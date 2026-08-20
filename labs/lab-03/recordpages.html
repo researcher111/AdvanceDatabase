@@ -5,7 +5,7 @@
 <title>Lab 3 · Records, Slots &amp; the Table Scan · microdb part 3</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=16">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -96,6 +96,9 @@ boundary, especially the pin handoff.</p>
     <a class="chat-dl-btn" href="starter/test_records.py" download>test_records.py</a>
     <a class="chat-dl-btn" href="starter/measure_layout.py" download>measure_layout.py</a>
   </div>
+  <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
+<pre class="clone-cmd"><code>git clone https://github.com/researcher111/AdvanceDatabase.git
+cd AdvanceDatabase/labs/lab-03/starter</code></pre>
   <p class="viz-caption">Delete a row mid-scan, keep stepping, then insert: the tombstone gets
   recycled before the file would ever grow. Every behavior here is a test in the harness.</p>
 </div>
@@ -248,7 +251,7 @@ CATALOG group
 
 <div class="exercise">
   <span class="ex-label">Exercise · read the failure</span>
-  <p>A classmate passes everything except <code>file grows to exactly 3 blocks</code>:their
+  <p>A classmate passes everything except <code>file grows to exactly 3 blocks</code>: their
   file has <strong>12 blocks</strong> after 12 inserts. Every row also reads back correctly, in
   order. Which loop has the bug, what exactly is it doing, and why do all the other SCAN tests
   still pass?</p>
@@ -362,7 +365,7 @@ instructions.</p>
 pair, the exact call an index will make in week 6, and about six lines); add a
 <strong>free-slot hint</strong> (remember the last block that had room, so insert() stops
 re-scanning full blocks; measure inserts before and after on the 10k-row table); or implement
-<strong><code>Schema.add_from(other, fields)</code></strong>, building a sub-schema;you'll
+<strong><code>Schema.add_from(other, fields)</code></strong>, building a sub-schema; you'll
 want it for Project in next week's lab, and future-you will send thanks.</p>
 
 <!-- ============================================================ -->
@@ -386,7 +389,7 @@ records). Real engines do both: SQLite puts a whole database in one file; Postgr
 table its own file chain. The block abstraction doesn't care.</p>
 
 <h3>The catalog file grew to 2 blocks for one table. Why?</h3>
-<p class="keep-in-present">field_catalog's own slot is 64 bytes (two varchar(16)s, a varchar(8), two ints);a
+<p class="keep-in-present">field_catalog's own slot is 64 bytes (two varchar(16)s, a varchar(8), two ints); a
 128-byte harness block fits 2 rows. Three students fields → 2 blocks. Your layout arithmetic,
 applied to the catalog itself: pleasingly circular, easily verified.</p>
 

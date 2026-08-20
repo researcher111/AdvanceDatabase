@@ -5,7 +5,7 @@
 <title>Lab 4 · Scan Operators · microdb part 4</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=16">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -66,7 +66,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="try-it">Stack a plan</h2>
 
-<p>Build a plan by stacking operators, then run it,against the pinned students and majors
+<p>Build a plan by stacking operators, then run it, against the pinned students and majors
 tables, with every operator's row traffic counted. Try the join preset before reading
 further: it is today's finish line.</p>
 
@@ -93,6 +93,9 @@ further: it is today's finish line.</p>
     <a class="chat-dl-btn" href="starter/test_scans.py" download>test_scans.py</a>
     <a class="chat-dl-btn" href="starter/measure_pipeline.py" download>measure_pipeline.py</a>
   </div>
+  <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
+<pre class="clone-cmd"><code>git clone https://github.com/researcher111/AdvanceDatabase.git
+cd AdvanceDatabase/labs/lab-04/starter</code></pre>
   <p class="viz-caption">Note the join preset's product line: 18 pairs built, 3 delivered.
   Keeping that ratio civilized is what the second half of this course calls "optimization".</p>
 </div>
@@ -156,7 +159,7 @@ The craft is knowing which method each operator actually changes:</p>
   <ul class="tps-steps">
     <li><span class="tps-phase">Think · 2 min</span>A ProjectScan kept only <code>name</code>,
     and some code above it asks for <code>gpa</code> anyway. Three possible behaviors: return
-    the value (it IS still down there), return None, or raise. Pick one and defend it:what
+    the value (it IS still down there), return None, or raise. Pick one and defend it: what
     does each choice do to the poor soul debugging a wrong query result at 2am?</li>
   </ul>
   <details class="tps-reveal">
@@ -224,7 +227,7 @@ predicate <em>is</em> the join.</p>
 <div class="callout note">
   <span class="label">Gotchas that cost real debugging time</span>
   <p>In <code>ProductScan.before_first</code>, the left side needs <code>next()</code> called
-  once;a product positioned "before" both sides yields nothing (the cardinality test reads 0
+  once; a product positioned "before" both sides yields nothing (the cardinality test reads 0
   or 15 instead of 18). In the odometer, rewind the right <em>before</em> advancing the left.
   And <code>close()</code> must reach both children; the pin test runs a whole join and then
   audits the pool.</p>
@@ -361,7 +364,7 @@ instructions.</p>
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
 <p class="keep-in-present">Fast finishers: write a <strong>JoinScan</strong> convenience class
-(constructor takes two scans + a join predicate, builds Select-over-Product internally;same
+(constructor takes two scans + a join predicate, builds Select-over-Product internally; same
 tests should pass with plans half as deep); add <strong>OR</strong> to Predicate (a list of
 AND-groups: satisfied if any group is) with a test of your own; or write the cruelest
 five-line scan there is, a <strong>CachingScan</strong> that
@@ -374,7 +377,7 @@ new counter readings. That's a hash join's little sibling, and week 9 will feel 
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">My join returns 18 rows, not 3.</h3>
-<p class="keep-in-present">Your SelectScan's predicate isn't being consulted,or the plan
+<p class="keep-in-present">Your SelectScan's predicate isn't being consulted, or the plan
 stacked Product over Select instead of Select over Product. Print the plan as you build it;
 the tree reads bottom-up.</p>
 
