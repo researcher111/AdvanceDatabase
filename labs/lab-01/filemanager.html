@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=17">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 
@@ -243,6 +243,36 @@ round-trips, and every later lab assumes it:</p>
 <pre class="equation"><code>bytes_needed("ada")  =  4 + 3  =  7      → the ada row: 4 (id) + 7 (name) + 4 (gpa) = 15 bytes
 bytes_needed(s)      =  4 + len(s.encode('utf-8'))     # 'héllo' is 6 bytes, not 5: count encoded bytes</code></pre>
 
+<p>Both of those rules are one Python call away. <code>struct.pack_into</code> is the tool the
+contract names, and it behaves differently from the <code>struct.pack</code> you may have met:
+it does not hand you new bytes, it writes into a buffer you already own, at an offset you choose,
+leaving everything else alone. Drive it before you write it.</p>
+
+<div class="viz" id="viz-pack">
+  <div class="viz-title">struct.pack_into · write 4 bytes into a buffer you already own</div>
+  <p class="viz-description">A 16-byte page, all zeros. Choose an offset and a value, then pack.
+  The <span class="hexlegend miss">warm bytes</span> are the ones the call just wrote; everything
+  else is untouched.</p>
+  <div class="qj-controls">
+    <label class="pk-label">format
+      <select id="pk-fmt">
+        <option value="&lt;i">'&lt;i' little-endian</option>
+        <option value="&gt;i">'&gt;i' big-endian</option>
+      </select></label>
+    <label class="pk-label">offset <input type="number" id="pk-off" value="4" min="0" max="12"></label>
+    <label class="pk-label">value <input type="number" id="pk-val" value="42"></label>
+    <button type="button" class="btn primary" id="pk-pack">pack_into</button>
+    <button type="button" class="btn" id="pk-unpack">unpack_from</button>
+    <button type="button" class="btn" id="pk-reset">reset</button>
+  </div>
+  <pre class="pk-call" id="pk-call"></pre>
+  <div class="pk-grid" id="pk-grid"></div>
+  <div class="pk-note" id="pk-note"></div>
+  <p class="viz-caption">Try writing at offset 4, then again at offset 6. The second call
+  overwrites two bytes of the first value, and nothing complains: the buffer has no idea what
+  those bytes meant. That is the whole reason the layout table exists.</p>
+</div>
+
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
@@ -472,6 +502,6 @@ semantics. Inside the methods, style is yours.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=1"></script>
+<script src="viz.js?v=2"></script>
 </body>
 </html>

@@ -168,3 +168,81 @@
     `<div class="fs-row"><span></span><span style="font-family:var(--sans);font-size:12px;color:var(--ink-mute)">` +
     `ratio: 15.1× on this machine — yours may be far larger</span><span></span></div>`;
 })();
+
+/* ---------------- Widget: struct.pack_into ---------------- */
+(function () {
+  const grid = document.getElementById('pk-grid');
+  if (!grid) return;
+  const $ = id => document.getElementById(id);
+  const fmtEl = $('pk-fmt'), offEl = $('pk-off'), valEl = $('pk-val'),
+        callEl = $('pk-call'), noteEl = $('pk-note');
+  const N = 16, WIDTH = 4;
+  let buf = new Uint8Array(N);
+  let writtenAt = new Array(N).fill(null);   // which offset's write owns each byte
+  let hot = [], read = [];
+
+  const hex = b => b.toString(16).toUpperCase().padStart(2, '0');
+  const clampOff = () => Math.max(0, Math.min(N - WIDTH, parseInt(offEl.value, 10) || 0));
+  const clampVal = () => {
+    let v = parseInt(valEl.value, 10);
+    if (!Number.isFinite(v)) v = 0;
+    return Math.max(-2147483648, Math.min(2147483647, v));
+  };
+
+  function bytesFor(val, little) {
+    const dv = new DataView(new ArrayBuffer(WIDTH));
+    dv.setInt32(0, val, little);
+    return [0, 1, 2, 3].map(i => dv.getUint8(i));
+  }
+  function render() {
+    grid.innerHTML = Array.from(buf).map((b, i) => {
+      const cls = read.includes(i) ? ' pk-read' : (hot.includes(i) ? ' pk-hot' : '');
+      return '<span class="pk-cell' + cls + '"><span class="pk-idx">' + i + '</span>' +
+             '<span class="pk-byte">' + hex(b) + '</span></span>';
+    }).join('');
+  }
+  function pack() {
+    const little = fmtEl.value === '<i', off = clampOff(), val = clampVal();
+    offEl.value = off; valEl.value = val;
+    // Which earlier writes are we about to damage?
+    const clobbered = new Set();
+    for (let i = off; i < off + WIDTH; i++)
+      if (writtenAt[i] !== null && writtenAt[i] !== off) clobbered.add(writtenAt[i]);
+
+    bytesFor(val, little).forEach((b, k) => { buf[off + k] = b; writtenAt[off + k] = off; });
+    hot = [off, off + 1, off + 2, off + 3]; read = [];
+    callEl.textContent = "struct.pack_into('" + fmtEl.value + "', buf, " + off + ", " + val + ")";
+    let msg = 'Wrote ' + WIDTH + ' bytes at ' + off + '..' + (off + WIDTH - 1) +
+              '. Every other byte is exactly as it was.';
+    if (clobbered.size) {
+      msg += ' <strong class="pk-warn">It also overwrote part of the value you packed at offset ' +
+             [...clobbered].sort((a, b) => a - b).join(' and ') +
+             ', which is now unreadable. Nothing raised an error.</strong>';
+    }
+    noteEl.innerHTML = msg;
+    render();
+  }
+  function unpack() {
+    const little = fmtEl.value === '<i', off = clampOff();
+    offEl.value = off;
+    const dv = new DataView(new ArrayBuffer(WIDTH));
+    for (let k = 0; k < WIDTH; k++) dv.setUint8(k, buf[off + k]);
+    const got = dv.getInt32(0, little);
+    read = [off, off + 1, off + 2, off + 3]; hot = [];
+    callEl.textContent = "struct.unpack_from('" + fmtEl.value + "', buf, " + off + ")[0]";
+    noteEl.innerHTML = 'Read those 4 bytes back as <code>' + got + '</code>. ' +
+      'The <code>[0]</code> is not decoration: <code>unpack_from</code> always returns a tuple, ' +
+      'because a format string can describe several values.';
+    render();
+  }
+  function reset() {
+    buf = new Uint8Array(N); writtenAt = new Array(N).fill(null); hot = []; read = [];
+    callEl.textContent = 'buf = bytearray(16)';
+    noteEl.innerHTML = 'A fresh page: 16 zero bytes. Nothing means anything yet.';
+    render();
+  }
+  $('pk-pack').addEventListener('click', pack);
+  $('pk-unpack').addEventListener('click', unpack);
+  $('pk-reset').addEventListener('click', reset);
+  reset();
+})();
