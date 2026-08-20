@@ -137,11 +137,15 @@ Then try your own values and read them back.</p>
       throws away the rest of the trip you already paid for.</p>
       <p>Fetch one row per trip and the six-row query from lecture pays six full storage trips for
       data that was sitting in one neighbourhood. Fetch the block and it pays one, with the other
-      five rows arriving free. Why <em>fixed</em> size rather than "whatever was asked for": block
-      k always lives at one computable place, <code>[k × block_size, (k+1) × block_size)</code>,
-      so addressing is arithmetic instead of bookkeeping, and memory can be managed as
-      interchangeable frames of one size. Every serious engine lands here: 4&nbsp;KB in microdb,
-      8&nbsp;KB in Postgres, up to 64&nbsp;KB in analytics systems.</p>
+      five rows arriving free. Why <em>fixed</em> size rather than "whatever was asked for"? Because it turns
+      finding a block into arithmetic. Block k starts at <code>k × block_size</code>, so with
+      4096-byte blocks, block 3 begins at byte 12288 and runs to byte 16383. Nothing has to be
+      recorded or looked up to find it. Blocks of varying size would need a table saying where
+      each one begins, maintained forever and consulted on every single read.</p>
+      <p>Fixed size pays a second time in memory. Every frame in next week's buffer pool is the
+      same size, so any block can be loaded into any free frame. That is what lets the pool be a
+      plain array of frames rather than a memory allocator. Every serious engine lands here:
+      4&nbsp;KB in microdb, 8&nbsp;KB in Postgres, up to 64&nbsp;KB in analytics systems.</p>
     </details>
   </details>
 </div>
