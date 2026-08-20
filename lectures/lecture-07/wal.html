@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 7 · Transactions &amp; the Write-Ahead Log · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lecture 7</div>
+  <ul>
+    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#promise">What COMMIT promises</a></li>
+    <li><a href="#try-it">Crash a bank</a></li>
+    <li><a href="#wal">The write-ahead rule</a></li>
+    <li><a href="#recovery">Recovery: undo the unfinished</a></li>
+    <li><a href="#policies">Force, steal, and ARIES</a></li>
+    <li><a href="#nextweek">Next Thursday you build it</a></li>
+    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 7 · Thursday October 8, 2026 · (lecture in the lab slot; Reading Days ate Tuesday)</div>
+  <h1>Transactions &amp; the Write-Ahead Log</h1>
+  <div class="subtitle">What COMMIT actually promises, and the append-only file that makes the promise keepable.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+Way back in Lab 1 you measured how much a durable write costs; today that number becomes the
+design constraint of the course. A transaction promises <em>all-or-nothing, even through a
+power cut</em>, while the buffer pool flushes pages whenever it likes. The reconciliation is
+one of the great tricks in systems: log the <strong>old value before every change</strong>,
+in an append-only file, and every promise becomes keepable with a single well-placed
+<span class="gloss" data-gloss="fsync-recall">fsync</span>. Next Thursday you build it and
+<code>kill -9</code> your own engine to prove it.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 5 (transactions) ·
+  the full monty: Mohan et&nbsp;al., <a href="https://dl.acm.org/doi/10.1145/128765.128770"><em>ARIES</em></a> (1992) ·
+  Postgres's <a href="https://www.postgresql.org/docs/current/wal-intro.html">WAL introduction</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="plan">Today's plan</h2>
+
+<p>No quiz today (short week; Quiz 6 lands Tuesday). Straight into the deepest promise in
+the stack.</p>
+
+<ol class="agenda">
+  <li><strong>What COMMIT promises</strong>: ACID, with the A and D made precise.</li>
+  <li><strong>Crash a bank</strong>: watch $50 vanish mid-transfer, live.</li>
+  <li><strong>The write-ahead rule</strong>: old value to the log, before the page changes.</li>
+  <li><strong>Recovery</strong>: one backward pass undoes every unfinished transaction.</li>
+  <li><strong>Force &amp; steal</strong>: the 2×2 from week 2, finally paid off.</li>
+  <li><strong>Next Thursday</strong>: you build all of it, then kill it.</li>
+</ol>
+
+<p class="keep-in-present">Today's claim: <strong>durability is one fsync in the right
+place</strong>; everything else is bookkeeping that makes that one fsync sufficient.</p>
+
+<!-- ============================================================ -->
+<h2 id="promise">What COMMIT promises</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the interrupted transfer</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>A transfer moves $40 from account A to B:
+    subtract, then add: two writes, possibly on two different pages. List every moment a
+    crash could strike, and what the on-disk balances look like at each. Which outcomes are
+    merely annoying, and which one is <em>unacceptable</em>?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare: crash before = fine (nothing
+      happened); crash after = fine (all happened); crash <em>between</em> = money destroyed
+      or minted. What single capability turns "between" into "before"?</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: the promise a database must
+      make about multi-write operations.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Three moments. <strong>Before</strong> either write reaches disk: nothing happened, A
+      and B are untouched, and the transfer simply did not occur. Annoying, correct.
+      <strong>After</strong> both: the transfer happened in full. Correct. <strong>Between</strong>
+      the two writes: A has been debited $40 and B never credited, so <strong>$40 has been
+      destroyed</strong>, and on the reverse ordering it would have been minted. That is the
+      unacceptable one, and no amount of care in the application can prevent it, because the crash
+      lands between two instructions.</p>
+      <p>The capability that turns "between" into "before" is the ability to <em>undo</em>: if the
+      engine can put A back the way it was, the half-done transfer becomes the same as the
+      never-started one. And to undo after a crash you must have written the old value somewhere
+      that survives the crash, which is the log. So the promise, in one sentence: a multi-write
+      operation happens <strong>entirely or not at all</strong>, whatever the moment of failure.
+      That is the A in ACID.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="What COMMIT promises">ACID, with two letters in focus</h3>
+
+<table>
+  <thead><tr><th></th><th>The promise</th><th>Kept by</th><th>When</th></tr></thead>
+  <tbody>
+    <tr><td><strong>A</strong>tomic</td><td>all of the transaction, or none of it</td><td>the log + rollback/recovery</td><td><strong>today</strong></td></tr>
+    <tr><td><strong>C</strong>onsistent</td><td>integrity rules still hold afterward</td><td>constraints + A and I doing their jobs</td><td>implied</td></tr>
+    <tr><td><strong>I</strong>solated</td><td>concurrent users can't see half-done work</td><td>locks / MVCC</td><td>Tuesday</td></tr>
+    <tr><td><strong>D</strong>urable</td><td>committed means survives-anything</td><td>the log + one fsync</td><td><strong>today</strong></td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">A and D are both promises about <em>crashes</em>:one says
+unfinished work must vanish, the other says finished work must not. The same log keeps
+both.</p>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Crash a bank</h2>
+
+<p>The lab's kill&nbsp;-9 demo, as a step-through. Watch the exact interleaving of page
+writes, log writes, and one murder, then run recovery and count the money.</p>
+
+<div class="viz" id="viz-crash">
+  <div class="viz-title">The $40 transfer, the $50 disaster, the one-pass repair</div>
+  <p class="viz-description">Disk state on the left, the write-ahead log on the right;
+  <span class="hexlegend hit">green</span> entries are fsync'd (safe),
+  <span class="hexlegend miss">warm</span> are in the OS's hands. Step through the timeline.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="cr-play">▶ Play</button>
+    <button type="button" class="btn" id="cr-step">Step</button>
+    <button type="button" class="btn" id="cr-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="cr-msg">Two accounts, two transactions, one power cord. Step when ready.</div>
+  <div class="cr-grid">
+    <div class="cr-panel"><div class="cr-title">disk · acct.tbl</div><div id="cr-disk" class="cr-body"></div></div>
+    <div class="cr-panel"><div class="cr-title">the write-ahead log</div><div id="cr-log" class="cr-body"></div></div>
+  </div>
+  <div class="bs-stats" id="cr-stats"></div>
+  <p class="viz-caption">The moment worth replaying: recovery reads the log <em>backwards</em>,
+  learns each transaction's fate before seeing its writes, and undoes only the unfinished.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="wal">The write-ahead rule</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>design the insurance</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>You must be able to UNDO any page write
+    after a crash, but the crash erases everything not yet on disk. Design the minimal
+    insurance: what must be written, where, and (the crucial part) <em>in what order</em>
+    relative to the page write it insures? What goes wrong with the opposite order?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Run the bad order: page write hits disk,
+      crash, no log record; the old value is gone from the universe. Nothing can undo it.
+      Agree: the log entry must exist <em>first</em>, always.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Name the rule. (It's the lecture title.)</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Write the <strong>old value</strong> of whatever you are about to change, to an
+      <strong>append-only file</strong>, <strong>before</strong> the page write it insures. One
+      small record per change: which transaction, which file, which block, which offset, and what
+      was there before.</p>
+      <p>Run the opposite order and the failure is total. The page write reaches disk, the crash
+      arrives, and the log record was never written: the old value now exists nowhere in the
+      universe, so nothing can undo it. The insurance has to be bought before the risk is taken,
+      not after. That is the rule, and it is the lecture's title:
+      <strong>write-ahead logging</strong>. The log is append-only because sequential writes are
+      the one thing disks do at full speed, which is why logging every change costs far less than
+      it sounds.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="The write-ahead rule">The rule, and the record</h3>
+
+<pre class="equation"><code>WRITE-AHEAD:   log(old value)  happens-before  page write  happens-before  page flush
+
+one record per change:   {"kind": "SET_INT", "tx": 2, "file": "acct.tbl",
+                          "blk": 0, "off": 0, "old": 100}
+
+the log itself:  an APPEND-ONLY file, no seeks, no slots, no structure.
+                 Sequential writes are the one thing disks do at full speed,
+                 which is why logging every change costs less than it sounds.</code></pre>
+
+<p class="keep-in-present">The log stores <em>old</em> values because our recovery only ever
+undoes. (ARIES logs new values too, so it can also redo; same rule, more insurance.)</p>
+
+<h3 class="new-slide" data-kicker="The write-ahead rule">Where the fsyncs go, and don't</h3>
+
+<table>
+  <thead><tr><th>Event</th><th>fsync?</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>each SET record</td><td>no, buffered append</td><td>the record must merely be <em>ahead of</em> its page; pages flush rarely</td></tr>
+    <tr><td>data pages at commit</td><td>yes (our FORCE policy)</td><td>data on disk before the commit record exists</td></tr>
+    <tr><td><strong>the COMMIT record</strong></td><td><strong>yes, THE fsync</strong></td><td>when it returns, the promise is binding; before it, the tx never happened</td></tr>
+    <tr><td>ROLLBACK records</td><td>at leisure</td><td>a lost rollback record just means recovery re-undoes, harmless (idempotence)</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Lab 1's ratio, resolved: a transaction touching fifty pages pays
+<strong>one</strong> mandatory fsync, on a sequential file. That arithmetic is why databases
+can promise durability and still be fast.</p>
+
+<div class="callout note">
+  <span class="label">War story · "fsyncgate," 2018</span>
+  <p class="keep-in-present">If one fsync carries the entire durability promise, its error
+  handling had better be perfect, and for twenty years, Postgres's wasn't. In 2018 the
+  community discovered that on Linux, when an fsync fails with an I/O error, the kernel can
+  mark the dirty pages clean anyway; <em>retrying</em> the fsync then returns success while
+  the data never reached disk. Postgres had assumed retry-until-success was safe. The fix,
+  shipped urgently across every supported version, was brutal honesty: if THE fsync fails,
+  crash the whole server and run recovery from the WAL, because the log is now the only
+  copy you can trust. Search "fsyncgate" for the full thread; it is the best systems reading
+  of that year, and it is exactly this slide's table with real stakes.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="recovery">Recovery: undo the unfinished</h2>
+
+<p class="keep-in-present">A crash leaves the disk mid-sentence: committed work possibly
+complete, unfinished work possibly half-flushed (stolen pages!). Recovery's contract is
+modest and absolute: <strong>make the disk look as if every unfinished transaction never
+began.</strong> One backward pass over the log does it.</p>
+
+<table>
+  <thead><tr><th>Found on disk after the crash</th><th>Why it's there</th><th>Recovery's move</th></tr></thead>
+  <tbody>
+    <tr><td>committed data</td><td>FORCE flushed it before its COMMIT record</td><td>keep; its fate says so</td></tr>
+    <tr><td>uncommitted data</td><td>a stolen dirty page</td><td>undo; the log holds the old value</td></tr>
+    <tr><td>missing uncommitted data</td><td>never flushed; the crash ate the buffer</td><td>nothing to do; already gone</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Recovery">One backward pass</h3>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="r1" data-explain="Newest-first is the trick: a transaction's COMMIT or ROLLBACK appears BEFORE its writes when reading backwards, so every write's fate is already known when you reach it.">for rec in log.records_backwards():</div>
+  <div class="code-step" data-step="r1" data-explain="Seeing a fate first means: mark this tx finished; its writes, encountered later in the pass, get skipped.">    if rec.kind in (COMMIT, ROLLBACK): finished.add(rec.tx)</div>
+  <div class="code-step" data-step="r2" data-step-name="the undo" data-explain="An unfinished transaction's write: restore the old value through the buffer pool, exactly like rollback does, because this IS rollback, performed posthumously.">    elif rec.kind is SET and rec.tx not in finished:</div>
+  <div class="code-step" data-step="r2" data-explain="">        restore(rec.file, rec.blk, rec.off, rec.old)</div>
+  <div class="code-step" data-step="r3" data-step-name="the receipt" data-explain="Log a ROLLBACK for each undone tx, so a SECOND recovery (crash during recovery!) sees them as finished and does nothing. Recovery must be idempotent, and this line is why.">log ROLLBACK for each undone tx; flush</div>
+  <div class="code-explain-panel">Hover a line: recovery is rollback for transactions that can no longer speak for themselves.</div>
+</div>
+
+<h3 class="new-slide" data-kicker="Recovery">Crash during recovery?</h3>
+
+<p class="keep-in-present">Then recovery runs again at the next startup, and must do no new
+damage. Undo-only recovery is naturally <span class="gloss" data-gloss="idempotent">idempotent</span>:
+restoring an old value twice restores it once. The receipt records make the second pass
+skip cleanly; the lab tests literally run <code>recover()</code> twice and check nothing
+moves. Systems design rule worth framing: <strong>any repair process must survive being
+interrupted by the disaster it repairs.</strong></p>
+
+<!-- ============================================================ -->
+<h2 id="policies">Force, steal, and ARIES</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the 2×2, cashed in</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Week 2's grid: FORCE = flush data pages at
+    commit; STEAL = the pool may flush uncommitted pages anytime. For each quadrant, decide:
+    does recovery need UNDO? REDO? Both? Neither? (Reason from what could be on disk at crash
+    time.)</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Check: steal puts <em>uncommitted</em>
+      data on disk → undo needed. No-force leaves <em>committed</em> data off disk → redo
+      needed. microdb picks force+steal: undo only.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Why does every real engine pick the
+      quadrant needing BOTH?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Reason from what the disk can hold at the moment of the crash. <strong>Steal</strong>
+      lets uncommitted data reach disk, so recovery needs <strong>undo</strong>.
+      <strong>No-force</strong> lets committed data still be missing from disk, so recovery needs
+      <strong>redo</strong>. That gives the grid: no-steal + force needs neither, no-steal +
+      no-force needs redo, steal + force needs undo (microdb's corner), and steal + no-force needs
+      both.</p>
+      <p>Every real engine picks the both corner, because the other three buy their simple
+      recovery by crippling normal operation. Force means every commit waits for scattered random
+      page writes, so commit latency is hostage to the data pages rather than to one sequential
+      log write. No-steal means the buffer pool may not evict a dirty page belonging to a live
+      transaction, so a long transaction can pin the pool solid. Steal plus no-force gives the pool
+      complete freedom and makes commit cost exactly one sequential fsync; the price is a recovery
+      algorithm with two passes, which is a price you pay only after a crash.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Force, steal, and ARIES">The quadrant, explorable</h3>
+
+<p>Check your TPS answer: click any quadrant and reason from what the disk can hold at the
+moment of the crash; that single fact decides everything recovery must do.</p>
+
+<div class="viz" id="viz-quad">
+  <div class="viz-title">buffer policy → recovery duty · click a quadrant</div>
+  <div class="quad-wrap">
+    <div class="quad-grid" id="quad-grid">
+      <div class="quad-corner"></div>
+      <div class="quad-axis">NO-STEAL<br><span>dirty pages of live txs may NOT be flushed</span></div>
+      <div class="quad-axis">STEAL<br><span>the pool may flush them anytime</span></div>
+      <div class="quad-axis side">FORCE<br><span>flush all dirty pages at commit</span></div>
+      <button type="button" class="quad-cell" data-q="fn"></button>
+      <button type="button" class="quad-cell" data-q="fs"></button>
+      <div class="quad-axis side">NO-FORCE<br><span>commit = log fsync only</span></div>
+      <button type="button" class="quad-cell" data-q="nn"></button>
+      <button type="button" class="quad-cell" data-q="ns"></button>
+    </div>
+    <div class="quad-detail" id="quad-detail"></div>
+  </div>
+  <p class="viz-caption">The diagonal is the story: microdb takes the simplest correct
+  corner; every production engine takes the corner needing <em>both</em> passes,because
+  both freedoms (commit without data I/O, evict whenever memory needs it) are worth their
+  recovery complexity.</p>
+</div>
+
+<h3 class="new-slide" data-kicker="Force, steal, and ARIES">microdb's choice vs the world's</h3>
+
+<table>
+  <thead><tr><th></th><th>microdb (Lab 7)</th><th>Real engines (ARIES)</th></tr></thead>
+  <tbody>
+    <tr><td>Policy</td><td>FORCE + STEAL</td><td>NO-FORCE + STEAL</td></tr>
+    <tr><td>Commit cost</td><td>flush every dirty page, then the log fsync</td><td><strong>the log fsync only</strong>; data pages flush whenever</td></tr>
+    <tr><td>Recovery</td><td>one undo pass</td><td>analysis + <span class="gloss" data-gloss="redo">redo</span> + undo, bounded by <span class="gloss" data-gloss="checkpoint-recall">checkpoints</span></td></tr>
+    <tr><td>Why</td><td>simplest correct thing, a teaching engine's duty</td><td>commits must not wait on data I/O, a bank's duty</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">ARIES is this lecture plus bookkeeping: log new values too (redo),
+number every record (LSNs), checkpoint so recovery reads days less log. The <em>rule</em>,
+log before page, never changes.</p>
+
+<!-- ============================================================ -->
+<h2 id="nextweek">Next Thursday you build it</h2>
+
+<p>Lab 7 closes microdb: the log manager and lock table ship complete; you write the five
+pieces that keep the promises.</p>
+
+<table>
+  <thead><tr><th>You write</th><th>The whole job</th></tr></thead>
+  <tbody>
+    <tr><td><code>set_int / set_string</code></td><td>the WAL rule: xlock · log old · write · set_modified; order is everything</td></tr>
+    <tr><td><code>commit</code></td><td>flush pages, fsync the COMMIT record, release</td></tr>
+    <tr><td><code>rollback</code></td><td>walk the log backwards, restore your own old values</td></tr>
+    <tr><td><code>recover</code></td><td>today's one-pass undo, verbatim</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Next Thursday">Before class checklist</h3>
+
+<ul class="checklist">
+  <li>☐ Lab 6 due at class start Thursday: the tower is six layers; Lab 7 caps it.</li>
+  <li>☐ Download the eight starter files from the Lab 7 page.</li>
+  <li>☐ Harness runs: <code>python3 test_tx.py</code> prints <strong>0/9 passed</strong>
+  (two tests spawn a subprocess and kill it; that's supposed to happen).</li>
+  <li>☐ Say the WAL rule aloud until it bores you: <em>old value to the log before the page
+  changes</em>. Every Thursday bug is a violation of that sentence.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="recap">Recap &amp; next time</h2>
+
+<ul class="recap-list">
+  <li><strong>A and D are crash promises,</strong> and one append-only log keeps both:
+  unfinished work undone, finished work fsync'd into permanence.</li>
+  <li><strong>The rule has an order:</strong> old value to the log, log ahead of the page,
+  COMMIT record fsync'd last. One mandatory fsync per transaction, on a sequential file.</li>
+  <li><strong>Recovery is posthumous rollback</strong>: one backward pass, fates before
+  writes, idempotent by construction because it must survive its own crashes.</li>
+</ul>
+
+<p class="keep-in-present"><strong>Tuesday:</strong> the I in ACID: lost updates and
+phantoms live, two-phase locking, and how Postgres reads without blocking writers (MVCC).
+Quiz 6 opens class: B+ trees. <strong>Next Thursday:</strong> Lab 7, build, then
+<code>kill -9</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">If the log is so critical, what happens when IT gets corrupted?</h3>
+<p class="keep-in-present">Real WALs checksum every record and treat the first bad checksum
+as end-of-log; a <span class="gloss" data-gloss="torn-write">torn</span> final record just means that transaction never committed (its fsync
+can't have returned). The log's append-only shape is what makes this safe: corruption can
+only live at the tail.</p>
+
+<h3 class="keep-in-present">Doesn't logging every change double the write traffic?</h3>
+<p class="keep-in-present">Roughly, but the log's writes are sequential appends (the fast
+kind, Lab 1) while the pages they protect are random writes that can now be deferred and
+batched. Net effect on real hardware: WAL made databases <em>faster</em>, which is the
+punchline nobody expects.</p>
+
+<h3 class="keep-in-present">What's a checkpoint actually for, then?</h3>
+<p class="keep-in-present">Bounding recovery time. Without one, a year-old database replays a
+year of log; a checkpoint records "everything before here is on disk," so recovery starts
+there. Week 2's table said "flush at checkpoints"; this is the debt that line was
+foreshadowing.</p>
+
+<h3 class="keep-in-present">Does SQLite have a WAL? My phone doesn't feel like a bank.</h3>
+<p class="keep-in-present">It does (<code>PRAGMA journal_mode=WAL</code>), and your phone
+uses it constantly; every messaging app is a little bank of messages that must not vanish.
+The other SQLite mode (rollback journal) is the same insurance with the copies made before
+changes instead of beside them.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=2"></script>
+</body>
+</html>

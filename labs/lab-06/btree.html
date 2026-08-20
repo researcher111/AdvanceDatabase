@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 6 · The B+ Tree Index · microdb part 6</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lab 6 · microdb 6</div>
+  <ul>
+    <li><a href="#try-it">Split by hand</a></li>
+    <li><a href="#big-idea">Values → RIDs</a></li>
+    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#build">Part 1 · Build</a></li>
+    <li><a href="#verify">Part 2 · Verify</a></li>
+    <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#assignment">Assignment</a></li>
+    <li><a href="#going-further">Going further</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>due Thu Oct 8, class start</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lab 6 · Thursday October 1, 2026 · microdb part 6 of 7</div>
+  <h1>The B+ Tree Index</h1>
+  <div class="subtitle">Four methods, one split, and a 4,000× speedup you measure yourself.</div>
+  <div class="byline">Follows Lecture 6 (B+ Trees from First Principles) · in class: 75 min · aim to finish Build + Verify · due Thu Oct 8 at class start</div>
+</header>
+
+<p class="lede">
+Today microdb learns to find things. You build the B+ tree (search, insert, the split, and
+the chained range scan) keyed by field values and holding
+<span class="gloss" data-gloss="rid-stability">RIDs</span> into your real heap file. The
+provided <code>IndexSelectScan</code> then answers <code>uid = 77777</code> by jumping
+straight to the row, and the measurement puts the number on it: a hundred thousand rows
+touched by the scan, eleven nodes by your tree.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 12 ·
+  Lecture 6's <a href="../../lectures/lecture-06/btrees.html">slides &amp; live tree</a> ·
+  Comer's <a href="https://dl.acm.org/doi/10.1145/356770.356776"><em>The Ubiquitous B-Tree</em></a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Split by hand</h2>
+
+<p>Before writing <code>_split</code>, perform it. This widget deals you overfull nodes; you
+choose what goes where. Get three in a row right and the code is transcription.</p>
+
+<div class="viz" id="viz-split">
+  <div class="viz-title">The split drill · ORDER = 4</div>
+  <p class="viz-description">A node just went overfull. Click the key that should be
+  <strong>hoisted</strong> to the parent, then say (before revealing) which keys go left,
+  which go right, and whether the hoisted key is <em>copied</em> or <em>moved</em>.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="sd-deal">Deal an overfull node</button>
+    <button type="button" class="btn" id="sd-reveal" hidden>Reveal the full split</button>
+  </div>
+  <div class="qj-msg" id="sd-msg">Press deal. Leaves and internal nodes split differently; the drill mixes both.</div>
+  <div class="sd-area" id="sd-area"></div>
+  <div class="bs-stats" id="sd-stats"></div>
+  <div class="chat-downloads">
+    <span class="chat-downloads-label">Starter code:</span>
+    <a class="chat-dl-btn" href="starter/btree.py" download>btree.py</a>
+    <a class="chat-dl-btn" href="starter/record_manager.py" download>record_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/query_engine.py" download>query_engine.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/buffer_manager.py" download>buffer_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/file_manager.py" download>file_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/catalog.py" download>catalog.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/test_btree.py" download>test_btree.py</a>
+    <a class="chat-dl-btn" href="starter/measure_index.py" download>measure_index.py</a>
+  </div>
+  <p class="viz-caption">The one distinction the drill hammers: a leaf's middle key is
+  <em>copied</em> up (leaves keep all data); an internal node's is <em>moved</em> up (guides
+  only). Most Thursday bugs are that one word.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big-idea">Values → RIDs</h2>
+
+<p>The tree stores no rows. Its leaves map field values to the
+<span class="gloss" data-gloss="rid-stability">stable addresses</span> Lab 3 gave every row,
+and the reference TableScan gained a three-line <code>move_to_rid()</code> so a scan can jump
+wherever the tree points. An index is a second, sorted road into the same heap.</p>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>why not sort the table itself?</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Instead of a side structure, why not keep
+    the heap file itself sorted by uid: binary search, no extra space? List what breaks,
+    using what Lab 3 taught about inserts and stable RIDs. Then: what if you want fast lookup
+    by uid AND by name?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare damage lists: inserts shift rows
+      (RIPs for every RID), and one physical order can serve one key at most. A side tree
+      dodges both; that's the entire design argument for indexes.</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: what does "the heap stays
+      dumb, the smartness lives beside it" buy an engine?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Two things break, and Lab 3 taught both. <strong>Inserts:</strong> keeping the heap
+      sorted means every insert shifts the rows after it to make room, which is the packed-page
+      nightmare that fixed slots abolished, and every shift invalidates every RID pointing past
+      it. <strong>Only one order:</strong> a file has exactly one physical arrangement, so sorting
+      by <code>uid</code> makes lookup by <code>name</code> no better than a full scan. You cannot
+      sort one file two ways.</p>
+      <p>A side structure dodges both. The heap keeps its fast unordered inserts and its stable
+      RIDs, and the sorted thing lives beside it holding (key, RID) pairs. Want a second access
+      path by name? Build a second tree. What that buys an engine is
+      <strong>independence</strong>: access paths can be added, dropped and rebuilt without
+      touching the data or invalidating anything, and each one is paid for only by the writes that
+      maintain it. The heap stays dumb precisely so that the smartness can be plural.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The contract</h2>
+
+<p>The Node class, the descend helper, the index builder, and <code>IndexSelectScan</code>
+ship complete. You write the four methods that make the structure a structure:</p>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="se" data-step-name="search" data-explain="_descend (provided) hands you the path; the leaf is path[-1]. Find the key in leaf.keys, return a COPY of its rid list; [] for a miss. Six lines.">search(key)      # descend, find in leaf, return the RID list</div>
+  <div class="code-step" data-step="in" data-step-name="insert" data-explain="Descend for the path. In the leaf: existing key → append the rid to its list; new key → bisect.insort position, insert key and [rid] at the same index. Then walk the path bottom-up splitting any overfull node.">insert(key, rid) # insort into the leaf, then repair upward</div>
+  <div class="code-step" data-step="sp" data-step-name="_split" data-explain="mid = len//2. Leaf: sibling takes keys[mid:]+rids, hoisted key COPIED up, chain fixed (node→sibling→old next). Internal: sibling takes keys[mid+1:]+children, hoisted key MOVED up. No parent → new root of one key, height += 1.">_split(node, parent)  # the lecture table, transcribed</div>
+  <div class="code-step" data-step="ra" data-step-name="range" data-explain="Descend to lo's leaf, then walk: through this leaf's sorted keys, across .next to the sibling, collecting rids while key <= hi. Return them in key order.">range(lo, hi)    # descend once, then walk the chain</div>
+  <div class="code-explain-panel">Hover a line. Read the provided Node class first; its docstring shows both node shapes with real values.</div>
+</div>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the off-by-one museum</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Three classic split bugs: (a) the leaf's
+    middle key is <em>moved</em> up instead of copied; (b) the internal split gives the sibling
+    <code>keys[mid:]</code> instead of <code>keys[mid+1:]</code>; (c) the leaf chain skips the
+    new sibling. For each: which harness test catches it, and what symptom would you see?
+    (The test names are on this page.)</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Match: (a) → "a LEAF split must keep every
+      key in the leaves"; (b) → the invariants check (children ≠ keys+1); (c) → "range walks
+      the leaf chain" silently missing keys. Agreeing on symptoms now is debugging later, prepaid.</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: why copy-vs-move differs
+      between leaf and internal at all.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>(a) Moving the leaf's middle key up instead of copying it</strong> is caught
+      by "a LEAF split must keep every key in the leaves": the key vanishes from the data level, so
+      searching for it returns nothing and a range scan skips it, while the tree looks perfectly
+      well formed. <strong>(b) Giving the internal sibling <code>keys[mid:]</code></strong> is
+      caught by the invariants check, because an internal node must have exactly one more child
+      than keys; keep the middle key and the counts no longer line up. <strong>(c) Forgetting the
+      leaf chain</strong> passes every point lookup and is caught only by "range walks the leaf
+      chain", which silently returns too few keys.</p>
+      <p>Why copy versus move differs at all: <strong>leaves hold the data, internal nodes hold
+      only directions.</strong> A key in a leaf is a real entry with a RID attached, so it must
+      stay there; the parent gets a <em>copy</em> to use as a signpost. A key in an internal node
+      is already just a signpost, so promoting it moves it, with nothing left behind to lose. The
+      rule follows from what each kind of node is for.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
+
+<ol>
+  <li><strong>Read <code>Node</code> and <code>_descend</code></strong> (5 min); the docstring
+  draws both node shapes with live values; <code>child_index_for</code> is the only subtle
+  helper and it's provided.</li>
+  <li><strong><code>search</code></strong>: warm up on the easy descent. First SEARCH test
+  greens once insert can feed it, so write it now, test it after step 3.</li>
+  <li><strong><code>insert</code> without splits</strong>: bisect into the leaf, duplicates
+  share a slot. The first TREE test passes.</li>
+  <li><strong><code>_split</code></strong>: transcribe the lecture table: leaf case, internal
+  case, new-root case. Then wire the bottom-up repair loop in <code>insert</code>. TREE and
+  SEARCH groups green.</li>
+  <li><strong><code>range</code></strong>: descend to <code>lo</code>, walk the chain. All
+  nine tests green; run the drill widget once more and feel smug.</li>
+</ol>
+
+<div class="callout note">
+  <span class="label">Gotchas that cost real debugging time</span>
+  <p>Split from the <em>bottom of the path upward</em>: a parent may only split after its
+  child's hoist landed. When the root splits there is no parent: build the new root yourself
+  and bump <code>self.height</code> (a test reads it). And return a <em>copy</em> of the rid
+  list from <code>search</code>; handing out your internal list lets callers mutate the
+  tree by accident.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="verify">Part 2 · Verify <span class="part-time">~15 min in class</span></h2>
+
+<p>Nine tests: TREE checks shape under fire (the fifth key's split, 25 scattered inserts, 500
+keys staying height ≤ 6, with a full invariant sweep after each), SEARCH checks lookups,
+duplicates sharing one slot, and ranges crossing the chain, and INDEX runs your tree against
+a real table: <code>IndexSelectScan</code> must agree with Lab 4's <code>SelectScan</code>
+row for row, while touching exactly <code>height</code> nodes.</p>
+
+<pre><code class="language-text">$ python3 test_btree.py
+TREE group
+  [PASS] TREE: the fifth key splits; the root grows
+  ...
+INDEX group
+  [PASS] INDEX: IndexSelectScan agrees with SelectScan
+  [PASS] INDEX: one lookup touches exactly height nodes
+
+9/9 tests passed</code></pre>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · read the failure</span>
+  <p>A classmate passes everything except <code>500 keys, height stays logarithmic</code>:
+  their height reaches 9 at 500 sequential keys (expected ≤ 6). All invariants hold; search
+  still works. Their <code>_split</code> uses <code>mid = 1</code> instead of
+  <code>len(keys) // 2</code>. Why does everything stay <em>correct</em>, and what exactly
+  degrades?</p>
+  <details><summary>Show answer</summary>
+  <p>Splitting at 1 leaves a one-key left node and a fat right node, legal by every
+  invariant, so correctness holds. But sequential inserts keep splitting the fat right edge,
+  minting nearly-empty nodes: <span class="gloss" data-gloss="occupancy">occupancy</span> craters, so far more nodes exist, so the tree needs
+  more levels to hold the same keys. Height is a <em>quality</em> metric, not just a
+  correctness one; mid-splits keep nodes half-full minimum, which is where the logarithm's
+  promised base comes from.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>call the shot</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>100,000 rows, ORDER-4 tree. Before running:
+    predict the tree's height (compute: how many keys fit in a height-h ORDER-4 tree at ~half
+    occupancy?), the nodes one search touches, and (the brave one) the speedup over the full
+    scan. Write all three down.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Run it. Score each other's predictions:
+      height is computable (~11), the speedup usually humbles everyone in the good direction.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Re-answer with real-page fan-out 200:
+      height for the same table? For 100M rows?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Height about <strong>11</strong>, one search touching <strong>11 nodes plus 1 heap
+      block</strong>, against a scan of 100,000 rows across 294 blocks. Measured:
+      <strong>128&nbsp;ms versus 0.03&nbsp;ms, a 4,091× speedup</strong>, and the speedup is the
+      number that humbles everyone, always in the good direction. (Dividing the two printed times
+      gives about 4,300; the script reports 4,091 because it divides the unrounded timings.)</p>
+      <p>Height is computable rather than guessable: an ORDER-4 tree at roughly half occupancy
+      holds about 2 keys per node, so height ≈ log₂(100,000) ≈ 17 at worst and about 11 in
+      practice, since real occupancy runs better than the worst case.</p>
+      <p>Re-answered at real-page fan-out 200: the same 100,000 rows need
+      <strong>height 3</strong>, and <strong>100 million rows need height 4</strong>. That is the
+      whole point of sizing nodes to blocks. Your ORDER-4 tree pays 11 node visits for what a real
+      engine does in 4, and the difference is not a better algorithm, it is a bigger base on the
+      same logarithm.</p>
+    </details>
+  </details>
+</div>
+
+<p>Reference run (counts deterministic; milliseconds representative of an Apple-silicon laptop):</p>
+
+<pre><code class="language-text">$ python3 measure_index.py
+loading 100,000 rows...
+
+scan:   found 1 row · touched 100,000 rows across 294 blocks · 128 ms
+building the index (one scan, paid once)...
+index:  found 1 row · touched 11 tree nodes (height 11) + 1 heap block · 0.03 ms
+        (index build took 0.5s, the once-per-table price)
+
+lookup speedup: 4,091x</code></pre>
+
+<p class="keep-in-present">Four thousand times, from a structure you wrote in an afternoon,
+and at real-page <span class="gloss" data-gloss="fanout">fan-out</span> the height drops from 11 to 3. This is the second of the course's two
+great speed tricks: week 2 cached the blocks; this week we stopped needing most of them.</p>
+
+<!-- ============================================================ -->
+<h2 id="assignment">Assignment</h2>
+
+<p>Due <strong>Thursday Oct 8 at class start</strong>, submitted per the course submission
+instructions.</p>
+
+<h3>Deliverables</h3>
+<ul>
+  <li>☐ <code>btree.py</code>: all nine local tests pass (<code>9/9</code>).</li>
+  <li>☐ <code>measurements.txt</code>: the full measurement output plus answers to the
+  script's three questions (selectivity; the height at 100M rows, computed both at ORDER 4
+  and fan-out 200; who pays the build price).</li>
+  <li>☐ Reflection (3–5 sentences): (1)&nbsp;Why must a leaf split <em>copy</em> its middle
+  key up while an internal split <em>moves</em> it? (2)&nbsp;Your index became <span class="gloss" data-gloss="stale-index">stale</span> the
+  moment someone inserts a row without telling it: what would a real engine do about that,
+  and at what cost per write?</li>
+</ul>
+
+<h3>What's provided vs what you write</h3>
+<table>
+  <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
+  <tbody>
+    <tr><td><code>btree.py</code></td><td>Node, _descend, build_index, IndexSelectScan</td><td>search · insert · _split · range</td></tr>
+    <tr><td>reference layers ×5</td><td>Labs 1–5 (+ TableScan.move_to_rid), do not edit</td><td>&nbsp;</td></tr>
+    <tr><td>harness + measure</td><td>complete, do not edit</td><td>run, record</td></tr>
+  </tbody>
+</table>
+
+<h3>Grading</h3>
+<table>
+  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Correctness</td><td>Gradescope superset: adversarial insert orders, big duplicate families, deep trees</td><td>70%</td></tr>
+    <tr><td>Measurement + answers</td><td>Counts match; height computations correct at both fan-outs</td><td>20%</td></tr>
+    <tr><td>Code quality</td><td>_split reads like the lecture table; no defensive-copy leaks</td><td>10%</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">Fast finishers: wire the index into the <strong>planner</strong>:
+in Lab 5's <code>plan_query</code>, when a WHERE term is <code>field = literal</code> on an
+indexed field, build an <code>IndexSelectScan</code> instead of Select-over-Table (your first
+real optimization, one week early); make the tree <strong>persistent</strong> by writing each
+Node to a Lab-1 block (child pointers become block numbers; sketch first, it's the whole
+ch. 12); or add a <span class="gloss" data-gloss="covering-idea">covering</span> twist: store
+a second field's value beside each RID and answer
+<code>SELECT score WHERE uid = k</code> without touching the heap at all, then measure what
+that saves.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">My height is 12, the reference says 11. Failed?</h3>
+<p class="keep-in-present">Only the invariants and the ≤ bounds are graded; exact height
+depends on split ties your bisect direction decides. If <code>check_invariants</code> passes
+and 500 keys stay ≤ 6, you're correct; note your height honestly in measurements.txt.</p>
+
+<h3 class="keep-in-present">Why does the index rebuild each run instead of persisting?</h3>
+<p class="keep-in-present">A 75-minute budget: persistence is Lab 1 plumbing (nodes into
+blocks, pointers into block numbers) with no new ideas, and Sciore ch. 12 walks it. The
+half-second rebuild on 100k rows also honestly shows what CREATE INDEX costs.</p>
+
+<h3 class="keep-in-present">What happens if two students share the same gpa, or a thousand do?</h3>
+<p class="keep-in-present">Duplicates share one key entry whose rid list grows, fine at
+course scale. A thousand-rid list makes that key's leaf huge; real engines either treat
+(key, RID) as the sort key (making every entry unique) or spill big families to overflow
+pages. The harness's duplicate test keeps you honest at three.</p>
+
+<h3 class="keep-in-present">Is <code>bisect</code> cheating?</h3>
+<p class="keep-in-present">It's the standard library doing binary search <em>within a
+node</em>, exactly what a real engine does inside a page. The tree's job is choosing which
+node; bisect's job is the last twenty comparisons inside it. Use it with pride.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

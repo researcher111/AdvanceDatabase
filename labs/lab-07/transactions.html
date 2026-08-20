@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 7 · Transactions &amp; Recovery · microdb part 7</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lab 7 · microdb 7</div>
+  <ul>
+    <li><a href="#try-it">Murder rehearsal</a></li>
+    <li><a href="#big-idea">One rule, one fsync</a></li>
+    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#build">Part 1 · Build</a></li>
+    <li><a href="#verify">Part 2 · Verify</a></li>
+    <li><a href="#measure">Part 3 · The kill</a></li>
+    <li><a href="#assignment">Assignment</a></li>
+    <li><a href="#going-further">Going further</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>due TUE Oct 20, class start</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lab 7 · Thursday October 15, 2026 · microdb part 7 of 7 · the capstone layer</div>
+  <h1>Transactions &amp; Recovery</h1>
+  <div class="subtitle">The write-ahead log, rollback, recovery, locks, then you kill your engine and watch it come back.</div>
+  <div class="byline">Follows Lectures 7–8 · in class: 75 min · aim to finish Build + Verify · due <strong>Tuesday Oct 20</strong> at class start (before the midterm)</div>
+</header>
+
+<p class="lede">
+The last layer of microdb is the one that makes it a database instead of a file format with
+opinions. You enact the <span class="gloss" data-gloss="undo-log">write-ahead rule</span> in <code>set_int</code>, place the one
+<span class="gloss" data-gloss="the-fsync">fsync that matters</span> in <code>commit</code>,
+walk the log backwards in <code>rollback</code>, and write the <code>recover()</code> that
+runs at startup. Then <code>crash_demo.py</code> murders your engine mid-transfer, and your
+recovery puts every dollar back.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 5 ·
+  Lectures <a href="../../lectures/lecture-07/wal.html">7 (WAL)</a> and
+  <a href="../../lectures/lecture-08/concurrency.html">8 (locks &amp; MVCC)</a> ·
+  the grown-up version: the <a href="https://dl.acm.org/doi/10.1145/128765.128770">ARIES paper</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Murder rehearsal</h2>
+
+<p>Before you write a line: practice being <code>recover()</code>. Here is a log as your code
+will find it after a crash: read it backwards and sentence each transaction.</p>
+
+<div class="viz" id="viz-judge">
+  <div class="viz-title">Read the log like recovery does · newest first</div>
+  <p class="viz-description">Click each record from the <strong>bottom (newest) upward</strong>,
+  deciding as you go: is this tx's fate already known? Is this SET an undo instruction or
+  skippable? The widget scores your calls.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="jd-deal">Deal a crashed log</button>
+    <button type="button" class="btn" id="jd-auto" hidden>Let recovery finish</button>
+  </div>
+  <div class="qj-msg" id="jd-msg">Press deal; each scenario is a different crash.</div>
+  <div class="jd-log" id="jd-log"></div>
+  <div class="bs-stats" id="jd-stats"></div>
+  <div class="chat-downloads">
+    <span class="chat-downloads-label">Starter code:</span>
+    <a class="chat-dl-btn" href="starter/transaction.py" download>transaction.py</a>
+    <a class="chat-dl-btn" href="starter/crash_demo.py" download>crash_demo.py</a>
+    <a class="chat-dl-btn" href="starter/record_manager.py" download>record_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/query_engine.py" download>query_engine.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/buffer_manager.py" download>buffer_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/file_manager.py" download>file_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/catalog.py" download>catalog.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/test_tx.py" download>test_tx.py</a>
+  </div>
+  <p class="viz-caption">The one insight the drill installs: reading newest-first, a
+  transaction's <em>fate arrives before its writes</em>, so every SET you meet is already
+  judged.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big-idea">One rule, one fsync</h2>
+
+<p>Everything in this lab is consequences of one sentence: <em>the old value reaches the log
+before the page changes, and the COMMIT record's fsync is the moment of truth.</em> The log
+is an append-only file of JSON lines, which is not a toy stand-in;
+an append-only file with disciplined fsyncs <em>is</em> what a WAL is.</p>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>order the commit</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>commit() must do three things: flush the
+    dirty data pages, fsync a COMMIT record, release locks &amp; pins. Six orderings exist.
+    For each of the two wrong-looking ones (record-before-flush, and release-before-record),
+    construct the crash that burns you.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Record-before-flush: crash after the
+      record → recovery sees COMMIT, skips undo, but the data never hit disk (that's why
+      NO-FORCE engines need redo). Release-before-record: another tx reads your data, then
+      the crash uncommits you: a dirty read with extra steps.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Recite the safe order: flush · fsync ·
+      release. The tests check it by consequence.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>Record-before-flush:</strong> the COMMIT record is fsync'd, then the crash
+      arrives before the data pages are written. Recovery reads the log, sees a COMMIT, concludes
+      the transaction finished, and skips undo. But the changes never reached disk, so committed
+      work is silently missing. That is precisely why NO-FORCE engines must log <em>new</em> values
+      and redo them; microdb avoids the whole problem by flushing first.</p>
+      <p><strong>Release-before-record:</strong> locks are released, another transaction reads your
+      data and acts on it, and then the crash arrives before your COMMIT record was durable.
+      Recovery finds you unfinished and undoes you, so the other transaction read a value that
+      officially never existed. That is a dirty read with extra steps, and it can propagate
+      arbitrarily far before anyone notices.</p>
+      <p>The safe order is therefore <strong>flush, fsync the COMMIT record, then release</strong>:
+      make the data durable, make the decision durable, and only then let anyone else see it. The
+      tests check it by consequence rather than by inspection, which is why getting it merely
+      nearly right still fails them.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The contract</h2>
+
+<p>The <code>LogManager</code> (append + backward read) and the <span class="gloss" data-gloss="strict-2pl">strict-2PL</span>
+<code>LockTable</code> ship complete and are worth reading; together they're 60 lines. You
+write five things:</p>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="si" data-step-name="set_int / set_string" data-explain="The WAL rule as four lines: xlock(block) · read the OLD value from the buffer's page · append the SET record carrying it · write the new value + set_modified. The harness literally checks the log holds the old value.">set_int:   xlock · log OLD value · write new · set_modified</div>
+  <div class="code-step" data-step="cm" data-step-name="commit" data-explain="The safe order from the TPS: bm.flush_all() (FORCE: data first) · lm.append(COMMIT, sync=True), which is THE fsync · release locks · unpin. Four calls; the order is the content.">commit:    flush pages · fsync COMMIT · release · unpin</div>
+  <div class="code-step" data-step="rb" data-step-name="rollback" data-explain="Walk lm.records_backwards(); for records of THIS tx: SET → restore the old value through the buffer (pin if needed); START → stop. Then a ROLLBACK record, flush, release, unpin. Newest-first matters when one slot was set twice.">rollback:  walk back · restore olds · receipt · release</div>
+  <div class="code-step" data-step="rc" data-step-name="recover" data-explain="One backward pass over everything: COMMIT/ROLLBACK seen → that tx is finished; SET from an UNfinished tx → restore its old value. Then flush and write ROLLBACK receipts so a second recovery is a no-op (idempotence, tested).">recover:   fates first, then undo the unfinished · receipts</div>
+  <div class="code-explain-panel">Hover a line: five jobs, and every one is an ordering discipline more than an algorithm.</div>
+</div>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>same slot, twice</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>One transaction sets A := 1 (logging
+    old=100), then A := 2 (logging old=1), then rolls back. Walk the undo BOTH directions:
+    oldest-first and newest-first. Which one leaves A = 100, and why does the other leave the
+    wrong answer with perfect confidence?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Newest-first: 2→1, then 1→100 ✓.
+      Oldest-first: 1→100, then… the old=1 record restores 1. Wrong, silently. The harness's
+      "same slot twice" test is exactly this trap.</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: why undo must retrace steps
+      in reverse, like leaving a maze.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>Newest-first is correct.</strong> The records are old=100 then old=1. Walking
+      backwards: restore 1 (A becomes 1), then restore 100 (A becomes 100). Correct.</p>
+      <p>Oldest-first: restore 100 (A becomes 100), then restore 1 (A becomes <strong>1</strong>).
+      Wrong, and this is the dangerous part: nothing errors, no invariant is violated, and the
+      final value 1 is a perfectly plausible account balance. The undo ran to completion with
+      perfect confidence and left corrupted data. The harness's "same slot twice" test exists for
+      exactly this trap, because a rollback that touches each slot only once cannot tell the two
+      orders apart.</p>
+      <p>In one sentence: <strong>undo must retrace the steps in reverse because each log record
+      restores the state that existed immediately before its own change</strong>, so the records
+      are only valid when applied in the reverse of the order they were written. It is leaving a
+      maze: you have to walk the turns backwards, and taking them in the original order just gets
+      you lost somewhere new.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
+
+<ol>
+  <li><strong>Read <code>LogManager</code> and <code>LockTable</code></strong> (8 min; they're
+  short and they're half the exam material). Note which <code>append</code> calls sync and
+  which don't.</li>
+  <li><strong><code>set_int</code>, then <code>set_string</code></strong>: the four-step
+  dance. WAL group greens.</li>
+  <li><strong><code>commit</code></strong>: four calls in the sacred order. First COMMIT test
+  passes.</li>
+  <li><strong><code>rollback</code></strong>: backward walk, restore, receipt. Mind the
+  same-slot-twice test.</li>
+  <li><strong><code>recover</code></strong>: the module-level function; fates before writes,
+  receipts after. The subprocess-murder tests go green, and with them, the semester's
+  promise.</li>
+</ol>
+
+<div class="callout note">
+  <span class="label">Gotchas that cost real debugging time</span>
+  <p>Read the old value from the <em>buffer's page</em>, not from disk; the current value may
+  never have been flushed. In <code>rollback</code>, stop at <em>your own</em> START record,
+  not the first START you meet (other transactions' records interleave). And in
+  <code>recover</code>, the receipts must be written <em>after</em> the undo flush; a receipt
+  for an un-flushed undo is a lie the next crash exposes.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<p>Nine tests, four groups. WAL checks the rule literally (the log record must hold the old
+value, with its address). COMMIT checks durability-in-order and both rollback traps. RECOVER
+is the showpiece: a <strong>subprocess commits one transfer, half-finishes another, and dies
+by <code>os._exit</code></strong>: your recovery must keep the committed money and erase the
+rest, and doing it <em>twice</em> must change nothing
+(<span class="gloss" data-gloss="idempotent-recall">idempotence</span>). LOCKS runs Lecture
+8's lost-update schedule against your lock table and expects the refusal.</p>
+
+<pre><code class="language-text">$ python3 test_tx.py
+WAL group
+  [PASS] WAL: the OLD value is logged, before the write
+  ...
+RECOVER group
+  [PASS] RECOVER: kill -9 mid-transaction; recovery repairs
+  [PASS] RECOVER: recovery twice is harmless (idempotent)
+LOCKS group
+  [PASS] LOCKS: write-write conflict refuses loudly
+  [PASS] LOCKS: readers share; writers wait their turn
+
+9/9 tests passed</code></pre>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · read the failure</span>
+  <p>A classmate passes everything except <code>recovery twice is harmless</code>: the second
+  <code>recover()</code> returns <code>[2]</code> again instead of <code>[]</code>, though the
+  balances stay correct. What did their first recovery forget, and why do the balances hide
+  the bug?</p>
+  <details><summary>Show answer</summary>
+  <p>No ROLLBACK receipts were written (or written without reaching the log before the second
+  read). The second pass finds tx2 still fate-less and re-undoes it, harmlessly, because
+  restoring an old value twice restores it once. Idempotence of the <em>data</em> masked
+  non-idempotence of the <em>bookkeeping</em>; the return value is the tell. In ARIES the
+  same receipt exists (the end record) for the same reason.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="measure">Part 3 · The kill <span class="part-time">~25 min · finish as homework</span></h2>
+
+<p>No predictions to commit this time, just an execution. <code>crash_demo.py</code> stages
+the full drama: a committed transfer, a half-done one, a
+<span class="gloss" data-gloss="stolen-page">stolen dirty page</span>, and an
+<code>os._exit(1)</code>. Reference output:</p>
+
+<pre><code class="language-text">$ python3 crash_demo.py
+============================================================
+opening balances:   A=$100  B=$50
+tx1 COMMITTED:      A=$60   B=$90   (a $40 transfer)
+tx2 mid-transfer:   A=$10 written, B not yet credited --
+KILLED. (os._exit, no rollback, no flush, no mercy)
+============================================================
+
+reopening the wreckage: A=$10  B=$90   <- $100 total: $50 has VANISHED mid-transfer
+after recover():        A=$60  B=$90   <- tx[2] undone; the committed transfer stands
+
+CONSISTENT. Your database survives kill -9.</code></pre>
+
+<p class="keep-in-present">Fifty dollars ceased to exist, and your code minted it back from a
+JSON line that said <code>"old": 60</code>. Every database you will ever trust is doing
+exactly this, at scale, right now. microdb is complete: seven layers, every line yours.</p>
+
+<!-- ============================================================ -->
+<h2 id="assignment">Assignment</h2>
+
+<p>Due <strong>TUESDAY Oct 20 at class start</strong>, one week minus two days, so the decks
+are clear for Thursday's midterm. Start in class.</p>
+
+<h3>Deliverables</h3>
+<ul>
+  <li>☐ <code>transaction.py</code>: all nine local tests pass (<code>9/9</code>).</li>
+  <li>☐ <code>measurements.txt</code>: the crash demo's three balance lines plus its two
+  questions (which fsync bound the promise; why the stolen page was safe).</li>
+  <li>☐ Reflection (3–5 sentences): (1)&nbsp;Why does <code>rollback</code> log a receipt even
+  though the transaction failed? (2)&nbsp;microdb pays a full <code>flush_all</code> per
+  commit; name what ARIES changes so it doesn't, and what recovery work that change buys.</li>
+</ul>
+
+<h3>What's provided vs what you write</h3>
+<table>
+  <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
+  <tbody>
+    <tr><td><code>transaction.py</code></td><td>LogManager, LockTable, pin plumbing, get_int/get_string</td><td>set_int · set_string · commit · rollback · recover</td></tr>
+    <tr><td><code>crash_demo.py</code></td><td>complete, the murder is scripted</td><td>run it, record the drama</td></tr>
+    <tr><td>reference layers ×5</td><td>Labs 1–6, do not edit</td><td>&nbsp;</td></tr>
+  </tbody>
+</table>
+
+<h3>Grading</h3>
+<table>
+  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Correctness</td><td>Gradescope superset: more crash points, interleaved multi-tx logs, string undo</td><td>70%</td></tr>
+    <tr><td>Measurement + answers</td><td>Demo output matches; answers name the exact fsync and the reversibility argument</td><td>20%</td></tr>
+    <tr><td>Code quality</td><td>Orders enacted as written; no fsyncs sprinkled "just in case"</td><td>10%</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">Fast finishers: add a <strong>checkpoint record</strong>
+(<code>{"kind": "CHECKPOINT"}</code> after a flush_all; recovery stops its backward walk
+there; measure recovery time on a 10,000-record log with and without); log <strong>new
+values too</strong> and write <code>redo()</code>: you are now one bookkeeping pass from
+ARIES, so read §3 of the paper and see how close; or wire transactions into the
+<strong>REPL</strong>: <code>BEGIN</code>/<code>COMMIT</code>/<code>ROLLBACK</code> statements
+in Lab 5's parser, and your SQL sessions become atomic.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">My recovery works but the RECOVER test says the wreckage isn't wrecked.</h3>
+<p class="keep-in-present">The test first asserts A=$0 <em>is</em> on disk pre-recovery,
+proving the steal happened. If that assert fails, your <code>set_int</code> isn't calling
+<code>set_modified()</code>, so the "dirty" page was never really dirty and flush_all wrote
+nothing. The bug is in the write path, not the recovery.</p>
+
+<h3 class="keep-in-present">Why JSON for log records? Real WALs are binary.</h3>
+<p class="keep-in-present">Readable logs debug themselves: <code>cat microdb.log</code> is a
+complete forensic timeline, which is worth more to a student (and frankly to many engineers)
+than the bytes JSON wastes. The structure per record is identical to ARIES's: who, where,
+old-what.</p>
+
+<h3 class="keep-in-present">Could two transactions deadlock in microdb?</h3>
+<p class="keep-in-present">No: conflicts abort immediately instead of waiting, and no wait
+means no wait-cycle. The price is spurious aborts a waiting system would have survived.
+Single-threaded honesty again: we keep the protocol, we lose the drama. Lecture 8's FAQ has
+the production version.</p>
+
+<h3 class="keep-in-present">Is my microdb now… an actual database?</h3>
+<p class="keep-in-present">Files, cache, records, catalog, operators, SQL, indexes,
+transactions, crash recovery: yes. Slower than SQLite and missing forty years of polish,
+but structurally the real thing, and you hold every line of it in your head. That's the
+midterm, and it's also the point.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

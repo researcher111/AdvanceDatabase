@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 4 · Scan Operators · microdb part 4</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lab 4 · microdb 4</div>
+  <ul>
+    <li><a href="#try-it">Stack a plan</a></li>
+    <li><a href="#big-idea">Wrap, don't copy</a></li>
+    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#build">Part 1 · Build</a></li>
+    <li><a href="#verify">Part 2 · Verify</a></li>
+    <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#assignment">Assignment</a></li>
+    <li><a href="#going-further">Going further</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>due Thu Sep 24, class start</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lab 4 · Thursday September 17, 2026 · microdb part 4 of 7</div>
+  <h1>Scan Operators</h1>
+  <div class="subtitle">Select, Project, Product, and microdb runs its first join.</div>
+  <div class="byline">Follows Lecture 4 (The Iterator Model) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 24 at class start</div>
+</header>
+
+<p class="lede">
+Today you turn one scan into a query engine. Three operator classes (a filter, a fence, and
+an odometer) each speak the same five-method interface your TableScan already speaks, so
+they stack into arbitrary plans. By the end of Verify, the Lecture 1 demo query runs for real
+on your own code, joins included, and Measure shows you the 15× that
+<span class="gloss" data-gloss="predicate-pushdown">filter placement</span> is worth.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 8 ·
+  Lecture 4's <a href="../../lectures/lecture-04/iterators.html">slides &amp; pull widget</a> ·
+  the model's namesake: Graefe's <a href="https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf"><em>Volcano</em> paper</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Stack a plan</h2>
+
+<p>Build a plan by stacking operators, then run it,against the pinned students and majors
+tables, with every operator's row traffic counted. Try the join preset before reading
+further: it is today's finish line.</p>
+
+<div class="viz" id="viz-stack">
+  <div class="viz-title">Plan builder · students(6) ⋈ majors(3)</div>
+  <p class="viz-description">Pick a preset plan, press run, and read the per-operator traffic:
+  rows flowing <em>through</em> each stage vs rows delivered at the top.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="st-q1">SELECT name WHERE gpa &gt; 3.5</button>
+    <button type="button" class="btn primary" id="st-q2">the join (honors × cs)</button>
+    <button type="button" class="btn" id="st-q3">bare product</button>
+    <button type="button" class="btn" id="st-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="st-msg">Choose a plan. The tree renders, then runs row by row.</div>
+  <div class="pl-tree" id="st-tree"></div>
+  <div class="bs-stats" id="st-stats"></div>
+  <div class="chat-downloads">
+    <span class="chat-downloads-label">Starter code:</span>
+    <a class="chat-dl-btn" href="starter/query_engine.py" download>query_engine.py</a>
+    <a class="chat-dl-btn" href="starter/record_manager.py" download>record_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/buffer_manager.py" download>buffer_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/file_manager.py" download>file_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/catalog.py" download>catalog.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/test_scans.py" download>test_scans.py</a>
+    <a class="chat-dl-btn" href="starter/measure_pipeline.py" download>measure_pipeline.py</a>
+  </div>
+  <p class="viz-caption">Note the join preset's product line: 18 pairs built, 3 delivered.
+  Keeping that ratio civilized is what the second half of this course calls "optimization".</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big-idea">Wrap, don't copy</h2>
+
+<p>Each operator holds a reference to the scan beneath it and answers the same five methods,
+mostly by <span class="gloss" data-gloss="delegation">delegation</span>. Nothing is copied;
+a plan over a terabyte is a few dozen bytes of Python objects plus one pinned block per table.
+The craft is knowing which method each operator actually changes:</p>
+
+<table>
+  <thead><tr><th>Operator</th><th>Changes</th><th>Delegates untouched</th></tr></thead>
+  <tbody>
+    <tr><td><strong>SelectScan</strong></td><td><code>next</code>: skip until the <span class="gloss" data-gloss="predicate">predicate</span> passes</td><td>everything about row shape</td></tr>
+    <tr><td><strong>ProjectScan</strong></td><td><code>get_val / has_field</code>: the fence</td><td>everything about row flow</td></tr>
+    <tr><td><strong>ProductScan</strong></td><td>all four: it has two children</td><td>nothing (it's the interesting one)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>who answers get_val?</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>A ProductScan of students × majors is asked
+    <code>get_val("dept")</code>. Neither side was told which fields exist where. Design the
+    routing rule, and then decide: what should happen if <em>both</em> sides had a field named
+    <code>id</code>?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare rules. microdb says "ask
+      has_field, left wins ties"; what does real SQL make you do about ambiguous columns
+      instead? (You've seen the error message.)</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: why the tests name majors'
+      key <code>mid2</code>, not <code>mid</code>.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The routing rule: <strong>ask the left side <code>has_field</code>; if it says yes,
+      delegate there, otherwise delegate right.</strong> Neither side needs to know anything about
+      the other, which is what lets any scan sit on any other scan.</p>
+      <p>If both sides have a field called <code>id</code>, microdb's rule silently answers from
+      the left. Real SQL refuses: Postgres raises <code>column reference "id" is ambiguous</code>
+      and makes you qualify it, <code>students.id</code>, because guessing is worse than
+      complaining. microdb documents its simple rule and then arranges never to rely on it, which
+      is why the tests name the majors key <strong><code>mid2</code> rather than
+      <code>mid</code></strong>: with distinct names the tie rule never fires, so a passing test
+      proves your routing works rather than proving your tie-break happened to match the
+      reference. A teaching engine should be predictable before it is featureful.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The contract</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>loud or silent?</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>A ProjectScan kept only <code>name</code>,
+    and some code above it asks for <code>gpa</code> anyway. Three possible behaviors: return
+    the value (it IS still down there), return None, or raise. Pick one and defend it:what
+    does each choice do to the poor soul debugging a wrong query result at 2am?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare choices. Which one turns a caller
+      bug into a wrong-but-plausible <em>answer</em>? That's the one that costs a retraction.</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: what "loud beats silent"
+      means as an API design rule.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>Raise.</strong> A ProjectScan is a fence, not a filter, and asking it for a
+      field it does not publish is a bug in the caller, not a question with an answer.</p>
+      <p>Compare the costs at 2am. <em>Raise</em> gives you a stack trace pointing at the exact
+      line that asked for the wrong field: minutes to fix. <em>Return None</em> gives you a
+      <code>None</code> that flows onward and surfaces as a crash or a wrong comparison somewhere
+      far away, with nothing connecting it to the projection. <em>Return the value</em> is the
+      genuinely dangerous one: it produces a <strong>wrong-but-plausible answer</strong> with no
+      error at all, so the query looks like it worked and the projection silently meant nothing.
+      That is the choice that costs a retraction rather than an afternoon.</p>
+      <p>"Loud beats silent" as an API rule: <strong>when a caller violates the contract, fail
+      immediately and say so, rather than inventing a plausible result</strong>. The cost of an
+      exception is bounded and lands on the person who caused it; the cost of a plausible wrong
+      answer is unbounded and lands on whoever trusted it.</p>
+    </details>
+  </details>
+</div>
+
+<p>Everything you write today, in one annotated card. These are the actual lines of the
+reference solution, shown because reading them is most of the work:</p>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="sel" data-step-name="SelectScan.next" data-explain="Advance the underlying scan until a row satisfies the predicate; False when it runs out. Rejected rows are skipped in place, never copied, never seen above.">SelectScan.next:      while scan.next(): if pred.is_satisfied(scan): return True</div>
+  <div class="code-step" data-step="prj" data-step-name="ProjectScan fence" data-explain="get_val answers only for kept fields, ValueError otherwise, because silently answering would corrupt results. has_field tells the truth about what survived.">ProjectScan.get_val:  raise ValueError unless fld in self.fields</div>
+  <div class="code-step" data-step="pb" data-step-name="ProductScan.before_first" data-explain="Left on its FIRST row (rewind + one next), right BEFORE its first. Get this wrong and you produce 0 pairs or |right| too few, the two classic Thursday bugs.">ProductScan.before_first:  left rewind + next · right rewind</div>
+  <div class="code-step" data-step="pn" data-step-name="ProductScan.next" data-explain="The odometer: advance right; on rollover, rewind right and advance left. 'left.next() and right.next()' ends everything cleanly when the left runs out.">ProductScan.next:     right.next() or (right rewind · left.next() and right.next())</div>
+  <div class="code-step" data-step="pg" data-step-name="ProductScan routing" data-explain="get_val asks whichever side has_field says owns it (left checked first). has_field is the OR of both sides.">ProductScan.get_val:  ask the side whose has_field says yes</div>
+  <div class="code-explain-panel">Hover a line: if you can explain each one aloud, the lab is dictation.</div>
+</div>
+
+<p class="keep-in-present">Join conditions need no new machinery: a predicate term's right
+side may be <code>F("mid2")</code> (a field instead of a literal), and
+<code>Predicate.is_satisfied</code> (provided) already handles it. The
+<span class="gloss" data-gloss="cartesian-product">cartesian product</span> plus that
+predicate <em>is</em> the join.</p>
+
+<!-- ============================================================ -->
+<h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
+
+<p>Seven starter files into <code>microdb-lab4/</code>: four are reference lower layers
+(note the two new methods at the bottom of the reference TableScan). Build in test order:</p>
+
+<ol>
+  <li><strong>Read <code>query_engine.py</code> top to bottom</strong> (5 min); the module
+  docstring shows a full plan being stacked and run; <code>Predicate</code> and
+  <code>F</code> are provided and worth reading closely.</li>
+  <li><strong><code>SelectScan.next</code></strong>: the skip-loop. SELECT group goes green.</li>
+  <li><strong><code>ProjectScan.get_val / has_field</code></strong>: the fence. PROJECT green.</li>
+  <li><strong><code>ProductScan</code></strong>: <code>before_first</code> first (left gets a
+  <code>next()</code>, right doesn't), then the odometer, then routing. PRODUCT green,
+  including the course's first join.</li>
+</ol>
+
+<div class="callout note">
+  <span class="label">Gotchas that cost real debugging time</span>
+  <p>In <code>ProductScan.before_first</code>, the left side needs <code>next()</code> called
+  once;a product positioned "before" both sides yields nothing (the cardinality test reads 0
+  or 15 instead of 18). In the odometer, rewind the right <em>before</em> advancing the left.
+  And <code>close()</code> must reach both children; the pin test runs a whole join and then
+  audits the pool.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<p>Eleven tests in three groups, ordered by dependency. The showcase is
+<code>a real join</code>: <code>Project(name, dept) ← Select(mid = mid2 AND gpa &gt; 35) ←
+Product(students, majors)</code> must return exactly <code>(ada, cs), (cyd, cs),
+(eli, stat)</code>; the toy rows earn their keep. The quietest test is again the pin audit:
+after a full join runs and closes, no frame may remain pinned.</p>
+
+<pre><code class="language-text">$ python3 test_scans.py
+SELECT group
+  [PASS] SELECT: predicate filters rows (gpa > 35)
+  ...
+PRODUCT group
+  [PASS] PRODUCT: a real join: product + join predicate
+  [PASS] PRODUCT: close releases every pin
+
+11/11 tests passed</code></pre>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · read the failure</span>
+  <p>A classmate's product passes the cardinality test (18 pairs) but fails
+  <code>before_first rewinds the whole tree</code>: the second run of the same product yields
+  0 rows. Their <code>before_first</code> is
+  <code>self.left.before_first(); self.right.before_first()</code>. What's missing, and why did
+  the <em>first</em> run work anyway?</p>
+  <details><summary>Show answer</summary>
+  <p>The left side is never advanced onto its first row. The first run worked because
+  <code>next()</code>'s rollover branch (<code>left.next() and right.next()</code>) rescued it:
+  right was exhausted-at-birth, so the very first <code>next()</code> rolled over and advanced
+  left. On the second run the right side isn't freshly exhausted in the same way and the
+  accident doesn't repeat. Moral: code that works by accident fails by schedule; position the
+  left explicitly.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>predict the traffic</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>300 students (a third in cs, gpas evenly
+    20–39), 3 majors. The query: names of cs students with gpa &gt; 35. Plan A filters after
+    the product; Plan B filters both inputs first. Predict each plan's pairs-built number.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare: A = 300 × 3 = 900. B = 60
+      survivors × 1 major = 60. Now the trap: the counter on B's <em>majors filter</em> reads
+      60, not 1. Why might that be?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Run it, read the note under the table
+      aloud, and agree on what the nested loop does to its right input.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>A builds 900 pairs</strong> (300 × 3), <strong>B builds 60</strong> (60 gpa
+      survivors × 1 cs major), and both return the same 20 rows: a <strong>15×</strong> difference
+      in work from filter placement alone.</p>
+      <p>The trap is the counter on B's majors filter, which reads <strong>60, not 1</strong>. The
+      filter really does keep only one row, but the nested loop <strong>re-runs its right input
+      once per left row</strong>: 60 surviving students, so the majors scan is rewound and walked
+      60 times, and the filter is asked 60 times over. It kept 1 row, sixty separate times.</p>
+      <p>That is the second lesson, and it is the one people forget: in a nested-loop join the
+      right side's cost is multiplied by the left side's cardinality. It is why "put the small
+      table on the right" is folklore, and why week 9's hash join exists at all, since building a
+      hash table once beats re-scanning sixty times.</p>
+    </details>
+  </details>
+</div>
+
+<p>Reference output is deterministic, yours must match:</p>
+
+<pre><code class="language-text">$ python3 measure_pipeline.py
+same query, same answer, two shapes (300 students x 3 majors):
+
+  Plan A (filter late):  pairs built:    900   rows out: 20
+  Plan B (filter early): pairs built:     60   rows out: 20
+                         students filter: kept 60 of 300, read once
+                         majors filter: kept 1, but 60 rows flowed through it,
+                         because the nested loop RE-RUNS its right input per left row
+
+  pair-building work ratio, A / B: 15x</code></pre>
+
+<p class="keep-in-present">Two lessons for the price of one: filter placement bought
+<strong>15×</strong> with an identical answer, and the right input of a nested loop is
+re-executed once per left row, which is why "small table on the right" is ancient DBA wisdom
+and why week 9 invents the hash join.</p>
+
+<!-- ============================================================ -->
+<h2 id="assignment">Assignment</h2>
+
+<p>Due <strong>Thursday Sep 24 at class start</strong>, submitted per the course submission
+instructions.</p>
+
+<h3>Deliverables</h3>
+<ul>
+  <li>☐ <code>query_engine.py</code>: all eleven local tests pass (<code>11/11</code>).</li>
+  <li>☐ <code>measurements.txt</code>: both plan tables plus your answers to the script's
+  three questions (where B's advantage comes from, the 60-through-a-1-row-filter puzzle, and
+  who should choose plan shapes).</li>
+  <li>☐ Reflection (3–5 sentences): (1)&nbsp;Why must ProjectScan raise rather than quietly
+  delegating an un-projected field? (2)&nbsp;A plan's memory footprint doesn't grow with table
+  size: what <em>does</em> it grow with, and why?</li>
+</ul>
+
+<h3>What's provided vs what you write</h3>
+<table>
+  <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
+  <tbody>
+    <tr><td><code>query_engine.py</code></td><td>F, Predicate, CountingScan, all delegation stubs</td><td>SelectScan.next · ProjectScan's fence · ProductScan's four methods</td></tr>
+    <tr><td>reference layers ×4</td><td>Labs 1–3 (+ TableScan's get_val/has_field), do not edit</td><td>&nbsp;</td></tr>
+    <tr><td>harness + measure</td><td>complete, do not edit</td><td>run, record</td></tr>
+  </tbody>
+</table>
+
+<h3>Grading</h3>
+<table>
+  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Correctness</td><td>Gradescope runs a superset (deeper stacks, three-table products, empty tables)</td><td>70%</td></tr>
+    <tr><td>Measurement + answers</td><td>Tables match; answers connect shape → work and right-input re-execution</td><td>20%</td></tr>
+    <tr><td>Code quality</td><td>Operators change only their one concern; the rest delegates</td><td>10%</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">Fast finishers: write a <strong>JoinScan</strong> convenience class
+(constructor takes two scans + a join predicate, builds Select-over-Product internally;same
+tests should pass with plans half as deep); add <strong>OR</strong> to Predicate (a list of
+AND-groups: satisfied if any group is) with a test of your own; or write the cruelest
+five-line scan there is, a <strong>CachingScan</strong> that
+<span class="gloss" data-gloss="materialization">materializes</span> its input's rows in
+a Python list on first pass and replays from memory on rewind, then re-run
+<code>measure_pipeline.py</code> with it wrapped around Plan B's right input and explain the
+new counter readings. That's a hash join's little sibling, and week 9 will feel familiar.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">My join returns 18 rows, not 3.</h3>
+<p class="keep-in-present">Your SelectScan's predicate isn't being consulted,or the plan
+stacked Product over Select instead of Select over Product. Print the plan as you build it;
+the tree reads bottom-up.</p>
+
+<h3 class="keep-in-present">My join returns 0 rows but cardinality passes.</h3>
+<p class="keep-in-present">Almost always field routing: <code>get_val("mid2")</code> is being
+answered by the left side (which lacks it) or has_field lies. Check ProductScan asks
+<code>has_field</code> before choosing a side.</p>
+
+<h3 class="keep-in-present">Does the order of terms inside a Predicate matter?</h3>
+<p class="keep-in-present">For correctness, no: it's a conjunction. For speed, mildly:
+<code>is_satisfied</code> stops at the first failing term, so putting the cheapest,
+most-often-failing test first saves comparisons. Real optimizers reorder terms for exactly
+this reason.</p>
+
+<h3 class="keep-in-present">Why "left wins ties" instead of an error on ambiguous fields?</h3>
+<p class="keep-in-present">Honesty about scope: real SQL makes you qualify
+(<code>students.id</code>) and errors on ambiguity, which needs a name-resolution layer we
+haven't built. microdb documents its simple rule and the tests avoid collisions; a teaching
+engine should be predictable before it's featureful.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 10 · micro-rag · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lab 10</div>
+  <ul>
+    <li><a href="#try-it">Ask it anything</a></li>
+    <li><a href="#big-idea">The whole pipeline, one file</a></li>
+    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#build">Part 1 · Build</a></li>
+    <li><a href="#verify">Part 2 · Verify</a></li>
+    <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#assignment">Assignment</a></li>
+    <li><a href="#going-further">Going further</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lab 10 · Thursday November 12, 2026</div>
+  <h1>micro-rag · wire the pipeline</h1>
+  <div class="subtitle">Chunk, embed, index, retrieve, assemble: 200 lines of Python, one function per stage, graded by an eval set.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+Tuesday's claim was that RAG is a database wearing an AI costume. Today you take the costume
+off: a complete retrieval-augmented pipeline over a corpus that summarizes <em>this course</em>,
+importing Lab 9's <code>microvector</code> unchanged as its index. The chunker and embedder
+ship; the LLM call ships (mocked offline in <span class="gloss" data-gloss="echo-mode">echo
+mode</span>, one env var away from real). You write the two stages that decide whether the
+right evidence ever reaches the model (the retriever and the context assembly), and then a
+12-question <span class="gloss" data-gloss="eval-set">eval set</span> grades your retrieval
+with numbers, not vibes.
+</p>
+
+<div class="cite">
+  Builds on: <a href="../lab-09/microvector.html">Lab 9 · microvector</a> (shipped as a reference implementation in this starter) ·
+  Lewis et&nbsp;al., <a href="https://arxiv.org/abs/2005.11401"><em>Retrieval-Augmented Generation</em></a> ·
+  the embedder is scikit-learn's <a href="https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.HashingVectorizer.html">HashingVectorizer</a> idea in 15 lines of stdlib.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Ask it anything</h2>
+
+<p>This widget runs the finished pipeline's retrieval stage in your browser: the same
+hashing, the same stop-word list, scores identical to the Python you're about to write.
+Your job today is to make <code>python3 ask.py</code> produce exactly this.</p>
+
+<div class="viz" id="viz-ask">
+  <div class="viz-title">micro-rag · 24 course-summary documents, 25 chunks, DIM = 2048</div>
+  <p class="viz-description">Ask a question about anything from weeks 1–11. Top-3 chunks by
+  cosine, then the assembled prompt, the string an LLM would receive.</p>
+  <div class="ask-row">
+    <input type="text" id="ask-input" placeholder="e.g. what happens to a row's bytes when it is deleted?">
+    <button type="button" class="btn primary" id="ask-go">Retrieve</button>
+  </div>
+  <div class="ask-presets">
+    <button type="button" class="btn" data-q="Why is recovery safe to run twice after a crash?">recovery</button>
+    <button type="button" class="btn" data-q="What does the probe setting trade away in vector search?">last week</button>
+    <button type="button" class="btn" data-q="Why can't the OS page cache replace the database's own cache?">buffer pool</button>
+    <button type="button" class="btn" data-q="What keeps the most popular pages sitting in memory?">…same question, synonyms</button>
+  </div>
+  <div id="ask-results"></div>
+  <details class="ask-prompt-wrap"><summary>Show the assembled prompt (your <code>build_prompt</code> output)</summary>
+    <pre id="ask-prompt" class="ask-prompt"></pre>
+  </details>
+  <div class="chat-downloads">
+    <span class="chat-downloads-label">Starter files:</span>
+    <a class="chat-dl-btn" href="starter/micro_rag.py" download>micro_rag.py</a>
+    <a class="chat-dl-btn" href="starter/corpus.py" download>corpus.py</a>
+    <a class="chat-dl-btn" href="starter/microvector.py" download>microvector.py</a>
+    <a class="chat-dl-btn" href="starter/ask.py" download>ask.py</a>
+    <a class="chat-dl-btn" href="starter/test_rag.py" download>test_rag.py</a>
+    <a class="chat-dl-btn" href="starter/measure_rag.py" download>measure_rag.py</a>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big-idea">The whole pipeline, one file</h2>
+
+<p class="keep-in-present"><code>micro_rag.py</code> is Tuesday's five-stage diagram as five
+callables, in reading order:</p>
+
+<pre class="equation"><code>chunk_corpus()   documents → chunks               provided   (record design, done for you)
+embed(text)      text → 2048-dim unit vector      provided   (the hashing trick, read it)
+Retriever        chunks → index → top-k           YOUR JOB   (Lab 9's index, wired to text)
+build_prompt()   question + chunks → prompt       YOUR JOB   (context assembly, exact format)
+answer()         prompt → text                    provided   (echo mode, or LLM_BASE_URL)</code></pre>
+
+<p>The provided <code>embed</code> deserves two minutes of reading: it is the whole
+"embedding model" and it fits on a slide. Hover each line:</p>
+
+<div class="code-annotated" id="embed-code">
+<div class="code-step" data-step="tokenize" data-step-name="tokenize" data-explain="Lowercase, keep alphabetic runs only. 'B+ trees!' becomes ['b','trees']: crude, deterministic, done. Words on the STOPWORDS list ('the', 'of', 'and'…) are dropped: they appear in every chunk, so they carry zero signal and drown the words that matter.">for word in re.findall(r"[a-z]+", text.lower()):
+    if word in STOPWORDS:
+        continue
+    counts[word] = counts.get(word, 0) + 1</div>
+<div class="code-step" data-step="hash" data-step-name="hash to a dimension" data-explain="The hashing trick: a word's dimension is md5(word) mod 2048. No vocabulary to store or fit: any word, ever, maps somewhere instantly. The price: two unrelated words can collide onto the same dimension, and the measurement in Part 3 shows exactly what that costs as DIM shrinks.">dim = int(hashlib.md5(word.encode()).hexdigest(), 16) % DIM</div>
+<div class="code-step" data-step="weight" data-step-name="weight the count" data-explain="A word appearing 5 times matters more than once, but not 5× more. The 1/(1+log n) damping is tf-weighting's standard move: repeated words saturate instead of dominating.">v[dim] += 1.0 / (1.0 + math.log(count))</div>
+<div class="code-step" data-step="normalize" data-step-name="normalize" data-explain="Scale to unit length, exactly like Lab 9's vectors, so the dot product IS cosine similarity and BruteForceIndex needs no changes to work on text.">norm = math.sqrt(sum(x * x for x in v)) or 1.0
+return [x / norm for x in v]</div>
+</div>
+<div class="code-explain-panel" id="embed-code-panel"></div>
+
+<p class="keep-in-present">That's a real embedder: the
+<span class="gloss" data-gloss="hashing-trick">hashing trick</span> with
+<span class="gloss" data-gloss="stop-words">stop-word</span> removal. Its real
+limitation: it matches <em>words</em>, not meaning. The lab measures the limitation
+instead of hiding it, and your project replaces this one function with a learned model
+while keeping every other line.</p>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The contract</h2>
+
+<table>
+  <thead><tr><th>File</th><th>Ships as</th><th>What's inside</th></tr></thead>
+  <tbody>
+    <tr><td><code>micro_rag.py</code></td><td><strong>you edit this one</strong></td><td>chunker + embedder + <code>answer()</code> provided; <code>Retriever</code> and <code>build_prompt</code> are the two YOUR JOB zones</td></tr>
+    <tr><td><code>corpus.py</code></td><td>provided, read-only</td><td>24 course-summary documents + the 12-question eval set with relevant doc ids</td></tr>
+    <tr><td><code>microvector.py</code></td><td>reference implementation, do not edit</td><td>Lab 9, complete: <code>BruteForceIndex</code> is your index (25 chunks need no IVF)</td></tr>
+    <tr><td><code>ask.py</code></td><td>provided</td><td>command-line front end: <code>python3 ask.py "your question"</code></td></tr>
+    <tr><td><code>test_rag.py</code></td><td>provided</td><td>the harness: RETRIEVE · QUALITY · PROMPT groups, 7 tests</td></tr>
+    <tr><td><code>measure_rag.py</code></td><td>provided</td><td>Part 3: DIM sweep, eval table, the synonym wall</td></tr>
+  </tbody>
+</table>
+
+<div class="callout insight">
+  <span class="label">The shapes that matter</span>
+  <p>A chunk is <code>{"doc": "wal", "title": "Write-ahead logging", "text": "Before
+  changing a page…"}</code>. <code>Retriever.retrieve(question, k)</code> returns k of those,
+  each with a <code>"score"</code> added, best first. <code>build_prompt</code> turns them
+  into three blank-line-separated sections: header, one <code>[doc] Title: text</code> line
+  per chunk, then <code>Question: …</code>. The harness parses that format character by
+  character; "close" is not a format.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>design the retriever</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span><code>BruteForceIndex</code> stores plain
+    vectors and returns <code>(score, i)</code> pairs; it has never heard of text. Sketch
+    <code>Retriever.__init__</code> and <code>retrieve</code>: what gets embedded when, and
+    how does an integer <code>i</code> from the index turn back into a chunk with a title?
+    What silently breaks if you build the index from a <em>filtered</em> copy of the chunk
+    list?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Converge on the invariant: index id
+      <code>i</code> ↔ <code>self.chunks[i]</code>, forever. Filter, sort, or dedupe the list
+      after building and every retrieval silently returns the wrong chunk with a confident
+      score; the eval set is how you'd ever notice.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Embedding 25 chunks: build time or
+      query time? Defend with what each choice costs per question.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><code>__init__</code> embeds <em>every chunk's text</em> once and builds a
+      <code>BruteForceIndex</code> over those vectors, keeping the index order aligned with
+      <code>self.chunks</code>. <code>retrieve</code> embeds the <em>question</em>, calls
+      <code>self.index.search(qv, k)</code>, and turns each returned integer <code>i</code> back
+      into a chunk by <code>self.chunks[i]</code>, attaching the score to a <em>copy</em>.</p>
+      <p>The invariant is <strong>index id <code>i</code> ↔ <code>self.chunks[i]</code>,
+      forever</strong>. Build the index from a filtered, sorted or deduped copy and the ids now
+      address a different list: every retrieval returns the <em>wrong chunk with a confident
+      score</em>, the own-text test still passes, and nothing raises. Only the eval set catches it,
+      which is precisely why the eval set exists.</p>
+      <p>Embed at <strong>build time</strong>. Embedding is the expensive step, the chunks do not
+      change between questions, and doing it per query would pay 25 embeddings on every single
+      question to answer one. Build time costs 25 embeddings once; query time then costs exactly
+      one, for the question. That is the same trade as building an index in Lab 6: pay
+      organisation once, skip work forever.</p>
+    </details>
+  </details>
+</div>
+
+<ol>
+  <li><strong>Read the provided half</strong> (8 min): the module docstring's pipeline
+  table, <code>chunk_corpus</code>, <code>embed</code> (annotated above), and
+  <code>answer</code>'s echo mode.</li>
+  <li><strong><code>Retriever.__init__</code></strong>: embed every chunk's
+  <code>text</code>, build a <code>BruteForceIndex</code> over the vectors, store it as
+  <code>self.index</code>. Order aligned with <code>self.chunks</code>: that's the whole
+  design.</li>
+  <li><strong><code>Retriever.retrieve</code></strong>: embed the question,
+  <code>self.index.search(qv, k)</code>, then attach each score to a <em>copy</em> of its
+  chunk (<code>dict(chunk)</code>). The RETRIEVE group greens.</li>
+  <li><strong><code>build_prompt</code></strong>: the exact three-section format from the
+  docstring. The PROMPT group parses it literally.</li>
+  <li><strong><code>python3 ask.py "why does commit fsync the log?"</code></strong>: your
+  pipeline, end to end, in echo mode.</li>
+</ol>
+
+<div class="callout note">
+  <span class="label">Gotchas that cost real debugging time</span>
+  <p>Attach scores to <em>copies</em>; mutating <code>self.chunks</code> passes one retrieval
+  and corrupts the next (there's a test for exactly this). Embed the chunk's
+  <code>text</code>, not title+text; the own-text test expects cosine 1.0. And keep
+  <code>build_prompt</code> boring: no extra newline at the end, no numbering, no
+  "creative" header. The format is an I/O protocol, like every autograder this
+  semester.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="verify">Part 2 · Verify <span class="part-time">~10 min in class</span></h2>
+
+<pre><code class="language-text">$ python3 test_rag.py
+RETRIEVE group
+  [PASS] RETRIEVE: a chunk's own text comes back first
+  [PASS] RETRIEVE: top-k results have the right shape
+  [PASS] RETRIEVE: stored chunks are never mutated
+QUALITY group
+  [PASS] QUALITY: hit@3 >= 0.90 on the eval set
+  [PASS] QUALITY: MRR >= 0.70 on the eval set
+PROMPT group
+  [PASS] PROMPT: build_prompt emits the exact format
+  [PASS] PROMPT: answer() cites sources in echo mode
+
+7/7 tests passed</code></pre>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · read the failure</span>
+  <p>A classmate passes everything except the two QUALITY tests:hit@3 comes out 0.08.
+  Their <code>retrieve</code> looks right, and the own-text test <em>passes</em>. What one
+  line in <code>__init__</code> produces exactly this pattern?</p>
+  <details><summary>Show answer</summary>
+  <p>They built the index from a re-sorted list (e.g.
+  <code>sorted(chunks, key=...)</code> or a set-deduped copy) while <code>self.chunks</code>
+  kept the original order. Index id <code>i</code> now points at the wrong chunk. The
+  own-text test can still pass when the queried chunk happens to land at the same position;
+  the eval set, which checks <em>which doc</em> came back, collapses to near zero. Alignment
+  bugs are silent until something checks identity, not just scores; that's what eval sets
+  are for.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>predict the collapse</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>The embedder hashes words into DIM
+    dimensions. Predict the hit@3 column of the DIM sweep before running it: what happens at
+    DIM=64, where ~700 corpus words share 64 dimensions? And predict the two buffer-pool
+    phrasings from the widget above: which retrieves, which doesn't, and why?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Two different failure mechanisms: DIM
+      shrink = <em>collisions</em> (unrelated words merged by the hash), synonym miss =
+      <em>vocabulary</em> (no shared content words at any DIM). Which one does buying a
+      bigger DIM fix? Which needs a different embedder entirely?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Your project uses a learned embedding
+      model. Which of the two failures does it cure, and which can it still have?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>At <strong>DIM=64</strong> hit@3 collapses to <strong>0.42</strong> (MRR 0.21), because
+      roughly 700 corpus words are being hashed into 64 dimensions, so unrelated words are merged
+      by collision and the vectors stop distinguishing documents. At 256 it recovers to 0.83, and
+      at 2048 to 0.92. For the two buffer-pool phrasings: the one containing the words
+      <em>cache</em> and <em>page</em> retrieves the bufferpool document; the paraphrase "what
+      keeps the most popular pages sitting in memory" does not, because it shares no content words
+      with the target at all.</p>
+      <p>These are <strong>two different mechanisms</strong>, and that is the point. Collisions are
+      a <em>capacity</em> problem, cured by buying more dimensions. The synonym wall is a
+      <em>vocabulary</em> problem: bag-of-words matches words, not meaning, so no DIM fixes it.
+      That is why 4096 buys nothing over 2048 once collisions are gone.</p>
+      <p>A learned embedding model cures the second, since it places paraphrases near each other in
+      the space regardless of shared words. It does not make you immune to the first: a learned
+      model still has a fixed dimensionality and can still be too small for the domain, and it adds
+      failure modes of its own, such as being trained on a distribution unlike your corpus.</p>
+    </details>
+  </details>
+</div>
+
+<p>The measurement is deterministic; yours must match:</p>
+
+<pre><code class="language-text">$ python3 measure_rag.py
+1. Embedding width vs. retrieval quality (same corpus, same questions)
+      DIM   hit@3     MRR
+       64    0.42    0.21
+      256    0.83    0.58
+     2048    0.92    0.86
+
+3. The synonym wall (both questions mean 'the buffer pool')
+   Why can't the OS page cache replace the database's own cache?
+      -> bufferpool (0.25), wal (0.13), catalog (0.12)
+   What keeps the most popular pages sitting in memory?
+      -> wal (0.10), selectivity (0.09), blocks (0.09)</code></pre>
+
+<p class="viz-description">(Exhibit 2, the per-question eval table, prints between these:
+one row per eval question with rank and retrieved docs. It has one MISS at DIM=2048:
+"What happens to a row's bytes when it is deleted?"; the corpus says
+"<em>Deleting</em> a record flips its flag." Same idea, different word form. Stemming,
+question 3's subject, exists for exactly this.)</p>
+
+<div class="viz" id="viz-dim">
+  <div class="viz-title">The DIM dial · measured on the reference solution</div>
+  <p class="viz-description">Drag to shrink the embedding. Collisions merge unrelated words
+  onto shared dimensions; the eval set watches quality fall. <span class="gloss" data-gloss="mrr">MRR</span>
+  falls first; collisions demote the right doc before they hide it.</p>
+  <div class="dl-wrap">
+    <label class="dl-label">DIM = <span id="dim-val">2048</span></label>
+    <input type="range" id="dim-slider" min="0" max="6" step="1" value="5">
+  </div>
+  <div id="dim-readout"></div>
+  <p class="viz-caption">4096 buys nothing over 2048; the remaining errors are vocabulary,
+  not collisions. Diagnosis before spending: know <em>which</em> failure you have.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="assignment">Assignment</h2>
+
+<p>Due <strong>Thursday Nov 19 at class start</strong>. Submit <code>micro_rag.py</code> and
+<code>measurements.txt</code> to Gradescope (autograder runs the harness plus a superset:
+held-out eval questions, format edge cases, alignment probes).</p>
+
+<h3>Deliverables</h3>
+<ul>
+  <li>☐ <code>micro_rag.py</code>: all seven tests pass (<code>7/7</code>).</li>
+  <li>☐ <code>measurements.txt</code>: the full <code>measure_rag.py</code> output plus
+  written answers: (1)&nbsp;Which eval questions fail at DIM=256 but pass at 2048, and what
+  does that isolate as the cause? (2)&nbsp;The synonym wall's best score is 0.10; propose a
+  <em>threshold rule</em> for <code>answer()</code> and defend the cutoff you'd pick.
+  (3)&nbsp;The MISS in exhibit 2 is "deleted" vs "Deleting"; one sentence on what a stemmer
+  would change, and one on what it still couldn't fix.</li>
+  <li>☐ Reflection (3–5 sentences): map each of your two functions to its microdb ancestor:
+  which week was <code>Retriever</code>, which week was <code>build_prompt</code>'s "exact
+  format or the parser breaks" discipline? Be specific.</li>
+</ul>
+
+<h3>Grading</h3>
+<table>
+  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Correctness</td><td>Gradescope superset: held-out questions, k edge cases, alignment and mutation probes</td><td>70%</td></tr>
+    <tr><td>Measurement + answers</td><td>Output exact; the threshold rule engages stakes; the two failure mechanisms kept distinct</td><td>20%</td></tr>
+    <tr><td>Code quality</td><td>Copies not mutations; no re-implementation of shipped helpers; readable straight through</td><td>10%</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">Fast finishers: set <code>LLM_BASE_URL</code> /
+<code>LLM_API_KEY</code> / <code>LLM_MODEL</code> to any OpenAI-compatible endpoint and watch
+your retrieval feed a real model, then break it with the synonym wall and watch it answer
+confidently from the wrong chunks (grounding failure, live). Add a <strong>score
+threshold</strong> to <code>answer()</code> that refuses below your question-2 cutoff. Or
+implement <strong>Porter-lite stemming</strong> (strip <code>-ing</code>/<code>-ed</code>/<code>-s</code>
+before hashing, ~10 lines) and re-run the eval: exhibit 2's MISS should flip; measure
+whether anything else got <em>worse</em>, because that's the real lesson of retrieval
+tuning.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">Why brute force instead of the IVF index I built last week?</h3>
+<p class="keep-in-present">25 chunks. IVF's bookkeeping costs more than it saves below a few
+thousand vectors: Tuesday's "at small scale, brute force is the right answer," practiced.
+The import swap is one line when your project corpus crosses that line; that's why
+<code>microvector.py</code> ships whole.</p>
+
+<h3 class="keep-in-present">My hit@3 is 0.92, not 1.00. Is that a bug?</h3>
+<p class="keep-in-present">No, that's the reference behavior. One eval question fails on a
+word-form mismatch ("deleted" vs "Deleting"), and the bars (0.90 / 0.70) are set so the
+correct implementation passes with the honest miss included. If you're at 0.83 or below,
+suspect index/chunk misalignment, not the embedder.</p>
+
+<h3 class="keep-in-present">Where does the LLM actually come from?</h3>
+<p class="keep-in-present">Any OpenAI-compatible chat endpoint. The course will post one for
+in-class use, or run a local server (Ollama and vLLM both speak the protocol). Nothing in the
+graded work needs it: the autograder runs entirely in echo mode, because what's graded is
+retrieval, and the prompt <em>is</em> retrieval made visible.</p>
+
+<h3 class="keep-in-present">Can my project just use this file?</h3>
+<p class="keep-in-present">That's the intent; it's the reference architecture. Swap
+<code>embed</code> for a learned model, <code>corpus.py</code> for your documents,
+<code>BruteForceIndex</code> for IVF/pgvector when scale demands, and grow the eval set to
+your domain. The structure (five stages, one contract each, an eval set in the loop)
+is the graded part of the project too.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

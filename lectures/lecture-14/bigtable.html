@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 14 · Bigtable, LSM Trees &amp; NoSQL · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lecture 14</div>
+  <ul>
+    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#problem">Google's 2004 problem</a></li>
+    <li><a href="#model">The Bigtable data model</a></li>
+    <li><a href="#tablets">Tablets</a></li>
+    <li><a href="#lsm">The LSM tree</a></li>
+    <li><a href="#try-it">Run the write path</a></li>
+    <li><a href="#reads">The read path</a></li>
+    <li><a href="#lsm-vs-btree">LSM vs B+ tree</a></li>
+    <li><a href="#cap">Replication &amp; CAP</a></li>
+    <li><a href="#descendants">The descendants</a></li>
+    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 14 · Tuesday November 24, 2026</div>
+  <h1>Google's Playbook: Bigtable, LSM Trees &amp; NoSQL</h1>
+  <div class="subtitle">How to accept a million writes a second on machines that keep dying, and why every piece of the answer is a course topic you already own.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+In 2006 Google described the store behind web search, Maps, and Gmail: Bigtable. Read today,
+the paper is a reunion tour: a WAL (week 7), a sorted in-memory buffer flushed to immutable
+sorted files (your B+ tree's ideas, rearranged), range partitioning (last week), and caching
+(week 2), all riding on <span class="gloss" data-gloss="commodity">commodity machines</span>
+that fail constantly. The one genuinely new structure is the LSM tree (the write-optimized
+mirror image of your read-optimized B+ tree), and it now sits inside Cassandra, HBase,
+RocksDB, LevelDB, and the storage engine of half the databases shipped since. No lab Thursday
+(Thanksgiving); today is the last new-systems lecture, and it closes the storage story.
+</p>
+
+<div class="cite">
+  Companion reading: Chang et&nbsp;al., <a href="https://research.google/pubs/pub27898/"><em>Bigtable: A Distributed Storage System for Structured Data</em></a> (OSDI 2006) ·
+  O'Neil et&nbsp;al., <a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf"><em>The Log-Structured Merge-Tree</em></a> (1996, the idea predates the need) ·
+  RocksDB's <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Overview">architecture overview</a> (the modern production LSM).
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="plan">Today's plan</h2>
+
+<p>Quiz 11 first (MapReduce, Spark &amp; Ray), then the write-optimized half of the storage
+world.</p>
+
+<ol class="agenda">
+  <li><strong>Google's 2004 problem</strong>: why sharded MySQL wasn't the answer.</li>
+  <li><strong>The Bigtable model</strong>: a sorted map wearing a table costume.</li>
+  <li><strong>Tablets</strong>: last week's range partitioning, productized.</li>
+  <li><strong>The LSM tree</strong>: never overwrite: buffer, flush, merge.</li>
+  <li><strong>Run the write path</strong>: memtable, SSTables, and compaction, live.</li>
+  <li><strong>LSM vs B+ tree</strong>: the read/write bargain, priced.</li>
+  <li><strong>Replication &amp; CAP</strong>: what partitions force you to choose.</li>
+</ol>
+
+<p class="keep-in-present">Today's claim: <strong>the B+ tree and the LSM tree are the two
+poles of one trade</strong> (organize on write (pay before reads) or organize later (pay
+during reads)), and every storage engine you'll ever meet sits somewhere on that line.</p>
+
+<!-- ============================================================ -->
+<h2 id="problem">Google's 2004 problem</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>break your own engine</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>The workload: the web crawl,
+    billions of pages, rewritten continuously, hundreds of thousands of writes per second,
+    keyed by URL, on thousands of cheap machines with disks that die daily. Take microdb's
+    write path (pin page → WAL → update slot → flush at commit) and find the two places it
+    collapses under this load. Be specific: which structure, which operation.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Converge on: (1) every row update is a
+      <em>random</em> page write; B+-tree-organized storage turns a write flood into disk
+      seeks everywhere; (2) one machine's disks and RAM bound everything, and at thousands
+      of machines, "a machine died" is Tuesday, so recovery must be routine, not an event.</li>
+      <li><span class="tps-phase">Share · 2 min</span>You may keep any course idea. Which
+      survive unchanged? (Hint: the WAL does. Sequential appends are the one thing cheap
+      disks do brilliantly.)</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>(1) The write path is random I/O.</strong> Every update pins the page holding
+      that row and modifies it in place, so a flood of writes to billions of URLs scattered
+      through a B+ tree becomes seeks all over the disk. The structure that made reads cheap by
+      sorting on the way in is precisely what makes this write pattern expensive.
+      <strong>(2) One machine bounds everything:</strong> its disks, its RAM, its buffer pool. And
+      at thousands of machines a death is a daily event, so recovery cannot be an operator waking
+      up at 3am; it has to be routine.</p>
+      <p>What survives unchanged is the interesting half. The <strong>WAL</strong> survives
+      completely, because appending sequentially is the one thing cheap disks do brilliantly, and
+      it is already how the engine gets durability without paying per page. <strong>Sorted
+      structures</strong> survive, just not sorted-in-place: sort in memory, then write immutable
+      sorted files. <strong>Block I/O and caching</strong> survive verbatim. So the redesign is not
+      a repudiation of anything you built; it keeps the log, keeps sorting, and abandons only
+      "update the page where the row already lives". That single subtraction is the LSM tree.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Google's 2004 problem">The insight: writes love sequential, reads love sorted</h3>
+
+<pre class="equation"><code>the tension:   fast writes  want  append-only, sequential I/O     (never seek, never overwrite)
+               fast reads   want  sorted, indexed structures      (binary search, range scans)
+
+B+ tree:   sorts on the way IN   → reads cheap, every write is a random page touch
+LSM tree:  appends on the way IN → writes cheap, sorting deferred to background merges
+
+Bigtable's bet: for crawl/serving workloads, take the LSM side, and make reads
+tolerable with memory, sorted files, and filters.</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="model">The Bigtable data model</h2>
+
+<p class="keep-in-present">The paper's own sentence, unpacked: "a sparse, distributed,
+persistent, multidimensional sorted map." Not a relational table, a map:</p>
+
+<pre class="equation"><code>(row_key, column_family:qualifier, timestamp)  →  bytes
+
+row_key    "com.cnn.www"      · URLs reversed so domains sort together (row keys are SORTED)
+column     "anchor:cnnsi.com" · families fixed & few (schema); qualifiers open-ended (data!)
+timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, reads pick one</code></pre>
+
+<h3 class="new-slide" data-kicker="The Bigtable data model">What each departure buys</h3>
+
+<table>
+  <thead><tr><th>Departure from SQL</th><th>What it buys</th><th>Course echo</th></tr></thead>
+  <tbody>
+    <tr><td>rows sorted by key, always</td><td>range scans + natural range partitioning</td><td>B+ tree leaves; Lab 8's folder partitions</td></tr>
+    <tr><td><span class="gloss" data-gloss="wide-column">sparse columns</span>, no fixed row width</td><td>a million anchor columns, zero storage for absent ones</td><td>the null-bitmap discussion, taken to its limit</td></tr>
+    <tr><td>versions instead of overwrites</td><td>lock-free reads of a consistent past</td><td>MVCC, week 8, almost verbatim</td></tr>
+    <tr><td>no joins, no SQL, single-row transactions only</td><td>every operation's cost is knowable and local</td><td>what you give up, the price tag NoSQL hid in the fine print</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="tablets">Tablets</h2>
+
+<p class="keep-in-present">Because rows are sorted, the table splits into contiguous key
+ranges:<strong>tablets</strong>, ~100–200&nbsp;MB each. A tablet is last week's range
+partition with an ops team: a master assigns tablets to tablet servers, hot or overgrown
+tablets split, cold ones merge, and a dead server's tablets are reassigned in seconds;
+recovery is routine precisely because the data (in GFS, replicated 3×) never lived on the
+server's own disk. The server is a cache and a pen; the file system is the truth.</p>
+
+<p class="keep-in-present">Note the row-key design consequence: keys prefixed by timestamp
+make the newest tablet the <span class="gloss" data-gloss="hotspot">hotspot</span> every
+write hammers: last week's skew, in range-partition form. Bigtable schema design is mostly
+key design; "reverse the URL" was never cosmetic.</p>
+
+<h3 class="new-slide" data-kicker="Tablets">Key design is capacity planning: prove it</h3>
+
+<div class="viz" id="viz-tablet">
+  <div class="viz-title">one sorted key space, four tablets · pick a key design, send writes</div>
+  <p class="viz-description">Each box is a tablet (a contiguous key range) on its own
+  server. Send a burst of writes under each key design and watch where they land. When one
+  tablet grows hot, split it; then send more writes and see whether splitting actually
+  helped.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="tb-user">write 12 rows · user-id keys</button>
+    <button type="button" class="btn primary" id="tb-time">write 12 rows · timestamp keys</button>
+    <button type="button" class="btn" id="tb-split">split the hottest tablet</button>
+    <button type="button" class="btn" id="tb-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="tb-msg">Four tablets, four servers, empty. Choose a key design.</div>
+  <div id="tb-stage"></div>
+  <p class="viz-caption">The trap, demonstrated: splitting the hot tablet under timestamp
+  keys just crowns a new final tablet; the next burst chases the end of the key space
+  forever, because the keys are monotonic. Splits fix <em>size</em>; only key design fixes
+  <em>direction</em>. This is why Bigtable schemas hash or reverse their key prefixes.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="lsm">The LSM tree</h2>
+
+<p class="keep-in-present">Inside one tablet server, the write path, the part the whole
+NoSQL generation inherited:</p>
+
+<pre class="equation"><code>write(k, v):   1. append to WAL            sequential disk: durability, week 7 verbatim
+               2. insert into MEMTABLE     sorted structure in RAM: fast, bounded size
+
+memtable full: flush to an SSTABLE        Sorted String Table: immutable file of sorted (k,v)
+                                           + a sparse index: written once, NEVER edited
+
+background:    COMPACTION                  merge-sort several SSTables into one,
+                                           dropping shadowed versions and tombstones (week 3!)</code></pre>
+
+<p class="keep-in-present">Every disk write is sequential: the WAL, the flushes, the
+merges. Random writes have been <em>abolished</em>, at the price of the same key now living
+in several places at once: the memtable, maybe three SSTables. That price lands on reads,
+which is the next section, but first, drive it.</p>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Run the write path</h2>
+
+<p>A tablet server's storage engine with a 6-entry memtable. Write keys, watch flushes make
+SSTables, compact, and then look keys up to see where reads must search.</p>
+
+<div class="viz" id="viz-lsm">
+  <div class="viz-title">LSM engine · memtable (cap 6) → L0 SSTables → compaction</div>
+  <p class="viz-description">Each write goes to the memtable (sorted, in RAM). At 6 entries
+  it flushes to an immutable SSTable. <strong>Compact</strong> merge-sorts all SSTables into
+  one, dropping old versions of re-written keys. Then <strong>look up</strong> a key: every
+  structure that must be checked lights up, newest first.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="lsm-w1">Write 1 key</button>
+    <button type="button" class="btn primary" id="lsm-w6">Write 6 keys</button>
+    <button type="button" class="btn" id="lsm-compact">Compact</button>
+    <button type="button" class="btn" id="lsm-reset">Reset</button>
+    <span class="lsm-msg" id="lsm-msg"></span>
+  </div>
+  <div class="lsm-lookup">
+    <label>look up key: <input type="text" id="lsm-key" size="6" placeholder="k12"></label>
+    <button type="button" class="btn" id="lsm-get">get()</button>
+    <span id="lsm-get-msg"></span>
+  </div>
+  <div id="lsm-stage"></div>
+  <p class="viz-caption">Write ~20 keys without compacting, then look one up: a read may
+  check the memtable plus every SSTable. Compact and repeat: one file, one check. That
+  cycle, tuned by heuristics, is the whole operational life of Cassandra and RocksDB.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="reads">The read path</h2>
+
+<p class="keep-in-present">A key can live anywhere from RAM to the oldest SSTable, so
+<code>get(k)</code> checks newest-to-oldest and returns the first hit. Three tools keep that
+from being a disaster:</p>
+
+<h3 class="new-slide" data-kicker="The read path">Three read rescues</h3>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Bloom filters</span><span>each SSTable carries a <span class="gloss" data-gloss="bloom">Bloom filter</span>, a tiny bitmap that answers "definitely absent" or "maybe here." Most SSTables are skipped without touching disk; the filter is wrong (a false "maybe") ~1% of the time and never wrong the dangerous way.</span></div>
+  <div class="lc-row"><span class="lc-k">Sparse indexes + caches</span><span>an SSTable stores every Nth key in memory: binary search the sparse index, read one block. Week 2's buffer-pool logic caches the hot blocks; week 6's "index = skip most of the data" logic finds the rest.</span></div>
+  <div class="lc-row"><span class="lc-k">Compaction itself</span><span>fewer, bigger, non-overlapping files = fewer places a key can hide. Compaction is a background tax on write throughput paid to keep <span class="gloss" data-gloss="read-amp">read amplification</span> bounded, the engine's central tuning dial.</span></div>
+</div>
+
+<h3 class="new-slide" data-kicker="The read path">Build a Bloom filter</h3>
+
+<p>The first rescue, small enough to build in a page: 32 bits, 3 hash functions per key.
+Insert keys, then query keys you never inserted, and keep querying until the filter tells
+you a polite lie:</p>
+
+<div class="viz" id="viz-bloom">
+  <div class="viz-title">Bloom filter · 32 bits, 3 hashes · insert, then try to catch it lying</div>
+  <p class="viz-description">Insert sets each key's 3 bits (hover a bit for which keys set
+  it). A query checks the same 3 bits: any zero means <em>definitely absent</em>; skip the
+  SSTable, no disk read; all ones means only <em>maybe here</em>.</p>
+  <div class="bloom-row">
+    <input type="text" id="bloom-key" size="8" placeholder="k12">
+    <button type="button" class="btn primary" id="bloom-ins">insert</button>
+    <button type="button" class="btn primary" id="bloom-qry">query</button>
+    <button type="button" class="btn" id="bloom-seed">insert k1…k6</button>
+    <button type="button" class="btn" id="bloom-reset">Reset</button>
+  </div>
+  <div class="bloom-bits" id="bloom-bits"></div>
+  <div class="bloom-msg" id="bloom-msg">The filter starts empty: every query answers "definitely absent" for free.</div>
+  <p class="viz-caption">The lie is one-sided by construction: a "maybe" for an absent key
+  (a false positive) costs one wasted disk read; a false "absent" for a present key would
+  lose data, and can never happen, because inserting a key sets exactly the bits its
+  queries check. Real filters size the bitmap so the lie rate stays near 1%.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="lsm-vs-btree">LSM vs B+ tree</h2>
+
+<table>
+  <thead><tr><th></th><th>B+ tree (microdb, Postgres, MySQL)</th><th>LSM (Bigtable, Cassandra, RocksDB)</th></tr></thead>
+  <tbody>
+    <tr><td>write path</td><td>find the page, modify in place, random I/O</td><td>append + memtable, sequential only</td></tr>
+    <tr><td>read path</td><td>one root-to-leaf descent, one home per key</td><td>memtable + K SSTables (Bloom-filtered)</td></tr>
+    <tr><td>background cost</td><td>splits, occasional vacuum</td><td>compaction, continuous, tunable, the ops burden</td></tr>
+    <tr><td>range scans</td><td>excellent, linked leaves</td><td>good, merge K sorted runs</td></tr>
+    <tr><td>wins when</td><td>read-heavy, point-lookup OLTP</td><td>write-heavy: ingest, events, time series, crawls</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Same bargain, opposite poles: the B+ tree pays the sorting cost
+<em>on the write</em> so reads are one descent; the LSM defers it to compaction so writes
+are one append. Neither wins in general; the <em>workload</em> picks. You now own both
+poles: you built one and just drove the other.</p>
+
+<!-- ============================================================ -->
+<h2 id="cap">Replication &amp; CAP</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the partition forces your hand</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Key <code>k</code> is replicated on
+    servers A and B. The network between them fails: both alive, neither reachable from the
+    other. A write for <code>k</code> arrives at A; a read at B. You must decide <em>now</em>:
+    what are the only two coherent policies, and what does each cost the client?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Policy 1: refuse (one side errors or
+      blocks) is consistent but unavailable. Policy 2: both proceed is available, and B just
+      served a stale read; the replicas must reconcile later. There is no third policy;
+      that's the theorem.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Pick per application: the shopping
+      cart, the bank balance, the like counter. Which policy for each, and what does
+      "reconcile later" concretely mean for the cart?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Only two coherent policies exist, which is the whole content of the theorem.
+      <strong>Refuse:</strong> one side errors or blocks until the partition heals. The client
+      gets an error or a hang, but never a wrong answer, so the system is consistent and
+      unavailable (CP). <strong>Proceed:</strong> A takes the write and B answers the read from
+      what it has. Every request succeeds, and B just served a <em>stale</em> value, so the system
+      is available and inconsistent (AP), and the two replicas must be reconciled afterwards.
+      There is no third option: you cannot be both correct and answering when the two halves
+      cannot talk.</p>
+      <p>Per application: the <strong>bank balance</strong> refuses, because serving a stale
+      balance mints or destroys money. The <strong>like counter</strong> proceeds without
+      hesitation, because nobody is harmed by a count that is briefly low. The <strong>shopping
+      cart</strong> proceeds too, and it is the interesting one, because "reconcile later"
+      concretely means <em>union the two carts</em>: if you added a book on one side and a lamp on
+      the other, the merged cart holds both. That is Dynamo's actual answer, and it works because
+      an over-full cart is a recoverable annoyance while a rejected add-to-cart is lost
+      revenue.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Replication &amp; CAP">CAP, stated honestly</h3>
+
+<pre class="equation"><code>During a network partition, a replicated system chooses ONE:
+
+  C  consistency   every read sees the latest write        → some requests must fail/wait
+  A  availability  every request gets a (possibly stale)   → replicas diverge; reconcile later
+                   answer
+
+No partition, no choice: normal operation can have both. "P" isn't chosen; networks fail.
+
+  CP lineage:  Bigtable, HBase, Spanner    (refuse rather than lie)
+  AP lineage:  Dynamo, Cassandra, Riak     (answer, then reconcile: <span class="gloss" data-gloss="eventual">eventual consistency</span>)</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="descendants">The descendants</h2>
+
+<p class="keep-in-present">The 2006–2012 NoSQL wave is these two papers (Bigtable + Dynamo)
+refracted through open source, and the LSM engine outlived the movement's maximalism:</p>
+
+<h3 class="new-slide" data-kicker="The descendants">Where you'll meet this material again</h3>
+
+<table>
+  <thead><tr><th>System</th><th>Lineage</th><th>One-line identity</th></tr></thead>
+  <tbody>
+    <tr><td>HBase</td><td>Bigtable, literally</td><td>the open-source clone, on Hadoop's HDFS-as-GFS</td></tr>
+    <tr><td>Cassandra</td><td>Bigtable's engine × Dynamo's replication</td><td>masterless AP wide-column store; tunable consistency per query</td></tr>
+    <tr><td>DynamoDB</td><td>Dynamo, productized</td><td>AWS's managed key-value store: pay-per-request, single-digit-ms</td></tr>
+    <tr><td>RocksDB / LevelDB</td><td>Bigtable's tablet engine, extracted</td><td>the LSM as a <em>library</em>, inside Kafka Streams, Flink, CockroachDB, your ML feature store</td></tr>
+    <tr><td>Spanner</td><td>Bigtable's successor</td><td>Google's admission: the world wanted SQL and transactions back, at global scale, with atomic clocks</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Spanner is the arc's punchline: after a decade of "no joins, no
+transactions, no SQL," Google rebuilt all three on top of Bigtable's bones. The relational
+model wasn't the bottleneck; the 2004 storage engine was. Which is why this course taught
+you engines, not brand names.</p>
+
+<div class="callout note">
+  <span class="label">War story · Discord's trillion messages, 2023</span>
+  <p class="keep-in-present">Every dial on this slide's engines shows up in Discord's
+  engineering blog, which reads like this lecture's final exam. Their message store (a
+  Cassandra cluster holding trillions of rows) suffered exactly the pathologies you can now
+  name: hot partitions (busy channels are skew), compaction falling behind (write
+  amplification winning the three-way budget), and JVM garbage-collection pauses turning one
+  slow node into cluster-wide latency. Their 2023 migration to ScyllaDB (same LSM design,
+  no JVM) plus a Rust data layer is a case study in a truth this course keeps landing on:
+  they didn't change the <em>ideas</em> (memtables, SSTables, compaction, tablets) they
+  changed the implementation's constants. The ideas are the part you now own.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="recap">Recap &amp; next time</h2>
+
+<ul class="recap-list">
+  <li><strong>Bigtable = course reunion</strong>: WAL + sorted-map records + range
+  partitions + caching, run on failure-is-normal hardware; the model is a sorted map, and
+  key design is schema design.</li>
+  <li><strong>The LSM tree abolishes random writes</strong>: memtable → immutable SSTables →
+  compaction; reads pay the spread and are rescued by Bloom filters, sparse indexes, and
+  merging.</li>
+  <li><strong>CAP is a forced choice only during partitions</strong>: refuse (CP) or serve
+  stale and reconcile (AP); pick per application, not per slogan.</li>
+</ul>
+
+<p class="keep-in-present"><strong>No lab Thursday: Thanksgiving.</strong> <strong>Next
+Tuesday (Dec 1):</strong> the last lecture: graph databases with a live Kuzu demo, and the
+course synthesis. Quiz 12 opens class: Bigtable, LSM &amp; NoSQL. Project workshop Thu
+Dec 3; reports Mon Dec 7; presentations Dec 8.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">Is Postgres/MySQL "obsolete" for big workloads then?</h3>
+<p class="keep-in-present">No: B+ tree engines serve the overwhelming majority of
+production workloads, because most workloads are read-heavy OLTP where one-descent reads and
+real transactions win. The LSM claims the write-flood niche (events, telemetry, feeds) and
+the embedded-engine niche (RocksDB). The honest question is never "SQL or NoSQL";it's
+"where on the read/write trade does this workload sit, and do I need transactions?"</p>
+
+<h3 class="keep-in-present">Where do deletes go if SSTables are immutable?</h3>
+<p class="keep-in-present">You write a <em>tombstone</em>: a "k is deleted" record that
+shadows older versions during reads and merges, until a compaction that can see every copy
+finally drops both. Week 3's tombstone flag, escalated: in Cassandra, tombstone pile-ups
+are a famous operational pathology (delete-heavy workloads make reads wade through
+graveyards), and "why is my read slow" often means "tombstones."</p>
+
+<h3 class="keep-in-present">Does my phone really run an LSM tree?</h3>
+<p class="keep-in-present">Very likely several. LevelDB and RocksDB are embedded in Chrome
+(IndexedDB), many Android components, and countless apps' local storage; SQLite (B+ tree)
+runs alongside them. The two poles of today's table are probably both in your pocket,
+serving the workloads each is shaped for; the cleanest possible proof that neither
+"won."</p>
+
+<h3 class="keep-in-present">Could microdb grow an LSM engine?</h3>
+<p class="keep-in-present">Cleanly: it's the best possible final-project appendix. Keep the
+WAL, replace RecordPage-in-place with a sorted dict + flush-to-sorted-file, and compaction
+is <code>heapq.merge</code> over readers. ~200 lines gets write throughput your slotted
+pages can't touch; then <em>measure</em> the read cost and you'll have reproduced this
+lecture's table from your own code, which is the course's whole method in one exercise.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=3"></script>
+</body>
+</html>

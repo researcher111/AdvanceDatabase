@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 5 · The SQL Front End · microdb part 5</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lab 5 · microdb 5</div>
+  <ul>
+    <li><a href="#try-it">Talk to your database</a></li>
+    <li><a href="#big-idea">Imitation with understanding</a></li>
+    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#build">Part 1 · Build</a></li>
+    <li><a href="#verify">Part 2 · Verify</a></li>
+    <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#assignment">Assignment</a></li>
+    <li><a href="#going-further">Going further</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>due Thu Oct 1, class start</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lab 5 · Thursday September 24, 2026 · microdb part 5 of 7</div>
+  <h1>The SQL Front End</h1>
+  <div class="subtitle">Five methods, and then you type SQL at an engine you built from bytes up.</div>
+  <div class="byline">Follows Lecture 5 (From SQL Text to Plan) · in class: 75 min · aim to finish Build + Verify · due Thu Oct 1 at class start</div>
+</header>
+
+<p class="lede">
+This is the payoff lab. You write the parser's three query methods (by imitating two
+provided worked examples), the planner's four-step recipe, and then run the provided
+<span class="gloss" data-gloss="repl">REPL</span> and talk to your own database in SQL.
+CREATE a table, INSERT the pinned students, run the honors query and the join; then
+<code>hexdump</code> the table file and wave at your Lab 1 bytes underneath it all.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 9–10 ·
+  Lecture 5's <a href="../../lectures/lecture-05/parsing.html">slides &amp; pipeline widget</a> ·
+  grammar-reading practice: the real <a href="https://www.sqlite.org/lang_select.html">SQLite SELECT railroad diagrams</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Talk to your database</h2>
+
+<p>A working replica of Thursday's finish line: microdb's REPL, in your browser, speaking the
+exact microSQL your code will parse. Type or click: the session below runs the same grammar,
+the same planner, the same error messages.</p>
+
+<div class="viz" id="viz-repl">
+  <div class="viz-title">The microdb REPL · what "done" feels like</div>
+  <p class="viz-description">Try the presets, then type your own. This mirror keeps its tables
+  in browser memory; the real one keeps them in <code>./mydb</code> as Lab 1 blocks.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn" id="rp-p1">CREATE + INSERT the students</button>
+    <button type="button" class="btn" id="rp-p2">the honors query</button>
+    <button type="button" class="btn" id="rp-p3">the join</button>
+    <button type="button" class="btn" id="rp-p4">something broken</button>
+    <button type="button" class="btn" id="rp-clear">Reset</button>
+  </div>
+  <div class="repl" id="rp-screen"></div>
+  <div class="repl-input-row">
+    <span class="repl-prompt">microdb&gt;</span>
+    <input type="text" id="rp-input" placeholder="SELECT name FROM students WHERE gpa > 35" autocomplete="off">
+    <button type="button" class="btn primary" id="rp-run">run</button>
+  </div>
+  <div class="chat-downloads">
+    <span class="chat-downloads-label">Starter code:</span>
+    <a class="chat-dl-btn" href="starter/sql_frontend.py" download>sql_frontend.py</a>
+    <a class="chat-dl-btn" href="starter/microdb.py" download>microdb.py (REPL)</a>
+    <a class="chat-dl-btn" href="starter/query_engine.py" download>query_engine.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/record_manager.py" download>record_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/buffer_manager.py" download>buffer_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/file_manager.py" download>file_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/catalog.py" download>catalog.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/test_sql.py" download>test_sql.py</a>
+    <a class="chat-dl-btn" href="starter/measure_sql.py" download>measure_sql.py</a>
+  </div>
+  <p class="viz-caption">Type <code>SELECT name students</code> to meet the error message your
+  <code>expect()</code> helper produces for free.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big-idea">Imitation with understanding</h2>
+
+<p>The starter hands you two complete parsers (<code>parse_insert</code> and
+<code>parse_create</code>) as worked examples, because <span class="gloss" data-gloss="recursive-descent">recursive descent</span> is a pattern you
+absorb by reading. Each grammar rule is one method; each method consumes exactly the tokens
+its rule owns, using four verbs on the token stream
+(<code>peek · next · match · expect</code>). Your <code>parse_query</code> is the same song
+with two new verses: the <code>*</code> alternative and the optional WHERE.</p>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>read like a parser</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Without running anything, trace
+    <code>parse_insert</code> on <code>INSERT INTO majors VALUES (4, 'math')</code>: write the
+    sequence of expect/match calls and what each consumes. Now do it on
+    <code>INSERT INTO majors VALUES (4 'math')</code>, missing comma. Which call dies, and
+    with what message?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare traces. The comma failure is
+      subtle: the <code>while match(",")</code> loop simply <em>ends</em>, and it's the
+      <code>expect(")")</code> after it that dies. Did you both catch that?</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: why "the loop ends and the
+      next expect dies" still produces a correct, helpful error.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The good trace: <code>expect(KEYWORD,'insert')</code>,
+      <code>expect(KEYWORD,'into')</code>, <code>expect(ID)</code> which returns "majors",
+      <code>expect(KEYWORD,'values')</code>, <code>expect(PUNCT,'(')</code>, then a literal, then
+      <code>while match(',')</code> consuming the comma and another literal, then
+      <code>expect(PUNCT,')')</code>.</p>
+      <p>With the comma missing, nothing dies where you would expect. <code>match(',')</code>
+      simply sees <code>'math'</code> instead of a comma and returns False, so the loop
+      <strong>ends normally</strong>; the parser believes the value list is finished. It is the
+      <code>expect(PUNCT,')')</code> on the next line that dies, reporting
+      <code>expected ')', found 'math'</code>.</p>
+      <p>That error is still correct and still helpful, because it reports the parser's honest
+      state: given the grammar, a value list really can end there, so the first thing that is
+      definitely wrong is the missing close paren. The message names what was expected and what
+      was found, which is enough to walk the user to the fault even though the diagnosis lands one
+      token later than the typo.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The contract</h2>
+
+<p>Your five methods, with the moves each one borrows:</p>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="pq" data-step-name="parse_query" data-explain="expect SELECT; then either a lone * or the { , } idiom over IDs; expect FROM; the { , } idiom over table IDs; if WHERE is next, consume it and delegate to _parse_predicate. Return QueryData(fields, tables, predicate-or-None).">parse_query        # imitates parse_insert + a * case + an optional clause</div>
+  <div class="code-step" data-step="pp" data-step-name="_parse_predicate" data-explain="The { AND term } idiom: one term, then while the next token is the keyword and, consume it and read another. Return Predicate(*terms).">_parse_predicate   # the {, } idiom wearing AND instead of a comma</div>
+  <div class="code-step" data-step="pt" data-step-name="_parse_term" data-explain="expect an ID (the field); take the operator, checking it's =, < or >; then the fork: NUM/STR tokens are literals, an ID becomes F(name); that one isinstance-shaped decision is what makes joins expressible.">_parse_term        # field, op, then the F fork for join terms</div>
+  <div class="code-step" data-step="pl" data-step-name="plan_query" data-explain="The lecture's four-step recipe verbatim: TableScans from the catalog, fold products left to right, SelectScan if predicate, ProjectScan unless ['*']. No useless wrappers; the shape tests check.">Database.plan_query  # scans → products → select? → project?</div>
+  <div class="code-explain-panel">Hover a line: between them they touch every layer you've built since August.</div>
+</div>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>one token, two meanings</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>In <code>WHERE name = 'ada'</code> the
+    right-hand side means <em>the string ada</em>. In <code>WHERE mid = mid2</code> it means
+    <em>the field mid2</em>. Both arrive at your <code>_parse_term</code> as single
+    <span class="gloss" data-gloss="token">tokens</span>.
+    What distinguishes them, and what must your code produce differently for each? What would
+    silently go wrong if you returned the string <code>"mid2"</code> for the second?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Work the failure: the predicate would
+      compare each row's <code>mid</code> (an int) to the literal string
+      <code>"mid2"</code>: never equal, join returns zero rows, no error anywhere. The
+      harness's join-term test exists for exactly this.</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: token <em>kind</em> is
+      information; STR vs ID is the lexer telling you which meaning survived the quotes.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The <strong>token kind</strong> distinguishes them. <code>'ada'</code> arrives as a
+      STR token because the lexer saw quotes; <code>mid2</code> arrives as an ID because it did
+      not. So <code>_parse_term</code> must produce a plain Python value for a STR or NUM, and an
+      <strong><code>F("mid2")</code> field marker</strong> for an ID.</p>
+      <p>Return the bare string <code>"mid2"</code> for the second and the failure is silent and
+      total: the predicate compares each row's <code>mid</code>, an int, against the literal
+      string <code>"mid2"</code>. They are never equal, so the join returns zero rows, and nothing
+      anywhere raises. A query that should join two tables quietly returns nothing, which is the
+      hardest class of bug to notice because empty looks like a legitimate answer. That is exactly
+      what the harness's join-term test exists to catch.</p>
+      <p>In one sentence: <strong>the token kind is information, and STR versus ID is the lexer
+      telling you which meaning survived the quotes.</strong> Throw that distinction away in the
+      parser and no later layer can reconstruct it.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
+
+<p>Nine files into <code>microdb-lab5/</code>: five are the reference tower, the REPL is
+ready, and your work is one file. In harness order:</p>
+
+<ol>
+  <li><strong>Read the two worked examples</strong> (8 min, honestly):
+  <code>parse_insert</code> and <code>parse_create</code>, next to the grammar in the module
+  docstring. Every move you need appears in one of them.</li>
+  <li><strong><code>parse_query</code></strong>: field list (star or <code>{ , }</code>),
+  FROM, table list, optional WHERE. Three PARSE tests go green.</li>
+  <li><strong><code>_parse_predicate</code> and <code>_parse_term</code></strong>: the AND
+  idiom and the F fork. The rest of PARSE passes, including the error tests you get for free
+  from <code>expect()</code>.</li>
+  <li><strong><code>plan_query</code></strong>: the four-step recipe. PLAN and SQL groups
+  light up, and with them the REPL: <code>python3 microdb.py</code>, type SQL, grin.</li>
+</ol>
+
+<div class="callout note">
+  <span class="label">Gotchas that cost real debugging time</span>
+  <p>The star: <code>*</code> is a PUNCT token, and it must short-circuit the field-list loop
+  entirely (<code>["*"]</code>, not <code>["*", ...]</code>). In <code>_parse_term</code>,
+  don't <code>expect("PUNCT", "=")</code>; the operator may be any of three, so peek, check
+  membership, and raise your own ParseError otherwise. And in <code>plan_query</code>, fetch
+  each table's layout from <code>self.catalog</code>, not by constructing a new Schema; the
+  catalog is the source of truth, that being the point of Lab 3.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<p>Twelve tests: PARSE checks the parsed
+<span class="gloss" data-gloss="ast">descriptions</span> (including that an ID right-hand side becomes
+<code>F</code>, and that three flavors of bad SQL die as ParseError rather than chaos), PLAN
+checks tree shapes (no useless wrappers: <code>SELECT * FROM t</code> must plan as a bare
+TableScan), and SQL runs the whole pipeline end to end, finishing with the Lab 4 join
+expressed as text and a pin-leak audit of <code>execute()</code>.</p>
+
+<pre><code class="language-text">$ python3 test_sql.py
+PARSE group
+  [PASS] PARSE: an ID rhs becomes F (join term)
+  ...
+SQL group
+  [PASS] SQL: the Lab 4 join, via text
+  [PASS] SQL: execute() leaks no pins
+
+12/12 tests passed</code></pre>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · read the failure</span>
+  <p>A classmate's <code>test_sql_join</code> fails with zero rows returned, but every PARSE
+  test passes, including the F test. Their <code>plan_query</code> builds:
+  <code>Select(pred) ← Product(Table(majors), Table(students))</code>, tables reversed from
+  the FROM order. Why does reversing the product's sides break <em>nothing</em> about the
+  join logically… and what actually went wrong? (Hint: check their <code>_run_query</code>'s
+  field list for <code>*</code>, or their ProductScan's tie-breaking.)</p>
+  <details><summary>Show answer</summary>
+  <p>Trick question with a real lesson: reversing product sides is logically harmless; the
+  same pairs appear in different order, and this join has no ambiguous fields. If they see
+  zero rows, the product isn't the culprit; the usual suspect is that their planner dropped
+  the predicate (built the SelectScan from a fresh empty Predicate, or tested
+  <code>if data.predicate</code> against a Predicate with no <code>__bool__</code> …).
+  Debugging rule the exercise teaches: when a symptom survives your prime suspect's alibi,
+  re-interrogate the description: print the QueryData before blaming the plan.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>your planner, predicted</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Before running the measurement: your
+    <code>plan_query</code> follows the four-step recipe. For the three-filter join query over
+    300 students × 3 majors, how many pairs will YOUR plan examine, 60 or 900? Now defend the
+    recipe anyway: why is the shape that examines 900 the only <em>safe</em> default for a
+    planner that knows nothing about the data?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Construct the trap together: invent a
+      predicate where pushing a filter below the product would be flat-out WRONG. (Hint: what
+      if a term references fields from <em>both</em> tables?)</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: what a planner must know
+      about each term before it may push it down.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>900.</strong> The four-step recipe builds the full product first and applies
+      the whole WHERE above it, so your planner examines every pair, exactly the shape Lab 4
+      called Plan A.</p>
+      <p>Defend it anyway: a planner that knows nothing about the data cannot tell whether pushing
+      a filter helps. Filters-above-product is <em>always correct</em>, whatever the tables
+      contain, and correctness that does not depend on the data is the right default when you have
+      no statistics. Naive and honest beats clever and occasionally wrong.</p>
+      <p>The trap: a term referencing fields from <strong>both</strong> tables, such as
+      <code>mid = mid2</code>, cannot be pushed to either side, because neither input can evaluate
+      it alone. Push it below the product and the scan is asked for a field it does not have. So
+      the rule a planner must establish before pushing any term is
+      <strong>which input owns every field the term mentions</strong>: push it only onto an input
+      that can answer all of them. That test is pure syntax and free; deciding whether pushing is
+      <em>worth</em> it needs statistics, and that is week 9.</p>
+    </details>
+  </details>
+</div>
+
+<p><code>measure_sql.py</code> prints the plan tree your planner builds for three queries,
+using the provided <code>render_plan</code>, then counts the join plan's work. Your planner
+is correct and <em>naive</em>, and now there's a number on the naivety:</p>
+
+<pre><code class="language-text">$ python3 measure_sql.py
+microdb> SELECT name, dept FROM students, majors WHERE mid = mid2 AND gpa > 35 AND dept = 'cs'
+  ProjectScan['name', 'dept']
+    SelectScan[mid = mid2 AND gpa > 35 AND dept = 'cs']
+      ProductScan
+        TableScan(students)
+        TableScan(majors)
+
+the join plan, measured: 900 pairs examined -> 20 rows returned
+Lab 4's hand-pushed-down plan did the same query in 60 pairs.</code></pre>
+
+<p class="keep-in-present">Your engine now takes SQL and gives correct answers, and its plans
+leave a 15× on the table that <em>you</em> knew how to collect by hand last week. The machine
+that collects it automatically needs one thing your engine doesn't have yet: knowledge about
+the data. That's statistics, and it's week 9.</p>
+
+<!-- ============================================================ -->
+<h2 id="assignment">Assignment</h2>
+
+<p>Due <strong>Thursday Oct 1 at class start</strong>, submitted per the course submission
+instructions.</p>
+
+<h3>Deliverables</h3>
+<ul>
+  <li>☐ <code>sql_frontend.py</code>: all twelve local tests pass (<code>12/12</code>).</li>
+  <li>☐ <code>measurements.txt</code>: the three plan trees, the pair count, and answers to
+  the script's two questions (why filters-above-product is always correct; what the planner
+  would need to know to push down safely and profitably).</li>
+  <li>☐ A REPL transcript (paste, ~10 lines): CREATE a table of your own design, INSERT three
+  rows, run one filtered SELECT: your engine, your data, your SQL.</li>
+</ul>
+
+<h3>What's provided vs what you write</h3>
+<table>
+  <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
+  <tbody>
+    <tr><td><code>sql_frontend.py</code></td><td>Lexer, the four verbs, parse_insert/parse_create (worked examples), Database plumbing, render_plan</td><td>parse_query · _parse_predicate · _parse_term · plan_query</td></tr>
+    <tr><td><code>microdb.py</code></td><td>the REPL, complete</td><td>&nbsp;</td></tr>
+    <tr><td>reference layers ×5</td><td>Labs 1–4, do not edit</td><td>&nbsp;</td></tr>
+    <tr><td>harness + measure</td><td>complete, do not edit</td><td>run, record</td></tr>
+  </tbody>
+</table>
+
+<h3>Grading</h3>
+<table>
+  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Correctness</td><td>Gradescope superset: more grammar corners, nastier errors, three-table FROM lists</td><td>70%</td></tr>
+    <tr><td>Measurement + transcript</td><td>Trees match; answers connect correctness/naivety; transcript shows a working REPL</td><td>20%</td></tr>
+    <tr><td>Code quality</td><td>Methods mirror grammar rules; all failures via ParseError with helpful messages</td><td>10%</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">Fast finishers: add <strong>DELETE FROM t WHERE …</strong> (a
+parse method plus a TableScan walk calling <code>delete()</code>; Sciore ch. 9 shape); add
+<strong>OR with parentheses</strong> to the predicate grammar (this is where recursive descent
+earns the "recursive"); or make <code>expect()</code> report the <strong>token position</strong>
+("expected 'from' at token 3") and watch every error message improve at once: one helper,
+global upgrade, the whole argument for funneling errors through one door.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">The REPL says <code>no such table in catalog</code> after I restart it.</h3>
+<p class="keep-in-present">It shouldn't: <code>./mydb</code> persists, and the catalog reads
+from disk. If tables vanish across restarts, an earlier crash likely left <code>mydb</code>
+half-written; delete the folder and re-create. (Yes: crash recovery. Lab 7 is coming for
+exactly this.)</p>
+
+<h3 class="keep-in-present">Why lowercase everything? <code>SELECT</code> and <code>select</code> both work but my strings changed case!</h3>
+<p class="keep-in-present">The lexer lowercases <em>words</em> (keywords and IDs) but not
+STR tokens; check that your table/field names are compared post-lowercase and that you're
+not lowercasing string literals somewhere. <code>'Ada'</code> must stay <code>'Ada'</code>.</p>
+
+<h3 class="keep-in-present">Can two tables in a FROM share a field name?</h3>
+<p class="keep-in-present">microSQL has no aliases, so a shared name is answered by the left
+table (Lab 4's tie rule), legal but a footgun. The harness avoids it; your own schemas
+should too. Aliases (<code>students s</code>) are a tidy Going-Further if the itch strikes.</p>
+
+<h3 class="keep-in-present">My parser works but the REPL prints columns in a weird order for SELECT *.</h3>
+<p class="keep-in-present">Field order for <code>*</code> comes from the catalog's schema
+rebuild, which orders by stored offset (Lab 3). If your order looks wrong, your Lab 3
+offsets were wrong first; the tower tattles on its lower floors.</p>
+
+<h3 class="keep-in-present">Is this how SQL injection happens?</h3>
+<p class="keep-in-present">Now you can see it: <span class="gloss" data-gloss="sql-injection">injection</span>
+is gluing untrusted text into SQL <em>before</em> your lexer runs; the attacker's words
+arrive as perfectly legal tokens. Your parser is blameless and helpless. The fix
+(parameterized queries) routes values around the front end entirely; try writing
+<code>db.execute_with_params()</code> if the itch strikes.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

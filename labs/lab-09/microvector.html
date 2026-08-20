@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 9 · microvector · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lab 9 · microvector</div>
+  <ul>
+    <li><a href="#try-it">Set the dial</a></li>
+    <li><a href="#big-idea">Skip most of the space</a></li>
+    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#build">Part 1 · Build</a></li>
+    <li><a href="#verify">Part 2 · Verify</a></li>
+    <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#assignment">Assignment</a></li>
+    <li><a href="#going-further">Going further</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>due Thu Nov 12, class start</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lab 9 · Thursday November 5, 2026 · Act II, lab 2 of 4 · your project's retrieval layer</div>
+  <h1>microvector</h1>
+  <div class="subtitle">Brute force, then IVF, and the recall-vs-speed dial becomes yours to set.</div>
+  <div class="byline">Follows Lecture 11 (Vector Databases) · in class: 75 min · aim to finish Build + Verify · due Thu Nov 12 at class start</div>
+</header>
+
+<p class="lede">
+Three methods and the ANN trade is in your hands: an exact
+<span class="gloss" data-gloss="brute-baseline">brute-force baseline</span>, an IVF index
+(k-means ships complete; you bucket and probe), and a measurement whose table (<span class="gloss" data-gloss="recall-at-k">recall@10</span>
+against comparisons-per-query) is the exact dial every production vector store exposes as
+<span class="gloss" data-gloss="nprobe"><code>nprobe</code> or <code>ef_search</code></span>. Next week this index retrieves chunks for
+micro-rag; three weeks after, for your project.
+</p>
+
+<div class="cite">
+  Companion reading: Lecture 11's <a href="../../lectures/lecture-11/vectors.html">slides &amp; 2-D space</a> ·
+  FAISS's <a href="https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index">index guide</a> ·
+  pgvector's <a href="https://github.com/pgvector/pgvector#ivfflat">ivfflat docs</a> (your lab, shipped).
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Set the dial</h2>
+
+<p>The lab's own measurement, interactive: drag the probe knob and watch recall and work
+move against each other. These are the real numbers from the reference solution over the
+seeded dataset; your Thursday table must match.</p>
+
+<div class="viz" id="viz-dial">
+  <div class="viz-title">The ANN dial · 4,000 vectors, 20 clusters, top-10</div>
+  <p class="viz-description">One slider, two consequences. The dashed line is brute force:
+  recall 1.0 at 4,000 comparisons, always available, never free.</p>
+  <div class="eat-controls">
+    <label for="dl-probe">probe <span id="dl-val">4</span> of 20 lists</label>
+    <input type="range" id="dl-probe" min="0" max="5" value="2" step="1">
+  </div>
+  <div class="dl-readout" id="dl-readout"></div>
+  <div class="chat-downloads">
+    <span class="chat-downloads-label">Starter files:</span>
+    <a class="chat-dl-btn" href="starter/microvector.py" download>microvector.py</a>
+    <a class="chat-dl-btn" href="starter/gen_embeddings.py" download>gen_embeddings.py</a>
+    <a class="chat-dl-btn" href="starter/test_vector.py" download>test_vector.py</a>
+    <a class="chat-dl-btn" href="starter/measure_recall.py" download>measure_recall.py</a>
+  </div>
+  <p class="viz-caption">Notice where the curve bends: probes 1→4 buy recall cheaply; 8→20
+  buy the last 1.5% at triple the work. Every ANN deployment lives somewhere on this bend.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big-idea">Skip most of the space</h2>
+
+<p>The move is week 6's, wearing geometry: build a structure that lets each query ignore most
+of the data. A B+ tree partitions an <em>ordered line</em>; k-means <span class="gloss" data-gloss="centroid">centroids</span> partition a <em>vector
+space</em>,and then a query only searches the few partitions its neighborhood could
+plausibly live in. The cost of the analogy's imperfection (space has no clean fences; near
+things straddle borders) is exactly what recall@k measures.</p>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>where do misses live?</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>IVF at probe 1 scored 0.758 recall; it
+    missed about 1 true neighbor in 4. Those misses aren't random. Describe geometrically
+    WHERE a query's missed neighbors live, and predict: are queries near a centroid or near a
+    boundary hurt more? What about a dataset with more cluster overlap?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Misses live just across unprobed borders;
+      boundary queries suffer most; overlap makes everything worse (and real embedding topics
+      overlap; the dataset generator was built to). Check your prediction against the
+      lecture's 2-D widget.</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: why probe buys recall back:
+      whose borders get covered?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The misses live <strong>just across the borders of clusters you did not probe</strong>.
+      A true neighbour can be geometrically very close to the query and still be assigned to a
+      different centroid, and if that list is not probed the vector is never scored at all. It is
+      not out-ranked, it is unseen.</p>
+      <p>So <strong>queries near a boundary are hurt far more</strong> than queries sitting near a
+      centroid: a query in the middle of its cluster has most of its true neighbours in that same
+      list, while a boundary query has them split across two or three. More cluster overlap makes
+      everything worse, and real embedding topics <em>do</em> overlap, which is why the lab's
+      generator was built to produce it rather than clean, well-separated blobs.</p>
+      <p>Why probe buys recall back: raising probe covers <strong>more of the borders</strong>.
+      Probe 2 adds the second-nearest centroid, which is exactly where a boundary query's missing
+      neighbours were hiding. That is also why recall can only rise as probe rises, never fall,
+      and why a "probe more, recall dropped" result is always a bug rather than a discovery.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The contract</h2>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="bf" data-step-name="BruteForceIndex.search" data-explain="Score all n vectors with dot() (count each in self.comparisons), keep the top k. heapq.nsmallest with key (-sim, id) gives best-first with deterministic ties. Six lines, exact by construction.">BruteForceIndex.search(q, k)   # the truth, at O(n) per query</div>
+  <div class="code-step" data-step="bu" data-step-name="IVFIndex._build" data-explain="For each vector, find its nearest centroid (max dot) and append its id to that list. Every id lands exactly once; the harness counts.">IVFIndex._build()              # bucket every id under its centroid</div>
+  <div class="code-step" data-step="se" data-step-name="IVFIndex.search" data-explain="Score all C centroids (count them!), take the probe best lists, brute-force only their ids (count those too), return top-k. The comparison counter is graded; it IS the speedup claim.">IVFIndex.search(q, k, probe)   # probe lists, then brute-force inside</div>
+  <div class="code-explain-panel">Hover a line: dot(), normalize(), kmeans(), and recall_at_k() ship complete and are worth reading first.</div>
+</div>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>count what you claim</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>The harness checks
+    <code>self.comparisons</code> as strictly as it checks results. Compute by hand what the
+    counter should read for one IVF search: 20 clusters, probe 4, lists averaging 200 ids.
+    Now: which subtle bug would give the RIGHT answers with a WRONG (too high) count?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>~20 + 4×200 = 820. The classic bug:
+      scoring every vector but only <em>keeping</em> results from probed lists: right
+      answers, zero speedup, and the counter confesses. Instrumentation as honesty.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Where did this course previously grade a
+      counter, not just an answer? (Lab 3's blocks; Lab 6's nodes. Pattern's a pattern.)</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>About 820:</strong> 20 centroid dot products to pick the probes, plus 4 lists
+      × roughly 200 ids each = 800 candidate comparisons.</p>
+      <p>The subtle bug that yields <em>right answers with a too-high count</em>: scoring every
+      vector in the dataset and then only keeping results whose ids belong to the probed lists.
+      Every returned neighbour is correct, every test on results passes, and you have implemented
+      brute force with extra bookkeeping. The counter is the only thing that notices, reading 4,000
+      instead of 820. Instrumentation as honesty: the number you claim is graded as strictly as
+      the answer you return, because the whole point of the structure is the number.</p>
+      <p>Where the course graded a counter before: <strong>Lab 3</strong> counted your file's
+      blocks after 12 inserts, catching a scan that worked but grew the file 4× too fast, and
+      <strong>Lab 6</strong> counted tree nodes touched per lookup. Same pattern each time: a
+      correct answer obtained the expensive way is a bug, and only a counter can see it.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
+
+<ol>
+  <li><strong>Read the provided half</strong> (8 min): <code>dot</code>, <code>normalize</code>,
+  the deliberately small <code>kmeans</code>, and <code>recall_at_k</code>. The module
+  docstring holds the cost model.</li>
+  <li><strong><code>BruteForceIndex.search</code></strong>: score, count, top-k. EXACT group
+  greens against a slow-but-obviously-right reference.</li>
+  <li><strong><code>IVFIndex._build</code></strong>: one assignment loop. The
+  every-id-exactly-once test passes.</li>
+  <li><strong><code>IVFIndex.search</code></strong>: centroids, probe, brute-force inside,
+  count everything. IVF and QUALITY groups green: recall ≥ 0.75 at probe 4, comparisons
+  under half of brute force.</li>
+</ol>
+
+<div class="callout note">
+  <span class="label">Gotchas that cost real debugging time</span>
+  <p>Sort by <code>(-similarity, id)</code>; plain similarity sort breaks ties
+  nondeterministically and the reference comparison notices. Count centroid dots AND
+  candidate dots. And don't re-normalize the stored vectors inside search; they arrive
+  unit-length from the generator; double normalization is a no-op that hides real bugs
+  elsewhere.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="verify">Part 2 · Verify <span class="part-time">~15 min in class</span></h2>
+
+<pre><code class="language-text">$ python3 test_vector.py
+EXACT group
+  [PASS] EXACT: brute force matches the reference
+  [PASS] EXACT: one search compares against everything
+  [PASS] EXACT: a vector's nearest neighbor is itself
+IVF group
+  [PASS] IVF: build assigns every vector exactly once
+  [PASS] IVF: probing more lists never hurts recall
+QUALITY group
+  [PASS] QUALITY: recall@10 >= 0.75 at probe 4
+  [PASS] QUALITY: comparisons drop by more than half
+
+7/7 tests passed</code></pre>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · read the failure</span>
+  <p>A classmate passes everything except <code>probing more lists never hurts recall</code>:
+  at probe 8 their recall <em>dropped</em> below probe 1. Recall mathematically cannot drop
+  as probed lists grow (a superset of candidates). What must their <code>search</code> be
+  doing with the probe parameter?</p>
+  <details><summary>Show answer</summary>
+  <p>Their probe selects the <em>worst</em> P centroids (sorted ascending by similarity,
+  a missing minus sign), so probe 1 gets one bad list but probe 8's "best 8" crowd out…
+  no: with more bad lists they'd still gain candidates. The real culprit: they take
+  <code>centroid_scores[:probe]</code> <em>unsorted</em>, so which lists get probed is
+  arbitrary per call; recall becomes noise, sometimes lower at 8. Monotonicity violations
+  in a should-be-monotone knob always mean the knob isn't selecting what you think.
+  Sort first, then slice.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
+
+<p>The dial, in numbers (deterministic, so yours must match):</p>
+
+<pre><code class="language-text">$ python3 measure_recall.py
+4000 vectors, 40 queries, top-10, 20 clusters
+
+       index | probe | avg recall@10 | comparisons/query | vs exact
+----------------------------------------------------------------------
+ brute force |     - |         1.000 |             4,000 |     1.0x
+         IVF |     1 |         0.758 |               236 |    16.9x
+         IVF |     2 |         0.885 |               471 |     8.5x
+         IVF |     4 |         0.948 |               882 |     4.5x
+         IVF |     8 |         0.985 |             1,702 |     2.4x
+         IVF |    16 |         1.000 |             3,284 |     1.2x
+         IVF |    20 |         1.000 |             4,020 |     1.0x</code></pre>
+
+<p class="keep-in-present">Read the bend: the first four probes buy 19 points of recall for
+650 comparisons; the last twelve buy 1.5 points for 2,400. Production ANN tuning is choosing
+your point on this curve <em>for your application's stakes</em>, which is question 3, and
+your project's writeup requirement.</p>
+
+<!-- ============================================================ -->
+<h2 id="assignment">Assignment</h2>
+
+<p>Due <strong>Thursday Nov 12 at class start</strong> (with the project's retrieval
+milestone; this lab is most of it).</p>
+
+<h3>Deliverables</h3>
+<ul>
+  <li>☐ <code>microvector.py</code>: all seven tests pass (<code>7/7</code>).</li>
+  <li>☐ <code>measurements.txt</code>: the full table plus the script's three questions
+  (your probe cut and its defense; why probe-all is recall 1.0 yet costlier than brute
+  force; the recall you'd demand for RAG evidence).</li>
+  <li>☐ Reflection (3–5 sentences): (1)&nbsp;IVF's structure is "an index maps values to
+  ids"; compare its miss mode to the B+ tree's (which can't miss). What did geometry cost
+  us? (2)&nbsp;Real embeddings <span class="gloss" data-gloss="embedding-drift">drift</span> as models update. What happens to an IVF index built on
+  last year's embedding space, and what's the operational fix?</li>
+</ul>
+
+<h3>Grading</h3>
+<table>
+  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Correctness</td><td>Gradescope superset: more queries, edge ks, a different seeded dataset</td><td>70%</td></tr>
+    <tr><td>Measurement + answers</td><td>Table exact; the probe-cut defense engages stakes, not vibes</td><td>20%</td></tr>
+    <tr><td>Code quality</td><td>Counters honest; ties deterministic; helpers used not re-invented</td><td>10%</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">Fast finishers: add <strong>re-ranking</strong>: probe 1 for a
+cheap candidate set of 3k, then exact-score only those 3×k and take k (measure: recall vs
+plain probe-1 at nearly the same cost); implement the tiny-<strong>HNSW</strong> bottom layer
+(greedy walk on a k-NN graph, ~30 lines, and the lecture's road-network intuition becomes
+code); or wire microvector into <strong>microdb</strong>: an IVF list as a table of
+(centroid_id, RID), searched via Lab 6's IndexSelectScan pattern: pgvector's architecture,
+recognizably, in your own engine.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">My recall differs in the third decimal from the reference.</h3>
+<p class="keep-in-present">Everything is seeded, so it shouldn't; the usual cause is tie
+handling (sort by <code>(-sim, id)</code> exactly) or k-means drift from calling
+<code>random</code> anywhere yourself. The autograder allows ±0.02; determinism is still the
+assignment.</p>
+
+<h3 class="keep-in-present">Why is Python fine here when it was "too slow" for real engines?</h3>
+<p class="keep-in-present">4,000 × 32 dims is ~1M float ops per brute query; Python shrugs.
+The real thing does 1536 dims × millions with SIMD (FAISS) precisely because the constant
+factor matters at scale. The <em>structure</em> and the <em>dial</em> (what this lab
+teaches) are identical at both scales.</p>
+
+<h3 class="keep-in-present">Should my project use microvector or pgvector/FAISS?</h3>
+<p class="keep-in-present">Spec says any real index. microvector earns style points and
+total understanding; pgvector earns SQL-side filtering; FAISS earns speed at size. All three
+require the same deliverable: a measured recall/speed table defending your setting, this
+lab, re-run on your corpus.</p>
+
+<h3 class="keep-in-present">Is k-means the only way to partition the space?</h3>
+<p class="keep-in-present">No: LSH hashes by random projections, trees cut recursively
+(Annoy), graphs skip partitioning entirely (HNSW). IVF is taught first because you already
+own its parts (clustering + brute force) and its dial is the cleanest. The FAISS guide in
+the citations is the practical taxonomy.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

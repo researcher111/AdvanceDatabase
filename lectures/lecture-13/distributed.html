@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 13 · Distributed Compute · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lecture 13</div>
+  <ul>
+    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#wall">The one-machine wall</a></li>
+    <li><a href="#partition">Partitioning</a></li>
+    <li><a href="#mapreduce">MapReduce</a></li>
+    <li><a href="#try-it">Trace the shuffle</a></li>
+    <li><a href="#spark">Spark</a></li>
+    <li><a href="#ray">Ray</a></li>
+    <li><a href="#thursday">On Thursday you run all three</a></li>
+    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 13 · Tuesday November 17, 2026</div>
+  <h1>Distributed Compute</h1>
+  <div class="subtitle">Partitioning, MapReduce, Spark's lazy plans, and Ray: what changes when the data outgrows the machine, and what stubbornly doesn't.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+Every system this semester fit on your laptop: microdb, DuckDB, microvector, micro-rag. Today
+the data stops fitting, and the fix is the same move you've now seen four times: split the
+data (partitioning), push the work to the pieces (like predicate pushdown), and pay a
+structured price to regroup (the shuffle, the network's version of Lab 4's join cost). One
+pattern, MapReduce, organizes all of it; Spark packages the pattern behind lazy query plans
+that will look suspiciously like microdb's Scan trees; Ray strips it down to "run my Python
+function on many cores." Thursday you build the pattern raw, then run both products.
+</p>
+
+<div class="cite">
+  Companion reading: Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce: Simplified Data Processing on Large Clusters</em></a> (OSDI 2004, 13 readable pages) ·
+  Zaharia et&nbsp;al., <a href="https://www.usenix.org/conference/nsdi12/technical-sessions/presentation/zaharia"><em>Resilient Distributed Datasets</em></a> (the Spark paper) ·
+  Ray's <a href="https://docs.ray.io/en/latest/ray-core/walkthrough.html">core walkthrough</a> (tasks in ten minutes).
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="plan">Today's plan</h2>
+
+<p>Quiz 10 first (RAG), then the biggest jump of the semester: from one machine to many.</p>
+
+<ol class="agenda">
+  <li><strong>The one-machine wall</strong>: what actually breaks at 10&nbsp;TB.</li>
+  <li><strong>Partitioning</strong>: hash vs range: you've already used both.</li>
+  <li><strong>MapReduce</strong>: the 2004 pattern, traced by hand on toy data.</li>
+  <li><strong>Trace the shuffle</strong>: step through map → shuffle → reduce, live.</li>
+  <li><strong>Spark</strong>: the pattern with a lazy query plan on top.</li>
+  <li><strong>Ray</strong>: distributed Python without the query engine.</li>
+</ol>
+
+<p class="keep-in-present">Today's claim: <strong>the shuffle is the whole story</strong>:
+every distributed engine is a scheme for moving matching keys to the same machine as cheaply
+as possible, and everything else is packaging.</p>
+
+<!-- ============================================================ -->
+<h2 id="wall">The one-machine wall</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>design it yourself</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>10&nbsp;TB of web-server logs, 100
+    machines, and one question: count requests per URL. Sketch the plan. Splitting the logs
+    100 ways and counting locally is the easy 90%; so where's the hard 10%? Be precise about
+    the moment your design needs two machines to <em>agree</em> about something.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>The hard moment: machine 7 and machine
+      52 both counted <code>/checkout</code>; somebody must add those partial counts, which
+      means the counts for one URL must <em>travel to the same place</em>. Compare: how did
+      each of you route them, and how does every machine independently agree on where
+      <code>/checkout</code> lives?</li>
+      <li><span class="tps-phase">Share · 2 min</span>You've just invented the shuffle, and
+      probably hash partitioning too. Name the failure if one URL is 40% of all traffic.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The easy 90% is exactly as it sounds: give each machine its own 100&nbsp;GB, count
+      locally, done in about a minute. The hard 10% arrives the moment two machines hold partial
+      counts for the <em>same</em> URL. Machine 7 saw <code>/checkout</code> 4,000 times and
+      machine 52 saw it 9,000 times, and nobody can emit an answer for <code>/checkout</code>
+      until those two numbers meet in one place.</p>
+      <p>So the counts for one URL must <strong>travel to the same machine</strong>, and every
+      machine has to agree on which machine that is, without asking anyone. The trick is to make
+      the decision a pure function of the key: <code>hash(url) % n_reducers</code>. No
+      coordination, no lookup table, and every mapper independently routes <code>/checkout</code>
+      to the same place. You have just invented the <strong>shuffle</strong> and hash
+      partitioning.</p>
+      <p>The failure when one URL is 40% of traffic: that key hashes to exactly one reducer, so
+      one machine does 40% of the reduce work while 99 others finish and idle. The job takes as
+      long as its slowest task. That is <strong>skew</strong>, and the straggler it creates is the
+      thing you will actually spend your time fighting.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="The one-machine wall">What breaks, precisely</h3>
+
+<table>
+  <thead><tr><th>Resource</th><th>One machine</th><th>10 TB job needs</th><th>The distributed answer</th></tr></thead>
+  <tbody>
+    <tr><td>Disk read</td><td>~2 GB/s sequential</td><td>~85 min just to read once</td><td>100 machines read their own 100 GB in ~1 min</td></tr>
+    <tr><td>Memory</td><td>hundreds of GB</td><td>working sets past RAM</td><td>each partition's working set fits its machine</td></tr>
+    <tr><td>Failure</td><td>rare, fatal</td><td>~guaranteed across 100 machines × hours</td><td>re-run the failed piece, which requires pieces</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Note what did <em>not</em> break: the logic. Counting per URL is
+the same computation at any scale; the distributed problem is placement, movement, and
+retry. That's why the pattern separates <strong>what you compute</strong> (two functions you
+write) from <strong>where it runs</strong> (plumbing you rent).</p>
+
+<!-- ============================================================ -->
+<h2 id="partition">Partitioning</h2>
+
+<p class="keep-in-present">To spread data you need a rule for which machine owns which
+record. Two rules cover practically everything, and you have used both:</p>
+
+<h3 class="new-slide" data-kicker="Partitioning">Hash vs range: the only two ideas</h3>
+
+<table>
+  <thead><tr><th></th><th>Hash partitioning</th><th>Range partitioning</th></tr></thead>
+  <tbody>
+    <tr><td>Rule</td><td><code>owner = hash(key) % n</code></td><td>owner holds a key interval (a–f, g–m, …)</td></tr>
+    <tr><td>Strength</td><td>spreads uniformly, no planning, any machine can compute the route alone</td><td>range queries touch few partitions; sorted neighbors stay together</td></tr>
+    <tr><td>Weakness</td><td>range queries touch <em>every</em> partition</td><td>needs split points chosen well; hot ranges overload one machine</td></tr>
+    <tr><td>You've used it as</td><td>Thursday's shuffle; every hash join's build side</td><td>Lab 8's Hive folders (<code>month=12/</code>); B+ tree leaves are ranges</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Partitioning">Feel the difference: run both rules</h3>
+
+<div class="viz" id="viz-part">
+  <div class="viz-title">the same 12 keys, both rules, side by side</div>
+  <p class="viz-description">Load the keys, then run each query against both partitionings
+  at once. Count the machines each side has to wake up; that count is the entire
+  hash-vs-range decision.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="pt-load">load 12 keys</button>
+    <button type="button" class="btn" id="pt-point">point query: kim = ?</button>
+    <button type="button" class="btn" id="pt-range">range query: dee … fay</button>
+  </div>
+  <div class="pt-grid">
+    <div class="pt-side"><div class="pt-side-title">HASH · owner = hash(key) % 4</div><div id="pt-hash"></div><div class="pt-verdict" id="pt-hash-verdict"></div></div>
+    <div class="pt-side"><div class="pt-side-title">RANGE · owner holds a key interval</div><div id="pt-range-panel"></div><div class="pt-verdict" id="pt-range-verdict"></div></div>
+  </div>
+  <p class="viz-caption">Point queries: a tie, both rules route to exactly one partition.
+  The range query is where they part company: sorted neighbors live together under range
+  partitioning, and nowhere in particular under hash. Every system in this course's Act II
+  picks its rule by which query it must make cheap.</p>
+</div>
+
+<h3 class="new-slide" data-kicker="Partitioning">Skew: when one key is famous</h3>
+
+<p class="keep-in-present">Hash partitioning promises balance <em>across keys</em>, not
+<em>across rows</em>: if one key carries 40% of the records
+(<span class="gloss" data-gloss="skew">skew</span>, the "celebrity problem"), its partition
+becomes the <span class="gloss" data-gloss="straggler">straggler</span> the whole job waits on. Real engines salt the hot key (append a random
+suffix, aggregate twice) or handle it separately. Diagnosis first: Spark's UI shows one task
+running long after 99 finished; now you know what that means.</p>
+
+<div class="viz" id="viz-skew">
+  <div class="viz-title">skew · one famous key vs eight partitions</div>
+  <p class="viz-description">8,000 rows hash-partitioned across 8 workers. Drag the slider
+  to make one key famous; its rows all share one hash, so they all land on one worker.
+  The job finishes when the <em>last</em> worker does.</p>
+  <div class="skew-controls">
+    <label>hot key's share of all rows: <span id="skew-val">0%</span></label>
+    <input type="range" id="skew-slider" min="0" max="80" step="5" value="0">
+  </div>
+  <div id="skew-stage"></div>
+  <p class="viz-caption">The wasted idle time (gray) is what you pay for: at 40% share, seven
+  workers finish early and wait while one grinds; the whole cluster runs at the straggler's
+  speed. Salting splits the hot key across workers and buys the balance back for the price
+  of a second aggregation round.</p>
+</div>
+
+<div class="callout note">
+  <span class="label">War story · the Justin Bieber problem</span>
+  <p class="keep-in-present">Skew has a celebrity mascot. Instagram's early engineers spoke
+  openly about what they called the Justin Bieber problem: any data keyed by account behaved
+  beautifully for millions of users and melted for the handful whose every post drew millions
+  of likes: one key, one shard, all the load. Their fixes were this slide's menu: denormalize
+  the hot counts, special-case celebrity accounts, redesign keys so no single row is the
+  whole story. The general lesson travels everywhere partitioning does: real-world
+  popularity is power-law distributed, so "uniform hash, uniform load" is an assumption
+  your most famous key will personally violate.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="mapreduce">MapReduce</h2>
+
+<p class="keep-in-present">Google's 2004 observation: nearly every batch job over partitioned
+data fits one shape, and if you write just the two computation functions, the framework can
+own placement, movement, retry, and skew for every job forever:</p>
+
+<pre class="equation"><code>map(record)         → zero or more (key, value) pairs      runs on each partition, no coordination
+shuffle             route pairs so ALL values for a key     the only network step:
+                    land on the same machine, grouped        hash(key) % n_reducers
+reduce(key, values) → one result per key                    runs per key, sees everything for it
+
+word count:  map:    "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
+             shuffle: every (the,1) (from every machine) arrives at the same reducer
+             reduce:  the,[1,1,1,…] → (the, 50)</code></pre>
+
+<p class="keep-in-present">The design's whole cleverness is what reduce may assume:
+<strong>it sees every value for its key, and nothing else.</strong> That guarantee is
+manufactured by the shuffle alone, which is why Thursday's Part A makes you build the
+shuffle and hands you everything else.</p>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Trace the shuffle</h2>
+
+<p>The whole pattern on four toy documents, two reducers. Step through it; hover any pair to
+see the routing arithmetic.</p>
+
+<div class="viz" id="viz-mr">
+  <div class="viz-title">map → shuffle → reduce · word count, 4 documents, 2 partitions</div>
+  <p class="viz-description">Every pair is colored by the partition its key hashes to;
+  the color is decided at <em>map time</em> by arithmetic every machine can do alone
+  (hover a pair: sum of letter codes, mod 2). Step and watch same-colored pairs converge.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="mr-step">Step ▸</button>
+    <button type="button" class="btn" id="mr-back">◂ Back</button>
+    <button type="button" class="btn" id="mr-reset">Reset</button>
+    <span class="mr-phase-label" id="mr-phase-label"></span>
+  </div>
+  <div id="mr-stage"></div>
+  <p class="viz-caption">Nothing about the map or reduce boxes would change with 4,000
+  machines; only the width of the shuffle in the middle. That's the pattern's sales
+  pitch, verbatim from the 2004 paper.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="spark">Spark</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>you've seen this plan before</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Spark code chains transformations
+    (<code>lines.flatMap(…).map(…).reduceByKey(…)</code>) and <em>nothing executes</em> until
+    you call <code>.collect()</code>. Where in this course have you already met "build a
+    description of the computation first, run it on demand later"? Name the class, and name
+    one optimization that being lazy makes possible.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>It's microdb's Scan tree (Lab 4): compose
+      operators, then pull. Lazy = the engine sees the <em>whole</em> plan before running,
+      so it can fuse the per-partition steps into one pass and push filters before shuffles,
+      exactly like Lecture 9's optimizer.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Which chained calls can run without any
+      network, and which one forces the shuffle? Sort them into two piles.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Lab 4's <strong>Scan tree</strong>, and specifically the iterator model: composing
+      <code>ProjectScan(SelectScan(ProductScan(...)))</code> builds a description and executes
+      nothing, and the rows only move when something calls <code>next()</code>. Spark's
+      <code>.collect()</code> is that first <code>next()</code>, and its DAG is your plan tree.</p>
+      <p>What laziness buys is that the engine sees the <em>whole</em> plan before running any of
+      it, so it can rewrite it. Two optimizations you already know: <strong>fusing</strong> the
+      narrow steps so <code>flatMap</code> and <code>map</code> run in a single pass over each
+      partition instead of materialising an intermediate, and <strong>pushing filters below the
+      shuffle</strong> so less data crosses the network, which is Lecture 9's predicate pushdown
+      wearing a cluster costume.</p>
+      <p>Sorting the calls: <code>flatMap</code>, <code>map</code> and <code>filter</code> are
+      <strong>narrow</strong>, each partition handled alone, no network. <code>reduceByKey</code>
+      is <strong>wide</strong>: it needs every value for a key in one place, so it forces the
+      shuffle and the stage boundary. One call in that chain costs the network, and it is the same
+      call you hand-wrote in Part A.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Spark">Word count, Spark edition</h3>
+
+<pre><code class="language-python">counts = (lines                                       # an RDD, split into 4 partitions
+    .flatMap(lambda t: re.findall(r"[a-z]+", t.lower()))   # your map_words
+    .map(lambda word: (word, 1))
+    .reduceByKey(lambda a, b: a + b))                 # your shuffle + reduce, one call
+
+counts.collect()                                      # NOW it runs</code></pre>
+
+<p class="keep-in-present">Transformations come in two kinds, and the difference is the
+entire cost model: <strong>narrow</strong> ones (<code>flatMap</code>, <code>map</code>,
+<code>filter</code>) stay inside each partition: free to chain, and Spark fuses them into
+one pass. <strong>Wide</strong> ones (<code>reduceByKey</code>, <code>join</code>,
+<code>groupBy</code>) need matching keys together, so they trigger the shuffle. Count the
+wide transformations in a Spark job and you've counted its
+<span class="gloss" data-gloss="stage">stages</span>.</p>
+
+<h3 class="new-slide" data-kicker="Spark">The plan, printed: Thursday's Part B</h3>
+
+<pre><code class="language-text">$ python3 spark_wordcount.py        # Part B, on the course corpus
+=== the DAG (read bottom-up; the stage break is the shuffle) ===
+(4) PythonRDD[5] at RDD at PythonRDD.scala:59 []
+ |  MapPartitionsRDD[4] at mapPartitions at PythonRDD.scala:197 []
+ |  ShuffledRDD[3] at partitionBy at NativeMethodAccessorImpl.java:0 []
+ +-(4) PairwiseRDD[2] at reduceByKey at spark_wordcount.py:37 []
+    |  PythonRDD[1] at reduceByKey at spark_wordcount.py:37 []
+    |  ParallelCollectionRDD[0] at readRDDFromFile at PythonRDD.scala:326 []</code></pre>
+
+<p class="keep-in-present">Read it bottom-up like an <code>EXPLAIN</code>: the indentation
+break is the stage boundary, and the stage boundary <em>is</em> the shuffle. Spark also keeps
+this plan around as <span class="gloss" data-gloss="lineage">lineage</span>: if a machine
+dies mid-job, its partitions are recomputed from the plan rather than restored from a backup.
+The plan is the fault tolerance.</p>
+
+<!-- ============================================================ -->
+<h2 id="ray">Ray</h2>
+
+<p class="keep-in-present">Spark wants your problem shaped like a dataflow over records. Much
+of data-science compute isn't; it's "run this Python function 10,000 times": embed every
+document, train per-city models, tune hyperparameters. Ray's offer is exactly that, with
+almost no ceremony:</p>
+
+<h3 class="new-slide" data-kicker="Ray">Tasks: two decorators' worth of distributed</h3>
+
+<pre><code class="language-python">@ray.remote                               # this function may run anywhere
+def embed_remote(text):
+    return embed(text)
+
+futures = [embed_remote.remote(t) for t in texts]   # all launched, returns instantly
+vectors = ray.get(futures)                          # wait; order preserved</code></pre>
+
+<pre><code class="language-text">$ python3 ray_speedup.py             # Part C, measured on a 10-core laptop
+24 documents, 30 ms simulated model latency each
+serial:      0.92 s
+parallel:    0.16 s     speedup: 5.7x
+identical results: True</code></pre>
+
+<p class="keep-in-present">The measured run, Thursday's Part C. The classic mistake is
+<code>ray.get()</code> inside the launch loop; wait-per-task is serial with extra steps, and
+the lab's timing test catches it. For state that must live <em>on</em> a worker (a loaded
+model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors</span>:
+<code>@ray.remote</code> on a class instead of a function.</p>
+
+<h3 class="new-slide" data-kicker="Ray">Choosing: the one-table version</h3>
+
+<table>
+  <thead><tr><th>Your job looks like…</th><th>Reach for</th><th>Because</th></tr></thead>
+  <tbody>
+    <tr><td>SQL-ish dataflow over huge records (filter, join, aggregate)</td><td>Spark (or DuckDB until it doesn't fit!)</td><td>the optimizer and shuffle machinery are the product</td></tr>
+    <tr><td>the same Python function, many times, maybe stateful</td><td>Ray</td><td>tasks and actors map 1:1 onto the code you already wrote</td></tr>
+    <tr><td>fits on one machine</td><td>one machine</td><td>Lecture 10's lesson still binds: distribution is a tax you pay only when forced</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="thursday">On Thursday you run all three</h2>
+
+<p>Lab 11, in the same spirit as always: build the naked pattern first, then meet the
+products:</p>
+
+<ul class="checklist">
+  <li>☐ <strong>Part A (graded, offline):</strong> micro-mapreduce. You write map,
+  hash partitioning, the shuffle, and reduce; the harness checks the grouping guarantee
+  and that the answer is independent of partition count.</li>
+  <li>☐ <strong>Part B (pyspark):</strong> the same word count in three chained calls;
+  print the DAG and point at the shuffle in it.</li>
+  <li>☐ <strong>Part C (ray):</strong> parallelize an embedding job; measure the speedup
+  and the launch-then-wait discipline.</li>
+  <li>☐ Install ahead of class: <code>pip install pyspark ray</code>; pyspark needs Java
+  (<code>java -version</code> must work). Parts B/C run locally; the autograder grades
+  Part A.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="recap">Recap &amp; next time</h2>
+
+<ul class="recap-list">
+  <li><strong>Partitioning is the primitive</strong>: hash for uniform spread and joins,
+  range for locality; skew is the failure mode both must manage.</li>
+  <li><strong>MapReduce separates computation from placement</strong>: you write map and
+  reduce; the shuffle manufactures reduce's see-everything-for-my-key guarantee.</li>
+  <li><strong>Spark is the pattern plus a lazy plan</strong> (narrow fuses, wide shuffles,
+  lineage recovers); <strong>Ray is the pattern minus the query engine</strong> (tasks and
+  actors for arbitrary Python).</li>
+</ul>
+
+<p class="keep-in-present"><strong>Thursday:</strong> Lab 11. <strong>Next Tuesday:</strong>
+Google's other 2004-era gift: Bigtable, LSM trees, and how NoSQL stores write at absurd
+rates. Quiz 11 opens class: MapReduce, Spark &amp; Ray.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">Is MapReduce dead? I've heard "nobody writes MapReduce anymore."</h3>
+<p class="keep-in-present">The <em>API</em> retired; the <em>pattern</em> runs everything.
+Spark, DuckDB's parallel aggregation, BigQuery, Snowflake: all execute map-shuffle-reduce
+under nicer front ends. It's COBOL vs. the ledger: the notation aged, the accounting is
+eternal. When a Spark job stalls, the diagnosis is always in this lecture's vocabulary:
+which stage, which shuffle, which skewed key.</p>
+
+<h3 class="keep-in-present">Why did we learn DuckDB if Spark exists?</h3>
+<p class="keep-in-present">Because a 2025-era laptop crunches hundreds of GB in DuckDB with
+zero cluster tax: no JVM, no shuffle, no ops. The honest decision procedure: DuckDB until
+data or memory genuinely doesn't fit, then Spark. Teams that skip step one pay the
+distribution tax on data that fit in RAM all along.</p>
+
+<h3 class="keep-in-present">Where does the shuffle physically put the data?</h3>
+<p class="keep-in-present">Mappers write their output partitioned by destination into local
+files; reducers pull their slice from every mapper over the network; disk on both ends,
+which is why the shuffle dominates job cost and why "shuffle spill" is the first metric a
+Spark tuner checks. Cloud engines increasingly shuffle through object storage (S3), trading
+latency for elasticity; the storage/compute split from Lecture 10, again.</p>
+
+<h3 class="keep-in-present">Could our RAG project need Spark or Ray?</h3>
+<p class="keep-in-present">The retrieval path shouldn't; your corpus fits comfortably on one
+machine. The <em>ingest</em> path is the natural fit: embedding 100k chunks is exactly
+Part C's shape (<code>@ray.remote</code> on the embed call). Several past teams did their
+final re-embed that way; note it in your writeup if you do.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=3"></script>
+</body>
+</html>

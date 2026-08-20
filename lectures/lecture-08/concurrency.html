@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 8 · Concurrency: Locks, Isolation &amp; MVCC · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lecture 8</div>
+  <ul>
+    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#anomalies">Ways to be wrong together</a></li>
+    <li><a href="#try-it">Interleave two transactions</a></li>
+    <li><a href="#locking">Two-phase locking</a></li>
+    <li><a href="#levels">Isolation levels</a></li>
+    <li><a href="#mvcc">MVCC: readers don't block</a></li>
+    <li><a href="#thursday">On Thursday you build it</a></li>
+    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 8 · Tuesday October 13, 2026</div>
+  <h1>Concurrency: Locks, Isolation &amp; MVCC</h1>
+  <div class="subtitle">Two transactions, one row, and every way that can go wrong, named, priced, and prevented.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+Thursday's log made one transaction crash-proof; today two of them meet. Interleave a pair of
+correct transactions carelessly and money vanishes with no crash anywhere;the anomalies
+have names, the fixes have prices, and every engine picks its trade. We build up from
+two-phase locking (the classic, and your lab) to
+<span class="gloss" data-gloss="mvcc-intro">MVCC</span>, the keep-every-version trick that
+lets Postgres run reports and updates through the same rows without either waiting.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 5 ·
+  the anomaly zoo: Berenson et&nbsp;al., <a href="https://dl.acm.org/doi/10.1145/223784.223785"><em>A Critique of ANSI SQL Isolation Levels</em></a> ·
+  Postgres's <a href="https://www.postgresql.org/docs/current/transaction-iso.html">isolation docs</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="plan">Today's plan</h2>
+
+<p>Quiz first, then the I in ACID.</p>
+
+<ol class="agenda">
+  <li><strong>Quiz 6</strong>: B+ trees (10 min, first thing).</li>
+  <li><strong>Ways to be wrong together</strong>: lost updates and friends, live.</li>
+  <li><strong>Interleave it yourself</strong>: build the disaster, then prevent it.</li>
+  <li><strong>Two-phase locking</strong>: the classic fix, and its deadlock bill.</li>
+  <li><strong>Isolation levels</strong>: the menu of safety-for-speed trades.</li>
+  <li><strong>MVCC</strong>: Postgres's answer: keep every version, block almost no one.</li>
+</ol>
+
+<p class="keep-in-present">Today's claim: <strong>isolation is purchased</strong>: with
+waiting, with aborts, or with old versions. There is no free level.</p>
+
+<!-- ============================================================ -->
+<h2 id="anomalies">Ways to be wrong together</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>break the bank yourselves</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Account A holds $100. Two cashiers each
+    run: <em>read A; add $10; write A back</em>. Both transactions are individually perfect.
+    Find the interleaving of their four steps where a deposit vanishes, and say exactly which
+    step destroyed it.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare interleavings: both read 100 →
+      both write 110 → one $10 is gone. No crash, no error, no log entry: which of last
+      Thursday's machinery even noticed?</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: what property did the
+      serial (one-then-the-other) schedule have that the interleaved one lost?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The killing interleaving is: T1 reads 100, T2 reads 100, T1 writes 110, T2 writes 110.
+      The step that destroys the deposit is <strong>T2's read</strong>, not its write: it read a
+      value that was already stale-in-waiting, because T1 was going to change it. The write merely
+      carries out the damage. Final balance $110 where it should be $120, and one customer's $10
+      has vanished.</p>
+      <p>What noticed? <strong>Nothing.</strong> No crash, no error, no rollback, and the log is
+      perfectly happy, because both transactions committed and every write it recorded did land on
+      disk. Last Thursday's machinery guarantees durability and atomicity, and neither was
+      violated. That is the point: this is a new category of bug. The property the serial schedule
+      had and the interleaved one lost is that each transaction saw the <em>whole</em> effect of
+      every transaction before it and <em>none</em> of any transaction after it. Restoring that
+      property is what isolation means, and it is the I this whole lecture is about.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Ways to be wrong together">The anomaly zoo: learn the names</h3>
+
+<table>
+  <thead><tr><th>Anomaly</th><th>The story in one line</th><th>Needs</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Lost update</strong></td><td>two read-modify-writes overlap; the first write is silently overwritten</td><td>write-write overlap</td></tr>
+    <tr><td><strong>Dirty read</strong></td><td>you read a value a transaction later rolls back; you acted on data that never existed</td><td>reading uncommitted</td></tr>
+    <tr><td><strong>Non-repeatable read</strong></td><td>read a row twice in one tx, get two answers; someone committed between</td><td>read, their commit, re-read</td></tr>
+    <tr><td><strong>Phantom</strong></td><td>run <code>WHERE gpa &gt; 35</code> twice, the second finds a row that wasn't born yet; inserts dodge row locks</td><td>predicate re-run</td></tr>
+    <tr><td><strong>Write skew</strong></td><td>two txs each check a condition, then write different rows; both checks pass, the combined result violates the rule</td><td>the subtle one, see FAQ</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">The gold standard is
+<span class="gloss" data-gloss="serializable">serializability</span>: the result equals
+<em>some</em> serial order. Everything else on today's menu is a named, priced deviation
+from it.</p>
+
+<div class="callout note">
+  <span class="label">War story · the lost update that closed a bank, 2014</span>
+  <p class="keep-in-present">The anomaly zoo is not academic. In 2014 the Bitcoin exchange
+  Flexcoin was destroyed by the first row of that table: attackers fired thousands of
+  simultaneous transfers between accounts they controlled, and the transfer code did
+  read-balance → check → write-balance with no isolation. Concurrent reads saw the same
+  balance, the debits overwrote each other (a textbook lost update), and the attackers
+  withdrew about 896 BTC the exchange didn't have. Flexcoin announced its closure within
+  days. The two-cashier TPS you just did is that exploit with smaller numbers; the fix is
+  today's entire lecture.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Interleave two transactions</h2>
+
+<p>Two cashiers, one account, and you as the scheduler. Build the disaster by hand, then flip
+the locks on and watch the same schedule get refused.</p>
+
+<div class="viz" id="viz-ilv">
+  <div class="viz-title">The scheduler's console · A = $100, two "+$10" transactions</div>
+  <p class="viz-description">Click a transaction's next step to run it. Each is
+  <code>read → compute → write → commit</code>. Try to lose an update; then enable strict
+  2PL and try the same clicks.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="il-t1">run tx1's next step</button>
+    <button type="button" class="btn primary" id="il-t2">run tx2's next step</button>
+    <label class="il-lock"><input type="checkbox" id="il-locks"> strict 2PL on</label>
+    <button type="button" class="btn" id="il-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="il-msg">A = $100. Both cashiers ready. You are the interleaving.</div>
+  <div class="il-grid">
+    <div class="il-col"><div class="il-title">tx1</div><div id="il-s1" class="il-steps"></div></div>
+    <div class="il-col"><div class="il-title">tx2</div><div id="il-s2" class="il-steps"></div></div>
+    <div class="il-col"><div class="il-title">account A</div><div id="il-acct" class="il-acct"></div></div>
+  </div>
+  <div class="bs-stats" id="il-stats"></div>
+  <p class="viz-caption">With locks on, the "disaster schedule" hits a LockAbortError at the
+  second read, the exact behavior your Lab 7 lock table implements.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="locking">Two-phase locking</h2>
+
+<p class="keep-in-present">The classic prevention: make conflicting access <em>impossible</em>
+by fencing rows with locks. Every serious engine shipped it for decades; yours ships it
+Thursday in 40 lines.</p>
+
+<pre class="equation"><code>S lock (shared / read):     many holders welcome, readers coexist
+X lock (exclusive / write): one holder, no readers, no exceptions
+
+conflict table:        S      X
+                 S    ok    WAIT
+                 X   WAIT   WAIT        ← every anomaly dies in these three WAITs</code></pre>
+
+<h3 class="new-slide" data-kicker="Two-phase locking">The protocol</h3>
+
+<table>
+  <thead><tr><th>Rule</th><th>Statement</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Lock before touching</td><td>S (shared) lock to read, many holders; X (exclusive) to write, one holder, no readers</td><td>write-write and read-write overlaps become impossible</td></tr>
+    <tr><td>Two phases</td><td>acquire locks growing, never after the first release</td><td>the growing/shrinking split is what makes schedules <em>provably</em> serializable</td></tr>
+    <tr><td>Strict variant</td><td>hold everything until commit/rollback</td><td>also kills dirty reads; what your lab (and most engines) implement</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Two-phase locking">The bill: waiting, and worse</h3>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Waiting</span><span>a conflicting lock means someone sits idle: the report blocks the update blocks the report. Throughput dies of politeness.</span></div>
+  <div class="lc-row"><span class="lc-k"><span class="gloss" data-gloss="deadlock">Deadlock</span></span><span>tx1 holds A wants B; tx2 holds B wants A, forever. Engines detect the cycle and shoot one participant (your app must retry).</span></div>
+  <div class="lc-row"><span class="lc-k">microdb's dodge</span><span>single-threaded, so waiting would be waiting on nobody: conflicts raise <code>LockAbortError</code> immediately. Same protocol, honest scale.</span></div>
+  <div class="lc-row"><span class="lc-k">The itch</span><span>most conflicts involve a <em>reader</em>, and readers don't change anything. Must a report really block a deposit? Hold that thought two sections.</span></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="levels">Isolation levels</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>price the safety</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Your dashboard runs a 10-minute analytics
+    query over the orders table while checkouts commit constantly. Full serializability would
+    block or abort someone for 10 minutes. Which anomalies from the zoo could you TOLERATE in
+    a dashboard, in exchange for never blocking checkouts? Which could a bank transfer
+    tolerate?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Dashboards shrug at non-repeatable reads;
+      transfers cannot shrug at lost updates. Different queries deserve different contracts;
+      that's why levels exist per-transaction, not per-database.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Guess before the next slide: which level
+      is Postgres's default?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>A dashboard can shrug at almost all of them. A non-repeatable read or a phantom just
+      means the ten-minute report reflects a slightly different instant in different places, which
+      for a revenue chart is noise next to the fact that it is ten minutes stale by the time anyone
+      reads it. Even a dirty read is often survivable there. A <strong>bank transfer can tolerate
+      none of it</strong>, and least of all the lost update, which is the one that silently
+      destroys money.</p>
+      <p>That asymmetry is why isolation is set <em>per transaction</em> rather than per database:
+      <code>SET TRANSACTION ISOLATION LEVEL …</code>. The same database serves both, and each
+      query buys only the safety it needs.</p>
+      <p>The guess: Postgres's default is <strong>READ COMMITTED</strong>, not SERIALIZABLE. Most
+      people assume the strongest is the default, and the fact that it is not is the whole
+      economics of this lecture: safety is bought with waiting, and databases sell it by the
+      transaction.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Isolation levels">The menu, explorable</h3>
+
+<div class="viz" id="viz-iso">
+  <div class="viz-title">four levels, three anomalies · click a level, watch what it buys</div>
+  <p class="viz-description">Each card is one anomaly's two-transaction story. Climbing the
+  ladder turns warm cards (can happen) green (prevented), and raises the price at the
+  bottom. Every level is a different point on the safety-for-throughput trade, not a
+  different degree of broken.</p>
+  <div class="iso-ladder" id="iso-ladder"></div>
+  <div class="iso-cards" id="iso-cards"></div>
+  <div class="iso-price" id="iso-price"></div>
+  <p class="viz-caption">Climb from bottom to top and watch the order the anomalies die in;
+  that order IS the standard's definition of the levels.</p>
+</div>
+
+<p class="keep-in-present">Set it per transaction:
+<code>SET TRANSACTION ISOLATION LEVEL SERIALIZABLE</code>. The gray zone at REPEATABLE READ
+is why the Berenson paper in the citations exists: the ANSI names predate the
+implementations, and write skew slips between them (FAQ).</p>
+
+<!-- ============================================================ -->
+<h2 id="mvcc">MVCC: readers don't block</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the reader who wants yesterday</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>The 10-minute report doesn't need the
+    <em>latest</em> data; it needs a <em>consistent</em> view, as of its start. Design a
+    scheme where writers never wait for it and it never waits for writers. Hint from Lab 3:
+    what if UPDATE didn't overwrite the row?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Converge on: keep old versions; stamp each
+      with its creator; let each reader see the versions current at its <span class="gloss" data-gloss="snapshot">snapshot</span>. What new
+      chore does this create? (Someone must take out the trash.)</li>
+      <li><span class="tps-phase">Share · 2 min</span>Name a Lab 3 design decision that made
+      "just keep the old row" cheap.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Do not overwrite. An <code>UPDATE</code> writes a <em>new version</em> of the row and
+      leaves the old one in place, each version stamped with the transaction that created it and
+      the one that deleted it. Every reader carries a <strong>snapshot</strong>, the set of
+      transactions committed when it started, and sees exactly the versions that were current
+      then. Readers never block writers and writers never block readers, because neither takes a
+      lock to do it: visibility is a two-field arithmetic test on the stamps, which is really just
+      a Predicate from Lab 4.</p>
+      <p>The new chore is <strong>garbage</strong>. Old versions accumulate forever unless someone
+      reclaims the ones no living snapshot can still see, which is what VACUUM does, and why a
+      long-running report makes vacuum's job harder: its snapshot keeps old versions alive. The
+      Lab 3 decision that made "just keep the old row" cheap is <strong>deletion as a bit
+      flip</strong> with tombstone slots that get recycled. Superseding a row is the same move as
+      deleting it, and reclaiming a dead version is the same move as reusing a tombstone. MVCC is
+      that idea, industrialized.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="MVCC">How Postgres actually does it</h3>
+
+<table>
+  <thead><tr><th>Piece</th><th>Mechanism</th><th>You already built the bones</th></tr></thead>
+  <tbody>
+    <tr><td>Versions</td><td>UPDATE = insert a new row version; the old one stays, stamped (xmin, xmax) with creator/deleter tx ids</td><td>Lab 3: inserts into free slots; tombstones linger</td></tr>
+    <tr><td>Snapshots</td><td>each tx knows which tx ids were committed at its start; it sees exactly those versions</td><td>&nbsp;</td></tr>
+    <tr><td>Visibility check</td><td>per row: xmin committed-before-me AND xmax not, a two-field test, no locks</td><td>a Predicate, really (Lab 4)</td></tr>
+    <tr><td>The trash</td><td><span class="gloss" data-gloss="vacuum">VACUUM</span> reclaims versions no living snapshot can see</td><td>Lab 3's tombstone reuse, industrialized</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present"><strong>Readers never block writers; writers never block
+readers.</strong> Writers still block writers (locks live on), and long-lived snapshots make
+vacuum's job harder: MVCC moved the cost, it didn't erase it. No free level, ever.</p>
+
+<h3 class="new-slide" data-kicker="MVCC">Walk a version chain</h3>
+
+<p>One account, three updates, four possible readers. The two-field visibility test from the
+table above, run live; drag the slider to move the reader's snapshot through time:</p>
+
+<div class="viz" id="viz-chain">
+  <div class="viz-title">ada's balance · one row, three versions, stamped (xmin, xmax)</div>
+  <p class="viz-description">History: tx&nbsp;100 inserted the row at 120, tx&nbsp;103
+  updated it to 70, tx&nbsp;107 updated it to 50. Each version's test:
+  <em>visible if xmin committed before my snapshot AND xmax was not</em>. Green = the
+  version this reader sees; every other reader, concurrently, sees its own.</p>
+  <div class="chain-controls">
+    <label>reader's snapshot: <span id="chain-when">after tx 107 committed</span></label>
+    <input type="range" id="chain-slider" min="0" max="2" step="1" value="2">
+  </div>
+  <div id="chain-stage"></div>
+  <p class="viz-caption">No locks appear anywhere in this test; it's pure arithmetic on two
+  stamps, which is why a 10-minute report and a write flood coexist. The versions the slider
+  leaves behind are VACUUM's job; a reader parked at the leftmost snapshot is exactly the
+  "long-lived snapshot" that makes vacuum's job harder.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="thursday">On Thursday you build it</h2>
+
+<p>Lab 7 caps microdb: WAL, commit, rollback, recovery, and the strict-2PL lock table from
+today guarding every read and write. Then you kill it and watch it live.</p>
+
+<ul class="checklist">
+  <li>☐ Lab 6 submitted; download the eight Lab 7 starter files.</li>
+  <li>☐ Harness prints <strong>0/9</strong>; two tests spawn and murder a subprocess; the
+  drama is intentional.</li>
+  <li>☐ From today: be able to run the lost-update interleaving on paper and say where strict
+  2PL refuses it; the LOCKS test group is that story in code.</li>
+  <li>☐ From Thursday: say the WAL rule aloud once more. Old value to the log, before the
+  page.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="recap">Recap &amp; next time</h2>
+
+<ul class="recap-list">
+  <li><strong>Correct alone ≠ correct together.</strong> The anomalies have names; learn them
+  and you can read any engine's isolation docs fluently.</li>
+  <li><strong>2PL buys serializability with waiting</strong> (and deadlocks); strict 2PL is
+  your lab's lock table holding everything to commit.</li>
+  <li><strong>MVCC buys reader-writer peace with versions</strong>: old rows linger, stamped
+  and vacuumed, exactly the storage moves Lab 3 taught, aimed at isolation.</li>
+</ul>
+
+<p class="keep-in-present"><strong>Thursday:</strong> Lab 7, the kill -9 lab.
+<strong>Next Tuesday:</strong> the optimizer: statistics, selectivity, and why the planner
+finally gets to be smart, plus midterm review. Quiz 7 (transactions &amp; MVCC) lands
+Tuesday Oct 27, after the exam.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">What exactly is write skew? The table teased it.</h3>
+<p class="keep-in-present">The on-call rule: at least one doctor rostered. Two doctors each
+run "if the OTHER is on call, I can leave": under snapshot isolation both reads see the old
+roster, both commit, zero doctors remain. No row was written by both, so no write conflict
+fired. Only true serializability (Postgres's SSI) catches it; the reason SERIALIZABLE still
+exists as a level above snapshot.</p>
+
+<h3 class="keep-in-present">Why doesn't microdb's Lab 7 implement MVCC?</h3>
+<p class="keep-in-present">Locks are 40 lines and teach the protocol; MVCC is version chains,
+snapshot bookkeeping, and vacuum, a semester garnish, not a Thursday. You now know both
+designs and, more importantly, the trade they're making. Sciore stops at locks too.</p>
+
+<h3 class="keep-in-present">How often do real deadlocks happen?</h3>
+<p class="keep-in-present">Constantly, at scale: check <code>pg_stat_database.deadlocks</code>
+on any busy system. The standard defenses are ordering (all code touches accounts in id
+order, no cycles possible) and retry loops. "Transactions may be shot; write retryable
+code" is professional-grade advice you now understand.</p>
+
+<h3 class="keep-in-present">Does the buffer pool's pin count relate to these locks?</h3>
+<p class="keep-in-present">Different layer, different lifetime: a pin protects a <em>frame</em>
+for microseconds (week 2, and the latch world of Lab 3's FAQ); a lock protects a
+<em>row/block's meaning</em> for the transaction's whole life. Same shaped API, three orders
+of magnitude apart in duration; confusing them is a classic systems interview trap you're
+now immune to.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=3"></script>
+</body>
+</html>

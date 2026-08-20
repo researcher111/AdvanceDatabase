@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Final Project · Build a RAG Pipeline · Advanced Databases Fall 2026</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="labs/_shared/lab-base.css?v=15">
+<style>
+  body { max-width: 980px; margin: 0 auto; padding: 44px 28px 80px; }
+  main { max-width: none; }
+
+  .eyebrow { font-family: var(--sans); font-size: 12px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-mute); margin: 0 0 10px; }
+  h1 { font: 600 38px/1.18 var(--serif); margin: 0 0 10px; letter-spacing: -0.01em; }
+  .subtitle { font-family: var(--sans); font-size: 15px; color: var(--ink-mute); margin: 0 0 22px; }
+
+  .lede { font: 400 17px/1.65 var(--serif); color: var(--ink); margin: 0 0 14px; }
+
+  h2 { font: 600 24px/1.3 var(--serif); margin: 38px 0 12px; }
+  h3 { font: 600 17px/1.3 var(--serif); margin: 22px 0 8px; }
+  p  { font: 400 15px/1.65 var(--serif); margin: 0 0 12px; color: var(--ink); }
+
+  .home-bar {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    font-family: var(--sans); font-size: 13px; margin: 20px 0 30px;
+  }
+  .home-bar a {
+    background: white; border: 1px solid var(--rule);
+    padding: 8px 14px; border-radius: 5px;
+    color: var(--ink); text-decoration: none;
+  }
+  .home-bar a:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Pipeline strip */
+  .pipeline {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch;
+    font-family: var(--sans); margin: 16px 0 8px;
+  }
+  .pipeline .stage {
+    flex: 1 1 120px; background: white; border: 1px solid var(--rule);
+    border-radius: 7px; padding: 10px 12px; min-width: 120px;
+  }
+  .pipeline .stage .s-no { font: 700 10px var(--mono); color: var(--accent); letter-spacing: 0.08em; }
+  .pipeline .stage .s-name { font: 600 13.5px var(--sans); margin: 3px 0 4px; color: var(--ink); }
+  .pipeline .stage .s-desc { font: 400 12px/1.45 var(--sans); color: var(--ink-mute); }
+  .pipeline .arrow { align-self: center; color: var(--ink-mute); font: 600 14px var(--sans); }
+
+  table.facts {
+    border-collapse: collapse; width: 100%;
+    font-family: var(--sans); font-size: 14px; margin: 10px 0 14px;
+  }
+  table.facts th {
+    background: var(--bg-elev); font-weight: 600; text-align: left;
+    padding: 9px 12px; border-bottom: 2px solid var(--rule);
+    font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  table.facts td { padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  table.facts td.w { font-family: var(--mono); white-space: nowrap; }
+  table.facts td.dt { font-family: var(--mono); white-space: nowrap; font-size: 13px; }
+
+  ul.plain, ol.plain { font: 400 14.5px/1.6 var(--sans); color: var(--ink); padding-left: 20px; margin: 6px 0 12px; }
+  ul.plain li, ol.plain li { margin: 5px 0; }
+
+  .callout {
+    border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    background: white; border-radius: 6px;
+    padding: 12px 16px; margin: 16px 0;
+    font-family: var(--sans); font-size: 13.5px; line-height: 1.6; color: var(--ink);
+  }
+  .callout .label {
+    display: block; font: 700 11px var(--sans); letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 4px;
+  }
+
+  .footnote {
+    font-family: var(--sans); font-size: 12.5px; color: var(--ink-mute);
+    margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--rule); line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <p class="eyebrow">Final Project · 30% of course grade · teams of 2–3</p>
+  <h1>Build a RAG pipeline</h1>
+  <p class="subtitle">Advanced Databases for Data Science · Fall 2026 · proposal Oct 29 → presentation Dec 8</p>
+
+  <p class="lede">
+    Retrieval-augmented generation is the most database-shaped problem in modern machine learning:
+    a corpus to ingest, an index to build, a query path to make fast, and a results quality bar to
+    measure honestly. Your team will build a complete RAG system in Python over a corpus you choose,
+    and because you built a vector index with your own hands in Lab 9, yours will not be a black box.
+  </p>
+
+  <div class="home-bar">
+    <a href="index.html">← Course home</a>
+    <a href="schedule.html">Schedule</a>
+  </div>
+
+  <h2 id="what">What you're building</h2>
+  <p>A question-answering system over a real document collection, end to end:</p>
+
+  <div class="pipeline">
+    <div class="stage"><div class="s-no">1 · INGEST</div><div class="s-name">Chunk</div><div class="s-desc">split documents into retrievable units; justify your chunking choices</div></div>
+    <span class="arrow">→</span>
+    <div class="stage"><div class="s-no">2 · EMBED</div><div class="s-name">Embed</div><div class="s-desc">turn chunks into vectors with a sentence-embedding model</div></div>
+    <span class="arrow">→</span>
+    <div class="stage"><div class="s-no">3 · INDEX</div><div class="s-name">Store &amp; index</div><div class="s-desc">a vector index: your Lab 9 microvector, pgvector, or FAISS</div></div>
+    <span class="arrow">→</span>
+    <div class="stage"><div class="s-no">4 · RETRIEVE</div><div class="s-name">Retrieve</div><div class="s-desc">top-k search; optional reranking, hybrid keyword + vector</div></div>
+    <span class="arrow">→</span>
+    <div class="stage"><div class="s-no">5 · GENERATE</div><div class="s-name">Generate</div><div class="s-desc">assemble context, prompt the LLM, cite the retrieved chunks</div></div>
+    <span class="arrow">→</span>
+    <div class="stage"><div class="s-no">6 · EVALUATE</div><div class="s-name">Evaluate</div><div class="s-desc">retrieval metrics + answer quality on a question set you author</div></div>
+  </div>
+
+  <h2 id="requirements">Requirements</h2>
+  <ul class="plain">
+    <li><strong>Real corpus, your choice.</strong> At least ~500 documents or ~2,000 chunks after splitting. Ideas: UVA course catalogs and policy pages, a Wikipedia category dump, arXiv abstracts in your field, cooking recipes, court opinions, game rulebooks, your favorite podcast's transcripts. Must be legally shareable with the teaching staff.</li>
+    <li><strong>Python, with the database doing real work.</strong> The retrieval layer must be a genuine index (your microvector from Lab 9, <code>pgvector</code>, FAISS, or DuckDB's vector extension), not a linear scan hidden in a loop (a brute-force <em>baseline</em> is required for comparison, but it can't be the product).</li>
+    <li><strong>An evaluation you can defend.</strong> Author ≥ 25 evaluation questions with known source passages. Report retrieval quality (recall@k and MRR against those passages) and answer quality (graded rubric or LLM-judge with spot checks). Compare at least two configurations (e.g. chunk size, k, brute-force vs ANN, with vs without reranking) and say which won and why.</li>
+    <li><strong>Measured performance.</strong> Index build time, queries per second, and the recall-vs-speed tradeoff your ANN settings chose.</li>
+    <li><strong>A demo.</strong> Live at the presentation: a question we ask, an answer with cited chunks, in seconds.</li>
+  </ul>
+
+  <div class="callout">
+    <span class="label">Stretch goals (pick at most one, only if the core is solid)</span>
+    Hybrid retrieval (BM25 + vector with score fusion) · GraphRAG over a Kuzu graph of your corpus's
+    entities · multi-hop questions · a text-to-SQL agent over a relational slice of your data ·
+    incremental ingestion (new documents indexed without a rebuild).
+  </div>
+
+  <h2 id="milestones">Milestones</h2>
+  <table class="facts">
+    <thead><tr><th>Date</th><th>Milestone</th><th>Deliverable</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="dt">Thu Oct 29</td>
+        <td><strong>Proposal</strong></td>
+        <td>1 page: team, corpus (with sample documents in hand), the questions your system will answer, planned index and embedding model, evaluation sketch.</td>
+      </tr>
+      <tr>
+        <td class="dt">Thu Nov 12</td>
+        <td><strong>Retrieval milestone</strong></td>
+        <td>Corpus ingested, index built, top-k retrieval working from the command line. Show 5 example queries with retrieved chunks. (Lab 10 hands you most of this scaffolding.)</td>
+      </tr>
+      <tr>
+        <td class="dt">Thu Dec 3</td>
+        <td><strong>Workshop</strong></td>
+        <td>In-class build session: arrive with your evaluation running; leave with your numbers.</td>
+      </tr>
+      <tr>
+        <td class="dt">Mon Dec 7, 11:59 pm</td>
+        <td><strong>Final report</strong></td>
+        <td>6–8 pages: architecture, design decisions and what you tried, evaluation results with tables, and an honest failure analysis (the questions your system gets wrong, and why). Plus the repo.</td>
+      </tr>
+      <tr>
+        <td class="dt">Tue Dec 8</td>
+        <td><strong>Presentation</strong></td>
+        <td>8 minutes + live demo + questions.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 id="rubric">Rubric</h2>
+  <table class="facts">
+    <thead><tr><th>Criterion</th><th>What earns it</th><th>Weight</th></tr></thead>
+    <tbody>
+      <tr><td><strong>System works end to end</strong></td><td>Ingestion through cited answers, reproducible from the repo README.</td><td class="w">25%</td></tr>
+      <tr><td><strong>Retrieval layer</strong></td><td>A real index, correctly used; the brute-force baseline comparison; the recall-vs-speed tradeoff measured and explained.</td><td class="w">25%</td></tr>
+      <tr><td><strong>Evaluation</strong></td><td>Honest, quantitative, comparative. Failure analysis counts as much as the wins.</td><td class="w">25%</td></tr>
+      <tr><td><strong>Report &amp; presentation</strong></td><td>Clear architecture, defended decisions, a demo that survives a live question.</td><td class="w">15%</td></tr>
+      <tr><td><strong>Milestones</strong></td><td>Proposal and retrieval milestone delivered on time and taken seriously.</td><td class="w">10%</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="notes">Ground rules</h2>
+  <ul class="plain">
+    <li><strong>Teams of 2–3.</strong> The report includes a one-paragraph contribution statement per member.</li>
+    <li><strong>LLM access:</strong> use the course-provided endpoint (details in class) or any model you can run locally; do not pay for API access to do this project.</li>
+    <li><strong>AI assistance:</strong> allowed for code, with attribution, but your team must be able to explain every line at the presentation, and the evaluation questions must be authored by humans who read the corpus.</li>
+    <li><strong>Off-the-shelf frameworks</strong> (LangChain, LlamaIndex) are allowed only for the generation step. Chunking, indexing, and retrieval must be code your team wrote. That's the point of the course.</li>
+  </ul>
+
+  <p class="footnote">
+    Advanced Databases for Data Science · Fall 2026 · UVA School of Data Science · Daniel G. Graham.
+    See the <a href="schedule.html">schedule</a> for how Labs 9 (microvector) and 10 (micro-rag) feed this project.
+  </p>
+
+</main>
+</body>
+</html>

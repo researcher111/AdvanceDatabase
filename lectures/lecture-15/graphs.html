@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 15 · Graph Databases &amp; Course Synthesis · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lecture 15</div>
+  <ul>
+    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#joins">When tables fight you</a></li>
+    <li><a href="#try-it">Walk the graph</a></li>
+    <li><a href="#model">The property graph</a></li>
+    <li><a href="#cypher">Cypher vs recursive SQL</a></li>
+    <li><a href="#kuzu">Live demo: Kuzu</a></li>
+    <li><a href="#when">When graphs win</a></li>
+    <li><a href="#graphrag">GraphRAG</a></li>
+    <li><a href="#synthesis">The whole course, one slide</a></li>
+    <li><a href="#endgame">Project endgame</a></li>
+    <li><a href="#recap">Final recap</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 15 · Tuesday December 1, 2026</div>
+  <h1>Graph Databases &amp; the Course, Closed</h1>
+  <div class="subtitle">When relationships are the data, plus the five ideas you actually learned this semester, wearing fifteen different costumes.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+One data shape has quietly resisted everything we've built: deep relationships.
+"Who follows ada?" is a join; "who's within three hops of ada?" is a join chained onto a
+join onto a join, with SQL getting longer and the plan getting worse at every depth. Graph
+databases store the relationships <em>as pointers on the data itself</em> and replace join
+chains with traversal; you'll watch it live in Kuzu, an embeddable graph engine that is to
+Neo4j what DuckDB is to Postgres. Then the real last act: the whole semester compressed to
+five ideas, and the argument that every system you'll meet for the rest of your career is a
+remix of them.
+</p>
+
+<div class="cite">
+  Companion reading: Kuzu's <a href="https://docs.kuzudb.com/">documentation</a> (install to Cypher in ten minutes) ·
+  Robinson, Webber &amp; Eifrem, <a href="https://neo4j.com/graph-databases-book/"><em>Graph Databases</em></a> (free O'Reilly text) ·
+  Microsoft's <a href="https://arxiv.org/abs/2404.16130"><em>From Local to Global: GraphRAG</em></a> paper.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="plan">Today's plan</h2>
+
+<p>Quiz 12 first (Bigtable, LSM &amp; NoSQL, the last quiz), then the last new idea and the
+oldest ones.</p>
+
+<ol class="agenda">
+  <li><strong>When tables fight you</strong>: the join-depth problem, priced.</li>
+  <li><strong>Walk the graph</strong>: traversal vs join chains, live.</li>
+  <li><strong>The property graph</strong>: nodes, edges, and adjacency as storage.</li>
+  <li><strong>Cypher vs recursive SQL</strong>: the same question, two notations.</li>
+  <li><strong>Kuzu, live</strong>: a graph engine on the six students you know.</li>
+  <li><strong>GraphRAG</strong>: the project's optional frontier.</li>
+  <li><strong>Synthesis</strong>: fifteen weeks, five ideas.</li>
+</ol>
+
+<p class="keep-in-present">Today's claim: <strong>a graph database is an index decision,
+not a new religion</strong>: it pre-joins your relationships at write time, exactly the way
+an index pre-sorts your rows.</p>
+
+<!-- ============================================================ -->
+<h2 id="joins">When tables fight you</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>feel the join-depth wall</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Table <code>follows(src, dst)</code>.
+    Write (mentally or on paper) the SQL for "names of people ada follows," then for
+    "people <em>they</em> follow" (2 hops), then 3 hops. Watch what happens to your query
+    text at each depth, and to the number of rows the middle of the plan must produce
+    before the final filter. What's the cost's shape as a function of depth?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>One self-join per hop; the query grows
+      linearly in text and the intermediate result grows like (average follows)<sup>depth</sup>.
+      Every hop re-<em>discovers</em> neighbors by matching keys, even though the
+      neighbors never changed. Compare: did either of you know the SQL for "any depth up
+      to 5"? (There is one, it's coming, but you had to reach for it.)</li>
+      <li><span class="tps-phase">Share · 2 min</span>Design the fix: what could you store
+      <em>with each row</em> so that finding neighbors costs zero key-matching?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>One self-join per hop. The text grows linearly, one more <code>JOIN follows</code> per
+      level, and the intermediate result grows like <strong>d<sup>k</sup></strong> for average
+      degree d and depth k, since the middle of the plan must materialise every path before the
+      final filter thins it. Three hops on a graph with average degree 100 is a million-row
+      intermediate to answer a question whose answer might be twelve names. And nobody writes the
+      5-hop version by hand; there is a <code>WITH RECURSIVE</code> answer, but you had to reach
+      for it, which is itself the lesson about notation.</p>
+      <p>The waste is that every hop <em>re-discovers</em> the neighbours by matching keys, even
+      though the neighbours never changed between queries. So the fix is to store the answer with
+      the row: keep on each node a list of pointers to its actual neighbours, an
+      <strong>adjacency list</strong>. Then a hop is a pointer-follow instead of an index probe,
+      and the key matching is paid once at insert rather than once per query per hop. That is a
+      graph database, and it is the same trade as an index in Lab 6: pay organisation on write,
+      skip work forever after.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="When tables fight you">The two cost models</h3>
+
+<pre class="equation"><code>relational:  each hop = a JOIN     · find neighbors by MATCHING KEYS (hash/index probe per row)
+graph:       each hop = a WALK     · find neighbors by FOLLOWING POINTERS stored on the node
+
+k hops from one start node, average degree d:
+    join chain:  k joins; intermediates ~ d^k rows before dedup; planner sweats at every step
+    traversal:   visit ~ d^k nodes, each neighbor list one pointer-follow away, no matching
+
+same asymptotics, wildly different constants, and the constant is the product.</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Walk the graph</h2>
+
+<p>The six students, nine follows edges, the same data the Kuzu demo loads. Pick a start
+and walk outward; the counter compares pointer-follows against what a SQL join chain
+touches.</p>
+
+<div class="viz" id="viz-walk">
+  <div class="viz-title">traversal · 6 students, 9 follows edges</div>
+  <p class="viz-description">Click a student to start there, then step the depth. Reached
+  nodes fill in per hop; the walked edges highlight. The tally under the graph counts
+  <em>edge visits</em> for the traversal vs <em>rows matched</em> by the equivalent
+  self-join chain.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="walk-step">+1 hop</button>
+    <button type="button" class="btn" id="walk-reset">Reset</button>
+    <span class="walk-msg" id="walk-msg"></span>
+  </div>
+  <div class="walk-svg-wrap"><svg id="walk-svg" viewBox="0 0 640 340"></svg></div>
+  <div class="bs-stats" id="walk-stats"></div>
+  <p class="viz-caption">Start at <strong>ada</strong> and step to depth 3:the reached set
+  matches query 3 of the Kuzu demo below, and the fay→ada edge shows why "within 3 hops"
+  needs cycle handling either way.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="model">The property graph</h2>
+
+<p class="keep-in-present">The data model every mainstream graph database shares (Neo4j,
+Kuzu, Neptune, Memgraph):</p>
+
+<pre class="equation"><code>node   (:Student {name: 'ada', gpa: 39})          a record with a label + properties
+edge   (ada)-[:Follows {since: 2026}]->(ben)      ALSO a record: typed, directed, with properties
+
+storage:  each node keeps its <span class="gloss" data-gloss="adjacency-list">adjacency lists</span>, Follows-out: [ben, cyd], Follows-in: [fay]
+          neighbors are reachable without consulting any index: <span class="gloss" data-gloss="ifa">index-free adjacency</span></code></pre>
+
+<p class="keep-in-present">Say it in this course's vocabulary: <strong>a graph database
+materializes the join at write time.</strong> Adding the edge does the key-matching once;
+every future traversal follows the stored pointer. The trade should feel familiar by now:
+it's the index trade (Lab 6) with the cost moved to a different operation: writes pay,
+reads ride. Even the failure mode is familiar: a <span class="gloss" data-gloss="supernode">supernode</span>
+is skew (Lecture 13) wearing a graph costume.</p>
+
+<!-- ============================================================ -->
+<h2 id="cypher">Cypher vs recursive SQL</h2>
+
+<p class="keep-in-present">SQL <em>can</em> traverse: <code>WITH RECURSIVE</code> is a loop
+in the algebra, and it's genuinely how you should do shallow graph work in Postgres or
+DuckDB. The same question, both notations, both verified against their engines on the
+six-student data (both return <code>ben cyd dee eli fay</code>):</p>
+
+<h3 class="new-slide" data-kicker="Cypher vs recursive SQL">"Everyone within 3 hops of ada"</h3>
+
+<pre><code class="language-sql">-- DuckDB / Postgres: a loop, spelled as algebra
+WITH RECURSIVE reach(name, depth) AS (
+    SELECT 'ada', 0
+  UNION ALL
+    SELECT f.dst, r.depth + 1
+    FROM reach r JOIN follows f ON f.src = r.name
+    WHERE r.depth < 3
+)
+SELECT DISTINCT name FROM reach WHERE name &lt;&gt; 'ada' ORDER BY name;</code></pre>
+
+<pre><code class="language-text">// Cypher: the pattern IS the query, draw the arrow, star the depth
+MATCH (a:Student {name: 'ada'})-[:Follows*1..3]->(b)
+WHERE b.name &lt;&gt; 'ada'
+RETURN DISTINCT b.name ORDER BY b.name</code></pre>
+
+<p class="keep-in-present">The Cypher pattern <code>( )-[ ]-&gt;( )</code> is ASCII art of
+the graph itself: nodes in parens, edges in brackets, direction as an arrow. Notation
+matters here the way it did in week 5: both compile to plans; one keeps the human honest
+about what's being asked. <code>*1..3</code> replaced the entire recursive CTE, and
+<code>* SHORTEST</code> (in the demo) replaces an algorithm SQL can't comfortably spell at
+all.</p>
+
+<!-- ============================================================ -->
+<h2 id="kuzu">Live demo: Kuzu</h2>
+
+<p>Kuzu is the DuckDB of graph databases: <code>pip install kuzu</code>, embedded in your
+process, no server. The demo script loads the six students and runs four queries;outputs
+below are the real thing, so the demo survives a typo-prone instructor:</p>
+
+<div class="chat-downloads">
+  <span class="chat-downloads-label">Demo script:</span>
+  <a class="chat-dl-btn" href="kuzu_demo.py" download>kuzu_demo.py</a>
+</div>
+
+<pre><code class="language-text">$ pip install kuzu &amp;&amp; python3 kuzu_demo.py
+loaded 6 students, 9 follows edges
+
+--- 1 · one hop: who does ada follow?
+    ['ben']
+    ['cyd']
+
+--- 2 · two hops: friends-of-friends (not ada, not already followed)
+    ['dee']
+    ['eli']
+
+--- 3 · variable length: everyone within 3 hops of ada
+    ['ben'] ['cyd'] ['dee'] ['eli'] ['fay']
+
+--- 4 · shortest path: how does ada reach fay?
+    [['ada', 'cyd', 'eli', 'fay']]</code></pre>
+
+<p class="keep-in-present">Query 4 is the one to savor: <em>how does ada reach fay</em> is a
+shortest-path search (BFS under the hood) expressed in one <code>MATCH</code>. Ask it of
+the SQL version and you're implementing Dijkstra in a CTE; ask it of Kuzu and it's Tuesday.
+When the <em>path itself</em> is the answer (recommendations, fraud rings, lineage,
+dependency chains) that's the graph database's home turf.</p>
+
+<!-- ============================================================ -->
+<h2 id="when">When graphs win</h2>
+
+<table>
+  <thead><tr><th>Signal</th><th>Reach for</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>fixed, shallow relationships (1–2 hops)</td><td>SQL joins, even at scale</td><td>the planner's home game; a join or two is what B+ trees and hash joins are FOR</td></tr>
+    <tr><td>variable/unknown depth, path-shaped answers</td><td>graph DB (Kuzu, Neo4j)</td><td><code>*1..k</code>, SHORTEST, cycles: first-class instead of CTE gymnastics</td></tr>
+    <tr><td>whole-graph analytics (PageRank, communities)</td><td>graph <em>compute</em> (NetworkX, Spark GraphFrames)</td><td>batch algorithms over all nodes: Lecture 13's shape, not a query</td></tr>
+    <tr><td>relationships that are really just foreign keys</td><td>stay relational</td><td>most schemas with edges are not graph <em>workloads</em>; don't pay a second store's sync tax (Lecture 11's lesson, again)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <span class="label">War story · the Panama Papers, 2016</span>
+  <p class="keep-in-present">The second row of that table won a Pulitzer. When 11.5 million
+  leaked documents from the law firm Mossack Fonseca reached the International Consortium of
+  Investigative Journalists, the questions that mattered were pure traversal: which officers
+  connect to which shell companies, through which intermediaries, to which real owners:
+  paths of unknown depth through millions of entities. ICIJ loaded the extracted entities and
+  relationships into Neo4j and gave hundreds of reporters a visual graph-query front end;
+  reporters with no database training followed edges to prime ministers. The relational
+  version of that investigation is a self-join per hop with the hops unknown in advance;
+  possible, and nobody would have finished it. Data model chosen to match the question:
+  that's the course's thesis, holding up under journalism's brightest spotlight.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="graphrag">GraphRAG</h2>
+
+<p class="keep-in-present">Your project retrieves by <em>similarity</em>: question vector →
+nearest chunks. Its known blind spot is questions whose answer is <em>spread across</em>
+documents ("how do the WAL and the buffer pool interact?"; no single chunk says it).
+GraphRAG's move: extract an entity graph from the corpus at ingest (WAL constrains→ page
+flushing; buffer pool defers→ writes), retrieve by <em>traversing</em> from mentioned
+entities, and hand the LLM connected subgraphs instead of disconnected paragraphs.
+Similarity finds what a question <em>sounds like</em>; traversal finds what it's
+<em>connected to</em>;<span class="gloss" data-gloss="knowledge-graph">knowledge-graph</span>
+retrieval and vector retrieval compose, and hybrid is the production pattern. An optional
+extension in the project spec; one past-team-sized bite is entity-tagging your chunks and
+adding a 1-hop expansion to retrieval.</p>
+
+<!-- ============================================================ -->
+<h2 id="synthesis">The whole course, one slide</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>compress the semester</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Before the reveal: write down the five
+    ideas YOU think this course keeps re-using. Test each candidate: does it appear in at
+    least three different weeks? (Be honest: "SQL" is a language, not an idea.)</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare lists with your neighbor and
+      merge to five. Where do you disagree with the table below, and can you defend a
+      sixth?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Each table nominates its most
+      contrarian pick to the room.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The five the course keeps re-using: <strong>block I/O and caching</strong> (file
+      manager and buffer pool, then SSTable blocks, Parquet row groups, shuffle spill files);
+      <strong>sorting and indexes</strong> (B+ tree, then IVF lists, Bloom-filtered SSTables, Hive
+      partitions, adjacency lists); <strong>log first, reorganise later</strong> (the WAL, then LSM
+      trees, Delta and Iceberg commit logs, Spark lineage); <strong>declarative query, plan,
+      execute</strong> (parser and planner and iterators, then EXPLAIN, Spark's DAG, Cypher's
+      MATCH); and <strong>partition to scale</strong> (the shuffle you hand-wrote, then tablets,
+      IVF lists, Hive folders).</p>
+      <p>Two tests for a candidate. Does it appear in at least three separate weeks, and is it an
+      <em>idea</em> rather than a technology? "SQL" fails the second test; it is a notation, and
+      the idea underneath it is the declarative one. A defensible sixth exists and tables often
+      nominate it: <strong>keep the old version rather than overwriting</strong>, which links
+      tombstones, MVCC, LSM compaction and time travel in Iceberg. Whether that is its own idea or
+      a corollary of log-first is exactly the argument worth having in the room.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="The whole course, one slide">Five ideas, fifteen costumes</h3>
+
+<table>
+  <thead><tr><th>The idea</th><th>Where you built it</th><th>Where you met it again</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Block I/O + caching</strong>: move data in chunks, keep hot chunks close</td><td>file manager (1), buffer pool (2)</td><td>SSTable blocks &amp; caches (14), Parquet row groups (10), the shuffle's spill files (13)</td></tr>
+    <tr><td><strong>Sorting &amp; indexes</strong>: pay organization once, skip data forever</td><td>B+ tree (6)</td><td>IVF lists (11), SSTables + Bloom filters (14), Hive partitions (8), adjacency lists (today)</td></tr>
+    <tr><td><strong>Log first, reorganize later</strong>: appends are durable and fast</td><td>WAL + recovery (7)</td><td>LSM trees (14), Delta/Iceberg commit logs (10), Spark lineage-as-plan (13)</td></tr>
+    <tr><td><strong>Declarative query → plan → execute</strong>: say what, let the engine choose how</td><td>parser + planner + iterators (4–5, 9)</td><td>DuckDB's EXPLAIN (8), Spark's DAG (13), Cypher's MATCH (today)</td></tr>
+    <tr><td><strong>Partition to scale</strong>: split by key, push work to the pieces, mind the skew</td><td>the shuffle, by hand (Lab 11)</td><td>tablets (14), Hive folders (8), IVF buckets (11), supernodes (today)</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">The claim this table earns: <strong>you didn't learn fifteen
+systems this semester; you learned five ideas and then recognized them fifteen
+times.</strong> The next database you meet (there will be a next one; the field ships a new
+"category" every three years) will be these five in a new arrangement. Read its docs asking
+"where's the log, where's the index, how does it partition" and you'll know it in an
+afternoon. That transfer is the course.</p>
+
+<!-- ============================================================ -->
+<h2 id="endgame">Project endgame</h2>
+
+<ul class="checklist">
+  <li>☐ <strong>Thu Dec 3, workshop:</strong> in-class working session; instructor + TAs
+  circulate. Bring your eval-set numbers and your ugliest bug.</li>
+  <li>☐ <strong>Mon Dec 7, 11:59 pm, report due:</strong> the measured-decisions document:
+  chunking, index + dial setting, eval table across at least three configurations, per the
+  <a href="../../project.html">spec</a>.</li>
+  <li>☐ <strong>Tue Dec 8, presentations:</strong> 8 minutes + 2 Q&amp;A per team: live
+  demo, one failure you diagnosed with an eval metric, one decision you'd reverse.</li>
+  <li>☐ No final exam. Course evals: be specific; this course is rebuilt from them.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="recap">Final recap</h2>
+
+<ul class="recap-list">
+  <li><strong>Graph databases materialize the join</strong>: adjacency stored on the node,
+  traversal instead of key-matching; worth it when depth is variable or the path is the
+  answer, and honestly not before.</li>
+  <li><strong>Cypher is week 5's lesson resurfacing</strong>: notation that matches the
+  question's shape; <code>WITH RECURSIVE</code> is the fair SQL comparison and fine for
+  shallow work.</li>
+  <li><strong>Five ideas, fifteen costumes</strong>: blocks &amp; caching, sort &amp;
+  index, log-first, declarative plans, partitioning. Everything else was arrangement.</li>
+</ul>
+
+<p class="keep-in-present"><strong>Thursday:</strong> project workshop. <strong>Tuesday:</strong>
+presentations. It has been a genuine pleasure building databases with you. · DGG</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">Is Kuzu real enough to use, or a teaching toy?</h3>
+<p class="keep-in-present">Real: columnar storage, a vectorized query processor, full
+Cypher, active development, and it holds its own on benchmarks against Neo4j for embedded
+analytics. Like DuckDB, its niche is in-process work rather than serving a fleet of
+concurrent clients. For a server deployment with users and auth, Neo4j or Neptune; for
+"I have a graph problem in a notebook," Kuzu is exactly right.</p>
+
+<h3 class="keep-in-present">Why did we not cover [Mongo/Redis/Elasticsearch/…]?</h3>
+<p class="keep-in-present">Deliberate: those are products, and products rotate. Mongo is a
+document store over a B+ tree engine (WiredTiger) with a WAL; Redis is a data-structure
+server with an append-only log; Elasticsearch is inverted indexes (BM25, Lecture 12) over
+segment files that behave like SSTables. You have the parts list. An afternoon with any of
+their architecture pages will slot them into the five-ideas table; try it; it's the best
+exam this course doesn't give.</p>
+
+<h3 class="keep-in-present">What should I learn next after this course?</h3>
+<p class="keep-in-present">Three worthy directions, pick by taste: <em>depth</em>, read
+the Red Book (Bailis, Hellerstein, Stonebraker's <em>Readings in Database Systems</em>) and
+the Spanner and Aurora papers; <em>breadth</em>, Kleppmann's <em>Designing Data-Intensive
+Applications</em>, which is this course's Act II at production scale; <em>craft</em>,
+extend microdb (MVCC, an LSM engine, the optimizer); nothing teaches like the engine you
+already own.</p>
+
+<h3 class="keep-in-present">Will the project rubric reward a GraphRAG attempt?</h3>
+<p class="keep-in-present">Only the measured kind. A 1-hop entity expansion with an eval
+table showing where it helped (and where it hurt; it will, on some questions) earns real
+credit; a bolted-on graph with no measurement earns sympathy. The rubric's spine all
+semester has been the same sentence: <em>show the numbers that made you decide.</em></p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

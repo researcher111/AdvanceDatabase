@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 3 · Records, Slots &amp; the Table Scan · microdb part 3</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lab 3 · microdb 3</div>
+  <ul>
+    <li><a href="#try-it">Walk a table</a></li>
+    <li><a href="#big-idea">Slots buy O(1)</a></li>
+    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#build">Part 1 · Build</a></li>
+    <li><a href="#verify">Part 2 · Verify</a></li>
+    <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#assignment">Assignment</a></li>
+    <li><a href="#going-further">Going further</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>due Thu Sep 17, class start</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lab 3 · Thursday September 10, 2026 · microdb part 3 of 7</div>
+  <h1>Records, Slots &amp; the Table Scan</h1>
+  <div class="subtitle">The ada row gets an address, the file becomes a table, and the catalog writes itself.</div>
+  <div class="byline">Follows Lecture 3 (Record Layout &amp; the Catalog) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 17 at class start</div>
+</header>
+
+<p class="lede">
+Three layers tall now: your Lab 1 pages hold the bytes, your Lab 2 pool decides what's in
+memory, and today's record layer decides what the bytes <em>mean</em>. You'll compute layouts
+from schemas, pack rows into fixed slots inside the
+<span class="gloss" data-gloss="heap-file">heap file</span>, and write the two loops of
+<code>TableScan</code>, after which the provided catalog starts describing your database in
+its own tables, using nothing but the code you wrote.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6–7 ·
+  Lecture 3's <a href="../../lectures/lecture-03/records.html">slides &amp; slot inspector</a> ·
+  the grown-up version: PostgreSQL's <a href="https://www.postgresql.org/docs/current/storage-page-layout.html">page layout</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Walk a table</h2>
+
+<p>This is the machine you're building, mid-walk: a 3-block students table, 5 slots per
+block, being traversed by <code>next()</code> through a buffer pool that holds <strong>one
+pinned block at a time</strong>. Step the cursor and watch what happens at every block
+boundary, especially the pin handoff.</p>
+
+<div class="viz" id="viz-scan">
+  <div class="viz-title">TableScan stepper · 12 rows, 3 blocks, one pin</div>
+  <p class="viz-description">The cursor (▶) sits on the current slot. Stepping past a block's
+  last USED slot unpins it and pins the next; the <span class="hexlegend hit">green frame</span>
+  marks the one block in memory. Tombstoned slots (italic) are skipped without comment.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="sc-next">next()</button>
+    <button type="button" class="btn" id="sc-first">before_first()</button>
+    <button type="button" class="btn" id="sc-del">delete() current</button>
+    <button type="button" class="btn" id="sc-insert">insert() a row</button>
+    <button type="button" class="btn" id="sc-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="sc-msg">Press next() to find the first row. Watch the pin indicator as you cross block 0 → 1.</div>
+  <div class="sc-blocks" id="sc-blocks"></div>
+  <div class="bs-stats" id="sc-stats"></div>
+  <div class="chat-downloads">
+    <span class="chat-downloads-label">Starter code:</span>
+    <a class="chat-dl-btn" href="starter/record_manager.py" download>record_manager.py</a>
+    <a class="chat-dl-btn" href="starter/catalog.py" download>catalog.py</a>
+    <a class="chat-dl-btn" href="starter/file_manager.py" download>file_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/buffer_manager.py" download>buffer_manager.py (ref)</a>
+    <a class="chat-dl-btn" href="starter/test_records.py" download>test_records.py</a>
+    <a class="chat-dl-btn" href="starter/measure_layout.py" download>measure_layout.py</a>
+  </div>
+  <p class="viz-caption">Delete a row mid-scan, keep stepping, then insert: the tombstone gets
+  recycled before the file would ever grow. Every behavior here is a test in the harness.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big-idea">Slots buy O(1)</h2>
+
+<p>Lecture 3 made the argument; here is the working summary you'll code against. A record slot
+is <code>[4-byte flag][fields in schema order]</code>, every slot identical, so every address
+is arithmetic, and a deleted row is a <span class="gloss" data-gloss="tombstone">tombstone</span>,
+not a hole.</p>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>where does row 9 live?</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>students rows are inserted 0,1,2,… into an
+    empty table: 24-byte slots, 128-byte blocks in the harness. Compute where row 9 lands:
+    block number, slot number, and the byte offset of its <code>gpa</code> within its block.
+    That (block, slot) pair is its <span class="gloss" data-gloss="rid">RID</span>.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare answers (5 slots per block:
+      9 = block 1, slot 4; gpa at 4×24+20 = byte 116). Now delete row 2 and insert a new row:
+      what's the <em>new</em> row's RID, and why?</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: why do stable RIDs matter to
+      a structure that stores "gpa 39 lives at (0,0)", like the index you'll build in week 6?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>128-byte blocks over 24-byte slots gives <strong>5 slots per block</strong>, so row 9
+      is <strong>block 1, slot 4</strong>, and its gpa sits at 4 × 24 + 20 =
+      <strong>byte 116</strong> of that block. Its RID is <code>(1, 4)</code>.</p>
+      <p>Delete row 2 and insert a new row: the new row takes RID <strong>(0, 2)</strong>, the
+      tombstone left behind, because <code>insert_after</code> hunts forward for the first EMPTY
+      slot and finds the recycled one before the file ever grows.</p>
+      <p>Why stability matters: an index stores "gpa 39 lives at (0, 0)". If a delete or an update
+      elsewhere could shift rows, every index entry, every cursor, and every saved position would
+      silently point at the wrong row. Fixed slots mean a RID handed out today is still correct in
+      week 6, which is what makes an index a pointer rather than a hint.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The contract</h2>
+
+<p>Three classes, three altitudes: <code>Layout</code> computes the byte map,
+<code>RecordPage</code> operates within one pinned block, <code>TableScan</code> walks the
+whole file. You write the arithmetic and the two traversal loops; all pin plumbing and
+block-hopping helpers are provided.</p>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="lay" data-step-name="Layout" data-explain="One walk over schema.fields(): flag owns bytes 0–3, so start at 4; int advances 4, varchar(n) advances 4+n. Leave offsets in self._offsets and the total in self.slot_size.">Layout(schema)                    # id→4, name→8, gpa→20 · slot_size 24</div>
+  <div class="code-step" data-step="pos" data-step-name="_field_pos" data-explain="The one formula everything uses: slot * slot_size + layout.offset(field). Get it right once; four accessors become one-liners.">_field_pos(slot, fld)             # slot·24 + offset(fld)</div>
+  <div class="code-step" data-step="rw" data-step-name="field get/set" data-explain="Each is one Lab-1 page call at _field_pos, and every setter ends with set_modified(), or the pool will never write your change back. The harness's durability test exists to catch exactly that omission.">get/set_int · get/set_string      # one page call each (+ set_modified)</div>
+  <div class="code-step" data-step="flags" data-step-name="slot search" data-explain="insert_after(k): first EMPTY slot after k; mark USED, return it, or -1. next_after(k): first USED after k, or -1. delete(k): flip to EMPTY. Three flag scans, symmetric on purpose.">insert_after / next_after / delete  # find-EMPTY · find-USED · bit flip</div>
+  <div class="code-step" data-step="scan" data-step-name="TableScan.next" data-explain="Ask the current page for next_after(current_slot). While -1: last block → False; else _move_to_block(+1) (which unpins then pins) and ask from -1. Position and return True.">TableScan.next()                  # cross blocks, skip tombstones</div>
+  <div class="code-step" data-step="scan" data-step-name="TableScan.insert" data-explain="insert_after on the current page; while -1: move to the next block, or _append_new_block() if this was the last; a fresh zeroed block is five EMPTY slots by construction.">TableScan.insert()                # recycle a tombstone, or grow the file</div>
+  <div class="code-explain-panel">Hover a line for its spec; the harness tests them in exactly this order.</div>
+</div>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the full-block insert</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>insert() is called; the current block reports
+    -1 (no EMPTY slot); this is the last block of the file. Write the exact sequence your code
+    must perform: file operation, pin traffic, and where the new row's flag gets set. What did
+    Lab 1's <code>append()</code> promise about a fresh block's bytes that makes this safe?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare sequences: append (zeroed block =
+      all flags EMPTY) → move there (unpin old, pin new) → insert_after(-1) lands in slot 0.
+      What breaks if append handed back garbage bytes instead of zeros?</li>
+      <li><span class="tps-phase">Share · 2 min</span>The harness counts your file's blocks after
+      12 inserts and expects exactly 3. State the bug it's hunting in five words or fewer.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The sequence: <code>append()</code> a new block, <strong>unpin the old block, pin the
+      new one</strong>, then <code>insert_after(-1)</code>, which lands in slot 0, and the flag is
+      set to USED by <code>insert_after</code> itself before the caller writes any fields.</p>
+      <p>What makes it safe is Lab 1's promise that <code>append()</code> hands back a
+      <strong>zeroed</strong> block. Zero is the EMPTY flag value, so a fresh block is five valid
+      empty slots by construction, with no initialisation pass required. If append returned
+      garbage instead, random bytes would read as USED flags, and the scan would return rows that
+      were never inserted while insert refused to use slots that were actually free.</p>
+      <p>The bug the harness hunts, in five words: <strong>appending instead of reusing
+      tombstones</strong>. Skip the search and jump straight to a new block and you get 12 blocks
+      for 12 rows instead of 3, with four wasted slots in each. Every read still works, which is
+      exactly why only a block count catches it.</p>
+    </details>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
+
+<p>Six starter files into <code>microdb-lab3/</code>: two are your reference lower layers,
+<code>catalog.py</code> is complete, and all your work lives in
+<code>record_manager.py</code>. The build order matches the harness groups:</p>
+
+<ol>
+  <li><strong>Read the slot-layout spec</strong> in the module docstring (3 min); it is the
+  whole contract, worked example included.</li>
+  <li><strong><code>Layout.__init__</code></strong>: the offset walk. Run the harness: the
+  LAYOUT group names the exact numbers it expects (4 / 8 / 20 / 24).</li>
+  <li><strong><code>_field_pos</code>, then the four get/set methods</strong>: one formula,
+  four one-liners. Setters end with <code>set_modified()</code>. RECORD test 1 goes green.</li>
+  <li><strong><code>insert_after</code>, <code>next_after</code>, <code>delete</code></strong>:
+  three flag scans. All of RECORD passes.</li>
+  <li><strong><code>TableScan.next()</code>, then <code>insert()</code></strong>: the two loops
+  from the annotated code above, using the provided <code>_move_to_block</code> /
+  <code>_append_new_block</code> helpers. SCAN, then CATALOG, go green: the catalog needs no
+  work from you; it's your scan's first customer.</li>
+</ol>
+
+<div class="callout note">
+  <span class="label">Gotchas that cost real debugging time</span>
+  <p>Forgetting <code>set_modified()</code> in a setter passes every in-memory test and fails
+  the durable one. In <code>next()</code>, re-ask from slot <code>-1</code> after moving blocks,
+  not from <code>current_slot</code>, which belonged to the previous block. And never call
+  <code>bm.pin</code> yourself in TableScan: <code>_move_to_block</code> owns the
+  unpin-then-pin handoff; the 2-frame-pool test aborts loudly if pins leak.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<p>Twelve tests, four groups, ordered so failures localize: LAYOUT is pure arithmetic (no
+disk), RECORD works within one page, SCAN crosses blocks and pools, and CATALOG runs the
+provided <code>create_table</code>/<code>get_layout</code>, which exercises literally
+everything above it. The sharpest test is the quietest:
+<em>one pin at a time</em> runs your 3-block scan through a <strong>2-frame pool</strong>;
+if TableScan ever holds two pins, the pool aborts on the spot.</p>
+
+<pre><code class="language-text">$ python3 test_records.py
+LAYOUT group
+  [PASS] LAYOUT: students offsets are 4 / 8 / 20, slot 24
+  ...
+SCAN group
+  [PASS] SCAN: one pin at a time (2-frame pool, no leaks)
+CATALOG group
+  [PASS] CATALOG: field_catalog rows are exactly right
+
+12/12 tests passed</code></pre>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · read the failure</span>
+  <p>A classmate passes everything except <code>file grows to exactly 3 blocks</code>:their
+  file has <strong>12 blocks</strong> after 12 inserts. Every row also reads back correctly, in
+  order. Which loop has the bug, what exactly is it doing, and why do all the other SCAN tests
+  still pass?</p>
+  <details><summary>Show answer</summary>
+  <p><code>insert()</code> never retries the current block: on any miss (or unconditionally) it
+  jumps straight to <code>_append_new_block()</code>, so every insert after the first lands in
+  slot 0 of a brand-new block: 12 rows, 12 blocks, 4 empty slots each. Scans still work
+  because <code>next()</code> dutifully walks all 12 blocks and finds every row in order. The
+  block-count test exists precisely because correctness-of-contents can hide a 5× storage bug.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the price of a wide column</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Same 4096-byte blocks. Schema A is
+    students (24-byte slots). Schema B swaps the name for <code>bio varchar(200)</code>.
+    Predict: rows per block for each, and how many blocks a 10,000-row table needs. Is B's file
+    5× bigger, 10× bigger, or something else?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Do the division together (4096 // slot).
+      Now the sharper question: if most bios are 40 chars, what fraction of B's file is
+      <span class="gloss" data-gloss="internal-fragmentation">air</span>?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Run <code>python3 measure_layout.py</code>
+      and check the table. One sentence: what does schema design have to do with I/O cost?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>4096 // 24 = <strong>170 rows per block</strong> for students, 16 bytes wasted.
+      4096 // 212 = <strong>19 rows per block</strong> for the wide schema, 68 bytes wasted. So
+      10,000 rows need <strong>59 blocks</strong> versus <strong>527</strong>: not 5× or 10× but
+      about <strong>8.9×</strong>, because what scales is rows-per-block, not the declared width.</p>
+      <p>If most bios are 40 characters, the bio field stores 44 useful bytes in 204 reserved,
+      so roughly <strong>78% of that field is air</strong>, and the file is close to eight times
+      larger than the data in it. Nobody wrote that waste; it followed from one
+      <code>varchar(200)</code>.</p>
+      <p>So what does schema design have to do with I/O cost? <strong>Everything, because column
+      width sets rows per block, and rows per block sets how many blocks a scan must read.</strong>
+      Declaring a generous varchar is not free insurance; it is a standing order to read nine
+      times more disk on every full scan for the life of the table.</p>
+    </details>
+  </details>
+</div>
+
+<p>The reference output is deterministic, so yours must match:</p>
+
+<pre><code class="language-text">$ python3 measure_layout.py
+schema                                 |  slot | rows/blk | waste/blk | blocks for 10k
+----------------------------------------------------------------------------------------
+students(id int, name vc(8), gpa int)  |    24 |      170 |      16 B |             59
+wide   (id int, bio vc(200))           |   212 |       19 |      68 B |            527
+skinny (id int, x int)                 |    12 |      341 |       4 B |             30
+
+actual file after inserting 10,000 students rows: 59 blocks (236 KB)
+full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember the cliff?)</code></pre>
+
+<p class="keep-in-present">Three lessons in one table: schema width sets I/O cost
+(<strong>59 vs 527 blocks</strong> for the same 10,000 rows); the arithmetic predicts the real
+file exactly (that's what a contract is); and the scan's ~0% hit rate is last week's cliff
+making a cameo: a full pass through an 8-frame pool re-uses nothing.</p>
+
+<!-- ============================================================ -->
+<h2 id="assignment">Assignment</h2>
+
+<p>Due <strong>Thursday Sep 17 at class start</strong>, submitted per the course submission
+instructions.</p>
+
+<h3>Deliverables</h3>
+<ul>
+  <li>☐ <code>record_manager.py</code>: all twelve local tests pass (<code>12/12</code>).</li>
+  <li>☐ <code>measurements.txt</code>: the layout table plus your answers to the script's three
+  questions (where the wide schema's waste lives, ada's air percentage, why the scan hit ~0%).</li>
+  <li>☐ Reflection (3–5 sentences total): (1)&nbsp;Why does <code>insert_after</code> mark the
+  flag <em>before</em> the caller writes the fields? (2)&nbsp;Your scan holds one pin for a
+  12-block table: how many would a <em>join</em> of two tables need at once? (A week-4 preview;
+  reason, don't look up.)</li>
+</ul>
+
+<h3>What's provided vs what you write</h3>
+<table>
+  <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
+  <tbody>
+    <tr><td><code>record_manager.py</code></td><td>Schema · flag plumbing · TableScan block-hopping + accessors</td><td>Layout walk · <code>_field_pos</code> + 4 get/set · 3 slot ops · <code>next()</code> · <code>insert()</code></td></tr>
+    <tr><td><code>catalog.py</code></td><td>complete, do not edit (it's your first customer)</td><td>&nbsp;</td></tr>
+    <tr><td><code>file_manager.py</code> · <code>buffer_manager.py</code></td><td>reference Labs 1–2, do not edit</td><td>&nbsp;</td></tr>
+    <tr><td><code>test_records.py</code> · <code>measure_layout.py</code></td><td>complete, do not edit</td><td>run them, record results</td></tr>
+  </tbody>
+</table>
+
+<h3>Grading</h3>
+<table>
+  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Correctness</td><td>Autograder superset: more schemas, bigger tables, adversarial delete/insert interleavings; same spec</td><td>70%</td></tr>
+    <tr><td>Measurement + answers</td><td>Table matches (deterministic); answers connect layout → I/O and cache behavior</td><td>20%</td></tr>
+    <tr><td>Code quality</td><td>Field access through <code>_field_pos</code>; loops use the provided helpers; no private pin calls</td><td>10%</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">Fast finishers, in rough order of payoff: add
+<strong><code>move_to_rid(rid)</code></strong> to TableScan (jump straight to a (block, slot)
+pair, the exact call an index will make in week 6, and about six lines); add a
+<strong>free-slot hint</strong> (remember the last block that had room, so insert() stops
+re-scanning full blocks; measure inserts before and after on the 10k-row table); or implement
+<strong><code>Schema.add_from(other, fields)</code></strong>, building a sub-schema;you'll
+want it for Project in next week's lab, and future-you will send thanks.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3>My strings come back with old garbage after slot reuse.</h3>
+<p class="keep-in-present">Working as designed: a recycled tombstone's bytes hold the ghost until you overwrite them,
+and the length prefix keeps reads inside whatever was last written. If you're seeing garbage,
+the length prefix itself is stale: check that <code>set_string</code> writes at
+<code>_field_pos</code>, not at the slot start.</p>
+
+<h3>Why does insert() mark USED before the fields are written?</h3>
+<p class="keep-in-present">So the slot is claimed: any other code path scanning for free slots must not hand out the
+same slot twice. The cost is a momentarily incoherent row; real engines handle that window
+with <span class="gloss" data-gloss="latch">latches</span> and WAL ordering; microdb handles it by being single-threaded. Week 7 makes this
+question serious.</p>
+
+<h3>Can two tables share one file?</h3>
+<p class="keep-in-present">Not in microdb: one heap file per table keeps the mapping trivial (that's what the catalog
+records). Real engines do both: SQLite puts a whole database in one file; Postgres gives each
+table its own file chain. The block abstraction doesn't care.</p>
+
+<h3>The catalog file grew to 2 blocks for one table. Why?</h3>
+<p class="keep-in-present">field_catalog's own slot is 64 bytes (two varchar(16)s, a varchar(8), two ints);a
+128-byte harness block fits 2 rows. Three students fields → 2 blocks. Your layout arithmetic,
+applied to the catalog itself: pleasingly circular, easily verified.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 4 · The Iterator Model · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lecture 4</div>
+  <ul>
+    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#pull">Queries without room to run</a></li>
+    <li><a href="#try-it">Pull a row through a plan</a></li>
+    <li><a href="#interface">One interface to rule them</a></li>
+    <li><a href="#operators">Select &amp; Project</a></li>
+    <li><a href="#product">Product: the join's engine</a></li>
+    <li><a href="#shapes">Same query, different shapes</a></li>
+    <li><a href="#thursday">On Thursday you build it</a></li>
+    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 4 · Tuesday September 15, 2026</div>
+  <h1>The Iterator Model</h1>
+  <div class="subtitle">Scan, Select, Project, Product: four small classes, one interface, and suddenly microdb runs queries.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+Your TableScan answers one question ("next row?"), and that turns out to be the only
+question a query engine ever needs. Today we meet the Volcano (iterator) model: every
+operator, from a WHERE filter to a join, implements the same tiny interface and wraps
+another operator that implements it too. Rows flow up on demand, nothing is copied, no
+<span class="gloss" data-gloss="materialization">intermediate table is materialized</span>,
+and a stack of these operators <em>is</em> the query plan you saw in Lecture 1.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 8 (query processing) ·
+  Graefe, <a href="https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf"><em>Volcano: An Extensible and Parallel Query Evaluation System</em></a> (the paper the model is named for).
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="plan">Today's plan</h2>
+
+<p>Quiz first, then the layer where microdb starts answering questions instead of storing
+answers.</p>
+
+<ol class="agenda">
+  <li><strong>Quiz 3</strong>: records &amp; the catalog (10 min, first thing).</li>
+  <li><strong>The memory problem</strong>: why you can't just compute intermediate tables.</li>
+  <li><strong>Pull a row through a plan</strong>: demand goes down, rows come up.</li>
+  <li><strong>The Scan interface</strong>: five methods, spoken by everyone.</li>
+  <li><strong>Select &amp; Project</strong>: each about ten readable lines.</li>
+  <li><strong>Product</strong>: the nested loop that powers every join.</li>
+  <li><strong>Plan shapes</strong>: same answer, 15× different work. Who chooses?</li>
+</ol>
+
+<p class="keep-in-present">Today's claim: <strong>a query plan is just objects wrapping
+objects</strong>, and you already built the bottom one.</p>
+
+<!-- ============================================================ -->
+<h2 id="pull">Queries without room to run</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the obvious way fails</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>The obvious way to run
+    <code>SELECT name FROM students WHERE gpa &gt; 3.5</code>: read the whole table into a
+    list, filter the list, then trim the columns. Now the table is 100&nbsp;GB and your RAM is
+    16&nbsp;GB. Where exactly does the obvious way die, and what's the smallest change that
+    saves it?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare fixes. Did you both land on some
+      version of "don't hold the rows, hand them over one at a time"?</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: if each stage only ever holds
+      one row, how much memory does the whole query need?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>It dies at the very first step: <code>read the whole table into a list</code> asks for
+      100&nbsp;GB of RAM you do not have. Note where it does <em>not</em> die. The filter is fine,
+      the column trim is fine, the answer is small. It is the <em>materialising</em> that kills
+      it, and materialising is not even necessary, because nothing downstream ever looks at more
+      than one row at a time.</p>
+      <p>The smallest change is to stop building lists and start answering a question: each stage
+      hands up one row when asked and remembers only its cursor. Then the memory a query needs is
+      set by the <em>depth of the plan</em>, not the size of the data. A three-operator plan over
+      a 100&nbsp;GB table holds about three rows. That is the whole idea of the iterator model,
+      and your TableScan already works this way, with its one pinned block.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Queries without room to run">The fix: pull, don't build</h3>
+
+<p class="keep-in-present">Instead of each stage <em>building its whole output</em>, each stage
+answers <strong>"give me your next row"</strong> by pulling just enough from the stage below.
+One row in flight per operator; memory use is the plan's <em>depth</em>, not the data's
+<em>size</em>. Each stage just remembers its <span class="gloss" data-gloss="cursor">cursor</span>.
+Your TableScan already works this way (one pinned block, remember), so the
+entire query engine can too.</p>
+
+<table>
+  <thead><tr><th></th><th>Materialize each stage</th><th>Pull one row at a time</th></tr></thead>
+  <tbody>
+    <tr><td>Memory</td><td>O(intermediate results), can exceed the data</td><td>O(plan depth), a few rows</td></tr>
+    <tr><td>First result arrives</td><td>after the whole stage finishes</td><td>almost immediately</td></tr>
+    <tr><td>When it's forced anyway</td><td colspan="2">sort and group-by must see everything before emitting; they break the pipeline on purpose (week 9)</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Queries without room to run">You already know this pattern</h3>
+
+<table>
+  <thead><tr><th>World</th><th>The lazy one-at-a-time thing</th><th>The eager build-it-all thing</th></tr></thead>
+  <tbody>
+    <tr><td>Python</td><td>a generator (<code>yield</code>), <code>range()</code></td><td>a list comprehension</td></tr>
+    <tr><td>pandas</td><td><code>read_csv(chunksize=…)</code></td><td><code>read_csv()</code> whole</td></tr>
+    <tr><td>Deep learning</td><td>a DataLoader streaming batches</td><td>the dataset as one tensor</td></tr>
+    <tr><td>microdb, today</td><td><strong>a scan</strong></td><td>the intermediate table we refuse to build</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">The iterator model is the database instance of a pattern data
+science already lives by: <strong>stream when you can, materialize when you must.</strong></p>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Pull a row through a plan</h2>
+
+<p>The Lecture 1 demo showed rows flowing; now watch the <em>demand</em> that moves them.
+Each press of <strong>pull</strong> asks the top operator for one row; follow the question
+down and the row back up.</p>
+
+<div class="viz" id="viz-pull">
+  <div class="viz-title">Demand-driven execution · Project ← Select ← Scan</div>
+  <p class="viz-description"><code>SELECT name FROM students WHERE gpa &gt; 3.5</code> over the
+  six pinned rows. <span class="hexlegend miss">Asks</span> travel down;
+  <span class="hexlegend hit">rows</span> travel up; rejected rows die at the Select.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="pl-pull">pull next()</button>
+    <button type="button" class="btn" id="pl-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="pl-msg">Press pull: the Project asks the Select, which asks the Scan…</div>
+  <div class="pl-grid">
+    <div class="pl-tree" id="pl-tree"></div>
+    <div class="pl-log-wrap"><div class="pl-log-title">event log</div><div class="pl-log" id="pl-log"></div></div>
+  </div>
+  <div class="qj-results"><span class="qj-results-label">Rows delivered:</span><span id="pl-out"></span></div>
+  <p class="viz-caption">Count the Scan's answers vs the rows delivered: the engine examines
+  six rows to deliver three. The plan's shape decides that ratio, the theme of this lecture's
+  last section.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="interface">One interface to rule them</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>design the interface</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>You need WHERE-filtering, column-trimming,
+    and joining to all be stackable in any order, over any table. Write the minimal set of
+    methods every stage must offer so any stage can sit on any other. (Hint: TableScan already
+    has almost all of them.)</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare interfaces. Did you remember rewind
+      (the product needs it) and close (the pins need it)?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Check against the contract below; every
+      difference is a capability you gained or lost.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Five methods, and TableScan already has four of them.
+      <code>before_first()</code> to rewind, <code>next()</code> to advance and report whether a
+      row exists, <code>get_val(field)</code> to read a field of the current row,
+      <code>has_field(field)</code> so a stage can be asked what it produces, and
+      <code>close()</code> to release what it holds.</p>
+      <p>The two that get forgotten are the ones the Pair step names.
+      <strong><code>before_first</code></strong> is what makes a join possible at all, because
+      the nested loop must rewind its right input once per left row. <strong><code>close</code>
+      </strong> is what makes a plan safe, because every TableScan at the bottom is holding a pin,
+      and a plan that forgets to close leaks a frame out of the pool. Miss either one and you have
+      lost a capability rather than saved a method, which is why Thursday's harness audits the
+      pool after the join has finished.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="One interface to rule them">The Scan contract</h3>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="bf" data-step-name="before_first" data-explain="Rewind to before row one. The product operator calls this on its right input over and over; rewind is what makes the nested loop possible.">def before_first()          # rewind</div>
+  <div class="code-step" data-step="next" data-step-name="next" data-explain="Advance to the next row; False when exhausted. The only method that moves anything. Everything in this lecture is a clever implementation of next().">def next() -> bool          # advance; False at the end</div>
+  <div class="code-step" data-step="gv" data-step-name="get_val" data-explain="Read a field of the current row. Schema-aware in TableScan (ints vs strings); wrappers mostly delegate it downward.">def get_val(fld)            # read a field of the current row</div>
+  <div class="code-step" data-step="hf" data-step-name="has_field" data-explain="Does this scan produce that field? The product uses it to route get_val to the correct side; the project uses it to fence.">def has_field(fld) -> bool  # do I produce this field?</div>
+  <div class="code-step" data-step="cl" data-step-name="close" data-explain="Release everything underneath: for a TableScan that's an unpin; for a product it's both sides. A leaked close is a leaked pin, and week 2's pool aborts loudly.">def close()                 # release pins, recursively</div>
+  <div class="code-explain-panel">Hover a line: five methods, and every operator in every real engine speaks a dialect of them.</div>
+</div>
+
+<p class="keep-in-present">Python needs no formal interface declaration;
+<span class="gloss" data-gloss="duck-typing">duck typing</span> means anything with these five
+methods <em>is</em> a scan. TableScan qualifies already; Thursday you write three more.</p>
+
+<h3 class="new-slide" data-kicker="One interface to rule them">Close is a chain of unpins</h3>
+
+<table>
+  <thead><tr><th>Operator</th><th>close() does</th><th>Why it matters</th></tr></thead>
+  <tbody>
+    <tr><td>TableScan</td><td>unpin its current block</td><td>the week-2 contract, honored at the bottom</td></tr>
+    <tr><td>Select / Project</td><td>close the wrapped scan</td><td>pass the duty down</td></tr>
+    <tr><td>Product</td><td>close both sides</td><td>two tables → two pinned blocks → two releases</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">A plan holds one pinned block per <em>table in the query</em>, not
+per table in the database, and one forgotten <code>close()</code> anywhere in the tree leaks
+a pin. Thursday's harness checks the pool after every query.</p>
+
+<h3 class="new-slide" data-kicker="One interface to rule them">TableScan already qualifies</h3>
+
+<table>
+  <thead><tr><th>Interface method</th><th>What Lab 3's TableScan does for it</th></tr></thead>
+  <tbody>
+    <tr><td><code>before_first</code></td><td>back to block 0, slot −1</td></tr>
+    <tr><td><code>next</code></td><td>the tombstone-skipping, block-crossing loop you wrote</td></tr>
+    <tr><td><code>get_val</code></td><td><em>new this week</em>: 3 lines, int fields via get_int, strings via get_string</td></tr>
+    <tr><td><code>has_field</code></td><td><em>new this week</em>: is the field in my schema?</td></tr>
+    <tr><td><code>close</code></td><td>unpin the current block</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Six lines added to last week's class and the storage engine becomes
+a query operator. That's what designing to an interface buys.</p>
+
+<!-- ============================================================ -->
+<h2 id="operators">Select &amp; Project</h2>
+
+<p class="keep-in-present">The two easy operators first: together they're barely twenty lines, and they're the
+exact lines you'll write Thursday. Readability is the point: each class states its one idea.</p>
+
+<h3 class="new-slide" data-kicker="Select &amp; Project">SelectScan: keep the rows that pass</h3>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="s1" data-explain="Wraps any scan plus a predicate: a conjunction of comparisons like gpa > 35, or sid = F('mid') for joins.">class SelectScan:                       # WHERE</div>
+  <div class="code-step" data-step="s2" data-step-name="the loop" data-explain="THE line of the lecture: advance the underlying scan until a row passes. Rejected rows are simply skipped; nobody above ever sees them.">    def next(self):</div>
+  <div class="code-step" data-step="s2" data-explain="Each underlying row is visited once; the predicate decides its fate.">        while self.scan.next():</div>
+  <div class="code-step" data-step="s2" data-explain="Found a keeper: stop here; the current row is now visible to whoever wrapped us.">            if self.predicate.is_satisfied(self.scan):</div>
+  <div class="code-step" data-step="s2" data-explain="">                return True</div>
+  <div class="code-step" data-step="s2" data-explain="Underlying scan exhausted: so are we.">        return False</div>
+  <div class="code-step" data-step="s3" data-step-name="everything else" data-explain="get_val, has_field, before_first, close: pure delegation. Selection changes WHICH rows appear, never what a row looks like, so all row-shape questions pass straight through.">    # get_val / has_field / before_first / close: delegate downward</div>
+  <div class="code-explain-panel">Hover a line. The filter is five lines; the philosophy (skip, don't copy) is the whole model.</div>
+</div>
+
+<h3 class="new-slide" data-kicker="Select &amp; Project">ProjectScan: a fence, not a copy</h3>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="p1" data-explain="Wraps any scan plus the list of fields to keep.">class ProjectScan:                      # the SELECT list</div>
+  <div class="code-step" data-step="p2" data-step-name="the fence" data-explain="Projection doesn't rebuild rows; it refuses questions. Asking for a projected-away field is a caller bug, and ValueError says so immediately.">    def get_val(self, fld):</div>
+  <div class="code-step" data-step="p2" data-explain="">        if fld not in self.fields:</div>
+  <div class="code-step" data-step="p2" data-explain="Loud beats silent: a wrong answer here would corrupt results quietly.">            raise ValueError(f"field {fld!r} was projected away")</div>
+  <div class="code-step" data-step="p2" data-explain="A kept field is answered by whoever is underneath.">        return self.scan.get_val(fld)</div>
+  <div class="code-step" data-step="p3" data-step-name="everything else" data-explain="next and before_first delegate: projection changes what a row LOOKS like, never which rows appear. The perfect mirror image of SelectScan.">    # next / before_first / close: delegate downward</div>
+  <div class="code-explain-panel">Hover a line. Select picks rows; Project picks columns; both are one idea each.</div>
+</div>
+
+<h3 class="new-slide" data-kicker="Select &amp; Project">Predicates, and the little class that enables joins</h3>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="f" data-step-name="F" data-explain="Four lines that unlock joins: F('mid2') marks a right-hand side as a FIELD to look up, not a literal to compare against.">class F:                                  # "this rhs is a field"</div>
+  <div class="code-step" data-step="f" data-explain="">    def __init__(self, name): self.name = name</div>
+  <div class="code-step" data-step="pr" data-step-name="the check" data-explain="One loop over the AND-ed terms; the only subtlety is resolving the right side: field via the scan, literal as itself.">def is_satisfied(self, scan):</div>
+  <div class="code-step" data-step="pr" data-explain="">    for field, op, rhs in self.terms:</div>
+  <div class="code-step" data-step="pr" data-explain="The line that makes ('mid', '=', F('mid2')) a join condition and ('gpa', '>', 35) a filter: same machinery, one isinstance.">        rhs_val = scan.get_val(rhs.name) if isinstance(rhs, F) else rhs</div>
+  <div class="code-step" data-step="pr" data-explain="Fail one term, fail the row, and stop checking (cheap terms first is a real optimization).">        if not self.OPS[op](scan.get_val(field), rhs_val): return False</div>
+  <div class="code-step" data-step="pr" data-explain="">    return True</div>
+  <div class="code-explain-panel">Hover a line: this is the provided code, worth reading before you write the operators that consult it.</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="product">Product: the join's engine</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>pair everything with everything</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>You must produce every (student, major)
+    pair (6 × 3 = 18 of them) through the one-row-at-a-time interface, using only next() and
+    before_first() on the two inputs. Sketch the loop. Which input gets rewound, and how many
+    times?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare loops. What must before_first() do
+      to the LEFT side so that the very first next() finds a pair? (Subtle: most bugs Thursday
+      live here.)</li>
+      <li><span class="tps-phase">Share · 2 min</span>How many rows does the right side deliver
+      in total? That number returns in the measurement.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The <strong>right</strong> side gets rewound, once per left row, so six times for the
+      six students. The loop is three lines: if the right side can advance, you have a pair; if it
+      cannot, rewind the right and advance the left; if the left is also exhausted, the product is
+      done. It is a car odometer, with the right-hand digit spinning fastest.</p>
+      <p>The subtlety in the Pair step: <code>before_first()</code> must leave the <em>left</em>
+      side already <em>on</em> its first row (rewind, then one <code>next()</code>) while leaving
+      the right side <em>before</em> its first. Park both before their first rows and the opening
+      <code>next()</code> pairs nothing, and you get 0 or 15 pairs instead of 18. And the Share
+      number: the right side delivers 3 rows per left row, 18 in total, even though the table only
+      holds 3. Remember that multiplier; Thursday it reappears as a filter that keeps 1 row and
+      still reads 60.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Product">The nested loop, traced</h3>
+
+<p>Three lines of logic: right side spins fastest, like a car's odometer:</p>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="n1" data-explain="Common case: the right side still has rows for the current left row.">    def next(self):</div>
+  <div class="code-step" data-step="n1" data-explain="">        if self.right.next(): return True</div>
+  <div class="code-step" data-step="n2" data-step-name="the odometer" data-explain="Right side exhausted: rewind it, advance the left one row, and take the right's first row again. When the LEFT runs out too, the product is done.">        self.right.before_first()</div>
+  <div class="code-step" data-step="n2" data-explain="Both must succeed; 'and' handles the end of everything.">        return self.left.next() and self.right.next()</div>
+  <div class="code-explain-panel">Hover a line: the entire cartesian product is an odometer rollover.</div>
+</div>
+
+<table>
+  <thead><tr><th>Pair #</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>…</th><th>18</th></tr></thead>
+  <tbody>
+    <tr><td>left (student)</td><td>ada</td><td>ada</td><td>ada</td><td>ben</td><td>ben</td><td>…</td><td>fay</td></tr>
+    <tr><td>right (major)</td><td>cs</td><td>stat</td><td>econ</td><td>cs</td><td>stat</td><td>…</td><td>econ</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Product">Drive the odometer</h3>
+
+<p>The three lines above, under your finger. Watch which code path each press takes,and
+watch what <code>before_first()</code> must do to the left side before anything works:</p>
+
+<div class="viz" id="viz-odo">
+  <div class="viz-title">ProductScan(students, majors) · press next(), watch the cursors</div>
+  <p class="viz-description">The <span class="hexlegend hit">green</span> cursors are each
+  input's current row. The fast path (right side still has rows) barely moves; the
+  <span class="hexlegend miss">rollover</span> rewinds the right and advances the left:
+  the odometer's carry.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="odo-next">next()</button>
+    <button type="button" class="btn" id="odo-reset">before_first()</button>
+    <span class="odo-path" id="odo-path"></span>
+  </div>
+  <div class="odo-grid">
+    <div class="odo-col"><div class="odo-title">left · students <span id="odo-lcount"></span></div><div id="odo-left"></div></div>
+    <div class="odo-col"><div class="odo-title">right · majors <span id="odo-rcount"></span></div><div id="odo-right"></div></div>
+    <div class="odo-col wide"><div class="odo-title">pairs emitted <span id="odo-pcount"></span></div><div id="odo-pairs"></div></div>
+  </div>
+  <p class="viz-caption">Note the setup move: <code>before_first()</code> already advanced
+  the left to ada; with the left parked <em>before</em> its first row, the first
+  <code>next()</code> would pair nothing. Forgetting this is Thursday's most common bug,
+  and now you've watched why.</p>
+</div>
+
+<h3 class="new-slide" data-kicker="Product">A join is a product wearing a filter</h3>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="j1" data-explain="The course's first join, as a plan you can type: pair everything, keep pairs where the ids agree and the gpa qualifies, show two columns.">plan = ProjectScan(</div>
+  <div class="code-step" data-step="j1" data-explain="The join CONDITION is just a predicate term whose right side is a field (F('mid2')) instead of a literal.">    SelectScan(</div>
+  <div class="code-step" data-step="j1" data-explain="">        ProductScan(students, majors),</div>
+  <div class="code-step" data-step="j1" data-explain="">        Predicate(("mid", "=", F("mid2")), ("gpa", ">", 35))),</div>
+  <div class="code-step" data-step="j1" data-explain="">    ["name", "dept"])</div>
+  <div class="code-step" data-step="j2" data-step-name="the result" data-explain="ada→cs, cyd→cs, eli→stat. No special join operator exists yet: product + select IS the join. Better join algorithms (hash, merge, week 9) are optimizations of exactly this.">#  (ada, cs)  (cyd, cs)  (eli, stat)</div>
+  <div class="code-explain-panel">Hover a line: <span class="gloss" data-gloss="cartesian-product">cartesian product</span> plus predicate equals join. Everything else is performance.</div>
+</div>
+
+<h3 class="new-slide" data-kicker="Product">The cost, honestly</h3>
+
+<pre class="equation"><code>rows the product builds  =  |left| × |right|
+
+  6 students × 3 majors        =        18   (cute)
+  300 × 300                    =    90,000   (hmm)
+  10⁶ × 10⁶                    =     10¹²   (a laptop-year, the join problem, stated)</code></pre>
+
+<p class="keep-in-present">The nested loop is <em>correct</em> at any size and <em>affordable</em>
+only when its inputs are small. Making joins affordable is week 6 (indexes) and week 9 (hash
+and merge joins); both are ways to avoid building pairs you'll throw away.</p>
+
+<h3 class="new-slide" data-kicker="Product">The right side lives a hard life</h3>
+
+<table>
+  <thead><tr><th>Input</th><th>Times executed</th><th>Rows it delivers in total</th></tr></thead>
+  <tbody>
+    <tr><td>left (students, 6 rows)</td><td>once</td><td>6</td></tr>
+    <tr><td>right (majors, 3 rows)</td><td><strong>6 times</strong>, rewound per left row</td><td>18</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">The nested loop <em>re-runs its right input for every left row</em>.
+Thursday's measurement puts a counter on a right-side filter that keeps 1 row, and reads 60.
+Remember this table when the number surprises you anyway.</p>
+
+<div class="exercise">
+  <span class="ex-label">Check yourself · count the work before running it</span>
+  <p><code>SelectScan(ProductScan(students, majors), mid = F('mid2'))</code> over the pinned
+  tables (6 students, 3 majors); exactly 6 pairs match. Predict four numbers: rows the left
+  scan delivers, rows the right scan delivers <em>in total</em>, pairs the product builds,
+  and pairs the select passes. Then: which numbers change if the predicate matched nothing?</p>
+  <details><summary>Show answer</summary>
+  <p>Left: 6. Right: 6&nbsp;×&nbsp;3&nbsp;=&nbsp;<strong>18</strong> (rewound per left row).
+  Pairs built: 18. Pairs passed: 6. With a never-true predicate: <strong>only the last number
+  changes</strong>: 6, 18, 18, 0. The product's work is fixed by the input sizes, not by the
+  answer; that indifference is exactly what pushdown attacks, and what the optimizer will
+  learn to predict in week 9.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="shapes">Same query, different shapes</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>move the filter</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Query: names of cs students with gpa &gt;
+    35, over 300 students × 3 majors. Plan A filters <em>after</em> the product; Plan B filters
+    each input <em>before</em> the product. Predict the number of pairs each plan builds.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Check each other's arithmetic: A = 300×3.
+      B = (survivors of gpa &gt; 35) × (majors named cs). The answers differ by how much?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Both plans came from the same SQL. Who
+      should choose between them, and what would the chooser need to know in advance?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>Plan A builds 900 pairs</strong> (300 × 3) and then throws nearly all of them
+      away. <strong>Plan B builds 60</strong>: the gpa filter leaves 60 of the 300 students, the
+      dept filter leaves the 1 cs major, and 60 × 1 = 60. Same 20 rows out, <strong>15× less
+      work</strong>, purely from where the filters sit.</p>
+      <p>Who chooses? Not you: SQL names the rows, not the steps, so both plans are legal
+      readings of the same query and relational algebra guarantees they return the same answer.
+      That guarantee is exactly what licenses a machine to pick. The chooser needs one thing you
+      have not built yet, an estimate of <em>how many rows survive each filter</em> before running
+      it, which means statistics about the data. That is the optimizer, and it is week 9.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Same query, different shapes">Measured: 15× from moving one filter</h3>
+
+<p>Thursday's measurement, run on the reference solution: same query, same 20 result rows:</p>
+
+<table>
+  <thead><tr><th>Plan</th><th>Shape</th><th>Pairs built</th><th>Rows out</th></tr></thead>
+  <tbody>
+    <tr><td><strong>A: filter late</strong></td><td>Project ← Select(join ∧ gpa ∧ dept) ← Product</td><td>900</td><td>20</td></tr>
+    <tr><td><strong>B: filter early</strong></td><td>Project ← Select(join) ← Product(σ<sub>gpa</sub>students × σ<sub>dept</sub>majors)</td><td><strong>60</strong></td><td>20</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Fifteen-fold less work from sliding filters below the product;
+this move is called <span class="gloss" data-gloss="predicate-pushdown">predicate
+pushdown</span>, and it's the first rewrite every optimizer learns. Same answer is
+<em>guaranteed</em> by relational algebra; that guarantee is why the machine is allowed to
+choose.</p>
+
+<h3 class="new-slide" data-kicker="Same query, different shapes">Who chooses? (Week 9 knocks)</h3>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Not the user</span><span>SQL is declarative: the whole deal (Lecture 3) was that you name the rows, not the steps.</span></div>
+  <div class="lc-row"><span class="lc-k">The planner, naively</span><span>Thursday-you picks the shape by hand when building plans. Week 5's planner will pick a <em>correct</em> shape mechanically.</span></div>
+  <div class="lc-row"><span class="lc-k">The optimizer, eventually</span><span>Week 9's optimizer picks a <em>fast</em> shape, using statistics to predict survivor counts before running anything. The 15× above is the smallest of its wins.</span></div>
+  <div class="lc-row"><span class="lc-k">The lesson to keep</span><span>plan shape is a degree of freedom the answer doesn't depend on. Everything an optimizer does lives in that freedom.</span></div>
+</div>
+
+<h3 class="new-slide" data-kicker="Same query, different shapes">Pushdown in the wild</h3>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Postgres</span><span>pushes predicates below joins automatically, and into index conditions when week 6's structures exist.</span></div>
+  <div class="lc-row"><span class="lc-k">Parquet / DuckDB</span><span>pushes filters into the <em>file format</em>: column chunks carry min/max stats, so whole blocks are skipped unread (week 10 measures it).</span></div>
+  <div class="lc-row"><span class="lc-k">Spark</span><span>pushes filters across the <em>network</em>, to the node holding the data, before the shuffle (week 13's whole story).</span></div>
+  <div class="lc-row"><span class="lc-k">One idea, five weeks</span><span>do the cheap discarding as close to the data as possible. You just measured it for the first time; you will not stop meeting it.</span></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="thursday">On Thursday you build it</h2>
+
+<p>Three classes, each small enough to read aloud, plus the join test that makes the
+lecture-1 demo real. The reference TableScan gained <code>get_val</code>/<code>has_field</code>
+(three lines each) so every scan speaks one language.</p>
+
+<table>
+  <thead><tr><th>You write</th><th>The whole job</th><th>Lines</th></tr></thead>
+  <tbody>
+    <tr><td><code>SelectScan.next</code></td><td>the skip-until-satisfied loop</td><td>~5</td></tr>
+    <tr><td><code>ProjectScan.get_val / has_field</code></td><td>the fence</td><td>~6</td></tr>
+    <tr><td><code>ProductScan</code> (4 methods)</td><td>the odometer + field routing</td><td>~15</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="On Thursday you build it">Before class checklist</h3>
+
+<ul class="checklist">
+  <li>☐ Lab 3 submitted: Lab 4's starter ships reference Labs 1–3 (the chain is four layers tall now).</li>
+  <li>☐ Download the seven starter files from the Lab 4 page.</li>
+  <li>☐ Harness runs: <code>python3 test_scans.py</code> prints <strong>0/11 passed</strong>.</li>
+  <li>☐ On paper: with students(6) × majors(3), write the first four pairs the odometer
+  produces. Thursday's order test checks exactly this.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="recap">Recap &amp; next time</h2>
+
+<p>Three ideas from today that the whole rest of the engine reuses.</p>
+
+<ul class="recap-list">
+  <li><strong>One interface, infinite plans.</strong> Five methods make operators Lego: any
+  scan wraps any scan, and a query plan is just the resulting tower.</li>
+  <li><strong>Pull, don't build.</strong> Demand flows down, single rows flow up; memory is the
+  plan's depth. Sort and group-by will be the deliberate exceptions.</li>
+  <li><strong>Shape is free, work isn't.</strong> Product + select = join; filter placement
+  changed work 15× with the answer guaranteed identical; the degree of freedom optimizers
+  live in.</li>
+</ul>
+
+<p class="keep-in-present"><strong>Thursday:</strong> build the three operators, run the
+course's first join. <strong>Next Tuesday:</strong> the SQL front end: text in, these plans
+out. Quiz 4 opens class: the iterator model.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3>Is this really how Postgres works?</h3>
+<p class="keep-in-present">Yes: the executor is a tree of nodes each implementing (roughly)
+<code>ExecProcNode</code>, pulled from the top exactly like today's widget. Modern analytics
+engines (DuckDB, week 10) pull <em>batches of ~1000 rows</em> instead of single rows to be
+kinder to CPUs; same model, bigger sips.</p>
+
+<h3>Why does the product re-read its right side instead of caching it?</h3>
+<p class="keep-in-present">Caching is memory, the thing we swore off. Re-reading costs I/O
+instead… except your week-2 buffer pool usually still has those blocks, which is the two
+layers quietly cooperating. When the right side is huge, real engines do materialize or hash
+it; that's week 9's hash join, a considered trade, not a default.</p>
+
+<h3>Where are ORDER BY and GROUP BY?</h3>
+<p class="keep-in-present">They need to see <em>all</em> rows before emitting one (you can't
+know the smallest row until you've seen the last). They're the operators that legitimately
+break the pipeline and spill to disk: week 9, alongside the optimizer.</p>
+
+<h3>What about OR in predicates?</h3>
+<p class="keep-in-present">microdb's Predicate is AND-only for readability; OR arrives with
+the parser next week if you want it (Going Further). The iterator machinery doesn't care;
+predicates are just a boolean box the SelectScan consults.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=2"></script>
+</body>
+</html>

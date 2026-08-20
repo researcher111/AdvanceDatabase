@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 11 · Spark &amp; Ray · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lab 11</div>
+  <ul>
+    <li><a href="#try-it">Trace what you'll build</a></li>
+    <li><a href="#big-idea">One pattern, three costumes</a></li>
+    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#build">Part 1 · micro-mapreduce</a></li>
+    <li><a href="#spark">Part 2 · Spark</a></li>
+    <li><a href="#ray">Part 3 · Ray</a></li>
+    <li><a href="#verify">Verify</a></li>
+    <li><a href="#assignment">Assignment</a></li>
+    <li><a href="#going-further">Going further</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lab 11 · Thursday November 19, 2026</div>
+  <h1>Spark &amp; Ray · the pattern and the products</h1>
+  <div class="subtitle">Build MapReduce naked in 60 lines, then watch Spark and Ray sell you the same three phases with better plumbing.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+Tuesday ended with a claim: the shuffle is the whole story. Today you test it by building the
+story yourself. Part 1 is pure stdlib: you write map, hash partitioning, the shuffle, and
+reduce, and a harness checks the one guarantee everything depends on (every value for a key
+in exactly one partition). Parts 2 and 3 are the products: the same word count in three
+chained Spark calls (find the shuffle in the printed plan), and an embedding job fanned
+across your cores with two lines of Ray. The corpus is Lab 10's (this course, as documents),
+so every answer is checkable against last week's code.
+</p>
+
+<div class="cite">
+  Builds on: <a href="../lab-10/microrag.html">Lab 10 · micro-rag</a> (same corpus) ·
+  Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce</em></a> (OSDI 2004) ·
+  Spark's <a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html">RDD programming guide</a> ·
+  Ray's <a href="https://docs.ray.io/en/latest/ray-core/walkthrough.html">core walkthrough</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Trace what you'll build</h2>
+
+<p>The lecture's step-through, here for reference while you code: four documents, two
+partitions, every chip colored by the arithmetic your <code>partition_for</code> will do.</p>
+
+<div class="viz" id="viz-mr">
+  <div class="viz-title">map → shuffle → reduce · word count, 4 documents, 2 partitions</div>
+  <p class="viz-description">Step through the phases; hover any pair for its routing
+  arithmetic. Part 1 is this widget, as Python, over 24 real documents.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="mr-step">Step ▸</button>
+    <button type="button" class="btn" id="mr-back">◂ Back</button>
+    <button type="button" class="btn" id="mr-reset">Reset</button>
+    <span class="mr-phase-label" id="mr-phase-label"></span>
+  </div>
+  <div id="mr-stage"></div>
+  <div class="chat-downloads">
+    <span class="chat-downloads-label">Starter files:</span>
+    <a class="chat-dl-btn" href="starter/mapreduce.py" download>mapreduce.py</a>
+    <a class="chat-dl-btn" href="starter/spark_wordcount.py" download>spark_wordcount.py</a>
+    <a class="chat-dl-btn" href="starter/ray_speedup.py" download>ray_speedup.py</a>
+    <a class="chat-dl-btn" href="starter/corpus.py" download>corpus.py</a>
+    <a class="chat-dl-btn" href="starter/test_sparkray.py" download>test_sparkray.py</a>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big-idea">One pattern, three costumes</h2>
+
+<p class="keep-in-present">All three parts run map → shuffle → reduce on the same 24
+documents. What changes is who owns the plumbing:</p>
+
+<pre class="equation"><code>Part 1  mapreduce.py        you own everything    map_words · partition_for · shuffle · reduce_counts
+Part 2  spark_wordcount.py  Spark owns placement  .flatMap → .map → .reduceByKey   (shuffle inside)
+Part 3  ray_speedup.py      Ray owns scheduling   @ray.remote + launch-all-then-ray.get
+
+same phases, same corpus, same answers, different plumbing landlords</code></pre>
+
+<p class="keep-in-present">Part 1 runs sequentially in one process, on purpose: the functions
+you write are <em>exactly</em> what would run on 1,000 machines; placement and retry are the
+part you'd rent. That separation is the pattern's whole design, and writing the rented part's
+contract yourself is how you'll know what you're renting.</p>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The contract</h2>
+
+<table>
+  <thead><tr><th>File</th><th>Ships as</th><th>What's inside</th></tr></thead>
+  <tbody>
+    <tr><td><code>mapreduce.py</code></td><td><strong>you edit, the graded file</strong></td><td><code>run_mapreduce</code> runner provided; <code>map_words</code>, <code>partition_for</code>, <code>shuffle</code>, <code>reduce_counts</code> are YOUR JOB</td></tr>
+    <tr><td><code>spark_wordcount.py</code></td><td>you edit, run locally</td><td>session setup + DAG printing provided; the three-transformation chain is YOUR JOB</td></tr>
+    <tr><td><code>ray_speedup.py</code></td><td>you edit, run locally</td><td>slow embedder + timing harness provided; <code>embed_remote</code> + <code>embed_all_parallel</code> are YOUR JOB</td></tr>
+    <tr><td><code>corpus.py</code></td><td>provided, read-only</td><td>Lab 10's 24 course-summary documents</td></tr>
+    <tr><td><code>test_sparkray.py</code></td><td>provided</td><td>OFFLINE group always runs; SPARK/RAY groups auto-skip if not installed</td></tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <span class="label">Install before you need it</span>
+  <p><code>pip install pyspark ray</code>. pyspark requires a working
+  <span class="gloss" data-gloss="jvm">JVM</span>: <code>java -version</code> must print
+  something; if it doesn't, install a JDK (Temurin or Zulu, 17+) first. Both engines run
+  in <span class="gloss" data-gloss="local-mode">local mode</span> for this lab: a full
+  cluster runtime, all machines played by your laptop. Part 1 needs neither; start there
+  while pip downloads Spark's 400 MB.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="build">Part 1 · micro-mapreduce <span class="part-time">~35 min in class · graded</span></h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the guarantee</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Reduce is handed <code>("the", [1, 1, 1,
+    …])</code> and simply sums; it never checks whether some other partition also has
+    "the" pairs. What property of <em>your</em> <code>shuffle</code> makes that laziness
+    safe? State it as an invariant, then predict: which harness test would catch you if you
+    routed pairs round-robin instead?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>The invariant: same key → same partition,
+      always, manufactured by routing on <code>hash(key)</code>, a function every mapper
+      computes identically without coordination. Round-robin scatters "the" across
+      partitions; both the grouping test and "answer independent of partition count"
+      catch it.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Why does the harness test with 1, 2,
+      and 7 partitions? What bug class does varying n expose that a single n never would?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The invariant: <strong>the same key always lands in the same partition</strong>,
+      guaranteed because routing is <code>hash(key) % n_partitions</code>, a pure function of the
+      key that every mapper computes identically without talking to anyone. That is what lets
+      reduce sum its list and stop: if a key is here, <em>all</em> of that key is here.</p>
+      <p>Route round-robin instead and "the" is scattered across every partition, so each reducer
+      emits a partial count and the final output has several rows per word with wrong values. The
+      grouping test catches it, and so does <code>answer independent of partition count</code>.</p>
+      <p>Why the harness varies n across 1, 2 and 7: <strong>with n=1 the bug is invisible</strong>,
+      because a single partition trivially contains every key however you route. Any routing rule,
+      including a broken one, passes at n=1. Varying n is what exposes rules that only accidentally
+      work, and the specific bug class it catches is routing that depends on something other than
+      the key: the pair's position, arrival order, or a hash of the whole (key, value) tuple.</p>
+    </details>
+  </details>
+</div>
+
+<ol>
+  <li><strong>Read <code>run_mapreduce</code></strong> (5 min, provided): three phases,
+  three lines each; the phase boundaries are where data would cross machines.</li>
+  <li><strong><code>map_words</code></strong>: one <code>(word, 1)</code> per occurrence,
+  tokenized exactly like Lab 10. No counting in map: raw pairs out.</li>
+  <li><strong><code>partition_for</code></strong>: <code>hash(key) % n_partitions</code>.
+  One line; the whole coordination-free routing idea lives in it.</li>
+  <li><strong><code>shuffle</code></strong>: n empty dicts; route every pair with
+  <code>partition_for</code>; group values per key. This is the graded heart.</li>
+  <li><strong><code>reduce_counts</code></strong>: <code>sum(values)</code>. Run
+  <code>python3 mapreduce.py</code>:</li>
+</ol>
+
+<pre><code class="language-text">$ python3 mapreduce.py
+  50  the
+  46  a
+  41  and
+  18  is
+  15  of
+   ...</code></pre>
+
+<p class="keep-in-present">The top of a raw word count is always stop words: Lab 10's
+stop-word lesson, seen from the producing side this time. Real pipelines put a filter in map
+or a <span class="gloss" data-gloss="combiner">combiner</span> before the shuffle; the
+harness grades the raw contract.</p>
+
+<!-- ============================================================ -->
+<h2 id="spark">Part 2 · Spark <span class="part-time">~15 min in class</span></h2>
+
+<p>Open <code>spark_wordcount.py</code>: the session, the 4-slice RDD, and the DAG printing
+ship; you write the chain: <code>flatMap</code> (your <code>map_words</code>),
+<code>map</code> to pairs, <code>reduceByKey</code> (your shuffle + reduce in one call).
+Stay lazy: no <code>collect()</code> inside the function. Then run it and read the plan:</p>
+
+<pre><code class="language-text">$ python3 spark_wordcount.py
+=== the DAG (read bottom-up; the stage break is the shuffle) ===
+(4) PythonRDD[5] at RDD at PythonRDD.scala:59 []
+ |  MapPartitionsRDD[4] at mapPartitions at PythonRDD.scala:197 []
+ |  ShuffledRDD[3] at partitionBy at NativeMethodAccessorImpl.java:0 []
+ +-(4) PairwiseRDD[2] at reduceByKey at spark_wordcount.py:37 []
+    |  PythonRDD[1] at reduceByKey at spark_wordcount.py:37 []
+    |  ParallelCollectionRDD[0] at readRDDFromFile at PythonRDD.scala:326 []</code></pre>
+
+<p class="keep-in-present">Read bottom-up like an <code>EXPLAIN</code>: the bottom block is
+the map-side stage (your flatMap and map, fused into one pass per partition), the
+<code>ShuffledRDD</code> line is Tuesday's stage boundary (your Part 1
+<code>shuffle</code>, industrialized), and the <code>(4)</code>s are the four partitions.
+The top-15 it prints must match Part 1's exactly; the harness checks the full dict.</p>
+
+<!-- ============================================================ -->
+<h2 id="ray">Part 3 · Ray <span class="part-time">~15 min in class</span></h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>why not threads?</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>The job: 24 documents × 30 ms of
+    (simulated) model latency each. Before Ray: why doesn't
+    <code>threading</code> give Python a 10× speedup on 10 cores for CPU-bound work? And
+    predict: if you call <code>ray.get(future)</code> inside the launch loop, what speedup
+    do you get and why?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>The GIL lets one thread run Python
+      bytecode at a time; threads interleave, they don't parallelize CPU work. Ray sidesteps
+      it with worker <em>processes</em>. And get-inside-the-loop waits for each task before
+      launching the next: speedup 1.0×, serial with extra steps.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Your real project embedder holds a 2 GB
+      model. What goes wrong with 10,000 <em>tasks</em>, and which Ray feature fixes it?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Threads do not help because of the <strong>GIL</strong>: only one thread executes
+      Python bytecode at a time, so threads interleave rather than run simultaneously and
+      CPU-bound work sees no speedup on any number of cores. Ray sidesteps it by using worker
+      <em>processes</em>, each with its own interpreter and its own GIL. And
+      <code>ray.get(future)</code> inside the launch loop gives <strong>1.0×</strong>: you block
+      waiting for task 1 to finish before launching task 2, which is serial execution with
+      inter-process overhead added on top. Launch all, then gather.</p>
+      <p>Measured, the real thing gets <strong>5.7×</strong> on 10 cores rather than 10×, because
+      24 tasks × 30&nbsp;ms is a small job and Ray's fixed costs are visible at that scale.</p>
+      <p>With a 2&nbsp;GB model and 10,000 tasks, the disaster is that <strong>every task loads
+      the model</strong>: 10,000 loads and 2&nbsp;GB shipped to each worker, so setup dwarfs the
+      work. The fix is a Ray <strong>actor</strong>, <code>@ray.remote</code> on a
+      <em>class</em>: the model is loaded once in <code>__init__</code>, the actor stays alive, and
+      tasks become method calls against a warm process.</p>
+    </details>
+  </details>
+</div>
+
+<p>Two edits in <code>ray_speedup.py</code>: decorate <code>embed_remote</code> with
+<code>@ray.remote</code>, and write <code>embed_all_parallel</code> as launch-all-then-gather.
+The <span class="gloss" data-gloss="gil">GIL</span> never gets a vote; every task is its own
+process. Measured on a 10-core laptop:</p>
+
+<pre><code class="language-text">$ python3 ray_speedup.py
+24 documents, 30 ms simulated model latency each
+serial:      0.92 s
+parallel:    0.16 s     speedup: 5.7x
+identical results: True</code></pre>
+
+<p class="keep-in-present">Not 10× on 10 cores: Ray pays startup and inter-process transfer,
+and 24 × 30 ms is a small job. The overhead is fixed, the win scales with the work; re-run
+the mental math for 100k chunks × 50 ms (your project's re-embed) and the fixed cost
+disappears into an 83-minute → 9-minute difference.</p>
+
+<!-- ============================================================ -->
+<h2 id="verify">Verify</h2>
+
+<p>With everything installed, all three groups run; without pyspark or ray the harness
+skips those groups and scores what ran;the
+<span class="gloss" data-gloss="driver">driver</span>-side OFFLINE group is the graded
+part either way:</p>
+
+<pre><code class="language-text">$ python3 test_sparkray.py
+OFFLINE group (Part A)
+  [PASS] OFFLINE: map emits raw (word, 1) pairs
+  [PASS] OFFLINE: partitioning is deterministic, in range
+  [PASS] OFFLINE: shuffle loses nothing, groups keys
+  [PASS] OFFLINE: shuffle routes by partition_for
+  [PASS] OFFLINE: reduce collapses values
+  [PASS] OFFLINE: end-to-end counts match the reference
+  [PASS] OFFLINE: answer independent of partition count
+SPARK group (Part B)
+  [PASS] SPARK: word_counts matches the reference
+RAY group (Part C)
+  [PASS] RAY: parallel results identical to serial
+  [PASS] RAY: launch-all-then-wait beats serial
+
+10/10 tests passed</code></pre>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · read the failure</span>
+  <p>A classmate passes everything except <code>answer independent of partition count</code>:
+  with <code>n=1</code> their counts are right, with <code>n=7</code> the word
+  <code>"the"</code> appears in the results <em>three times</em> with three partial counts.
+  Their <code>partition_for</code> passes its determinism test. What must their
+  <code>shuffle</code> be doing?</p>
+  <details><summary>Show answer</summary>
+  <p>Routing by something other than <code>partition_for(key, n)</code>, most commonly
+  round-robin over the pairs or hashing the whole <code>(key, value)</code> tuple. Each
+  partition then groups its own "the" pairs locally and reduces them separately, producing
+  one partial total per partition that saw the word. With <code>n=1</code> the bug is
+  invisible (everything is in the one partition, which is why the harness varies n). The
+  grouping guarantee isn't "values get grouped"; it's "grouped <em>globally</em>, because
+  routing sent them all to one place."</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="assignment">Assignment</h2>
+
+<p>Due <strong>Tuesday Nov 24 at class start</strong> (Thanksgiving week, no Thursday
+class). Submit <code>mapreduce.py</code> and <code>measurements.txt</code> to Gradescope.
+The autograder runs the OFFLINE group (plus held-out inputs: unicode text, empty documents,
+single-partition and 13-partition runs); Parts 2 and 3 are graded from your pasted output.</p>
+
+<h3>Deliverables</h3>
+<ul>
+  <li>☐ <code>mapreduce.py</code>: all seven OFFLINE tests pass (<code>7/7</code>).</li>
+  <li>☐ <code>measurements.txt</code>: three pasted blocks with one-paragraph answers:
+  (1)&nbsp;your Spark DAG, with the shuffle line marked and one sentence on why the stage
+  boundary sits exactly there; (2)&nbsp;your Ray timing, plus the speedup you'd predict for
+  100k documents at 50 ms each on your core count, show the arithmetic; (3)&nbsp;the top-15
+  word list, and one sentence connecting it to Lab 10's stop-word list.</li>
+  <li>☐ Reflection (3–5 sentences): Tuesday claimed the shuffle is Lab 4's join cost wearing
+  a network costume. Defend or attack, citing one concrete thing from your
+  <code>shuffle</code> implementation and one from <code>ProductScan</code>.</li>
+</ul>
+
+<h3>Grading</h3>
+<table>
+  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Correctness (Part 1)</td><td>Gradescope superset: held-out corpora, edge partition counts, grouping probes</td><td>70%</td></tr>
+    <tr><td>Parts 2–3 output + answers</td><td>DAG marked correctly; speedup arithmetic sound; outputs genuine</td><td>20%</td></tr>
+    <tr><td>Code quality</td><td>shuffle routes via partition_for (no duplicated hashing); readable straight through</td><td>10%</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">Fast finishers: add a <strong>combiner</strong> to
+<code>run_mapreduce</code>: pre-sum duplicate keys per input <em>before</em> the shuffle
+and count how many pairs cross the phase boundary (it drops ~6×; that ratio is why every
+engine combines). Implement <strong>skew salting</strong>: make one word 50% of a synthetic
+corpus, watch one partition bloat, then split the hot key across
+<code>the#0…the#3</code> and aggregate twice. Or convert Part 3 to an
+<strong>actor</strong>: <code>@ray.remote class Embedder</code> that "loads a model" (a
+2-second sleep in <code>__init__</code>, once per worker) and re-measure: tasks pay the
+load per call, actors pay it per worker.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">Python's built-in <code>hash()</code> gives different values each run. Is that OK?</h3>
+<p class="keep-in-present">Yes, and it's worth knowing why: Python salts string hashes per
+process (a security measure), so partition assignments differ <em>between</em> runs but
+never <em>within</em> one, which is all the shuffle's guarantee needs. Real engines use a
+fixed hash (murmur3) so that independent machines, and re-runs, agree. If you set
+<code>PYTHONHASHSEED=0</code> you get reproducible routing too.</p>
+
+<h3 class="keep-in-present">Spark printed a wall of WARN messages. Is it broken?</h3>
+<p class="keep-in-present">No; Spark in local mode is chatty (native-library warnings,
+psutil suggestions). <code>sc.setLogLevel("ERROR")</code> (already in the starter) quiets
+runtime noise; the startup warnings are cosmetic. If the run <em>hangs</em>, the usual
+culprit is Java missing or a JDK too old (need 17+): check <code>java -version</code>.</p>
+
+<h3 class="keep-in-present">My Ray speedup is only ~3× on 8 cores. Did I do it wrong?</h3>
+<p class="keep-in-present">Probably not: 24 tasks × 30 ms is a small job, and Ray's fixed
+costs (starting workers, moving arguments) are visible at this scale. The harness only
+requires beating serial by 1.5×; the point is the launch-then-gather <em>shape</em>, whose
+payoff grows with the work. If you see ~1.0×, that IS the bug: <code>ray.get</code> inside
+the loop.</p>
+
+<h3 class="keep-in-present">When would I genuinely choose Spark over DuckDB + Ray?</h3>
+<p class="keep-in-present">When the data doesn't fit one machine AND the workload is
+relational: multi-TB joins and aggregations on a shared cluster with other teams. DuckDB
+owns the fits-on-one-box case (most of them); Ray owns arbitrary-Python fan-out. Spark's
+moat is the optimizer + shuffle machinery over cluster-scale <em>tables</em>: if your
+mental model of the job is SQL, and it can't fit locally, it's Spark's job.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

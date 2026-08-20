@@ -1,0 +1,326 @@
+/* Lecture 1 — Anatomy of a Database · lab-specific widget rules only.
+   Palette, typography, .viz/.callout chrome all come from lab-base.css. */
+
+/* ---------------- Query journey ---------------- */
+
+
+.qj-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 760px) { .qj-grid { grid-template-columns: 1fr; } }
+
+.qj-col-title {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-mute);
+  margin-bottom: 8px;
+}
+.qj-sub { font-weight: 500; text-transform: none; letter-spacing: 0; }
+
+.qj-sql {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--bg-code);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 8px 10px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.qj-sql.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+.qj-tokens { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; min-height: 22px; }
+.qj-token {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+  background: white;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.qj-token.show { opacity: 1; }
+.qj-token.kw { background: #fde0d2; }
+
+.qj-plan { margin-top: 6px; text-align: center; }
+.qj-plan-node {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  background: white;
+  padding: 4px 10px;
+  margin: 0 auto;
+  width: fit-content;
+  opacity: 0.35;
+  transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+}
+.qj-plan-node span { display: block; font-size: 10.5px; color: var(--ink-mute); }
+.qj-plan-arrow { color: var(--ink-mute); font-size: 11px; opacity: 0.35; }
+.qj-plan.show .qj-plan-node, .qj-plan.show .qj-plan-arrow { opacity: 1; }
+.qj-plan-node.active { border-color: var(--accent); background: #fff3d6; }
+
+.qj-frame, .qj-block {
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  background: white;
+  padding: 6px 9px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.qj-frame-label {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  margin-bottom: 3px;
+}
+.qj-frame-body { font-family: var(--mono); font-size: 12px; color: var(--ink-mute); }
+.qj-frame.hit  { border-color: #3a8a5b; background: #e3f1e9; }
+.qj-frame.miss { border-color: var(--accent); background: #fde0d2; }
+.qj-block.reading { border-color: var(--accent); background: #fde0d2; box-shadow: 0 0 0 2px var(--accent-soft); }
+
+.qj-rows { display: flex; flex-direction: column; gap: 2px; }
+.qj-row {
+  display: flex; gap: 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  transition: background 0.12s;
+}
+.qj-row .r-name { min-width: 34px; }
+.qj-row.checking { background: #fff3d6; }
+.qj-row.pass { background: #d5e6dc; }
+.qj-row.fail { background: #f0eee5; opacity: 0.6; }
+
+.qj-stats {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  min-height: 34px;
+  white-space: pre-line;
+}
+
+.qj-results {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 13px;
+  min-height: 24px;
+}
+.qj-results-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  margin-right: 8px;
+}
+.qj-result-chip {
+  display: inline-block;
+  background: #d5e6dc;
+  border: 1px solid #b4d6c1;
+  border-radius: 4px;
+  padding: 1px 8px;
+  margin-right: 6px;
+  animation: qj-pop 0.25s ease-out;
+}
+@keyframes qj-pop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* ---------------- Pinned students table ---------------- */
+.students-table { width: auto; font-family: var(--mono); font-size: 13px; }
+.students-table th { font-family: var(--sans); font-size: 12px; }
+.students-table td.num { text-align: right; }
+.students-table tr.blk0 td:first-child { border-left: 3px solid #d4c896; }
+.students-table tr.blk1 td:first-child { border-left: 3px solid #a9d2d2; }
+.students-table .blk-tag {
+  font-family: var(--sans); font-size: 10px; color: var(--ink-mute);
+  padding-left: 10px;
+}
+
+/* ---------------- Layer stack + microdb plan ---------------- */
+.ls-stack, .mp-stack { max-width: 620px; }
+.ls-layer, .mp-layer {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  background: white;
+  padding: 9px 14px;
+  margin-bottom: 6px;
+  cursor: default;
+  transition: border-color 0.12s, background 0.12s, transform 0.12s;
+}
+.ls-layer:hover, .mp-layer:hover {
+  border-color: var(--accent);
+  background: #fff3d6;
+  transform: translateX(3px);
+}
+.ls-name, .mp-name { font-family: var(--sans); font-weight: 600; font-size: 14px; min-width: 170px; }
+.ls-lab, .mp-lab { font-family: var(--mono); font-size: 11px; color: var(--accent); font-weight: 700; min-width: 88px; }
+.ls-desc, .mp-desc { font-family: var(--sans); font-size: 12.5px; color: var(--ink-mute); }
+.ls-side {
+  border-style: dashed;
+  background: #f0f8f2;
+}
+.ls-info {
+  font-family: var(--sans);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--bg-elev);
+  border-left: 3px solid var(--rule);
+  border-radius: 0 4px 4px 0;
+  padding: 10px 14px;
+  margin-top: 12px;
+  min-height: 58px;
+}
+.ls-info strong { font-family: var(--sans); }
+.ls-info code { font-size: 0.9em; }
+
+/* ---------------- Latency ladder ---------------- */
+.lat-rows { margin-top: 8px; }
+.lat-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 150px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+@media (max-width: 640px) { .lat-row { grid-template-columns: 120px 1fr 108px; font-size: 12px; } }
+.lat-label { color: var(--ink); }
+.lat-track { background: var(--bg-elev); border-radius: 4px; height: 18px; position: relative; }
+.lat-bar {
+  display: block;          /* a bare <span> is inline: width would be ignored */
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #d5e6dc, #fde0d2);
+  border: 1px solid #e8b69e;
+  transition: width 0.4s ease;
+}
+.lat-val { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); text-align: right; }
+.lat-ratio { display: block; font-size: 11px; color: var(--ink-mute); }
+/* decade gridlines: every tick is 10x the one to its left */
+.lat-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(31, 29, 26, 0.16); }
+.lat-axis { position: relative; height: 13px; }
+.lat-atick {
+  position: absolute; top: 0;
+  font-family: var(--mono); font-size: 10px; font-style: normal;
+  color: var(--ink-mute); white-space: nowrap; transform: translateX(-50%);
+}
+.lat-atick.first { transform: translateX(0); }
+.lat-atick.last { transform: translateX(-100%); }
+.lat-axis-row { margin-bottom: 2px; }
+.lat-axis-val { font-size: 10px; color: var(--ink-mute); }
+
+/* ---------------- Deck-expansion widgets (v2) ---------------- */
+
+
+
+/* Declarative: two-strategy comparison */
+.strategy-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 16px 0 20px;
+  font-family: var(--sans);
+}
+@media (max-width: 640px) { .strategy-compare { grid-template-columns: 1fr; } }
+.strategy {
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  background: white;
+  padding: 14px 16px;
+}
+.st-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+.strategy:first-child  { border-top: 3px solid #d8a48a; }
+.strategy:last-child   { border-top: 3px solid #9ec3ae; }
+.st-steps { font-size: 14px; line-height: 1.7; color: var(--ink-soft); }
+.st-cost {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--rule);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+body.presentation-mode .st-steps { font-size: 19px; }
+body.presentation-mode .st-cost { font-size: 16px; }
+body.presentation-mode .st-title { font-size: 16px; }
+
+
+/* ---------------- Presentation scaling (v3) — em-relative so widgets
+   grow with the slide's clamp()-based font size ---------------- */
+body.presentation-mode .strategy-compare { font-size: 1em; }
+body.presentation-mode .st-title { font-size: 0.55em; }
+body.presentation-mode .st-steps { font-size: 0.68em; }
+body.presentation-mode .st-cost { font-size: 0.55em; }
+body.presentation-mode .ls-info { font-size: 0.75em; line-height: 1.5; }
+body.presentation-mode .ls-name, body.presentation-mode .mp-name { font-size: 0.6em; min-width: 11em; }
+body.presentation-mode .ls-lab, body.presentation-mode .mp-lab { font-size: 0.48em; min-width: 7em; }
+body.presentation-mode .ls-desc, body.presentation-mode .mp-desc { font-size: 0.52em; }
+body.presentation-mode .ls-stack, body.presentation-mode .mp-stack { max-width: 34em; }
+body.presentation-mode .lat-row { font-size: 0.58em; grid-template-columns: 14em 1fr 8.5em; }
+body.presentation-mode .lat-val { font-size: 0.9em; }
+body.presentation-mode .lat-track { height: 0.9em; }
+body.presentation-mode .lat-axis { height: 1em; }
+body.presentation-mode .lat-atick,
+body.presentation-mode .lat-axis-val { font-size: 0.72em; }
+body.presentation-mode .lat-ratio { font-size: 0.8em; }
+body.presentation-mode .students-table { font-size: 0.62em; }
+body.presentation-mode .qj-col-title { font-size: 0.45em; }
+body.presentation-mode .qj-sql { font-size: 0.55em; }
+body.presentation-mode .qj-token { font-size: 0.45em; }
+body.presentation-mode .qj-plan-node { font-size: 0.52em; }
+body.presentation-mode .qj-frame-label { font-size: 0.4em; }
+body.presentation-mode .qj-frame-body { font-size: 0.5em; }
+body.presentation-mode .qj-row { font-size: 0.5em; }
+body.presentation-mode .qj-stats { font-size: 0.5em; }
+body.presentation-mode .qj-results { font-size: 0.55em; }
+body.presentation-mode .qj-results-label { font-size: 0.75em; }
+
+/* ---- endianness widget ---- */
+.en-label { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); }
+.en-label input { width: 130px; font-family: var(--mono); font-size: 13px; padding: 3px 6px; }
+.en-rows { margin-top: 12px; }
+.en-row { display: grid; grid-template-columns: 200px 1fr; gap: 12px; align-items: center; margin-bottom: 10px; }
+.en-name { font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--ink); }
+.en-sub { display: block; font-weight: 400; font-size: 11px; color: var(--ink-mute); font-family: var(--mono); }
+.en-cells { display: flex; gap: 6px; }
+.en-cell {
+  flex: 0 0 auto; width: 74px; text-align: center;
+  background: #f0eee5; border: 1px solid #c9c3b4; border-radius: 4px; padding: 5px 0;
+}
+.en-lsb { background: #fde0d2; border-color: var(--accent); }
+.en-off { display: block; font-family: var(--sans); font-size: 10px; color: var(--ink-mute); }
+.en-hex { display: block; font-family: var(--mono); font-size: 17px; color: var(--ink); }
+.en-note { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
+body.presentation-mode .en-row { grid-template-columns: 11em 1fr; }
+body.presentation-mode .en-name { font-size: 0.6em; }
+body.presentation-mode .en-sub { font-size: 0.5em; }
+body.presentation-mode .en-cell { width: 4.4em; }
+body.presentation-mode .en-off { font-size: 0.45em; }
+body.presentation-mode .en-hex { font-size: 0.8em; }
+body.presentation-mode .en-note, body.presentation-mode .en-label { font-size: 0.6em; }

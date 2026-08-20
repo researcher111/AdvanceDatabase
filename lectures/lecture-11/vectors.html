@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 11 · Vector Databases · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lecture 11</div>
+  <ul>
+    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#similar">The similarity query</a></li>
+    <li><a href="#try-it">Search a vector space</a></li>
+    <li><a href="#exact">Exact search and its wall</a></li>
+    <li><a href="#ann">ANN: IVF and HNSW</a></li>
+    <li><a href="#recall">Recall: the honesty metric</a></li>
+    <li><a href="#landscape">The landscape</a></li>
+    <li><a href="#thursday">On Thursday you build one</a></li>
+    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 11 · Tuesday November 3, 2026</div>
+  <h1>Vector Databases</h1>
+  <div class="subtitle">When the column is an embedding and the query is "what's similar?": indexes for a world without equality.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+You already trust <span class="gloss" data-gloss="embedding-recall">embeddings</span>, vectors whose geometry encodes meaning. The database question
+they raise is new: every index you've met accelerates <em>equality and order</em>
+(<code>uid = 7</code>, <code>gpa &gt; 35</code>), but "the 10 chunks most similar to this
+question" has no equality anywhere. B+ trees are useless here; hashing is worse. The answer
+is a new index family (<span class="gloss" data-gloss="ann">approximate nearest
+neighbor</span>) that buys speed with a currency you've never spent before:
+<em>correctness, measured and dialed</em>. Thursday you build IVF and set the dial yourself;
+your project's retrieval layer will sit on it.
+</p>
+
+<div class="cite">
+  Companion reading: pgvector's <a href="https://github.com/pgvector/pgvector">README</a> (the whole design in one page) ·
+  the HNSW paper: Malkov &amp; Yashunin, <a href="https://arxiv.org/abs/1603.09320"><em>Efficient and robust ANN search using Hierarchical Navigable Small World graphs</em></a> ·
+  FAISS's <a href="https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index">index-choosing guide</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="plan">Today's plan</h2>
+
+<p>Quiz 8 first (columnar &amp; the analytics stack), then the index your project depends on.</p>
+
+<ol class="agenda">
+  <li><strong>The similarity query</strong>: why embeddings break every index you know.</li>
+  <li><strong>Search a vector space</strong>: exact vs approximate, live.</li>
+  <li><strong>Exact search and its wall</strong>: O(n) per query, forever.</li>
+  <li><strong>ANN</strong>: IVF (cluster and probe) and HNSW (navigate a graph).</li>
+  <li><strong>Recall</strong>: the metric that makes "approximate" honest.</li>
+  <li><strong>The landscape</strong>: pgvector, FAISS, and the standalone crowd.</li>
+</ol>
+
+<p class="keep-in-present">Today's claim: <strong>ANN indexes trade correctness for speed on
+an explicit dial</strong>, and you are responsible for reading the dial.</p>
+
+<!-- ============================================================ -->
+<h2 id="similar">The similarity query</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>index the un-indexable</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>4,000 chunk embeddings (32-dim unit
+    vectors); query: the 10 nearest by cosine. Try to apply your tools: can a B+ tree on…
+    what, exactly… help? A hash index? Sorting by the first coordinate? For each, say
+    precisely where it breaks.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Converge: order needs ONE dimension
+      (which coordinate?), equality needs exact match (embeddings never repeat), and nearness
+      in 32-dim space survives neither. This is genuinely a new problem.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Salvage something: what WOULD group
+      similar vectors near each other, even roughly?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Every tool breaks, and for a different reason. A <strong>B+ tree</strong> needs a total
+      order, and a 32-dimensional vector has no single key to sort on; index the first coordinate
+      and you group vectors that agree on one number while differing wildly on the other 31, which
+      is not nearness in any useful sense. A <strong>hash index</strong> needs exact equality, and
+      two embeddings are essentially never bit-identical, so every lookup misses; worse, hashing
+      deliberately destroys locality, which is the one property you needed. <strong>Sorting by one
+      coordinate</strong> fails for the same reason as the tree: proximity in 32-D does not survive
+      projection to 1-D.</p>
+      <p>The salvage is the whole next section. Order is the wrong tool, but
+      <strong>grouping</strong> is not: cluster the vectors by proximity in the full space, so
+      vectors that are near each other land in the same bucket. You already know an algorithm for
+      that from your ML courses, k-means, and it turns "find the nearest" into "look in the few
+      buckets it is most likely to be in." That is IVF, and its price is that "most likely" is not
+      "certainly".</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="The similarity query">The setup, precisely</h3>
+
+<pre class="equation"><code>store:   n vectors, d dims (n = millions, d = 384-3072 for real embedding models)
+query:   top-k by similarity, cosine for unit vectors, which is just the dot product:
+
+    sim(q, v) = q · v = Σ qᵢvᵢ          (after normalizing: divide by length once, at insert)
+
+exact answer:  n dot products per query = n·d multiplications.
+             1M vectors × 1536 dims × every user question = the wall.</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Search a vector space</h2>
+
+<p>A 2-D toy space you can see (real ones are 32–3072-D; the geometry generalizes). Click
+anywhere to query; compare exact search with IVF at different probe settings.</p>
+
+<div class="viz" id="viz-space">
+  <div class="viz-title">2-D vector space · 300 points, 8 IVF clusters</div>
+  <p class="viz-description">Click to place a query (✕). <span class="hexlegend hit">Green</span>
+  points are the true top-10; <span class="hexlegend miss">warm</span> shading marks the
+  clusters IVF probed. Missed neighbors (green points outside warm regions) are recall loss,
+  visible.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="vs-exact">exact search</button>
+    <button type="button" class="btn primary" id="vs-p1">IVF probe 1</button>
+    <button type="button" class="btn primary" id="vs-p2">IVF probe 2</button>
+    <button type="button" class="btn" id="vs-p4">IVF probe 4</button>
+    <button type="button" class="btn" id="vs-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="vs-msg">Click in the space below to place a query point.</div>
+  <div class="vs-canvas-wrap"><canvas id="vs-canvas" width="640" height="360"></canvas></div>
+  <div class="bs-stats" id="vs-stats"></div>
+  <p class="viz-caption">Place a query near a cluster <em>boundary</em> and probe 1:watch
+  true neighbors get missed because they live across the border. That's the failure mode your
+  Thursday measurement quantifies.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="exact">Exact search and its wall</h2>
+
+<p class="keep-in-present">Before approximating anything, price the exact thing: score all
+n vectors, keep the top k. Correct by construction, embarrassingly parallel, and linear in
+everything: the baseline that never lies and eventually never finishes.</p>
+
+<h3 class="new-slide" data-kicker="Exact search">What brute force costs, and when it's fine</h3>
+
+<table>
+  <thead><tr><th>Scale</th><th>Exact cost per query</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>4k × 32-d (Thursday's lab)</td><td>128k mults, sub-millisecond</td><td>fine; measure it anyway</td></tr>
+    <tr><td>100k × 768-d (a real project corpus)</td><td>77M mults, tens of ms</td><td>fine-ish, single user</td></tr>
+    <tr><td>10M × 1536-d, 100 qps (production RAG)</td><td>1.5 × 10¹² mults/sec</td><td>the wall</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Honest advice your project should hear: <strong>at small scale,
+brute force is the right answer</strong>: exact, simple, zero recall anxiety. The project
+spec requires the brute-force baseline for exactly this reason. Indexes earn their keep at
+scale, like always.</p>
+
+<!-- ============================================================ -->
+<h2 id="ann">ANN: IVF and HNSW</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>invent IVF</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>You may preprocess the 4,000 vectors
+    however you like. Design a scheme where each query compares against far fewer than 4,000,
+    using only tools you know (clustering counts). What's stored, what happens per query, and
+    where can it be WRONG?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Most tables invent IVF: k-means the
+      vectors, search only the nearest cluster(s). Where's the wrongness? The true neighbor
+      can live just across a cluster border you didn't probe.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Name the knob that trades the wrongness
+      back for work.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>Stored:</strong> C cluster centroids from k-means, plus an inverted list per
+      centroid holding the ids of the vectors assigned to it. Built once, offline.
+      <strong>Per query:</strong> score the query against the C centroids, take the best P of them
+      (the "probe"), and brute-force only the vectors in those lists. Cost is roughly
+      C + P·(n/C) instead of n, so 4,000 vectors with C = 20 and P = 4 compare about 880 instead
+      of 4,000.</p>
+      <p><strong>Where it is wrong:</strong> a true neighbour can sit just across a cluster border
+      you did not probe. It is not scored, so it cannot be returned, and nothing in the output
+      reveals that it was missed. Queries near a boundary suffer most, which is exactly what the
+      widget shows when you place a query on a border and probe 1.</p>
+      <p>The knob that buys the wrongness back is <strong>probe</strong> (<code>nprobe</code> in
+      FAISS and pgvector). Raise it and you search more lists, recover more true neighbours, and
+      do more work. Probe every list and you are back to brute force with extra steps. That dial
+      is the entire product category.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="ANN">IVF: cluster, then probe</h3>
+
+<pre class="equation"><code>build:   k-means into C lists (C ≈ √n is folklore)      once, offline
+search:  score C centroids → take the best P ("probe")  → brute-force inside those lists
+
+cost ≈ C + P·(n/C) instead of n:   4,000 vectors, C=20, P=4  →  ~880 vs 4,000  (4.5×)
+                                   1M vectors, C=1000, P=10  →  ~11k vs 1M     (90×)
+
+the miss: a true neighbor in an unprobed list. P is the dial.</code></pre>
+
+<h3 class="new-slide" data-kicker="ANN">HNSW: navigate, don't partition</h3>
+
+<div class="viz" id="viz-hnsw">
+  <div class="viz-title">HNSW's greedy walk · highways to get close, streets to finish</div>
+  <p class="viz-description">Twelve vectors, two layers. The top layer keeps a few nodes
+  with long-range links (the highways); the bottom layer links every node to its near
+  neighbors (the streets). Step the walk: from the entry point, always hop to whichever
+  neighbor is closest to the query ★; when no neighbor improves, drop a layer and keep
+  walking.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="hn-step">Step ▸</button>
+    <button type="button" class="btn" id="hn-reset">Reset</button>
+    <span class="hn-msg" id="hn-msg"></span>
+  </div>
+  <div class="hn-svg-wrap"><svg id="hn-svg" viewBox="0 0 640 250"></svg></div>
+  <p class="viz-caption">The walk reaches the true nearest neighbor in a handful of hops,
+  computing distances only along the path; that near-logarithmic hop count is why HNSW
+  usually wins the recall-at-speed benchmarks. Its dial is <code>ef_search</code>, the width
+  of the frontier the walk keeps: same contract as IVF's probe, wider = better recall,
+  more work.</p>
+</div>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The dial</span><span><code>ef_search</code>: how wide a frontier the walk keeps. Same trade as probe: bigger = better recall, more work.</span></div>
+  <div class="lc-row"><span class="lc-k">The price</span><span>the graph lives in RAM and inserts are costlier than IVF's; the default when recall-at-speed matters most, IVF when memory or build time bind.</span></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="recall">Recall: the honesty metric</h2>
+
+<pre class="equation"><code>recall@k  =  |approximate top-k  ∩  true top-k|  /  k
+
+  1.0  = found everything the exact search would have
+  0.75 = missed a quarter of the real neighbors - and told you so</code></pre>
+
+<h3 class="new-slide" data-kicker="Recall">Thursday's table, previewed</h3>
+
+<table>
+  <thead><tr><th>Index</th><th>probe</th><th>avg recall@10</th><th>comparisons/query</th><th>speedup</th></tr></thead>
+  <tbody>
+    <tr><td>brute force</td><td>&nbsp;</td><td>1.000</td><td>4,000</td><td>1.0×</td></tr>
+    <tr><td>IVF</td><td>1</td><td>0.758</td><td>236</td><td><strong>16.9×</strong></td></tr>
+    <tr><td>IVF</td><td>2</td><td>0.885</td><td>471</td><td>8.5×</td></tr>
+    <tr><td>IVF</td><td>4</td><td><strong>0.948</strong></td><td>882</td><td>4.5×</td></tr>
+    <tr><td>IVF</td><td>8</td><td>0.985</td><td>1,702</td><td>2.4×</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Read it like an engineer: at probe 1 you're <em>wrong about 1 in 4
+neighbors</em> and 17× faster; at probe 4 you're wrong about 1 in 20 and still 4.5× faster.
+Neither is "right": a recommender shrugs at 0.76; retrieved <em>evidence</em> for a RAG
+answer should not. The dial is yours, and "what recall does this application need?" is now a
+question you ask out loud.</p>
+
+<div class="exercise">
+  <span class="ex-label">Check yourself · score an index by hand</span>
+  <p>Exact search says the true top-10 for a query is ids {1…10}. Your IVF at probe&nbsp;2
+  returns, in order: 1, 2, 3, 5, 6, 8, 9, 11, 14, 20. Compute recall@10, and then explain
+  where ids 4, 7, and 10 must be, physically, for this result to have happened.</p>
+  <details><summary>Show answer</summary>
+  <p>Seven of the true ten appear ({1,2,3,5,6,8,9}), so recall@10&nbsp;=&nbsp;<strong>0.7</strong>.
+  Ids 4, 7, and 10 sit in cluster lists the two probes didn't visit; they were never
+  <em>compared</em>, not out-scored; 11, 14, 20 filled their seats. Raising probe can only
+  add candidate lists, so recall can only rise, which is exactly the monotonicity Thursday's
+  harness tests, and the reason a "probe more, recall drops" bug always means the probe
+  isn't selecting what you think.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="landscape">The landscape</h2>
+
+<p class="keep-in-present">Every product in the vector-database gold rush is some packaging
+of the two structures you just met, plus the dial. What varies is <em>where it lives</em>
+relative to the rest of your data:</p>
+
+<h3 class="new-slide" data-kicker="The landscape">Three ways to ship a vector index</h3>
+
+<table>
+  <thead><tr><th>Shape</th><th>Examples</th><th>When</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Inside your database</strong></td><td><span class="gloss" data-gloss="pgvector">pgvector</span> (Postgres), DuckDB's VSS</td><td>vectors next to their rows: joins, filters, transactions included; the boring, usually-right default</td></tr>
+    <tr><td><strong>A library</strong></td><td><span class="gloss" data-gloss="faiss">FAISS</span>, hnswlib</td><td>you own the serving code; maximal control and speed, batteries not included</td></tr>
+    <tr><td><strong>A dedicated service</strong></td><td>Pinecone, Weaviate, Milvus, Qdrant</td><td>managed scale and ops, plus a second copy of your data to keep in sync (see FAQ)</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">For the project: microvector or pgvector or FAISS all satisfy the
+spec; what's graded is that your retrieval layer is a real index <em>and you can defend its
+dial setting with your own measurements</em>.</p>
+
+<!-- ============================================================ -->
+<h2 id="thursday">On Thursday you build one</h2>
+
+<p>microvector: brute force (the honest baseline) and IVF (the index), pure Python over a
+seeded 4,000-vector dataset with realistic topic overlap. The k-means ships; you write the
+scoring, bucketing, and probing.</p>
+
+<ul class="checklist">
+  <li>☐ Download the four Lab 9 starter files; <code>python3 gen_embeddings.py</code> once.</li>
+  <li>☐ Harness prints <strong>0/7</strong>; the QUALITY group grades your recall and your
+  comparison counts: correctness AND the point of the structure.</li>
+  <li>☐ From today: be able to say where IVF's misses live (borders) and which knob buys
+  them back.</li>
+  <li>☐ Project teams: this lab's index is your retrieval layer's first draft; bring your
+  proposal feedback questions to lab.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="recap">Recap &amp; next time</h2>
+
+<ul class="recap-list">
+  <li><strong>Similarity breaks equality-and-order indexing</strong>: embeddings need their
+  own index family, and "approximate" is in the family name for a reason.</li>
+  <li><strong>IVF = cluster and probe; HNSW = navigate a graph.</strong> Both expose one dial:
+  work vs recall.</li>
+  <li><strong>Recall@k makes the trade honest</strong>: measure it, set the dial per
+  application, and keep the brute-force baseline around as the truth.</li>
+</ul>
+
+<p class="keep-in-present"><strong>Thursday:</strong> build microvector.
+<strong>Next Tuesday:</strong> RAG as a systems problem: chunking, retrieval, and evaluating
+the whole pipeline your project is building. Quiz 9 opens class: vector search.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">Why cosine instead of Euclidean distance?</h3>
+<p class="keep-in-present">On unit vectors they induce the same ranking (‖q−v‖² = 2−2q·v),
+so the argument is moot once you normalize, which embedding models mostly assume. Cosine's
+virtue is invariance to length, which for embeddings encodes "topic, not intensity."</p>
+
+<h3 class="keep-in-present">Is recall the only quality metric that matters?</h3>
+<p class="keep-in-present">It's the index's metric: did the structure find the true
+geometric neighbors? Whether those neighbors are <em>useful</em> is the embedding model's
+burden and the pipeline's (next lecture: end-to-end evaluation, where retrieval hit-rate
+and answer quality get separated on purpose).</p>
+
+<h3 class="keep-in-present">The dedicated vector databases advertise hard: when do they earn it?</h3>
+<p class="keep-in-present">When vectors are your <em>primary</em> workload at serious scale:
+billions of vectors (usually <span class="gloss" data-gloss="quantization">quantized</span>), filtered ANN, multi-tenant serving. Below that, a second datastore
+means a second copy of truth, sync jobs, and consistency questions you now know by name.
+The boring answer (vectors in the database you already run) wins more often than the
+marketing implies.</p>
+
+<h3 class="keep-in-present">Could microdb have a vector index?</h3>
+<p class="keep-in-present">Structurally yes: IVF lists are just tables (centroid_id, RID),
+and Lab 6's IndexSelectScan pattern applies verbatim. That is, in fact, roughly what pgvector
+is to Postgres: new index type, same RID handshake. Nice final-project appendix for the
+microdb-attached.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=2"></script>
+</body>
+</html>

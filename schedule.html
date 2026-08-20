@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Advanced Databases for Data Science · Fall 2026 Schedule</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="labs/_shared/lab-base.css?v=15">
+<style>
+  body { max-width: 1180px; margin: 0 auto; padding: 36px 28px 80px; }
+  main { max-width: none; }
+
+  h1 { font: 600 38px/1.18 var(--serif); margin: 0 0 8px; letter-spacing: -0.01em; }
+  .eyebrow { font-family: var(--sans); font-size: 12px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-mute); margin: 0 0 8px; }
+  .subtitle { font-family: var(--sans); font-size: 15px; color: var(--ink-mute); margin: 0 0 18px; }
+
+  .sched-intro { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); margin: 0 0 18px; }
+  .sched-intro p { margin: 6px 0; }
+  .sched-intro .lede { font-size: 15px; color: var(--ink); line-height: 1.6; }
+
+  .legend {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    font-family: var(--sans); font-size: 12px;
+    color: var(--ink-mute); margin: 14px 0 22px;
+  }
+  .legend .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border: 1px solid var(--rule);
+    border-radius: 14px; background: white;
+  }
+  .legend .chip .sw {
+    width: 11px; height: 11px; border-radius: 2px;
+    display: inline-block; border: 1px solid var(--rule);
+  }
+  .sw.found     { background: #eef2f7; border-color: #c1d0e2; }
+  .sw.internals { background: #f0e8d8; border-color: #d4c896; }
+  .sw.query     { background: #e0f0f0; border-color: #a9d2d2; }
+  .sw.txn       { background: #e3f1e9; border-color: #b4d6c1; }
+  .sw.analytics { background: #fbeee7; border-color: #e8c8b8; }
+  .sw.ds        { background: #e8eafb; border-color: #c3c9ef; }
+  .sw.dist      { background: #f3eaf4; border-color: #dabfdf; }
+  .sw.exam      { background: #fbe7a8; border-color: #e0c476; }
+  .sw.project   { background: #ece3f5; border-color: #dabfdf; }
+  .sw.holiday   { background: #ececea; border-color: #cfcecb; }
+  .sw.due       { background: #fde0d2; border-color: #e8b69e; }
+
+  /* Schedule table */
+  table.schedule {
+    border-collapse: collapse; width: 100%;
+    font-family: var(--sans); font-size: 14px;
+    margin: 8px 0 28px;
+  }
+  table.schedule th {
+    background: var(--bg-elev); color: var(--ink); font-weight: 600;
+    padding: 10px 12px; text-align: left;
+    border-bottom: 2px solid var(--rule);
+    font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  table.schedule td {
+    padding: 10px 12px; border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  table.schedule td.date {
+    font-family: var(--mono); font-size: 13px; white-space: nowrap;
+    color: var(--ink); width: 130px;
+  }
+  table.schedule td.day {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--ink-mute); width: 80px;
+  }
+  table.schedule td.topic { font-size: 14px; color: var(--ink); }
+  table.schedule td.topic a {
+    color: var(--ink); border-bottom: 1px solid #b6cdd0;
+    text-decoration: none;
+  }
+  table.schedule td.topic a:hover { color: var(--accent); }
+  table.schedule td.due {
+    font-size: 13px; width: 280px; color: var(--ink);
+    background: #fbfbfd;
+  }
+  table.schedule td.due a {
+    color: var(--accent);
+    border-bottom: 1px dotted var(--accent);
+    text-decoration: none;
+  }
+  table.schedule td.due .due-pill {
+    display: inline-block; padding: 1px 7px;
+    border-radius: 3px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin-right: 4px;
+    background: #e6eef6; color: #34507a;
+  }
+  table.schedule td.due .due-pill.in-class {
+    background: #dcfce7; color: #166534;
+  }
+  table.schedule td.due .due-pill.exam {
+    background: #fbe7a8; color: #6b4d05;
+  }
+  table.schedule td.due .due-pill.proj {
+    background: #ece3f5; color: #5b3a7a;
+  }
+
+  /* Week header */
+  tr.week-row td {
+    background: #f4f7fa;
+    font: 600 12px var(--sans);
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-mute);
+    padding: 10px 12px;
+    border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  }
+  tr.week-row .wk-name { color: var(--accent); margin-right: 14px; }
+  tr.week-row .wk-range {
+    color: var(--ink-mute); font-weight: 500;
+    letter-spacing: 0.04em; text-transform: none;
+    font-family: var(--sans); font-size: 12px;
+  }
+
+  /* Day-type tinting */
+  tr.day-found     td.topic { border-left: 3px solid #6e8db4; padding-left: 10px; }
+  tr.day-internals td.topic { border-left: 3px solid #b8851a; padding-left: 10px; }
+  tr.day-query     td.topic { border-left: 3px solid #2f8a8a; padding-left: 10px; }
+  tr.day-txn       td.topic { border-left: 3px solid #3a8a5b; padding-left: 10px; }
+  tr.day-analytics td.topic { border-left: 3px solid #d3805d; padding-left: 10px; }
+  tr.day-ds        td.topic { border-left: 3px solid #5b6bd0; padding-left: 10px; }
+  tr.day-dist      td.topic { border-left: 3px solid #8a4c9a; padding-left: 10px; }
+  tr.day-project   td.topic { border-left: 3px solid #8a4c9a; padding-left: 10px; }
+  tr.day-exam      td.topic { border-left: 3px solid #b8851a; padding-left: 10px; }
+  tr.day-exam      td       { background: #fbf6ee; }
+
+  /* Holiday rows */
+  tr.holiday td { background: #f5f4f1; color: var(--ink-mute); }
+  tr.holiday td.topic { font-style: italic; border-left: 3px solid #cfcecb; padding-left: 10px; }
+
+  /* Category tag inside topic cell */
+  .type-tag {
+    display: inline-block;
+    font: 700 10px var(--sans);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 1px 7px; border-radius: 3px;
+    margin-right: 6px; vertical-align: 1px;
+  }
+  .type-tag.fnd { background: #eef2f7; color: #34507a; }
+  .type-tag.mdb { background: #f0e8d8; color: #6b4d05; }
+  .type-tag.qry { background: #e0f0f0; color: #1d6060; }
+  .type-tag.txn { background: #e3f1e9; color: #1d6038; }
+  .type-tag.anl { background: #fbeee7; color: #9f5d22; }
+  .type-tag.dsx { background: #e8eafb; color: #33409f; }
+  .type-tag.dst { background: #f3eaf4; color: #6e3a7a; }
+  .type-tag.exm { background: #fbe7a8; color: #6b4d05; }
+  .type-tag.prj { background: #ece3f5; color: #5b3a7a; }
+  .type-tag.hol { background: #ececea; color: #6b6660; }
+
+  /* Lecture / Lab pill */
+  .fmt-tag {
+    display: inline-block;
+    font: 700 10px var(--sans);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 1px 7px; border-radius: 3px;
+    margin-right: 8px; vertical-align: 1px;
+  }
+  .fmt-tag.lec { background: #1f1d1a; color: #fbfaf7; }
+  .fmt-tag.lab { background: var(--accent); color: #fff; }
+  .fmt-tag.spc { background: #6b6660; color: #fff; }
+
+  .part-tag {
+    display: inline-block;
+    font: 600 11px var(--sans); color: var(--ink-mute);
+    margin-left: 6px; letter-spacing: 0.04em;
+  }
+
+  .home-bar {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    font-family: var(--sans); font-size: 13px;
+    margin: 6px 0 20px;
+  }
+  .home-bar a {
+    background: white; border: 1px solid var(--rule);
+    padding: 7px 13px; border-radius: 5px;
+    color: var(--ink); text-decoration: none;
+  }
+  .home-bar a:hover { border-color: var(--accent); color: var(--accent); }
+
+  .footnote {
+    font-family: var(--sans); font-size: 12px;
+    color: var(--ink-mute); margin-top: 30px; line-height: 1.55;
+  }
+  .footnote h3 {
+    font: 600 13px var(--sans); text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--ink-mute); margin: 18px 0 6px;
+  }
+  .footnote ul { margin: 6px 0 12px; padding-left: 20px; }
+  .footnote li { margin: 3px 0; }
+
+  @media (max-width: 760px) {
+    table.schedule td.due, table.schedule td.day { font-size: 12px; }
+    table.schedule td.date { width: auto; }
+    table.schedule { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <p class="eyebrow">Fall 2026 · Tuesday / Thursday · 75 minutes</p>
+  <h1>Day-by-day course schedule</h1>
+  <p class="subtitle">Advanced Databases for Data Science · DS 6XXX · Daniel G. Graham, UVA School of Data Science</p>
+
+  <div class="sched-intro">
+    <p class="lede">
+      This course opens with the question a data-science curriculum usually skips:
+      <em>what is actually happening underneath the query?</em> It answers that the hard way:
+      <strong>you build a working relational database engine from scratch, in Python.</strong>
+      <strong>microdb</strong>, built in the spirit of Edward Sciore's <em>SimpleDB</em>, grows one
+      subsystem per week: pages on disk, a buffer pool, records and a catalog, query operators,
+      a SQL front end, a B+ tree, and transactions. After the midterm the lens widens to the
+      engines data scientists live in: <strong>DuckDB and the columnar world, vector databases,
+      MapReduce, Spark &amp; Ray, Google's Bigtable, and graph databases</strong>. The semester
+      project has your team build a <strong>retrieval-augmented-generation (RAG) pipeline in
+      Python</strong> on top of the same ideas.
+    </p>
+    <p><strong>Weekly rhythm.</strong> <span class="fmt-tag lec">Lecture</span> Tuesdays: concepts, live demos, and a 10-minute quiz on the prior week at the start of class. <span class="fmt-tag lab">Lab</span> Thursdays: 75 minutes, laptop open, building; whatever isn't finished in class is homework, due the following Thursday. The <strong>midterm</strong> lands Thursday Oct 22, after the microdb core closes; the final session (Tue Dec 8) is <strong>project presentations</strong>. Two breaks fall in the window: fall <em>Reading Days</em> (no class Tue Oct 6) and <em>Thanksgiving recess</em> (no class Thu Nov 26).</p>
+  </div>
+
+  <div class="home-bar">
+    <a href="index.html">← Course home</a>
+    <a href="project.html">Final project: build a RAG pipeline</a>
+  </div>
+
+  <div class="legend">
+    <span class="chip"><span class="sw found"></span>Foundations</span>
+    <span class="chip"><span class="sw internals"></span>microdb · storage engine</span>
+    <span class="chip"><span class="sw query"></span>microdb · query engine</span>
+    <span class="chip"><span class="sw txn"></span>microdb · transactions</span>
+    <span class="chip"><span class="sw analytics"></span>Analytics &amp; columnar</span>
+    <span class="chip"><span class="sw ds"></span>Vector · RAG · Graph</span>
+    <span class="chip"><span class="sw dist"></span>Distributed &amp; cloud</span>
+    <span class="chip"><span class="sw exam"></span>Midterm</span>
+    <span class="chip"><span class="sw project"></span>Project</span>
+    <span class="chip"><span class="sw holiday"></span>No class</span>
+    <span class="chip"><span class="sw due"></span>Due today</span>
+  </div>
+
+  <table class="schedule">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Day</th>
+        <th>Topic</th>
+        <th>Due today</th>
+      </tr>
+    </thead>
+    <tbody>
+
+      <!-- ============================ WEEK 1 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 1</span><span class="wk-range">Aug 25 – Aug 27 · course begins</span></td></tr>
+
+      <tr class="day-found">
+        <td class="date">Tue Aug 25</td>
+        <td class="day">Day 1</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 1</span>
+          <span class="type-tag fnd">Foundations</span>
+          <a href="lectures/lecture-01/anatomy.html">Anatomy of a database · the microdb plan</a>
+          <span class="part-tag">what happens when you run a query · DBMS architecture tour · relational model refresher · why we build one from scratch</span>
+        </td>
+        <td class="due">&nbsp;</td>
+      </tr>
+
+      <tr class="day-internals">
+        <td class="date">Thu Aug 27</td>
+        <td class="day">Day 2</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 1</span>
+          <span class="type-tag mdb">microdb 1</span>
+          <a href="labs/lab-01/filemanager.html">Disk &amp; file manager · blocks and pages</a>
+          <span class="part-tag">environment setup · read/write fixed-size pages · hexdump your first page · the block abstraction</span>
+        </td>
+        <td class="due">&nbsp;</td>
+      </tr>
+
+      <!-- ============================ WEEK 2 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 2</span><span class="wk-range">Sep 1 – Sep 3</span></td></tr>
+
+      <tr class="day-internals">
+        <td class="date">Tue Sep 1</td>
+        <td class="day">Day 3</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 2</span>
+          <span class="type-tag mdb">microdb</span>
+          <a href="lectures/lecture-02/bufferpool.html">Memory &amp; the buffer pool</a>
+          <span class="part-tag">pin/unpin · eviction &amp; replacement (LRU vs clock) · why not just use the OS cache · sequential vs random I/O</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 1 · first 10 min</span>
+          Files, blocks &amp; pages
+        </td>
+      </tr>
+
+      <tr class="day-internals">
+        <td class="date">Thu Sep 3</td>
+        <td class="day">Day 4</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 2</span>
+          <span class="type-tag mdb">microdb 2</span>
+          <a href="labs/lab-02/buffermanager.html">Buffer manager</a>
+          <span class="part-tag">pin/unpin protocol · LRU eviction · hit-rate counter · measure hits vs misses on a scan</span>
+        </td>
+        <td class="due">
+          <span class="due-pill">Lab</span>
+          Lab 1 · file manager
+        </td>
+      </tr>
+
+      <!-- ============================ WEEK 3 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 3</span><span class="wk-range">Sep 8 – Sep 10</span></td></tr>
+
+      <tr class="day-internals">
+        <td class="date">Tue Sep 8</td>
+        <td class="day">Day 5</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 3</span>
+          <span class="type-tag mdb">microdb</span>
+          <a href="lectures/lecture-03/records.html">Record layout &amp; the catalog</a>
+          <span class="part-tag">slotted pages · fixed vs variable-length fields · schemas · the system catalog: tables about tables</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 2 · first 10 min</span>
+          Buffer pool
+        </td>
+      </tr>
+
+      <tr class="day-internals">
+        <td class="date">Thu Sep 10</td>
+        <td class="day">Day 6</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 3</span>
+          <span class="type-tag mdb">microdb 3</span>
+          <a href="labs/lab-03/recordpages.html">Record pages, table scan &amp; catalog</a>
+          <span class="part-tag">insert/read records through the buffer pool · full table scan · register tables in the catalog</span>
+        </td>
+        <td class="due">
+          <span class="due-pill">Lab</span>
+          Lab 2 · buffer manager
+        </td>
+      </tr>
+
+      <!-- ============================ WEEK 4 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 4</span><span class="wk-range">Sep 15 – Sep 17 · the query engine begins</span></td></tr>
+
+      <tr class="day-query">
+        <td class="date">Tue Sep 15</td>
+        <td class="day">Day 7</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 4</span>
+          <span class="type-tag qry">Query</span>
+          <a href="lectures/lecture-04/iterators.html">Query processing · the iterator model</a>
+          <span class="part-tag">relational algebra · select / project / join as operators · Volcano-style pipelining · nested-loop join</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 3 · first 10 min</span>
+          Records &amp; catalog
+        </td>
+      </tr>
+
+      <tr class="day-query">
+        <td class="date">Thu Sep 17</td>
+        <td class="day">Day 8</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 4</span>
+          <span class="type-tag qry">microdb 4</span>
+          <a href="labs/lab-04/scans.html">Scan operators</a>
+          <span class="part-tag">SelectScan · ProjectScan · nested-loop ProductScan · run your first relational-algebra query end to end</span>
+        </td>
+        <td class="due">
+          <span class="due-pill">Lab</span>
+          Lab 3 · records &amp; catalog
+        </td>
+      </tr>
+
+      <!-- ============================ WEEK 5 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 5</span><span class="wk-range">Sep 22 – Sep 24</span></td></tr>
+
+      <tr class="day-query">
+        <td class="date">Tue Sep 22</td>
+        <td class="day">Day 9</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 5</span>
+          <span class="type-tag qry">Query</span>
+          <a href="lectures/lecture-05/parsing.html">From SQL text to plan · parsing &amp; planning</a>
+          <span class="part-tag">lexer &amp; recursive-descent parser · predicates · building the plan tree · what "declarative" buys you</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 4 · first 10 min</span>
+          Iterator model &amp; operators
+        </td>
+      </tr>
+
+      <tr class="day-query">
+        <td class="date">Thu Sep 24</td>
+        <td class="day">Day 10</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 5</span>
+          <span class="type-tag qry">microdb 5</span>
+          <a href="labs/lab-05/sqlfrontend.html">The SQL front end</a>
+          <span class="part-tag">parse a tiny SQL subset · plan it · execute it · microdb now answers real SQL</span>
+        </td>
+        <td class="due">
+          <span class="due-pill">Lab</span>
+          Lab 4 · scan operators
+        </td>
+      </tr>
+
+      <!-- ============================ WEEK 6 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 6</span><span class="wk-range">Sep 29 – Oct 1 · reading days next Tuesday</span></td></tr>
+
+      <tr class="day-internals">
+        <td class="date">Tue Sep 29</td>
+        <td class="day">Day 11</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 6</span>
+          <span class="type-tag mdb">Indexing</span>
+          <a href="lectures/lecture-06/btrees.html">Indexing · B+ trees from first principles</a>
+          <span class="part-tag">fan-out &amp; height · splits · range scans · hash indexes · what to index and what it costs</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 5 · first 10 min</span>
+          Parsing &amp; planning
+        </td>
+      </tr>
+
+      <tr class="day-internals">
+        <td class="date">Thu Oct 1</td>
+        <td class="day">Day 12</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 6</span>
+          <span class="type-tag mdb">microdb 6</span>
+          <a href="labs/lab-06/btree.html">B+ tree index</a>
+          <span class="part-tag">insert / search / range scan · wire the index into the planner · measure the speedup on 100k rows</span>
+        </td>
+        <td class="due">
+          <span class="due-pill">Lab</span>
+          Lab 5 · SQL front end
+        </td>
+      </tr>
+
+      <!-- ============================ WEEK 7 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 7</span><span class="wk-range">Oct 6 – Oct 8 · reading days Sat Oct 3 – Tue Oct 6</span></td></tr>
+
+      <tr class="holiday">
+        <td class="date">Tue Oct 6</td>
+        <td class="day">&nbsp;</td>
+        <td class="topic">
+          <span class="type-tag hol">No class</span>
+          Fall Reading Days: no class
+        </td>
+        <td class="due">&nbsp;</td>
+      </tr>
+
+      <tr class="day-txn">
+        <td class="date">Thu Oct 8</td>
+        <td class="day">Day 13</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 7</span>
+          <span class="type-tag txn">Transactions</span>
+          <a href="lectures/lecture-07/wal.html">Transactions &amp; recovery · the write-ahead log</a>
+          <span class="part-tag">lecture in the lab slot (short week) · ACID · commit &amp; rollback · WAL · checkpoints · what survives <code>kill -9</code></span>
+        </td>
+        <td class="due">
+          <span class="due-pill">Lab</span>
+          Lab 6 · B+ tree
+        </td>
+      </tr>
+
+      <!-- ============================ WEEK 8 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 8</span><span class="wk-range">Oct 13 – Oct 15</span></td></tr>
+
+      <tr class="day-txn">
+        <td class="date">Tue Oct 13</td>
+        <td class="day">Day 14</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 8</span>
+          <span class="type-tag txn">Transactions</span>
+          <a href="lectures/lecture-08/concurrency.html">Concurrency · locking, 2PL, isolation &amp; MVCC</a>
+          <span class="part-tag">lost updates &amp; phantoms live · two-phase locking · isolation levels · how Postgres does MVCC</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 6 · first 10 min</span>
+          B+ trees &amp; indexing
+        </td>
+      </tr>
+
+      <tr class="day-txn">
+        <td class="date">Thu Oct 15</td>
+        <td class="day">Day 15</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 7</span>
+          <span class="type-tag txn">microdb 7</span>
+          <a href="labs/lab-07/transactions.html">Transactions · log, rollback &amp; recovery</a>
+          <span class="part-tag">log manager · rollback from the log · crash mid-write, recover on restart · a simple lock table</span>
+        </td>
+        <td class="due">&nbsp;</td>
+      </tr>
+
+      <!-- ============================ WEEK 9 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 9</span><span class="wk-range">Oct 20 – Oct 22 · midterm Thursday</span></td></tr>
+
+      <tr class="day-query">
+        <td class="date">Tue Oct 20</td>
+        <td class="day">Day 16</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 9</span>
+          <span class="type-tag qry">Query</span>
+          <a href="lectures/lecture-09/optimizer.html">Query optimization · statistics, cost &amp; join order</a>
+          <span class="part-tag">why the optimizer guesses · selectivity &amp; histograms · reading <code>EXPLAIN ANALYZE</code> · midterm review at the end</span>
+        </td>
+        <td class="due">
+          <span class="due-pill">Lab</span>
+          Lab 7 · transactions <em>(due before the midterm)</em>
+        </td>
+      </tr>
+
+      <tr class="day-exam">
+        <td class="date">Thu Oct 22</td>
+        <td class="day">Day 17</td>
+        <td class="topic">
+          <span class="fmt-tag spc">Exam</span>
+          <span class="type-tag exm">Midterm</span>
+          <strong>Midterm exam</strong>
+          <span class="part-tag">the microdb core: storage · buffer pool · records · scans · SQL front end · indexing · transactions &amp; recovery</span>
+        </td>
+        <td class="due">
+          <span class="due-pill exam">In class · full session</span>
+          Midterm exam
+        </td>
+      </tr>
+
+      <!-- ============================ WEEK 10 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 10</span><span class="wk-range">Oct 27 – Oct 29 · beyond the engine you built</span></td></tr>
+
+      <tr class="day-analytics">
+        <td class="date">Tue Oct 27</td>
+        <td class="day">Day 18</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 10</span>
+          <span class="type-tag anl">Analytics</span>
+          <a href="lectures/lecture-10/analytics.html">The analytics stack · row vs column, DuckDB, warehouses &amp; the lakehouse</a>
+          <span class="part-tag">columnar layout &amp; compression · vectorized execution · Parquet · BigQuery &amp; Snowflake: storage/compute split · Delta &amp; Iceberg</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 7 · first 10 min</span>
+          Transactions, locking &amp; MVCC
+        </td>
+      </tr>
+
+      <tr class="day-analytics">
+        <td class="date">Thu Oct 29</td>
+        <td class="day">Day 19</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 8</span>
+          <span class="type-tag anl">Analytics</span>
+          <a href="labs/lab-08/duckdb.html">DuckDB + partitioned Parquet</a>
+          <span class="part-tag">same dataset, microdb vs DuckDB · read the plans · partition the Parquet, watch pruning skip 90% of the files</span>
+        </td>
+        <td class="due">
+          <span class="due-pill proj">Project</span>
+          <a href="project.html">RAG project proposal due</a>
+        </td>
+      </tr>
+
+      <!-- ============================ WEEK 11 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 11</span><span class="wk-range">Nov 3 – Nov 5 · vectors</span></td></tr>
+
+      <tr class="day-ds">
+        <td class="date">Tue Nov 3</td>
+        <td class="day">Day 20</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 11</span>
+          <span class="type-tag dsx">Vector</span>
+          <a href="lectures/lecture-11/vectors.html">Embeddings &amp; vector databases</a>
+          <span class="part-tag">similarity search at scale · ANN indexes: IVF &amp; HNSW · recall vs speed · pgvector, FAISS &amp; the vector-DB landscape</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 8 · first 10 min</span>
+          Columnar &amp; the analytics stack
+          <br><span class="due-pill">Lab</span>
+          Lab 8 · DuckDB analytics
+        </td>
+      </tr>
+
+      <tr class="day-ds">
+        <td class="date">Thu Nov 5</td>
+        <td class="day">Day 21</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 9</span>
+          <span class="type-tag dsx">microvector</span>
+          <a href="labs/lab-09/microvector.html">Build a vector index</a>
+          <span class="part-tag">brute-force → IVF on real embeddings · measure recall@k vs queries/sec · the index your RAG project will use</span>
+        </td>
+        <td class="due">&nbsp;</td>
+      </tr>
+
+      <!-- ============================ WEEK 12 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 12</span><span class="wk-range">Nov 10 – Nov 12 · RAG</span></td></tr>
+
+      <tr class="day-ds">
+        <td class="date">Tue Nov 10</td>
+        <td class="day">Day 22</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 12</span>
+          <span class="type-tag dsx">RAG</span>
+          <a href="lectures/lecture-12/rag.html">RAG as a systems problem</a>
+          <span class="part-tag">chunking · retrieval &amp; reranking · context assembly · evaluating retrieval &amp; answers · failure modes</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 9 · first 10 min</span>
+          Vector search
+          <br><span class="due-pill">Lab</span>
+          Lab 9 · microvector
+        </td>
+      </tr>
+
+      <tr class="day-ds">
+        <td class="date">Thu Nov 12</td>
+        <td class="day">Day 23</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 10</span>
+          <span class="type-tag dsx">micro-rag</span>
+          <a href="labs/lab-10/microrag.html">Wire the RAG pipeline</a>
+          <span class="part-tag">chunk → embed → retrieve → generate over a real corpus · evaluate retrieval quality · swap retrievers</span>
+        </td>
+        <td class="due">
+          <span class="due-pill proj">Project</span>
+          <a href="project.html">Milestone: retrieval working</a>
+        </td>
+      </tr>
+
+      <!-- ============================ WEEK 13 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 13</span><span class="wk-range">Nov 17 – Nov 19 · distributed compute</span></td></tr>
+
+      <tr class="day-dist">
+        <td class="date">Tue Nov 17</td>
+        <td class="day">Day 24</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 13</span>
+          <span class="type-tag dst">Distributed</span>
+          <a href="lectures/lecture-13/distributed.html">Distributed compute · partitioning, MapReduce, Spark &amp; Ray</a>
+          <span class="part-tag">hash vs range partitioning · map → shuffle → reduce, traced by hand · Spark's lazy DAG · Ray tasks &amp; actors for distributed Python</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 10 · first 10 min</span>
+          RAG systems
+          <br><span class="due-pill">Lab</span>
+          Lab 10 · micro-rag
+        </td>
+      </tr>
+
+      <tr class="day-dist">
+        <td class="date">Thu Nov 19</td>
+        <td class="day">Day 25</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Lab 11</span>
+          <span class="type-tag dst">Distributed</span>
+          <a href="labs/lab-11/sparkray.html">Spark &amp; Ray hands-on</a>
+          <span class="part-tag">word count as raw MapReduce, then PySpark · find the shuffle in the Spark UI · parallelize an embedding job with <code>@ray.remote</code>, measure the speedup</span>
+        </td>
+        <td class="due">&nbsp;</td>
+      </tr>
+
+      <!-- ============================ WEEK 14 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 14</span><span class="wk-range">Nov 24 – Nov 26 · Thanksgiving recess Wed – Sun</span></td></tr>
+
+      <tr class="day-dist">
+        <td class="date">Tue Nov 24</td>
+        <td class="day">Day 26</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 14</span>
+          <span class="type-tag dst">Distributed</span>
+          Inside <a href="lectures/lecture-14/bigtable.html">Google's playbook · Bigtable, LSM trees &amp; NoSQL at scale</a>
+          <span class="part-tag">GFS → Bigtable · tablets = range partitions · SSTables &amp; LSM trees vs your B+ tree · replication &amp; CAP · the wide-column descendants: HBase, Cassandra, DynamoDB</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 11 · first 10 min</span>
+          MapReduce, Spark &amp; Ray
+        </td>
+      </tr>
+
+      <tr class="holiday">
+        <td class="date">Thu Nov 26</td>
+        <td class="day">&nbsp;</td>
+        <td class="topic">
+          <span class="type-tag hol">No class</span>
+          Thanksgiving recess: no class
+        </td>
+        <td class="due">&nbsp;</td>
+      </tr>
+
+      <!-- ============================ WEEK 15 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 15</span><span class="wk-range">Dec 1 – Dec 3 · graphs &amp; wrap-up</span></td></tr>
+
+      <tr class="day-ds">
+        <td class="date">Tue Dec 1</td>
+        <td class="day">Day 27</td>
+        <td class="topic">
+          <span class="fmt-tag lec">Lecture 15</span>
+          <span class="type-tag dsx">Graph</span>
+          <a href="lectures/lecture-15/graphs.html">Graph databases · live Kuzu demo &amp; course synthesis</a>
+          <span class="part-tag">property graphs · Cypher vs recursive SQL, run live in Kuzu · traversal vs join · GraphRAG · where databases are going</span>
+        </td>
+        <td class="due">
+          <span class="due-pill in-class">Quiz 12 · first 10 min</span>
+          Bigtable, LSM &amp; NoSQL
+          <br><span class="due-pill">Lab</span>
+          Lab 11 · Spark &amp; Ray
+        </td>
+      </tr>
+
+      <tr class="day-project">
+        <td class="date">Thu Dec 3</td>
+        <td class="day">Day 28</td>
+        <td class="topic">
+          <span class="fmt-tag lab">Workshop</span>
+          <span class="type-tag prj">Project</span>
+          Project workshop
+          <span class="part-tag">in-class build session · instructor + TA circulate · get your evaluation numbers and demo working</span>
+        </td>
+        <td class="due">&nbsp;</td>
+      </tr>
+
+      <!-- ============================ WEEK 16 ============================ -->
+      <tr class="week-row"><td colspan="4"><span class="wk-name">Week 16</span><span class="wk-range">Dec 8 · last day of classes</span></td></tr>
+
+      <tr class="day-project">
+        <td class="date">Tue Dec 8</td>
+        <td class="day">Day 29</td>
+        <td class="topic">
+          <span class="fmt-tag spc">Finale</span>
+          <span class="type-tag prj">Project</span>
+          <strong>Final project presentations</strong> &amp; course wrap-up
+          <span class="part-tag">team demos of the RAG pipelines · what we'd build differently · where databases are going</span>
+        </td>
+        <td class="due">
+          <span class="due-pill exam">In class · full session</span>
+          Present your project
+          <br><span class="due-pill proj">Report</span>
+          <a href="project.html">Final report due Mon Dec 7, 11:59 pm</a>
+        </td>
+      </tr>
+
+    </tbody>
+  </table>
+
+  <div class="footnote">
+    <h3>Grade structure</h3>
+    <table class="schedule">
+      <thead>
+        <tr><th>Component</th><th>Details</th><th>Weight</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Concept quizzes</strong></td>
+          <td>12 ten-minute quizzes at the start of Tuesday lectures, covering the prior week; lowest 2 dropped.</td>
+          <td>10%</td>
+        </tr>
+        <tr>
+          <td><strong>Labs</strong></td>
+          <td>11 hands-on labs: seven build microdb subsystem by subsystem; four build microvector and micro-rag, and run DuckDB, Spark &amp; Ray. Due the following Thursday at class start.</td>
+          <td>40%</td>
+        </tr>
+        <tr>
+          <td><strong>Midterm</strong></td>
+          <td>Thursday Oct 22, in class. Covers the microdb core: storage through transactions &amp; recovery.</td>
+          <td>20%</td>
+        </tr>
+        <tr>
+          <td><strong>Final project</strong></td>
+          <td>Team RAG pipeline in Python: <a href="project.html">spec</a>. Proposal (Oct 29), retrieval milestone (Nov 12), report (Dec 7), presentation (Dec 8).</td>
+          <td>30%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Calendar notes</h3>
+    <ul>
+      <li><strong>Sat Oct 3 – Tue Oct 6: Fall Reading Days.</strong> No class Tue Oct 6. The short week's Thursday (Oct 8) runs as a lecture (Transactions &amp; the WAL) so every lab still follows its lecture.</li>
+      <li><strong>Thu Oct 22: Midterm.</strong> Full session, covers Days 1–16 (the complete microdb build plus optimization). Review at the end of Tue Oct 20; Lab 7 due Tue Oct 20 so the decks are clear.</li>
+      <li><strong>Wed Nov 25 – Sun Nov 29: Thanksgiving recess.</strong> No class Thu Nov 26. Lab 11 (Spark &amp; Ray) gets the long runway: due Tue Dec 1.</li>
+      <li><strong>Tue Dec 8: Last day of classes.</strong> Final project presentations. UVA final exams run Dec 10–18; this course assesses via the project rather than a final exam.</li>
+    </ul>
+
+    <h3>Anchored to the UVA calendar</h3>
+    <ul>
+      <li>Dates follow the University Registrar's <a href="https://registrar.virginia.edu/calendar/academic/2026-2027">2026–2027 academic calendar</a>: classes Tue Aug 25 – Tue Dec 8, Reading Days Sat Oct 3 – Tue Oct 6, Thanksgiving recess Wed Nov 25 – Sun Nov 29, final exams Dec 10–18.</li>
+      <li>Course number and exact dataset list are a working draft; adjust to your section.</li>
+    </ul>
+  </div>
+
+</main>
+</body>
+</html>

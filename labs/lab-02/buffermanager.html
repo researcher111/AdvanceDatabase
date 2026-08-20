@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 2 · Buffer Manager · microdb part 2</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lab 2 · microdb 2</div>
+  <ul>
+    <li><a href="#try-it">Pin, poke, evict</a></li>
+    <li><a href="#big-idea">Why pin/unpin exists</a></li>
+    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#build">Part 1 · Build</a></li>
+    <li><a href="#verify">Part 2 · Verify</a></li>
+    <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#assignment">Assignment</a></li>
+    <li><a href="#going-further">Going further</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>due Thu Sep 10, class start</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lab 2 · Thursday September 3, 2026 · microdb part 2 of 7</div>
+  <h1>Buffer Manager</h1>
+  <div class="subtitle">A fixed pool of frames, two verbs, and the hit rate that decides everything.</div>
+  <div class="byline">Follows Lecture 2 (Memory &amp; the Buffer Pool) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 10 at class start</div>
+</header>
+
+<p class="lede">
+Today microdb stops touching the disk directly. Every page access from this lab forward goes
+through the buffer manager you build: a fixed set of memory frames, a pin/unpin protocol, LRU
+eviction, and <span class="gloss" data-gloss="write-back">write-back</span> of dirty pages.
+Four methods, ten tests, and at the end, a measurement with a cliff in it that most
+professional engineers have never seen drawn.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 4 ·
+  Lecture 2's <a href="../../lectures/lecture-02/bufferpool.html">slides &amp; simulator</a> ·
+  the same machinery grown up: PostgreSQL's
+  <a href="https://github.com/postgres/postgres/blob/master/src/backend/storage/buffer/README">buffer manager README</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Pin, poke, evict</h2>
+
+<p>This is the exact machine you're about to build: 3 frames, 6 disk blocks, every rule
+live. Select a block, then drive the protocol by hand: pin it, modify it, unpin it, and watch
+what eviction does to a dirty page. Try to trigger all three failure flashes before you read
+another word.</p>
+
+<div class="viz" id="viz-pool">
+  <div class="viz-title">The protocol playground · 3 frames, LRU, write-back</div>
+  <p class="viz-description">Each disk block stores one number. <strong>Pin</strong> brings a
+  block into a frame and locks it there; <strong>modify</strong> writes <code>value+1</code>
+  through the buffer (memory only; the frame turns <span class="hexlegend miss">dirty</span>);
+  <strong>unpin</strong> releases; eviction writes
+  back dirty pages before reuse. Disk chips show what's actually on disk.</p>
+  <div class="qj-controls">
+    <span class="pp-sel-label">selected block:</span><span class="pp-sel" id="pp-sel">B0</span>
+    <button type="button" class="btn primary" id="pp-pin">pin</button>
+    <button type="button" class="btn primary" id="pp-unpin">unpin</button>
+    <button type="button" class="btn" id="pp-mod">modify (+1)</button>
+    <button type="button" class="btn" id="pp-flush">flush_all()</button>
+    <button type="button" class="btn" id="pp-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="pp-msg">Select a block below, pin it, and start breaking things.</div>
+  <div class="bs-frames" id="pp-frames"></div>
+  <div class="bs-disk" id="pp-disk"></div>
+  <div class="bs-stats" id="pp-stats"></div>
+  <div class="chat-downloads">
+    <span class="chat-downloads-label">Starter code:</span>
+    <a class="chat-dl-btn" href="starter/buffer_manager.py" download>buffer_manager.py</a>
+    <a class="chat-dl-btn" href="starter/file_manager.py" download>file_manager.py (reference)</a>
+    <a class="chat-dl-btn" href="starter/test_buffermanager.py" download>test_buffermanager.py</a>
+    <a class="chat-dl-btn" href="starter/measure_hits.py" download>measure_hits.py</a>
+  </div>
+  <p class="viz-caption">Three things to trigger: a hit (pin a block that's already in a frame),
+  a <code>BufferAbortError</code> (pin all three frames, then a fourth block), and a write-back
+  (modify, unpin, then pin three other blocks and watch the disk chip update).</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big-idea">Why pin/unpin exists</h2>
+
+<p>Before the code, earn the protocol. It exists because of one hazard, and once you've named
+it, every rule in this lab follows.</p>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the vanishing page</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Suppose the pool had only
+    <code>get_page(block)</code> (no pin, no unpin) and evicted by LRU whenever it needed room.
+    Your code gets a page reference and starts reading row 2 from it. Construct the exact
+    sequence of events where your read returns <em>another table's data</em> without any error
+    being raised.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare sequences. Whose disaster is quieter:
+      a wrong read, or a write landing in a frame that now holds a different block?</li>
+      <li><span class="tps-phase">Share · 2 min</span>State the fix as a rule about who may evict
+      what, when, then check it against the contract below.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The sequence: you call <code>get_page(block 3)</code> and get a reference to frame 1.
+      Before you read row 2, another part of the query misses on block 9, the pool is full, and
+      LRU picks frame 1 as its victim. It loads block 9 into that memory. Your reference is still
+      perfectly valid and still points at frame 1, which now holds block 9. You read row 2 and get
+      bytes from a different block, possibly a different table. <strong>No exception, no warning,
+      no way to detect it.</strong></p>
+      <p>The quieter disaster is the <em>write</em>. A wrong read produces a wrong answer that
+      someone might notice; a write landing in a frame that now holds a different block corrupts
+      that other block, gets flushed to disk as though it were legitimate, and outlives the query
+      that caused it. The rule that fixes both: <strong>a frame that someone is using may never
+      be chosen as a victim</strong>. Callers declare use with <code>pin</code> and end it with
+      <code>unpin</code>, and eviction skips any frame with a non-zero pin count.</p>
+    </details>
+  </details>
+</div>
+
+<p>The hazard: between your <code>get_page</code> and your read, <em>someone else's miss</em>
+evicts your frame and loads a different block into the same memory. Your reference still
+points at the frame; the frame no longer holds your data. No exception, no warning,just
+wrong answers. The fix is a lease: <strong>pin</strong> marks the frame in-use (eviction must
+skip it), <strong>unpin</strong> ends the lease. That single
+<span class="gloss" data-gloss="invariant">invariant</span> (<em>never evict a pinned
+frame</em>) is what the tests enforce most fiercely, because it's the one whose violation
+corrupts data silently.</p>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The contract</h2>
+
+<p>You implement four methods; the frame class (<code>Buffer</code>) and its flush/load
+machinery ship complete. Hover each line, then keep the LRU spec table beside you while
+coding; the tests check it literally.</p>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="find" data-step-name="_find_existing" data-explain="The lookup: scan self.pool for a frame whose .block equals the requested BlockId (BlockId defines ==, so == just works). Return the Buffer or None.">def _find_existing(block) -> Buffer | None      # already resident?</div>
+  <div class="code-step" data-step="victim" data-step-name="_choose_victim" data-explain="The policy: among frames with pins == 0, return the one with the smallest last_used; None if all are pinned. min(candidates, key=...) is the whole job.">def _choose_victim() -> Buffer | None           # LRU among unpinned</div>
+  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Tick first (self._tick += 1). Existing frame -> hits += 1. Otherwise victim or raise BufferAbortError; misses += 1; victim.assign_to_block(block), which flushes the victim if dirty, then reads. Both paths: pins += 1, last_used = tick.">def pin(block) -> Buffer                        # hit, or evict + load</div>
+  <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="pins -= 1, but first: if pins is already 0, raise ValueError. A double-unpin is always a caller bug, and silent pin-count corruption is the nastiest bug family in this lab.">def unpin(buf)                                  # release the lease</div>
+  <div class="code-explain-panel">Hover a line for its spec and the tool that implements it.</div>
+</div>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>design the victim rule</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>The pool is full and a new block needs a
+    frame. Write your eviction rule as one sentence precise enough to code, including the
+    tie-breaker and what happens if no frame qualifies. Would your rule survive the "pinned
+    reader" hazard from the last section?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Swap rules and attack each other's: does it
+      evict a pinned frame? Does a <em>hit</em> refresh recency, or only a load?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Compare the table's spec against your rule.
+      The difference is exactly what the tests will catch in your code.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>The rule, precise enough to code: <strong>evict the frame with the smallest
+      <code>last_used</code> among frames whose <code>pins</code> is 0; if no frame qualifies,
+      raise <code>BufferAbortError</code>.</strong></p>
+      <p>Two details decide whether your version passes. First, <code>last_used</code> is stamped
+      on <strong>every successful pin, hits included</strong>, not only on loads. Stamp only on
+      misses and you have built insertion order wearing an LRU costume, and the LRU-order test is
+      built to catch exactly that. Second, <strong>pinned is untouchable regardless of age</strong>:
+      the oldest frame in the pool is not a candidate if someone holds it, which is what makes the
+      rule survive the previous section's hazard. And "no frame qualifies" must be a loud error
+      rather than a silent stall, because in a single-threaded engine waiting would wait
+      forever.</p>
+    </details>
+  </details>
+</div>
+
+<p>The LRU spec, exactly as the tests measure it:</p>
+
+<table>
+  <thead><tr><th>Rule</th><th>Statement</th><th>Test that checks it</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Stamp on every pin</strong></td><td>each successful <code>pin</code> sets <code>last_used</code> to a fresh tick, <em>hits included</em></td><td><code>recency order, not insertion order</code></td></tr>
+    <tr><td><strong>Victim = oldest unpinned</strong></td><td>smallest <code>last_used</code> among frames with <code>pins == 0</code></td><td><code>full pool evicts least recently used</code></td></tr>
+    <tr><td><strong>Pinned is untouchable</strong></td><td>a frame with <code>pins &gt; 0</code> is never a victim, no matter how old</td><td><code>pinned frames are never evicted</code></td></tr>
+    <tr><td><strong>No frame? Abort</strong></td><td>all pinned → <code>BufferAbortError</code>, not a wait, not a crash</td><td><code>all-pinned pool raises</code></td></tr>
+    <tr><td><strong>Dirty leaves clean</strong></td><td>the victim is flushed before reuse; <code>assign_to_block</code> does this if you call it</td><td><code>dirty page written back</code></td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
+
+<p>Download the four starter files into <code>microdb-lab2/</code>. Note that
+<code>file_manager.py</code> is the <strong>reference Lab 1 implementation</strong>; use it
+even if yours passed, so your layer 1 matches everyone's. Then build in this order:</p>
+
+<ol>
+  <li><strong>Read <code>buffer_manager.py</code> top to bottom</strong> (5 min). The
+  <code>Buffer</code> class is complete; notice that <code>assign_to_block</code> already
+  flushes-if-dirty before loading. Your four methods orchestrate; they never touch bytes.</li>
+  <li><strong><code>_find_existing</code></strong>: a loop and an <code>==</code>.
+  Run the harness: the first PIN test should flip once <code>pin</code> exists, so keep going.</li>
+  <li><strong><code>_choose_victim</code></strong>: filter unpinned, <code>min</code> by
+  <code>last_used</code>, or <code>None</code>.</li>
+  <li><strong><code>pin</code></strong>: follow the docstring's spec exactly: tick, lookup,
+  hit-count or victim/abort/load/miss-count, then <code>pins += 1</code> and the stamp.
+  PIN and LRU groups should now pass.</li>
+  <li><strong><code>unpin</code></strong>: two lines plus the <code>ValueError</code> guard.
+  All ten tests green.</li>
+</ol>
+
+<div class="callout note">
+  <span class="label">Gotchas that cost real debugging time</span>
+  <p>Stamp <code>last_used</code> on <em>hits</em>, not just misses; the LRU-order test is
+  built to catch exactly that omission. Increment <code>self._tick</code> <em>before</em> using
+  it, or two pins can share a tick. And don't reset <code>pins</code> in <code>pin()</code>:
+  the same block pinned twice must reach <code>pins == 2</code> on the <em>same</em> frame,
+  not load twice.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<p>Ten tests in three groups, and each failure message names its usual cause. The PIN group
+checks the protocol: data actually loads, re-pins are hits on the same frame, pin counts nest,
+double-unpin raises. The LRU group checks the policy: victim choice, recency updates, pinned
+immunity, and the all-pinned abort. The DIRTY group checks
+write-back: a modified page must survive
+its own eviction, and <code>flush_all</code> must push everything down before shutdown.</p>
+
+<pre><code class="language-text">$ python3 test_buffermanager.py
+PIN group
+  [PASS] PIN: pin loads the block's data
+  ...
+LRU group
+  [PASS] LRU: recency order, not insertion order
+  ...
+DIRTY group
+  [PASS] DIRTY: flush_all makes writes durable
+
+10/10 tests passed</code></pre>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · read the failure</span>
+  <p>A classmate passes every test except <code>dirty page written back on eviction</code>.
+  Their <code>pin()</code> handles the miss path like this:
+  <code>victim.block = block; self.fm.read(block, victim.page); ...</code>, assigning the
+  fields themselves instead of calling <code>assign_to_block</code>. All the LRU tests still
+  pass. What exactly is being lost, and why do only the DIRTY tests notice?</p>
+  <details><summary>Show answer</summary>
+  <p>By setting <code>victim.block</code> and reading directly, they skipped
+  <code>assign_to_block</code>'s first step: <code>self.flush()</code>, the write-back of the
+  victim's modified page. The old page's changes are silently overwritten in memory and never
+  reach disk. LRU tests don't notice because they only read; the modification is only missed
+  when the DIRTY test evicts a modified block and then checks the <em>disk</em>. Moral: the
+  provided helpers encode invariants; bypassing them compiles fine and corrupts quietly.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
+
+<p>Your buffer manager now has a hit-rate counter. Time to see the number every database
+engineer carries around, but commit to a prediction first.</p>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>one frame short</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>A 50-block file, scanned start to finish,
+    twice. Your pool has <strong>49 frames</strong>, room for all but one block. Predict the
+    hit rate on the second pass: roughly 98%? 50%? Something else? Reason it through with LRU's
+    rule before you peek.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Walk the pointer: when the scan re-reads
+      block 0, which block did LRU just evict to make room for block 49? And then?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Run <code>python3 measure_hits.py</code> and
+      read the table out loud. One sentence on why 49 frames buys <em>nothing</em>.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>0%.</strong> Not 98%, not 50%: exactly zero hits on the second pass, and
+      <code>measure_hits.py</code> prints it.</p>
+      <p>Walk the pointer. Reading block 49 needs a frame, and the least recently used block is
+      block 0, so block 0 is evicted. The scan then wraps to block 0, which is now missing, and
+      loading it evicts block 1, which is the very next block the scan wants. Every single access
+      misses, forever, because LRU evicts each block exactly one step before the scan returns to
+      it. Add one more frame, 50 for 50 blocks, and the hit rate jumps to 50%.</p>
+      <p>So why does 49 frames buy nothing? Because a cache does not reward the <em>amount</em> of
+      data you touched, it rewards <strong>re-use that fits</strong>. A working set one block too
+      large for the pool is, for LRU, exactly as good as no cache at all. That cliff is the reason
+      real engines detect sequential scans and give them a small private ring rather than letting
+      them flood the pool.</p>
+    </details>
+  </details>
+</div>
+
+<p>The reference solution's output (yours should match it exactly, since the workloads are
+seeded):</p>
+
+<pre><code class="language-text">$ python3 measure_hits.py
+ pool size |  scan hit rate | hot-set hit rate
+------------------------------------------------
+         5 |          0.0% |           77.6%
+        10 |          0.0% |           91.2%
+        25 |          0.0% |           93.8%
+        45 |          0.0% |           97.2%
+        49 |          0.0% |           97.5%
+        50 |         50.0% |           97.5%
+        55 |         50.0% |           97.5%</code></pre>
+
+<p class="keep-in-present">Read the scan column slowly: <strong>0.0% at 49 frames, 50% at
+50</strong>. Caching 98% of the file bought exactly nothing, because LRU evicts each block one
+step before the scan returns to it. Meanwhile the hot set, whose
+<span class="gloss" data-gloss="working-set">working set</span> is 5 blocks, cruises at 90%+
+with a pool a tenth the size. Which column your workload resembles matters more than any
+tuning parameter you will ever set.</p>
+
+<!-- ============================================================ -->
+<h2 id="assignment">Assignment</h2>
+
+<p>Due <strong>Thursday Sep 10 at class start</strong>, submitted per the course submission
+instructions.</p>
+
+<h3>Deliverables</h3>
+<ul>
+  <li>☐ <code>buffer_manager.py</code>: all ten local tests pass (<code>10/10</code>).</li>
+  <li>☐ <code>measurements.txt</code>: the full hit-rate table, plus your answers to the three
+  questions <code>measure_hits.py</code> prints (why the scan gets 0%, why the hot set doesn't
+  care, and which one your own ML pipelines resemble).</li>
+  <li>☐ Reflection (3–5 sentences total): (1)&nbsp;Why must <code>last_used</code> be stamped on
+  hits, not just misses? (2)&nbsp;Why does <code>unpin</code> raise on a double-release instead
+  of ignoring it?</li>
+</ul>
+
+<h3>What's provided vs what you write</h3>
+<table>
+  <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
+  <tbody>
+    <tr><td><code>buffer_manager.py</code></td><td>Buffer class (flush, assign_to_block), BufferAbortError, hit_rate, flush_all</td><td><code>_find_existing</code>, <code>_choose_victim</code>, <code>pin</code>, <code>unpin</code></td></tr>
+    <tr><td><code>file_manager.py</code></td><td>complete reference (Lab 1), do not edit</td><td>&nbsp;</td></tr>
+    <tr><td><code>test_buffermanager.py</code></td><td>complete, do not edit</td><td>&nbsp;</td></tr>
+    <tr><td><code>measure_hits.py</code></td><td>complete, do not edit</td><td>run it, record results</td></tr>
+  </tbody>
+</table>
+
+<h3>Grading</h3>
+<table>
+  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Correctness</td><td>Autograder runs a superset of the harness (more frames, longer access traces, interleaved pins; same spec)</td><td>70%</td></tr>
+    <tr><td>Measurement + answers</td><td>Table present and matching (workloads are seeded); explanations connect LRU's rule to the cliff</td><td>20%</td></tr>
+    <tr><td>Code quality</td><td>Four methods orchestrate via the provided helpers; no bypassed invariants</td><td>10%</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">Fast finishers, in rough order of payoff: give <code>pin()</code> a
+<strong>scan-resistant mode</strong>: a boolean <code>sequential=True</code> that makes the
+pinned block eligible for immediate eviction (a one-frame "ring buffer", exactly Postgres's
+trick) and re-run <code>measure_hits.py</code> to show the hot set is now protected from the
+scan; or implement <strong>clock</strong> eviction (a rotating hand and one reference bit per
+frame, LRU's cheap approximation) and verify all ten tests still pass; or replace
+<code>_find_existing</code>'s linear scan with a <strong>dict <span class="gloss" data-gloss="page-table">page table</span></strong>
+(<code>{BlockId: Buffer}</code>; BlockId is hashable for exactly this reason) and keep it
+consistent through evictions.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3>My scan hit rates don't match the table exactly.</h3>
+<p class="keep-in-present">They should: both workloads are seeded, and the file layer is the shipped reference. A
+mismatch almost always means <code>last_used</code> isn't stamped per the spec (tick on every
+pin) or eviction is choosing a different victim than smallest-<code>last_used</code>.</p>
+
+<h3>Why does pin() abort instead of waiting for a frame?</h3>
+<p class="keep-in-present">In a single-threaded microdb, waiting would wait forever: nobody else is running to do
+the unpinning. Real engines block the requesting thread and get woken by an unpin; the abort
+is the honest single-threaded translation, and it still catches the same bug (leaked pins).</p>
+
+<h3>Is my pool's memory really fixed? Python doesn't work that way…</h3>
+<p class="keep-in-present">The <em>pages</em> are: each frame allocates its bytearray once, and blocks are copied into
+it. Python objects around them churn, but the design mirrors the real thing: a real engine
+allocates <code>shared_buffers</code> once at boot and never grows it.</p>
+
+<h3>Does the OS page cache mess up my measurement?</h3>
+<p class="keep-in-present">It sits underneath, making <em>misses cheaper</em> than real disk, but hit <em>rates</em>
+are computed by your counters, not by timing, so the
+<span class="gloss" data-gloss="os-page-cache">OS cache</span> can't touch them. That's why
+this lab measures rates, not milliseconds.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 9 · The Query Optimizer · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lecture 9</div>
+  <ul>
+    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#gap">The 15× left on the table</a></li>
+    <li><a href="#try-it">Read a real plan</a></li>
+    <li><a href="#stats">Statistics &amp; selectivity</a></li>
+    <li><a href="#cost">Costing a plan</a></li>
+    <li><a href="#joins">Join order &amp; join algorithms</a></li>
+    <li><a href="#review">Midterm review</a></li>
+    <li><a href="#recap">Recap &amp; the road ahead</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 9 · Tuesday October 20, 2026 · midterm Thursday</div>
+  <h1>The Query Optimizer</h1>
+  <div class="subtitle">Statistics, selectivity, and the machine that finds the fast plan you proved exists, plus the midterm map.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+Your Lab 5 planner is correct and leaves 15× on the table; you collected that 15× by hand in
+Lab 4. Today: the machine that collects it automatically. An optimizer needs three things:
+knowledge about the data (<span class="gloss" data-gloss="statistics">statistics</span>), a
+way to price plans without running them (a <span class="gloss" data-gloss="cost-model">cost
+model</span>), and a search over the space of equivalent shapes. None of it is magic, all of
+it can guess wrong, and reading its output (<code>EXPLAIN</code>) is the single most useful
+practical skill this course confers. Lab 7 is due today; the midterm is Thursday;the last
+third of class is the review.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 10 &amp; 15 ·
+  the founding document: Selinger et&nbsp;al., <a href="https://dl.acm.org/doi/10.1145/582095.582099"><em>Access Path Selection</em></a> (System R, 1979) ·
+  Postgres's <a href="https://www.postgresql.org/docs/current/using-explain.html">EXPLAIN docs</a>.
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="plan">Today's plan</h2>
+
+<p>Lab 7 in, midterm Thursday. Today closes Act I's story and opens the exam.</p>
+
+<ol class="agenda">
+  <li><strong>The 15× left on the table</strong>: what your planner doesn't know.</li>
+  <li><strong>Read a real plan</strong>: <code>EXPLAIN ANALYZE</code>, decoded line by line.</li>
+  <li><strong>Statistics &amp; selectivity</strong>: how an engine knows before running.</li>
+  <li><strong>Costing a plan</strong>: blocks, again, always blocks.</li>
+  <li><strong>Join order &amp; algorithms</strong>: hash and merge join, at last.</li>
+  <li><strong>Midterm review</strong>: the map of weeks 1–8, and how to study.</li>
+</ol>
+
+<p class="keep-in-present">Today's claim: <strong>an optimizer is a guesser with a
+budget</strong>; respect it for guessing well, and know how to catch it guessing badly.</p>
+
+<!-- ============================================================ -->
+<h2 id="gap">The 15× left on the table</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>what would the machine need to know?</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>You proved pushing <code>gpa &gt; 35</code>
+    below the product saved 15×. For a machine to make that move safely and profitably, list
+    the facts it needs: about the predicate, and about the data. Which of those facts can it
+    know <em>without running the query</em>?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Safety needs field analysis (which side
+      owns the term's fields, pure syntax). Profit needs a guess at how many rows survive;
+      that's data knowledge. Where could such knowledge live?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Name the missing organ: a place the
+      engine keeps facts <em>about</em> its own tables. (You built its little sibling in
+      Lab 3.)</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Two different kinds of fact, and only one of them is free.
+      <strong>Safety</strong> is pure syntax: which side of the product owns the fields the term
+      mentions. <code>gpa &gt; 35</code> touches only students, so it can be pushed onto the
+      students input; <code>mid = mid2</code> touches both, so it cannot be pushed anywhere. The
+      engine can settle that by inspecting the query alone, without looking at a single row.</p>
+      <p><strong>Profit</strong> cannot. Whether pushing helps depends on how many rows actually
+      survive the filter: pushing a predicate that keeps 99% of the table buys nothing, while one
+      that keeps 20% bought the 15×. That is knowledge about the <em>data</em>, not the query, and
+      the engine cannot get it by running the query, because the whole point is to decide before
+      running. So it must have been collected earlier and stored somewhere. The missing organ is
+      <strong>table statistics</strong>, kept in the catalog, whose little sibling you built in
+      Lab 3.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="The 15× left on the table">The optimizer's three organs</h3>
+
+<table>
+  <thead><tr><th>Organ</th><th>Question it answers</th><th>Where it lives</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Statistics</strong></td><td>how many rows will survive this predicate?</td><td>catalog tables, refreshed by <span class="gloss" data-gloss="analyze"><code>ANALYZE</code></span></td></tr>
+    <tr><td><strong>Cost model</strong></td><td>what would this plan cost, in blocks, without running it?</td><td>formulas over the statistics</td></tr>
+    <tr><td><strong>Plan search</strong></td><td>which of the exponentially many equivalent shapes is cheapest?</td><td>dynamic programming over join orders (System R's gift)</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Read a real plan</h2>
+
+<p>The skill to leave with: decoding <code>EXPLAIN ANALYZE</code>. Here's a real Postgres
+plan for our join, annotated; hover every line.</p>
+
+<div class="code-annotated" data-lang="sql">
+  <div class="code-step" data-step="e0" data-step-name="the query" data-explain="Lab 4's join, in Postgres: honors students and their departments.">EXPLAIN ANALYZE SELECT name, dept FROM students JOIN majors ON mid = mid2 WHERE gpa > 35;</div>
+  <div class="code-step" data-step="e1" data-step-name="the join node" data-explain="Read plans INSIDE-OUT: deepest nodes ran first. This top node is a hash join: build a hash table on one side, probe with the other. cost=a..b are OPTIMIZER GUESSES in abstract units; actual time is measured reality, in ms.">Hash Join  (cost=1.07..8.72 rows=20 width=13) (actual time=0.04..0.11 rows=20 loops=1)</div>
+  <div class="code-step" data-step="e2" data-explain="The join condition, as the executor sees it.">  Hash Cond: (students.mid = majors.mid2)</div>
+  <div class="code-step" data-step="e3" data-step-name="the outer side" data-explain="A sequential scan (your TableScan) with the filter pushed INTO it (pushdown, mechanically applied). rows=60: the planner PREDICTED 60 survivors from statistics; actual rows=60 means the guess was perfect.">  ->  Seq Scan on students  (cost=0.00..6.75 rows=60 ...) (actual ... rows=60 ...)</div>
+  <div class="code-step" data-step="e4" data-explain="The pushed-down predicate, plus a count of what it removed.">        Filter: (gpa > 35)   Rows Removed by Filter: 240</div>
+  <div class="code-step" data-step="e5" data-step-name="the inner side" data-explain="The build side: tiny majors is read once into an in-memory hash table, the CachingScan idea from Lab 4's Going Further, industrialized.">  ->  Hash  (cost=1.03..1.03 rows=3 ...)  ->  Seq Scan on majors (rows=3)</div>
+  <div class="code-step" data-step="e6" data-step-name="the verdict" data-explain="Planning took longer than executing, normal for tiny data. When ESTIMATED rows and ACTUAL rows diverge wildly on big data, you've caught the optimizer guessing badly: stale statistics, usually. That comparison is the whole diagnostic art.">Planning Time: 0.28 ms   Execution Time: 0.15 ms</div>
+  <div class="code-explain-panel">Hover a line: estimated-vs-actual is the diagnostic; inside-out is the reading order.</div>
+</div>
+
+<p class="keep-in-present">The two habits: <strong>read inside-out</strong>, and <strong>compare
+estimated rows to actual rows</strong>; where they diverge, the optimizer was flying blind,
+and that's where your query went wrong.</p>
+
+<!-- ============================================================ -->
+<h2 id="stats">Statistics &amp; selectivity</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>guess the survivors</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Without running anything, estimate the
+    survivors of <code>gpa &gt; 35</code> on 300 students, given only: (a) nothing;
+    (b) min=20, max=39; (c) a 10-bucket <span class="gloss" data-gloss="histogram">histogram</span> of gpa counts. Write your three estimates
+    and rank their trustworthiness.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>(a) is folklore (1/3 by convention);
+      (b) assumes uniformity: (39−35)/(39−20) ≈ 21%; (c) just reads the buckets. More
+      knowledge, better guess, and all of it is cheap to keep.</li>
+      <li><span class="tps-phase">Share · 2 min</span>What could make even the histogram
+      wrong? (When was it computed?)</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>(a) With nothing at all, guess by convention: a third, so about
+      <strong>100 rows</strong>. Pure folklore, but it beats having no number.
+      (b) With min = 20 and max = 39, assume the values spread evenly and take the fraction of the
+      range above 35: (39 − 35) / (39 − 20) ≈ 21%, so about <strong>63 rows</strong>.
+      (c) With a 10-bucket histogram you stop assuming and simply add up the buckets above 35,
+      which is right even when gpas cluster.</p>
+      <p>Trustworthiness runs in exactly that order, and the cost of all three is negligible. What
+      can still make even the histogram wrong is <strong>staleness</strong>: it describes the
+      table as of the last <code>ANALYZE</code>. Bulk-load a million rows, skip the refresh, and
+      the planner is reasoning confidently about a table that no longer exists. That is one of the
+      two classic reasons a plan that was fine yesterday is catastrophic at 3am; the other is the
+      independence assumption, which is why <code>city = 'Charlottesville' AND state = 'VA'</code>
+      is not two independent filters.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Statistics &amp; selectivity">What the engine keeps, and the formulas it runs</h3>
+
+<pre class="equation"><code>per table:   N rows, B blocks          per column:  distinct values V, min/max, histogram
+
+selectivity guesses (System R's, still everywhere):
+  field = literal      1 / V(field)
+  field = field (join) 1 / max(V(left), V(right))
+  field > literal      (max − literal) / (max − min)     ← uniformity assumed
+
+survivors(σ) = N × selectivity       , chain them for ANDed terms (independence assumed!)</code></pre>
+
+<p class="keep-in-present">Two famous lies power everything: <em>uniformity</em> (values
+spread evenly) and <em>independence</em> (predicates don't correlate). When plans go bad at
+3am, one of these lies is usually why: <code>city = 'Charlottesville' AND state = 'VA'</code>
+is not two independent filters.</p>
+
+<div class="exercise">
+  <span class="ex-label">Check yourself · be the planner for one minute</span>
+  <p>students: N&nbsp;=&nbsp;300, gpa min&nbsp;20 / max&nbsp;39, V(mid)&nbsp;=&nbsp;3.
+  Using only the formulas above, estimate the survivors of
+  <code>gpa &gt; 30 AND mid = 2</code>, and then say which of the two famous lies each
+  step of your estimate leaned on.</p>
+  <details><summary>Show answer</summary>
+  <p><code>gpa &gt; 30</code>: (39&nbsp;−&nbsp;30)/(39&nbsp;−&nbsp;20) ≈ 0.47 → ~142 rows
+  (leaning on <em>uniformity</em>; gpas might really cluster near 30).
+  <code>mid = 2</code>: 1/V = 1/3. Chained: 300 × 0.47 × 0.33 ≈ <strong>47 rows</strong>
+  (leaning on <em>independence</em>; but what if the mid-2 department grades harder?).
+  Every EXPLAIN's <code>rows=</code> guess is exactly this arithmetic; when it's far from
+  <code>actual rows</code>, you now know which lie to suspect.</p>
+  </details>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="cost">Costing a plan</h2>
+
+<p class="keep-in-present">A price without a purchase: the cost model runs your Lab 4
+counting experiment <em>hypothetically</em>, over shapes it never executes, using statistics
+in place of reality. The currency has never changed:</p>
+
+<h3 class="new-slide" data-kicker="Costing a plan">Blocks, again, always blocks</h3>
+
+<pre class="equation"><code>cost(TableScan)          = B(table)                      ← week 1's lesson, formalized
+cost(IndexSelect, eq)    = height + matching RIDs        ← week 6
+cost(NestedLoopJoin)     = B(left) + N(left) × B(right)  ← the multiplier that hurts
+cost(HashJoin)           = B(left) + B(right)            ← read each side once (+ memory)
+cost(MergeJoin)          = sort costs + B(left) + B(right)
+
+pick the plan with the smallest TOTAL, computed from statistics, before running anything.</code></pre>
+
+<p class="keep-in-present">Same currency since Lecture 1: count block touches. The optimizer
+is your Lab 4 CountingScan experiment, run <em>hypothetically</em> over every candidate shape.</p>
+
+<h3 class="new-slide" data-kicker="Costing a plan">Watch the plan flip</h3>
+
+<p>The two formulas above disagree about who wins, and the answer depends entirely on
+selectivity. Drag the slider and watch the optimizer's choice flip:</p>
+
+<div class="viz" id="viz-flip">
+  <div class="viz-title">index scan vs sequential scan · 100,000 rows, 1,000 blocks, tree height 3</div>
+  <p class="viz-description">The slider sets the predicate's selectivity (fraction of rows
+  kept). Costs come from the formulas above: seq scan always pays B = 1,000 blocks; the
+  index pays height + one block touch per matching RID. The cheaper plan is the one the
+  optimizer picks.</p>
+  <div class="flip-controls">
+    <label>selectivity: <span id="flip-sel-val">1.00%</span></label>
+    <input type="range" id="flip-sel" min="0" max="100" step="1" value="50">
+  </div>
+  <div id="flip-readout"></div>
+  <p class="viz-caption">The crossover sits near 1% on this table, far lower than most
+  people's instinct. "I added an index, why isn't it used?" is usually this chart: the
+  optimizer did the same arithmetic and the index lost. Below the flip, the index wins by
+  orders of magnitude; above it, it loses politely.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="joins">Join order &amp; join algorithms</h2>
+
+<p class="keep-in-present">Two independent choices per join (<em>which algorithm</em> pairs
+the rows, and <em>which order</em> the tables meet in), and the second one explodes
+combinatorially. Both were foreshadowed weeks ago:</p>
+
+<h3 class="new-slide" data-kicker="Join order">The algorithms, finally named</h3>
+
+<table>
+  <thead><tr><th>Algorithm</th><th>Idea</th><th>Shines when</th><th>You've basically built it</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Nested loop</strong></td><td>for each left row, walk right</td><td>tiny right side, or an index on it</td><td>Lab 4's ProductScan</td></tr>
+    <tr><td><strong>Hash join</strong></td><td>hash the small side into memory; probe with the big side</td><td>equality joins, one side fits in RAM</td><td>Lab 4's Going-Further CachingScan + a dict</td></tr>
+    <tr><td><strong>Merge join</strong></td><td>sort both sides, zip through in step</td><td>inputs already sorted (indexes! B+ leaves!)</td><td>Lab 6's chained leaves are a sorted stream</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Join order">Order matters exponentially</h3>
+
+<p class="keep-in-present">Joining n tables admits a catalan-number explosion of orders:10
+tables ≈ 17 <em>billion</em> shapes. System R's dynamic programming prunes it to feasible;
+modern planners add heuristics and genetic search above ~12 tables (all descendants of
+System R's <span class="gloss" data-gloss="access-path">access-path</span> selection). The reason your dashboards
+sometimes "flip plans" overnight: statistics shifted, a different order won the auction. Now
+you know who to interrogate (<code>EXPLAIN</code>) and what to refresh
+(<code>ANALYZE</code>).</p>
+
+<h3 class="new-slide" data-kicker="Join order">Feel the explosion: pick an order</h3>
+
+<p>Three tables, two join predicates, three left-deep orders; every order returns the same
+3,000 rows, but the work in the middle is not the same work:</p>
+
+<div class="viz" id="viz-order">
+  <div class="viz-title">join order · students (300 rows) ⋈ majors (3) ⋈ enrollments (3,000)</div>
+  <p class="viz-description">Predicates: <code>students.mid = majors.mid2</code> and
+  <code>students.uid = enrollments.uid</code>. Click an order; the bars show each
+  intermediate result's row count (the cost proxy: rows a plan must produce and carry).
+  Note what happens to the order that joins majors and enrollments first:no predicate
+  connects them.</p>
+  <div class="order-buttons">
+    <button type="button" class="btn primary" data-order="SM">1 · (students ⋈ majors) ⋈ enrollments</button>
+    <button type="button" class="btn" data-order="SE">2 · (students ⋈ enrollments) ⋈ majors</button>
+    <button type="button" class="btn" data-order="ME">3 · (majors ⋈ enrollments) ⋈ students</button>
+  </div>
+  <div id="order-readout"></div>
+  <p class="viz-caption">Order 3 builds a 9,000-row cross product it then filters down:
+  the same answer, 3× the intermediate work of order 2 and 30× order 1's first step. At 10
+  tables this gap is why join ordering is THE optimization, and why the planner's dynamic
+  programming earns its complexity.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="review">Midterm review</h2>
+
+<p class="keep-in-present">Thursday, in class, 70 minutes, 39 multiple-choice questions,
+closed book. Concepts over trivia; if you can explain each lab's <em>measured number</em>,
+you can pass it walking backwards.</p>
+
+<h3 class="new-slide" data-kicker="Midterm review">The map of weeks 1–8</h3>
+
+<table>
+  <thead><tr><th>Week</th><th>The one idea</th><th>The number to explain</th></tr></thead>
+  <tbody>
+    <tr><td>1 · files</td><td>whole blocks; trips are the currency</td><td>your fsync ratio</td></tr>
+    <tr><td>2 · buffer pool</td><td>pin/unpin; LRU; the miss term owns the average</td><td>0% at 49 of 50 frames</td></tr>
+    <tr><td>3 · records</td><td>fixed slots buy O(1); deletes are flags; RIDs are stable</td><td>59 vs 527 blocks for 10k rows</td></tr>
+    <tr><td>4 · iterators</td><td>one interface; pull don't build; shape is free, work isn't</td><td>900 vs 60 pairs</td></tr>
+    <tr><td>5 · SQL</td><td>lex → parse → describe → plan; correct first</td><td>the same 900, now automatic</td></tr>
+    <tr><td>6 · B+ trees</td><td>split up, grow at the root; fan-out beats cleverness</td><td>4,091× and height 11</td></tr>
+    <tr><td>7 · WAL</td><td>old value to the log first; one fsync that matters</td><td>$50 vanished and returned</td></tr>
+    <tr><td>8 · concurrency</td><td>isolation is purchased; 2PL vs MVCC</td><td>110 where 120 belonged</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Midterm review">How to study (and how not to)</h3>
+
+<ul class="checklist">
+  <li>☐ Re-run each lab's <code>measure_*.py</code> and explain every printed line aloud to a
+  patient friend. This is 80% of the exam.</li>
+  <li>☐ Replay each lecture's TPS prompts cold; the questions were mined from them.</li>
+  <li>☐ Re-read the five FAQ sections you skimmed. (You know which ones.)</li>
+  <li>☐ Do NOT memorize API signatures, flag names, or exact byte offsets beyond the ada row;
+  the exam tests why, not what.</li>
+  <li>☐ Sleep. A rested guess beats a tired certainty; this is also queueing theory.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="recap">Recap &amp; the road ahead</h2>
+
+<ul class="recap-list">
+  <li><strong>The optimizer = statistics + cost model + search.</strong> All three are
+  guesses; estimated-vs-actual in EXPLAIN is where the guessing shows.</li>
+  <li><strong>Selectivity runs the show</strong>, and its two convenient lies (uniformity,
+  independence) are where production plans go to die.</li>
+  <li><strong>Act I is complete.</strong> You built an engine and can now read any engine's
+  mind. After Thursday: the systems data scientists actually live in (columns, vectors,
+  clusters) with your x-ray vision along.</li>
+</ul>
+
+<p class="keep-in-present"><strong>Thursday: midterm.</strong> <strong>Next Tuesday:</strong>
+Act II opens with the analytics stack: DuckDB, Parquet, and why row storage was the wrong
+default for analysis all along. Quiz 7 (transactions &amp; MVCC) opens that class.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3 class="keep-in-present">Will microdb get an optimizer in a later lab?</h3>
+<p class="keep-in-present">No: Act II begins Thursday-after-next, and microdb rests at seven
+proud layers. The Going-Further path exists (Lab 6 wired an index into the planner; add
+statistics to the catalog and a cost comparison and you have a baby Selinger). Some students
+make it a final-project appendix; it's a good one.</p>
+
+<h3 class="keep-in-present">Why do plans change when I add LIMIT 10?</h3>
+<p class="keep-in-present">The optimizer prices <em>first rows</em> differently from
+<em>all rows</em>: a plan that streams cheap early rows (nested loop via an index) can beat
+one with a big setup cost (hash join) when only 10 are wanted. Cost models track both
+startup and total cost for exactly this reason.</p>
+
+<h3 class="keep-in-present">Is the exam cumulative with the quizzes? Same style?</h3>
+<p class="keep-in-present">Same style, same sources (TPS prompts, measured numbers, FAQ
+subtleties), longer sitting. If your quiz scores have been comfortable, the midterm will feel
+like a long quiz. Bring a pencil; scratch paper is provided and not collected.</p>
+
+<h3 class="keep-in-present">What's the single most exam-relevant thing to re-read?</h3>
+<p class="keep-in-present">The measured outputs. Every one of the eight numbers in the review
+table has a mechanism behind it, and mechanisms are what get asked. Second place: the
+force/steal grid and the WAL ordering; the exam enjoys orderings.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=2"></script>
+</body>
+</html>

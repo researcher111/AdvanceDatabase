@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 2 · Memory &amp; the Buffer Pool · Advanced Databases for Data Science</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=15">
+<link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+
+<aside class="toc">
+  <div class="toc-title">Lecture 2</div>
+  <ul>
+    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#problem">The gap you measured</a></li>
+    <li><a href="#try-it">Drive a buffer pool</a></li>
+    <li><a href="#pool">Frames, pin &amp; unpin</a></li>
+    <li><a href="#policies">Eviction: who leaves?</a></li>
+    <li><a href="#dirty">Dirty pages &amp; write-back</a></li>
+    <li><a href="#math">The arithmetic of a cache</a></li>
+    <li><a href="#thursday">On Thursday you build it</a></li>
+    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span>
+  <span class="present-label">Present</span>
+</button>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 2 · Tuesday September 1, 2026</div>
+  <h1>Memory &amp; the Buffer Pool</h1>
+  <div class="subtitle">The layer that decides which bytes deserve to be in RAM, and why that one decision is most of database performance.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+
+<p class="lede">
+Thursday you measured the gap: your SSD absorbs hundreds of thousands of buffered writes a
+second and a fraction of that when honesty is required. Today we build the layer that lives
+in that gap. The buffer pool is a cache the database runs for itself (not the
+<span class="gloss" data-gloss="os-page-cache">OS page cache</span>, its own), and its hit
+rate, more than any other number, decides whether your query answers in milliseconds or
+minutes. On Thursday you write one; today you learn why every design choice in it is forced.
+</p>
+
+<div class="cite">
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 4 (SimpleDB's buffer manager) ·
+  Hellerstein et&nbsp;al., <a href="https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf"><em>Architecture of a Database System</em></a>, §4 ·
+  the case against mmap: Crotty et&nbsp;al., <a href="https://db.cs.cmu.edu/mmap-cidr2022/"><em>Are You Sure You Want to Use MMAP in Your DBMS?</em></a> (CIDR 2022).
+</div>
+
+<p class="glossary-hint">
+Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
+hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+</p>
+<div class="glossary-panel" id="glossary-panel" hidden>
+  <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
+  <div id="glossary-content" class="glossary-content"></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="plan">Today's plan</h2>
+
+<p>Quiz first, then one arc: from the number you measured Thursday to the cache that exists
+because of it.</p>
+
+<ol class="agenda">
+  <li><strong>Quiz 1</strong>: files, blocks &amp; pages (10 min, first thing).</li>
+  <li><strong>The gap you measured</strong>: what your fsync ratio implies.</li>
+  <li><strong>Drive a buffer pool</strong>: hits, misses, and evictions, live.</li>
+  <li><strong>Frames, pin &amp; unpin</strong>: the contract, and why the OS cache isn't enough.</li>
+  <li><strong>Eviction</strong>: LRU, the sequential-flooding cliff, and what real engines do.</li>
+  <li><strong>Dirty pages</strong>: when bytes actually reach disk.</li>
+  <li><strong>The arithmetic</strong>: why 90% hits is not nearly good enough.</li>
+</ol>
+
+<p class="keep-in-present">Today's claim: <strong>a database is fast exactly when its buffer
+pool is winning.</strong> Everything else is commentary.</p>
+
+<!-- ============================================================ -->
+<h2 id="problem">The gap you measured</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>your fsync ratio</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Take out Thursday's <code>measurements.txt</code>.
+    Suppose microdb went to disk for <em>every</em> page it touched, durable every time. Using your
+    measured durable-writes-per-second: how many of the query-journey demo's queries (2 block
+    reads each) could your laptop serve per second? Is that a usable database?</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare ratios: whose laptop is faster, and
+      does it matter to the conclusion?</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: what must a storage engine do,
+      structurally, to escape its own disk?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Whatever your laptop measured, the answer lands in the hundreds per second, and the
+      shape of it is the same for everyone: a durable write costs milliseconds, so a database
+      that pays that price on every page touch serves a few hundred queries a second and no
+      more. No, that is not a usable database. Whose laptop is faster does not change the
+      verdict, which is why the ratio, not the absolute number, was the thing worth writing
+      down.</p>
+      <p>Structurally there are only two escapes, and this course builds both. Stop going to
+      disk for reads by keeping hot blocks in memory, which is today's buffer pool. Stop paying
+      for durability page by page by writing one small sequential record to a log instead, which
+      is week 7's write-ahead log. Every engine you will ever meet is some arrangement of those
+      two moves.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="The gap you measured">The problem, stated honestly</h3>
+
+<p>The two resources at hand have opposite virtues, and the buffer pool's whole job is
+arbitraging between them:</p>
+
+<table>
+  <thead><tr><th></th><th>DRAM</th><th>SSD / disk</th><th>Ratio</th></tr></thead>
+  <tbody>
+    <tr><td>Access time</td><td>~100 ns</td><td>~25 µs – 10 ms</td><td>250× – 100,000×</td></tr>
+    <tr><td>Capacity (a laptop)</td><td>16–32 GB</td><td>0.5–4 TB</td><td>~50× the other way</td></tr>
+    <tr><td>Survives power loss</td><td>no</td><td>yes</td><td>&nbsp;</td></tr>
+    <tr><td>Cost per GB</td><td>high</td><td>low</td><td>~10–20×</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">The data must <em>live</em> on disk (it's big, and it must survive).
+The data must be <em>read</em> in RAM (nothing else is fast enough). Something has to manage
+the shuttle between them, deliberately, not accidentally.</p>
+
+<h3 class="new-slide" data-kicker="The gap you measured">Two workloads, two worlds</h3>
+
+<p>How hard the shuttle job is depends entirely on the access pattern, and database access
+patterns cluster into two families you'll meet all semester:</p>
+
+<table>
+  <thead><tr><th></th><th>Transactional (OLTP)</th><th>Analytical (OLAP)</th></tr></thead>
+  <tbody>
+    <tr><td>Typical access</td><td>the same hot rows, over and over</td><td>one pass over everything</td></tr>
+    <tr><td>Re-use</td><td>constant: small working set</td><td>almost none: each block once</td></tr>
+    <tr><td>What a cache can do</td><td>nearly everything</td><td>nearly nothing</td></tr>
+    <tr><td>In today's lecture</td><td>the "hot set" workload</td><td>the "scan" workload</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Keep this split in mind; the simulator you're about to drive runs
+one workload from each family, and they will behave like different machines.</p>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Drive a buffer pool</h2>
+
+<p>Here is Thursday's lab as a toy you can break. Three frames of memory, eight blocks of
+disk. Click a block to access it, or run a preset workload: watch which accesses hit, which
+miss, and who gets evicted.</p>
+
+<div class="viz" id="viz-bufsim">
+  <div class="viz-title">Buffer pool simulator · 3 frames, 8 disk blocks, LRU</div>
+  <p class="viz-description">Click any disk block to access it (pin + unpin). A
+  <span class="hexlegend hit">green flash</span> is a hit, no disk. A
+  <span class="hexlegend miss">warm flash</span> is a miss: the least-recently-used unpinned
+  frame is evicted to make room. The tick under each frame is its <code>last_used</code>.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="bs-scan">▶ Scan 0–7, twice</button>
+    <button type="button" class="btn primary" id="bs-hot">▶ Hot set</button>
+    <button type="button" class="btn" id="bs-step" hidden>Step</button>
+    <button type="button" class="btn" id="bs-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="bs-msg">Click a disk block below, or run a preset workload.</div>
+  <div class="bs-frames" id="bs-frames"></div>
+  <div class="bs-disk" id="bs-disk"></div>
+  <div class="bs-stats" id="bs-stats"></div>
+  <p class="viz-caption">Try this before the next section: run the scan preset and explain the
+  hit rate to your neighbor. Then run the hot set.</p>
+</div>
+
+<h3 class="new-slide" data-kicker="Drive a buffer pool">What just happened</h3>
+
+<p>Two workloads, same pool, wildly different outcomes; that contrast is the whole lecture
+in miniature:</p>
+
+<table>
+  <thead><tr><th>Workload</th><th>Pattern</th><th>Hit rate (3 frames)</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Scan ×2</strong></td><td>0,1,2,…,7 then again</td><td><strong>0%</strong></td><td>by the time a block is needed again, LRU has evicted it, every time</td></tr>
+    <tr><td><strong>Hot set</strong></td><td>mostly blocks 0–1, occasional others</td><td><strong>~70%</strong></td><td>the <span class="gloss" data-gloss="working-set">working set</span> fits in the pool, so repeats are free</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Caches don't reward <em>size</em> of data touched; they reward
+<em>reuse that fits</em>. Hold that thought: it comes back as a cliff.</p>
+
+<!-- ============================================================ -->
+<h2 id="pool">Frames, pin &amp; unpin</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the cache you already have</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>Your OS <em>already</em> caches file reads in
+    spare RAM; Lab 1's buffered writes were fast precisely because of it. So why does every
+    serious database (Postgres, MySQL, Oracle, SQLite) build and manage its <em>own</em> cache
+    on top? List at least two things the database knows or needs that the OS cannot.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Merge lists. Did either of you think about
+      what happens if the OS evicts a page the database is <em>mid-way through modifying</em>?</li>
+      <li><span class="tps-phase">Share · 2 min</span>Keep your list visible; the "why not the
+      OS" slide below grades it.</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>Four things, and the first is the one that forces the issue. <strong>Pinning:</strong>
+      the OS offers no way to say "do not evict this page, I am reading it right now," and a
+      database must hold a page still while it walks the rows inside. <strong>Write
+      ordering:</strong> correctness after a crash requires the log record to reach disk before
+      the page it describes, and the OS flushes on its own schedule.
+      <strong>Workload-aware eviction:</strong> the database knows a sequential scan will not
+      re-read its blocks, so it can refuse to cache them; the OS sees anonymous bytes.
+      <strong>Predictability:</strong> the OS cache can stall or evict at any moment, for
+      reasons belonging to some other process.</p>
+      <p>The mid-modification case in the Pair step is the sharpest one: if the OS wrote a
+      half-updated page out at a moment of its choosing, recovery would have no way to know. That
+      is exactly the argument of the CIDR 2022 paper in the citations, whose title asks whether
+      you are sure you want to use mmap. The OS cache still helps underneath; the database pool
+      is not instead of it, it is the layer that adds the guarantees.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Frames, pin &amp; unpin">Anatomy of the pool</h3>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The pool</span><span>N fixed <strong>frames</strong>, allocated once at startup; Postgres calls the setting <code>shared_buffers</code>. Each frame holds exactly one block's page.</span></div>
+  <div class="lc-row"><span class="lc-k">The lookup</span><span>"is block <em>b</em> already here?": microdb scans its handful of frames; real engines keep a hash table from BlockId → frame so the answer costs O(1).</span></div>
+  <div class="lc-row"><span class="lc-k">The bookkeeping</span><span>per frame: which block · a <strong>pin count</strong> · a <strong>dirty</strong> flag · a <strong>last-used tick</strong>. Twelve bytes of metadata that decide everything.</span></div>
+  <div class="lc-row"><span class="lc-k">The interface</span><span>two verbs only: <code>pin(block)</code> and <code>unpin(buffer)</code>. Every read and write in the rest of microdb goes through them, forever.</span></div>
+</div>
+
+<h3 class="new-slide" data-kicker="Frames, pin &amp; unpin">The lookup: a page table</h3>
+
+<p>Every <code>pin</code> starts with the same question (<em>is block b already here?</em>),
+and how fast you can answer it decides whether the pool itself becomes the bottleneck:</p>
+
+<table>
+  <thead><tr><th>Approach</th><th>Cost per pin</th><th>Who uses it</th></tr></thead>
+  <tbody>
+    <tr><td>Scan every frame</td><td>O(frames)</td><td>microdb: fine at 3 frames, honest at 50</td></tr>
+    <tr><td>Hash table: BlockId → frame</td><td>O(1)</td><td>every real engine (Postgres: the "buffer mapping table")</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">This is why Lab 1 made <code>BlockId</code> immutable and hashable:
+a design decision two weeks old pays off as a dict key today. Interfaces are promises to your
+future layers.</p>
+
+<h3 class="new-slide" data-kicker="Frames, pin &amp; unpin">Pin &amp; unpin: the contract</h3>
+
+<p>Why do the verbs exist at all? Because a cache that can evict at any moment is a cache
+that can evict the page you are <em>currently reading</em>. Pinning is the fix, a promise
+with two sides:</p>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Caller's side: 'I am using this page, do not evict it.' Returns a Buffer whose page is guaranteed resident until the matching unpin.">buf = bm.pin(BlockId("students.tbl", 0))   # "hold this in memory for me"</div>
+  <div class="code-step" data-step="use" data-step-name="use" data-explain="All reads and writes go through the buffer's page while pinned. Writers must also call set_modified(); the pool trusts, but must be told.">value = buf.contents().get_int(0)          # safe: the frame cannot vanish</div>
+  <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="Caller's side: 'done.' The pin count drops; at zero the frame becomes an eviction candidate again. Forgetting this leaks frames until the pool aborts.">bm.unpin(buf)                              # "you may evict it now"</div>
+</div>
+
+<p class="keep-in-present">Pin counts <em>nest</em>: two readers of one block means
+<code>pins == 2</code>, and the frame survives until both release. And a frame with
+<code>pins &gt; 0</code> is <strong>never</strong> evicted, no matter how old.</p>
+
+<h3 class="new-slide" data-kicker="Frames, pin &amp; unpin">Why not just use the OS cache?</h3>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Pinning</span><span>The OS offers no "don't evict this, I'm using it." A database must be able to hold a page mid-operation; that alone forces its own pool.</span></div>
+  <div class="lc-row"><span class="lc-k">Write ordering</span><span>Recovery (week 7) requires the log to reach disk <em>before</em> the data page it describes. The OS flushes whenever it likes; the database must control the order.</span></div>
+  <div class="lc-row"><span class="lc-k">Smarter eviction</span><span>The database knows its own future ("this is a one-pass scan, don't cache it"), and can pick policies per workload. The OS sees anonymous bytes.</span></div>
+  <div class="lc-row"><span class="lc-k">The <span class="gloss" data-gloss="mmap">mmap</span> trap</span><span>Mapping the file into memory looks like a free buffer pool; the CIDR 2022 paper in the citations is titled "Are you sure?" for a reason: no pinning, no write ordering, surprise stalls.</span></div>
+</div>
+
+<p class="keep-in-present">The OS cache still exists underneath, doing its best. The database
+pool isn't <em>instead of</em> it; it's the layer that adds the guarantees correctness needs.</p>
+
+<!-- ============================================================ -->
+<h2 id="policies">Eviction: who leaves?</h2>
+
+<p>The pool is full and a new block is needed: someone must go. The policy that picks the
+victim is the pool's personality, and Thursday you implement the classic one.</p>
+
+<pre class="equation"><code>LRU (least recently used), microdb's spec:
+
+  every successful pin stamps the frame:   last_used ← next tick
+  victim = the UNPINNED frame with the smallest last_used
+  no unpinned frame?  →  BufferAbortError</code></pre>
+
+<h3 class="new-slide" data-kicker="Eviction: who leaves?">LRU by hand: the pinned trace</h3>
+
+<p>Trace it once by hand and the tests in Thursday's lab will hold no surprises. Three frames,
+access sequence <code>A B C A D</code>:</p>
+
+<table>
+  <thead><tr><th>Access</th><th>Result</th><th>Frame 0</th><th>Frame 1</th><th>Frame 2</th><th>Victim logic</th></tr></thead>
+  <tbody>
+    <tr><td><code>A</code></td><td>miss</td><td><strong>A¹</strong></td><td>&nbsp;</td><td>&nbsp;</td><td>empty frame</td></tr>
+    <tr><td><code>B</code></td><td>miss</td><td>A¹</td><td><strong>B²</strong></td><td>&nbsp;</td><td>empty frame</td></tr>
+    <tr><td><code>C</code></td><td>miss</td><td>A¹</td><td>B²</td><td><strong>C³</strong></td><td>empty frame</td></tr>
+    <tr><td><code>A</code></td><td><strong>hit</strong></td><td><strong>A⁴</strong></td><td>B²</td><td>C³</td><td>re-stamp A's tick; this is the step people forget</td></tr>
+    <tr><td><code>D</code></td><td>miss</td><td>A⁴</td><td><strong>D⁵</strong></td><td>C³</td><td>victim = min tick among unpinned = <strong>B²</strong></td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">The superscript is <code>last_used</code>. If your code evicts A
+instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
+
+<div class="exercise">
+  <span class="ex-label">Check yourself · continue the trace</span>
+  <p>Pick up where the table stops (frames: A⁴, D⁵, C³) and run two more accesses:
+  <code>E</code>, then <code>B</code>. Who gets evicted each time, and would either answer
+  change if a client still held a pin on A?</p>
+  <details><summary>Show answer</summary>
+  <p><code>E</code> misses; victim is the min tick, C³ → frames A⁴, D⁵, E⁶. <code>B</code>
+  also misses; it was evicted back at step 5, which is the quiet lesson: eviction has a
+  memory-shaped cost later. Victim is now A⁴, so the once-hot page finally leaves → B⁷, D⁵,
+  E⁶. With A pinned, A is untouchable regardless of its tick, so <code>B</code> would evict
+  D⁵ instead; pins outrank recency, always.</p>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Eviction: who leaves?">Why LRU? The policy menu</h3>
+
+<table>
+  <thead><tr><th>Policy</th><th>Rule</th><th>Cost</th><th>Weakness</th></tr></thead>
+  <tbody>
+    <tr><td><strong>FIFO</strong></td><td>evict the oldest <em>load</em></td><td>trivial</td><td>ignores re-use entirely: a hot page ages out mid-popularity</td></tr>
+    <tr><td><strong>Random</strong></td><td>evict anyone unpinned</td><td>trivial</td><td>surprisingly decent on average; no protection for the working set</td></tr>
+    <tr><td><strong>LRU</strong></td><td>evict the coldest <em>use</em></td><td>a timestamp per access</td><td>the scan cliff you're about to see</td></tr>
+    <tr><td><strong>Clock</strong></td><td>LRU's cheap approximation: one bit + a sweeping hand</td><td>nearly free</td><td>same cliff, coarser recency</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">LRU wins the textbook seat because recency predicts re-use for
+most workloads, and Thursday you implement the honest version, tick and all.</p>
+
+<h3 class="new-slide" data-kicker="Eviction: who leaves?">The sequential-flooding cliff</h3>
+
+<p>Now the dark side of LRU, measured for real by Thursday's lab code: a 50-block file,
+two workloads, pool sizes from 5 to 55:</p>
+
+<div class="viz" id="viz-cliff">
+  <div class="viz-title">Measured hit rate vs pool size · Lab 2's <code>measure_hits.py</code></div>
+  <p class="viz-description">Sequential scan (two passes over all 50 blocks) vs a hot-set
+  workload (90% of accesses to 5 blocks). Same file, same LRU pool.</p>
+  <div class="cf-rows" id="cf-rows"></div>
+  <p class="viz-caption">The scan earns <strong>exactly 0%</strong> at 49 frames (one frame
+  short of the file), and jumps to 50% at 50. LRU + scan is a perfect anti-pattern: each block
+  is evicted precisely one step before it's needed again.</p>
+</div>
+
+<h3 class="new-slide" data-kicker="Eviction: who leaves?">What real engines do about it</h3>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Postgres</span><span>clock-sweep (an LRU approximation with a usage counter), plus <strong>ring buffers</strong>: a big sequential scan gets a tiny private ring so it can't flood the shared pool.</span></div>
+  <div class="lc-row"><span class="lc-k">MySQL/InnoDB</span><span>midpoint LRU: new pages enter the <em>middle</em> of the list, not the head; a page must be touched again to reach the protected young region.</span></div>
+  <div class="lc-row"><span class="lc-k">DuckDB &amp; friends</span><span>analytics engines mostly don't fight it: scans stream, and the pool is reserved for what genuinely re-reads (metadata, hash tables, hot columns).</span></div>
+  <div class="lc-row"><span class="lc-k">The shared idea</span><span>detect "this access pattern won't reuse" and refuse to let it evict what will. Your Going-Further in Lab 2 builds a taste of it.</span></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="dirty">Dirty pages &amp; write-back</h2>
+
+<p>Reads were the easy half. Once queries <em>modify</em> pages, the pool holds data the disk
+doesn't have yet, and must never lose track of that fact.</p>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>the modified page</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>A page in frame 2 was modified in memory.
+    List every moment you can think of when those bytes <em>must</em> or <em>could</em> be
+    written to disk, and one moment when writing them would be premature. (Hint for the last
+    one: what if the transaction that made the change hasn't committed?)</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare moment-lists against the table below.
+      The "premature" case is the deepest question in this course; file it for week 7.</li>
+      <li><span class="tps-phase">Share · 2 min</span>Agree: who should decide when a dirty page
+      is written: the query, the pool, or the log?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p><strong>Must:</strong> at eviction, when the frame is about to be reused, since
+      otherwise the modification is simply lost. <strong>Could:</strong> at
+      <code>flush_all()</code>, at shutdown, or at a checkpoint, all of which exist to bound how
+      much log recovery has to replay. <strong>Never:</strong> on unpin, which means "I am done
+      reading," not "write this"; hot pages stay dirty in memory for a long time on purpose.</p>
+      <p>The surprising one is <code>COMMIT</code>: it does <em>not</em> write the data pages. It
+      forces the log, one sequential fsync, and the pages drift out later. That is precisely the
+      escape from your Lab 1 fsync ratio.</p>
+      <p>The premature case is writing an uncommitted change to disk before the log record that
+      describes it is durable. Do that and a crash leaves a change on disk that nothing can undo,
+      because the only record of the old value never made it. So the answer to the Share prompt
+      is that the pool decides <em>when</em> a dirty page is written, but the log decides
+      <em>whether</em> it is allowed to be. Week 7 gives that rule its name.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="Dirty pages">When do bytes actually reach disk?</h3>
+
+<table>
+  <thead><tr><th>Moment</th><th>Who triggers it</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Eviction</strong></td><td>the pool, inside <code>pin()</code></td><td>the frame is being reused: flush-if-dirty first, or the modification is lost</td></tr>
+    <tr><td><strong><code>flush_all()</code></strong></td><td>shutdown / <span class="gloss" data-gloss="checkpoint">checkpoint</span></td><td>bound how much replay recovery needs</td></tr>
+    <tr><td><strong>Never on unpin</strong></td><td>&nbsp;</td><td>unpin means "not using it", not "write it"; hot pages stay dirty in memory for ages, on purpose</td></tr>
+    <tr><td><strong>Not at COMMIT</strong></td><td>the log instead</td><td>commit forces the <em>WAL</em> to disk (one sequential fsync), not the data pages; that's the week-7 escape from your fsync ratio</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Surprise worth savoring: on the day you commit a transaction, the
+table's pages are usually <em>not</em> written. One cheap log write stands in for many
+expensive page writes; the buffer pool and the WAL are two halves of one design.</p>
+
+<h3 class="new-slide" data-kicker="Dirty pages">A preview of week 7: force &amp; steal</h3>
+
+<p>Two yes/no questions define every engine's write-back personality, and the quadrant every
+serious engine picks is the one that <em>requires</em> a recovery log:</p>
+
+<table>
+  <thead><tr><th></th><th><strong>Force</strong> (flush dirty pages at commit)</th><th><strong>No-force</strong> (flush whenever)</th></tr></thead>
+  <tbody>
+    <tr><td><strong>No-steal</strong> (never flush uncommitted)</td><td>slow but simple, no log needed</td><td>needs redo after a crash</td></tr>
+    <tr><td><strong>Steal</strong> (may flush uncommitted)</td><td>needs undo after a crash</td><td><strong>needs both, and it's what everyone builds</strong>, because it's the only fast quadrant</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">No-force + steal means: commits don't wait for data pages, and the
+pool evicts whatever it likes, maximum freedom for the cache, paid for by ARIES-style
+recovery. Week 7 builds the payment.</p>
+
+<!-- ============================================================ -->
+<h2 id="math">The arithmetic of a cache</h2>
+
+<div class="callout tps">
+  <span class="label">Think · Pair · Share · <em>how good is good enough?</em></span>
+  <ul class="tps-steps">
+    <li><span class="tps-phase">Think · 2 min</span>RAM access: 100 ns. Disk access: 25 µs.
+    Guess, then compute if you can: what hit rate does the pool need so that the <em>average</em>
+    access is no worse than 2× pure RAM speed? 80%? 95%? 99%? Commit to a number.</li>
+  </ul>
+  <details class="tps-reveal">
+    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
+    <ul class="tps-steps">
+      <li><span class="tps-phase">Pair · 3 min</span>Compare guesses, then check against the
+      slider on the next slide. Most people are low by an order of magnitude.</li>
+      <li><span class="tps-phase">Share · 2 min</span>One sentence: what does this say about
+      "we cached 90% of it, we're done"?</li>
+    </ul>
+      <details class="tps-answer">
+      <summary>Show the answer</summary>
+      <p>About <strong>99.6%</strong>, and nearly everyone guesses far too low. Solve
+      T = h·100 ns + (1 − h)·25 µs ≤ 200 ns and you get h ≥ 24,800 / 24,900 = 0.99598.</p>
+      <p>The neighbouring numbers are what make the point. At 90% hits the average is 2,590 ns,
+      about 26× slower than RAM. At 99% it is 349 ns, still 3.5× slower. Only the last fraction
+      of a percent buys the last factor of two, because the miss term owns the average: at 90%
+      hits, the 10% of accesses that miss contribute 96% of the total time.</p>
+      <p>So "we cached 90% of it, we're done" is nearly meaningless. A cache is not good until it
+      is absurdly good, and the only thing that gets you there is the working set fitting in the
+      pool. That is why the next section's cliff, where 49 frames buy exactly nothing, is the
+      lesson rather than a curiosity.</p>
+    </details>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="The arithmetic of a cache">Effective access time</h3>
+
+<pre class="equation"><code>T_avg  =  h · t_mem  +  (1 − h) · t_disk        (h = hit rate)
+
+with t_mem = 100 ns, t_disk = 25 µs:
+
+  h = 90%   →  T_avg = 2,590 ns    ≈ 26× slower than RAM
+  h = 99%   →  T_avg =   349 ns    ≈ 3.5× slower than RAM
+  h = 99.6% →  T_avg =   200 ns    =  2× RAM  ← the TPS answer</code></pre>
+
+<p class="keep-in-present">The miss term owns the average: at 90% hits, the 10% of misses
+contribute <strong>96%</strong> of the total time. Caches aren't good until they're
+<em>absurdly</em> good; this is why the cliff matters.</p>
+
+<h3 class="new-slide" data-kicker="The arithmetic of a cache">Feel it: the hit-rate slider</h3>
+
+<div class="viz" id="viz-eat">
+  <div class="viz-title">Effective access time, live</div>
+  <p class="viz-description">Drag the hit rate; the bar is average access time on a log scale
+  (t_mem = 100 ns, t_disk = 25 µs). Watch how little happens until the very end of the dial.</p>
+  <div class="eat-controls">
+    <label for="eat-h">hit rate <span id="eat-h-val">90.0%</span></label>
+    <input type="range" id="eat-h" min="500" max="1000" value="900">
+  </div>
+  <div class="eat-readout" id="eat-readout"></div>
+  <p class="viz-caption">The last percent of hit rate is worth more than the first eighty-nine.</p>
+</div>
+
+<h3 class="new-slide" data-kicker="The arithmetic of a cache">Sizing pools in the wild</h3>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Postgres</span><span><code>shared_buffers</code>: the classic starting rule is ~25% of RAM, leaving the OS cache to serve as a fuzzy second tier underneath.</span></div>
+  <div class="lc-row"><span class="lc-k">Why not 100%?</span><span>double-caching (every page would live in both tiers), and everything else on the machine still needs memory; a pool that causes swapping is a pool that made things worse: <span class="gloss" data-gloss="thrashing">thrashing</span>.</span></div>
+  <div class="lc-row"><span class="lc-k">The real target</span><span>not a percentage, the working set. If the pages a workload actually re-touches fit in the pool, hit rates go asymptotic; if not, no tuning saves you.</span></div>
+  <div class="lc-row"><span class="lc-k">Your Thursday number</span><span>Lab 2's measurement is exactly this chart for your own code: hit rate as the pool shrinks, on two workloads with opposite working sets.</span></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="thursday">On Thursday you build it</h2>
+
+<p>Lab 2 is four methods; the rest of the machinery (the <code>Buffer</code> frame class,
+flush, write-back) ships complete, along with a reference Lab 1 file manager so everyone's
+bottom layer matches. Hover each line:</p>
+
+<div class="code-annotated" data-lang="python">
+  <div class="code-step" data-step="find" data-step-name="_find_existing" data-explain="The lookup half of pin: scan the pool for a frame already holding this block. Returns the Buffer or None. Two lines.">def _find_existing(block) -> Buffer | None     # is it already here?</div>
+  <div class="code-step" data-step="victim" data-step-name="_choose_victim" data-explain="The policy: among UNPINNED frames, the one with the smallest last_used. None if every frame is pinned. min() with a key does it.">def _choose_victim() -> Buffer | None          # LRU among the unpinned</div>
+  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="The heart: tick; existing -> hit; else victim or BufferAbortError, assign_to_block (which flushes the victim if dirty), count the miss. Either way: pins += 1, stamp last_used.">def pin(block) -> Buffer                       # hit, or evict-and-load</div>
+  <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="Release one pin; ValueError if pins is already 0; that's always a caller bug, and loud beats silent.">def unpin(buf)                                 # release; evictable at 0</div>
+  <div class="code-explain-panel">Hover a line for what it does and how to build it.</div>
+</div>
+
+<h3 class="new-slide" data-kicker="On Thursday you build it">What the tests hunt</h3>
+
+<table>
+  <thead><tr><th>Group</th><th>Invariant it guards</th><th>The bug it catches</th></tr></thead>
+  <tbody>
+    <tr><td><strong>PIN</strong> (4 tests)</td><td>pins nest; hits reuse the same frame; double-unpin is loud</td><td>reloading a block that's already resident; silent pin-count drift</td></tr>
+    <tr><td><strong>LRU</strong> (4 tests)</td><td>victim = oldest unpinned; recency = every pin, hits included</td><td>stamping <code>last_used</code> only on misses, the classic</td></tr>
+    <tr><td><strong>DIRTY</strong> (2 tests)</td><td>no modified page dies with its frame</td><td>bypassing <code>assign_to_block</code> and skipping the flush</td></tr>
+  </tbody>
+</table>
+
+<p class="keep-in-present">Ten tests, three invariants. If you can say each invariant aloud,
+the code is forty-five minutes of dictation.</p>
+
+<h3 class="new-slide" data-kicker="On Thursday you build it">Before class checklist</h3>
+
+<ul class="checklist">
+  <li>☐ Lab 1 submitted: Lab 2's starter ships a <strong>reference file_manager.py</strong>; the tests assume its exact behavior, so use it even if yours passed.</li>
+  <li>☐ Download the four starter files from the Lab 2 page: <code>buffer_manager.py</code>, <code>file_manager.py</code>, <code>test_buffermanager.py</code>, <code>measure_hits.py</code>.</li>
+  <li>☐ Harness runs: <code>python3 test_buffermanager.py</code> prints <strong>0/10 passed</strong>, the correct starting state.</li>
+  <li>☐ Write down a prediction: with a 49-frame pool and a 50-block file, what hit rate does a sequential scan get? You'll check it in Part 3.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="recap">Recap &amp; next time</h2>
+
+<p>Three ideas from today, each one load-bearing for the rest of the course.</p>
+
+<ul class="recap-list">
+  <li><strong>The pool is deliberate memory.</strong> Fixed frames, pin/unpin as the only doors,
+  its own eviction policy, because correctness needs guarantees (pinning, write ordering) that
+  a general-purpose cache can't give.</li>
+  <li><strong>LRU is great until it's catastrophic.</strong> Recency wins on hot sets and earns
+  exactly 0% on scans one block too big; real engines detect and special-case the scan.</li>
+  <li><strong>The miss term owns the average.</strong> T = h·t_mem + (1−h)·t_disk means 90% is
+  26× slower than RAM and "good" starts past 99%; the working set fitting the pool is the whole
+  ballgame.</li>
+</ul>
+
+<p class="keep-in-present"><strong>Thursday:</strong> build the buffer manager, measure your
+own cliff. <strong>Next Tuesday:</strong> records &amp; the catalog: bytes finally become rows.
+Quiz 2 opens class: the buffer pool.</p>
+
+<!-- ============================================================ -->
+<h2 id="faq">FAQ</h2>
+
+<h3>Is the buffer pool the same thing as the OS page cache?</h3>
+<p class="keep-in-present">Same idea, different owner and different guarantees. The OS caches anonymous file bytes
+opportunistically; the database pool adds pinning, controlled write-back ordering, and
+workload-aware eviction: the three things correctness and predictability need. On a
+Postgres box both are active at once, stacked.</p>
+
+<h3>Why LRU and not something smarter?</h3>
+<p class="keep-in-present">Lab 2 uses true LRU because it's the canonical policy and its failure mode (the cliff) is
+the best systems lesson in the course. Real engines use cheaper approximations (clock,
+usage counters) that behave almost identically, and then bolt on scan-resistance, which is
+the actual smartness.</p>
+
+<h3>What happens if I forget to unpin?</h3>
+<p class="keep-in-present">The frame stays ineligible for eviction forever; enough leaks and <code>pin()</code> raises
+<code>BufferAbortError</code> with every frame pinned. Real engines have the same bug class;
+it's why their buffer code is written with the paranoia of a bank vault.</p>
+
+<h3>Does a bigger pool always help?</h3>
+<p class="keep-in-present">Up to the working set, enormously; past it, almost not at all, and past available RAM it
+actively hurts (the machine swaps, which is disk again with extra steps). The measurement you
+run Thursday shows the first two regimes on real code.</p>
+
+<footer>
+  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
+</footer>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=13"></script>
+<script src="viz.js?v=1"></script>
+</body>
+</html>
