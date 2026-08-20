@@ -166,7 +166,7 @@
     `<span class="fs-track"><span class="fs-bar ${r.cls}" style="width:${(100 * r.v / max).toFixed(1)}%"></span></span>` +
     `<span class="fs-val">${r.v.toLocaleString()} blk/s</span></div>`).join('') +
     `<div class="fs-row"><span></span><span style="font-family:var(--sans);font-size:12px;color:var(--ink-mute)">` +
-    `ratio: 15.1× on this machine — yours may be far larger</span><span></span></div>`;
+    `ratio: 15.1× on this machine; yours may be far larger</span><span></span></div>`;
 })();
 
 /* ---------------- Widget: struct.pack_into ---------------- */
