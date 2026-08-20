@@ -244,12 +244,23 @@ round-trips, and every later lab assumes it:</p>
 </table>
 
 <pre class="equation"><code>bytes_needed("ada")  =  4 + 3  =  7      → the ada row: 4 (id) + 7 (name) + 4 (gpa) = 15 bytes
-bytes_needed(s)      =  4 + len(s.encode('utf-8'))     # 'héllo' is 6 bytes, not 5: count encoded bytes</code></pre>
+bytes_needed(s)      =  4 + len(s.encode('utf-8'))
 
-<p>Both of those rules are one Python call away. <code>struct.pack_into</code> is the tool the
-contract names, and it behaves differently from the <code>struct.pack</code> you may have met:
-it does not hand you new bytes, it writes into a buffer you already own, at an offset you choose,
-leaving everything else alone. Drive it before you write it.</p>
+Encode first, then count. Characters are not bytes:
+
+    'héllo'      h     é       l     l     o
+    as bytes     68    C3 A9   6C    6C    6F   ← 'é' takes TWO bytes
+
+    len('héllo')                  = 5 characters
+    len('héllo'.encode('utf-8'))  = 6 bytes      ← reserve this many, or you truncate</code></pre>
+
+<p>The <em>Tool</em> column above names a function most people have never used:
+<code>struct.pack_into</code>. It is worth a minute, because it does not behave the way ordinary
+functions do. <strong>It returns nothing.</strong> You hand it a buffer you already have, an
+offset, and a value, and it writes the bytes into that buffer <em>in place</em>, leaving every
+other byte exactly as it was. That is precisely what a page needs, because a page is one fixed
+block of memory that many fields have to share. Try it here before you implement
+<code>set_int</code> on Thursday.</p>
 
 <div class="viz" id="viz-pack">
   <div class="viz-title">struct.pack_into · write 4 bytes into a buffer you already own</div>
