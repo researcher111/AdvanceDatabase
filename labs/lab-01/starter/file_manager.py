@@ -144,6 +144,11 @@ class FileManager:
         return f
 
     # ---------------- YOUR JOB starts here. ----------------
+    #
+    # Delete the `raise NotImplementedError` line when you fill in a
+    # method. If it stays, the method does its work and then raises
+    # anyway, and the harness reports "not implemented yet" for every
+    # test that touches it.
 
     def read(self, block: BlockId, page: Page) -> None:
         """Fill `page` with the contents of `block` on disk.
@@ -152,6 +157,17 @@ class FileManager:
         (i.e. >= self.length(block.filename))."""
         # TODO: bounds-check, seek to the block's byte offset, read
         #       block_size bytes into page.contents().
+        #
+        # Three mistakes that each cost a classmate an hour:
+        #   1. Do the bounds check FIRST, before you seek. length() moves
+        #      the cursor to the end of the file, so a seek that happens
+        #      before it is silently undone.
+        #   2. Compare block NUMBERS (block.blknum >= self.length(...)),
+        #      not f.tell() against the file size. After reading the last
+        #      valid block, tell() equals the file size, so that check
+        #      raises on a perfectly good read.
+        #   3. f.read(n) takes a byte COUNT, not a buffer. To fill the
+        #      buffer the page already owns, use f.readinto(page.contents()).
         raise NotImplementedError
 
     def write(self, block: BlockId, page: Page, sync: bool = True) -> None:
@@ -166,6 +182,10 @@ class FileManager:
     def append(self, filename: str) -> BlockId:
         """Grow `filename` by one zeroed block; return the new block's BlockId."""
         # TODO: the new block number is the current length in blocks.
+        #       Then actually grow the file: seek to the end, write
+        #       block_size zero bytes (bytes(self.block_size)), and flush.
+        #       Returning a BlockId by itself changes nothing on disk, and
+        #       length() will still say 0.
         raise NotImplementedError
 
     def length(self, filename: str) -> int:

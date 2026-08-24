@@ -35,7 +35,11 @@
     },
     'durability': {
       title: 'Durability',
-      body: '<p>The D in ACID: once the system says “saved,” the data survives anything short of ' +
+      body: '<p>Quick reminder of ACID: <strong>A</strong>tomicity (a transaction happens entirely ' +
+        'or not at all), <strong>C</strong>onsistency (every transaction moves the database from one ' +
+        'valid state to another), <strong>I</strong>solation (concurrent transactions behave as if they ' +
+        'ran one at a time), and <strong>D</strong>urability.</p>' +
+        '<p>The D: once the system says “saved,” the data survives anything short of ' +
         'hardware destruction: crash, power cut, kernel panic. In this lab durability is just ' +
         '“survives close and reopen”; by Lab 7 it becomes the real promise a <code>COMMIT</code> makes, ' +
         'priced at one fsync per transaction.</p>',

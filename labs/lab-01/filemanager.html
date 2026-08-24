@@ -5,8 +5,8 @@
 <title>Lab 1 · Disk &amp; File Manager · microdb part 1</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=17">
-<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 
@@ -321,6 +321,86 @@ each step turns a new group green.</p>
   <code>self._data[a:b] = payload</code>, not <code>chunk = self._data[a:b]; chunk[:] = payload</code>.</p>
 </div>
 
+<h3 class="new-slide" data-kicker="Part 1 · Build">The cursor: <code>seek</code> and <code>tell</code></h3>
+
+<p>Every open file object carries one number. The docs call it the <em>stream position</em>;
+everyone else calls it the cursor. It is the byte offset where the next <code>read</code> or
+<code>write</code> will happen. It starts at 0 when <code>_file()</code> opens the file, and every
+<code>read(n)</code> or <code>write(b)</code> moves it forward by the number of bytes moved. Two
+methods let you move it and ask where it is:</p>
+
+<pre class="equation"><code>f.seek(offset, whence=0)    move the cursor. Returns the new absolute position.
+f.tell()                    report the cursor's absolute byte position.</code></pre>
+
+<p>The second argument to <code>seek</code>, called <code>whence</code>, says what
+<code>offset</code> is measured from. Python accepts the integer or the named constant from the
+<code>os</code> module; they are the same value.</p>
+
+<table>
+  <thead><tr><th><code>whence</code></th><th>Name</th><th>Offset is measured from</th><th>In this lab</th></tr></thead>
+  <tbody>
+    <tr><td><code>0</code></td><td><code>os.SEEK_SET</code> (the default)</td><td>the start of the file</td><td><code>f.seek(blknum * block_size)</code> jumps to a block</td></tr>
+    <tr><td><code>1</code></td><td><code>os.SEEK_CUR</code></td><td>the current cursor position</td><td>not needed; every call seeks from the start</td></tr>
+    <tr><td><code>2</code></td><td><code>os.SEEK_END</code></td><td>the end of the file</td><td><code>f.seek(0, 2)</code> means "go to the very end"</td></tr>
+  </tbody>
+</table>
+
+<div class="viz" id="viz-seektell">
+  <div class="viz-title">Where the cursor is after each call</div>
+  <svg class="st-svg" viewBox="0 0 960 250" role="img"
+       aria-label="Three views of the same 12,288-byte file. After open the cursor is at byte 0. After f.seek(4096) it is at the start of block 1. After f.seek(0, 2) it is at byte 12288, the end of the file, and f.tell() returns 12288.">
+    <text class="st-title" x="300" y="14">a 3-block file (block_size = 4096) · the triangle is the cursor</text>
+    
+    <text class="st-call" x="20" y="56">open(path, "r+b")</text>
+    <rect class="st-block" x="300" y="34" width="160" height="36"/><text class="st-blk" x="380" y="56">block 0</text><rect class="st-block" x="460" y="34" width="160" height="36"/><text class="st-blk" x="540" y="56">block 1</text><rect class="st-block" x="620" y="34" width="160" height="36"/><text class="st-blk" x="700" y="56">block 2</text>
+    <text class="st-tick" x="300" y="86">0</text><text class="st-tick" x="460" y="86">4096</text><text class="st-tick" x="620" y="86">8192</text><text class="st-tick" x="780" y="86">12288</text>
+    <line class="st-cursor" x1="300" y1="22" x2="300" y2="72"/>
+    <path class="st-head" d="M294,16 L306,16 L300,26 Z"/>
+    <text class="st-note" x="800" y="56">f.tell() → 0</text><text class="st-note st-sub" x="800" y="70">next read starts at byte 0</text>
+    
+    <text class="st-call" x="20" y="131">f.seek(4096)</text>
+    <rect class="st-block" x="300" y="109" width="160" height="36"/><text class="st-blk" x="380" y="131">block 0</text><rect class="st-block" x="460" y="109" width="160" height="36"/><text class="st-blk" x="540" y="131">block 1</text><rect class="st-block" x="620" y="109" width="160" height="36"/><text class="st-blk" x="700" y="131">block 2</text>
+    <text class="st-tick" x="300" y="161">0</text><text class="st-tick" x="460" y="161">4096</text><text class="st-tick" x="620" y="161">8192</text><text class="st-tick" x="780" y="161">12288</text>
+    <line class="st-cursor" x1="460" y1="97" x2="460" y2="147"/>
+    <path class="st-head" d="M454,91 L466,91 L460,101 Z"/>
+    <text class="st-note" x="800" y="131">f.tell() → 4096</text><text class="st-note st-sub" x="800" y="145">next read returns block 1</text>
+    
+    <text class="st-call" x="20" y="206">f.seek(0, 2)</text>
+    <rect class="st-block" x="300" y="184" width="160" height="36"/><text class="st-blk" x="380" y="206">block 0</text><rect class="st-block" x="460" y="184" width="160" height="36"/><text class="st-blk" x="540" y="206">block 1</text><rect class="st-block" x="620" y="184" width="160" height="36"/><text class="st-blk" x="700" y="206">block 2</text>
+    <text class="st-tick" x="300" y="236">0</text><text class="st-tick" x="460" y="236">4096</text><text class="st-tick" x="620" y="236">8192</text><text class="st-tick" x="780" y="236">12288</text>
+    <line class="st-cursor" x1="780" y1="172" x2="780" y2="222"/>
+    <path class="st-head" d="M774,166 L786,166 L780,176 Z"/>
+    <text class="st-note" x="800" y="206">f.tell() → 12288</text><text class="st-note st-sub" x="800" y="220">= file size → 3 blocks</text>
+  </svg>
+  <p class="viz-caption">Each row is the same file. <code>seek</code> only changes the number; it
+  does not touch the disk. A block is moved when you <code>read</code> or <code>write</code> from
+  wherever the cursor is.</p>
+</div>
+
+<p>Put the two together and you get <code>length()</code> for free. <code>f.seek(0, 2)</code>
+walks the cursor to the end of the file, so the position <code>f.tell()</code> reports
+<em>is</em> the file size in bytes; integer-divide by <code>block_size</code> and you have the
+number of whole blocks. <code>os.fstat(f.fileno()).st_size</code> returns the same number without
+moving the cursor, and either is fine for this lab.</p>
+
+<div class="callout note">
+  <span class="label">Seek before every read and write</span>
+  <p>The cursor is shared by everything that touches the handle. A <code>read</code> leaves it at
+  the end of the block it just read, and a <code>length()</code> call leaves it at the end of the
+  file. If <code>read(block, page)</code> assumes the cursor is already in the right place, it will
+  return the wrong block exactly often enough to be confusing. Compute
+  <code>blknum * block_size</code> and <code>seek</code> to it at the top of both
+  <code>read</code> and <code>write</code>, every time. That habit is the whole fix for the
+  "writing block 1 clobbered block 0" failure in Part 2.</p>
+</div>
+
+<div class="cite">
+  Docs: <a href="https://docs.python.org/3/library/io.html#io.IOBase.seek"><code>io.IOBase.seek</code></a> ·
+  <a href="https://docs.python.org/3/library/io.html#io.IOBase.tell"><code>io.IOBase.tell</code></a> ·
+  <a href="https://docs.python.org/3/library/os.html#os.SEEK_SET"><code>os.SEEK_SET</code> / <code>SEEK_CUR</code> / <code>SEEK_END</code></a> ·
+  <a href="https://docs.python.org/3/library/os.html#os.fstat"><code>os.fstat</code></a>
+</div>
+
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
 
@@ -338,15 +418,15 @@ bug). Reading past the end of the file must raise <code>ValueError</code>. The l
 FileManager, opens a fresh one, and expects the data to still be there. That is the smallest
 possible version of surviving a restart.</p>
 
-<pre><code class="language-text">$ python3 test_filemanager.py
-PAGE group
-  [PASS] PAGE: int round-trip (incl. negative, INT_MAX)
-  [PASS] PAGE: bytes round-trip (length-prefixed)
-  ...
-FILE group
-  [PASS] FILE: data survives close + reopen
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_filemanager.py</span>
+<span class="t-head">PAGE group</span>
+  <span class="t-pass">[PASS]</span> PAGE: int round-trip (incl. negative, INT_MAX)
+  <span class="t-pass">[PASS]</span> PAGE: bytes round-trip (length-prefixed)
+  <span class="t-mute">...</span>
+<span class="t-head">FILE group</span>
+  <span class="t-pass">[PASS]</span> FILE: data survives close + reopen
 
-9/9 tests passed</code></pre>
+<span class="t-pass">9/9 tests passed</span></code></pre>
 
 <div class="exercise">
   <span class="ex-label">Exercise · read the failure</span>
@@ -409,7 +489,7 @@ the SSD". Before you run the benchmark, commit to a prediction.</p>
 
 <p>Run it and record all three numbers in <code>measurements.txt</code>:</p>
 
-<pre><code class="language-text">$ python3 measure_io.py
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_io.py</span>
 buffered writes (sync=False):      465,849 blocks/sec
 durable  writes (sync=True):        30,788 blocks/sec
 ratio (buffered / durable):           15.1x</code></pre>

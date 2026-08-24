@@ -5,7 +5,7 @@
 <title>Lab 11 · Spark &amp; Ray · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=17">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=18">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -192,13 +192,13 @@ contract yourself is how you'll know what you're renting.</p>
   <code>python3 mapreduce.py</code>:</li>
 </ol>
 
-<pre><code class="language-text">$ python3 mapreduce.py
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 mapreduce.py</span>
   50  the
   46  a
   41  and
   18  is
   15  of
-   ...</code></pre>
+<span class="t-mute">   ...</span></code></pre>
 
 <p class="keep-in-present">The top of a raw word count is always stop words: Lab 10's
 stop-word lesson, seen from the producing side this time. Real pipelines put a filter in map
@@ -213,7 +213,7 @@ ship; you write the chain: <code>flatMap</code> (your <code>map_words</code>),
 <code>map</code> to pairs, <code>reduceByKey</code> (your shuffle + reduce in one call).
 Stay lazy: no <code>collect()</code> inside the function. Then run it and read the plan:</p>
 
-<pre><code class="language-text">$ python3 spark_wordcount.py
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span>
 === the DAG (read bottom-up; the stage break is the shuffle) ===
 (4) PythonRDD[5] at RDD at PythonRDD.scala:59 []
  |  MapPartitionsRDD[4] at mapPartitions at PythonRDD.scala:197 []
@@ -275,7 +275,7 @@ The top-15 it prints must match Part 1's exactly; the harness checks the full di
 The <span class="gloss" data-gloss="gil">GIL</span> never gets a vote; every task is its own
 process. Measured on a 10-core laptop:</p>
 
-<pre><code class="language-text">$ python3 ray_speedup.py
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span>
 24 documents, 30 ms simulated model latency each
 serial:      0.92 s
 parallel:    0.16 s     speedup: 5.7x
@@ -294,22 +294,22 @@ skips those groups and scores what ran; the
 <span class="gloss" data-gloss="driver">driver</span>-side OFFLINE group is the graded
 part either way:</p>
 
-<pre><code class="language-text">$ python3 test_sparkray.py
-OFFLINE group (Part A)
-  [PASS] OFFLINE: map emits raw (word, 1) pairs
-  [PASS] OFFLINE: partitioning is deterministic, in range
-  [PASS] OFFLINE: shuffle loses nothing, groups keys
-  [PASS] OFFLINE: shuffle routes by partition_for
-  [PASS] OFFLINE: reduce collapses values
-  [PASS] OFFLINE: end-to-end counts match the reference
-  [PASS] OFFLINE: answer independent of partition count
-SPARK group (Part B)
-  [PASS] SPARK: word_counts matches the reference
-RAY group (Part C)
-  [PASS] RAY: parallel results identical to serial
-  [PASS] RAY: launch-all-then-wait beats serial
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_sparkray.py</span>
+<span class="t-head">OFFLINE group (Part A)</span>
+  <span class="t-pass">[PASS]</span> OFFLINE: map emits raw (word, 1) pairs
+  <span class="t-pass">[PASS]</span> OFFLINE: partitioning is deterministic, in range
+  <span class="t-pass">[PASS]</span> OFFLINE: shuffle loses nothing, groups keys
+  <span class="t-pass">[PASS]</span> OFFLINE: shuffle routes by partition_for
+  <span class="t-pass">[PASS]</span> OFFLINE: reduce collapses values
+  <span class="t-pass">[PASS]</span> OFFLINE: end-to-end counts match the reference
+  <span class="t-pass">[PASS]</span> OFFLINE: answer independent of partition count
+<span class="t-head">SPARK group (Part B)</span>
+  <span class="t-pass">[PASS]</span> SPARK: word_counts matches the reference
+<span class="t-head">RAY group (Part C)</span>
+  <span class="t-pass">[PASS]</span> RAY: parallel results identical to serial
+  <span class="t-pass">[PASS]</span> RAY: launch-all-then-wait beats serial
 
-10/10 tests passed</code></pre>
+<span class="t-pass">10/10 tests passed</span></code></pre>
 
 <div class="exercise">
   <span class="ex-label">Exercise · read the failure</span>
