@@ -324,16 +324,19 @@ each step turns a new group green.</p>
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
 
-<p>
-The PAGE group runs entirely in memory: round-trips for ints (including negatives: sign bit
-handling is why the spec says <em>signed</em>), multibyte UTF-8 strings, and the
-<em>adjacent-values</em> test, which stores the full ada row and catches writes that spill past
-their field. The FILE group touches disk: append/length bookkeeping, write-then-read round-trips,
-block independence (writing block 1 must not disturb block 0, the classic seek-arithmetic bug),
-the past-the-end <code>ValueError</code>, and finally
-<span class="gloss" data-gloss="durability">durability</span>: the harness closes
-your FileManager, opens a fresh one, and expects the data still there, the smallest possible
-version of surviving a restart.</p>
+<p>The tests come in two groups. The <strong>PAGE</strong> tests never touch disk. Each one
+writes a value into a page and reads it back: ints (including negatives, which is why the spec
+says <em>signed</em>), strings with multibyte UTF-8 characters, and the <em>adjacent-values</em>
+test, which stores the full ada row and then checks that no field's write spilled into its
+neighbor.</p>
+
+<p>The <strong>FILE</strong> tests go through disk. They check that <code>append</code> and
+<code>length</code> agree with each other, that a page written to a block comes back unchanged
+when you read it, and that writing block 1 leaves block 0 alone (the classic seek-arithmetic
+bug). Reading past the end of the file must raise <code>ValueError</code>. The last test checks
+<span class="gloss" data-gloss="durability">durability</span>: the harness closes your
+FileManager, opens a fresh one, and expects the data to still be there. That is the smallest
+possible version of surviving a restart.</p>
 
 <pre><code class="language-text">$ python3 test_filemanager.py
 PAGE group

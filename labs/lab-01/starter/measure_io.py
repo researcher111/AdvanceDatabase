@@ -1,13 +1,13 @@
-"""Lab 1, Part 3 — measure what fsync costs. Run:  python3 measure_io.py
+"""Lab 1, Part 3: measure what fsync costs. Run:  python3 measure_io.py
 
 Writes the same 4 KB block over and over through your FileManager, two ways:
 
-    sync=True    every write is flushed AND fsync'd — the OS must promise
+    sync=True    every write is flushed AND fsync'd. The OS must promise
                  the bytes are on durable storage before write() returns
     sync=False   every write goes to the OS page cache and returns
 
 Record all three printed numbers in measurements.txt. Your absolute numbers
-will differ from your neighbor's (different SSDs, different laptops) — the
+will differ from your neighbor's (different SSDs, different laptops). The
 RATIO is the lesson.
 """
 
@@ -18,7 +18,7 @@ import time
 from file_manager import Page, FileManager
 
 BLOCK_SIZE = 4096
-N_SYNC = 200        # fsync'd writes are slow — keep the count modest
+N_SYNC = 200        # fsync'd writes are slow, so keep the count modest
 N_NOSYNC = 5000
 
 

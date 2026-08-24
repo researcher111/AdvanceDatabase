@@ -1,4 +1,4 @@
-/* Lab 1 — Disk & File Manager · widgets.
+/* Lab 1: Disk & File Manager · widgets.
    Presentation toggle, TOC tracking, glossary + annotated-code engines
    are owned by ../_shared/lab-base.js. */
 
@@ -7,14 +7,14 @@
   const GLOSSARY = {
     'block': {
       title: 'Block',
-      body: '<p>The fixed-size unit a disk (and this lab) moves data in — microdb uses ' +
+      body: '<p>The fixed-size unit a disk (and this lab) moves data in. microdb uses ' +
         '4096 bytes. A file is treated as an array of blocks: block 0 is bytes 0–4095, block 1 ' +
         'is 4096–8191, and so on. Databases never read or write less than a whole block, because ' +
         'the trip to storage costs the same either way.</p>',
     },
     'page-mem': {
       title: 'Page',
-      body: '<p>A block’s worth of <em>memory</em> — same size, same bytes, different home. ' +
+      body: '<p>A block’s worth of <em>memory</em>: same size, same bytes, different home. ' +
         'The pair of words keeps the bookkeeping straight: blocks live on disk, pages live in RAM, ' +
         'and the file manager’s whole job is copying one into the other. Your <code>Page</code> class ' +
         'adds typed reads and writes (ints, strings) on top of the raw bytes.</p>',
@@ -23,26 +23,26 @@
       title: 'fsync',
       body: '<p>The system call that turns “I wrote the file” into “the bytes are physically on ' +
         'durable storage.” A normal <code>write()</code> just hands bytes to the OS’s in-memory cache ' +
-        'and returns in microseconds; <code>fsync</code> blocks until the device confirms — 10–1000× ' +
+        'and returns in microseconds; <code>fsync</code> blocks until the device confirms, 10–1000× ' +
         'slower. Databases ration fsyncs the way you’d ration anything that expensive.</p>',
     },
     'os-cache': {
       title: 'OS page cache',
       body: '<p>The operating system keeps its own cache of recently used file data in otherwise-free ' +
         'RAM. Writes land there first (fast, but lost in a power cut until flushed); re-reads of recent ' +
-        'blocks are served from it without touching the disk. It silently helps — and silently lies to — ' +
+        'blocks are served from it without touching the disk. It silently helps, and silently lies to, ' +
         'anyone who benchmarks file I/O, which is why <code>measure_io.py</code> tests both modes.</p>',
     },
     'durability': {
       title: 'Durability',
       body: '<p>The D in ACID: once the system says “saved,” the data survives anything short of ' +
-        'hardware destruction — crash, power cut, kernel panic. In this lab durability is just ' +
+        'hardware destruction: crash, power cut, kernel panic. In this lab durability is just ' +
         '“survives close and reopen”; by Lab 7 it becomes the real promise a <code>COMMIT</code> makes, ' +
         'priced at one fsync per transaction.</p>',
     },
     'hexdump': {
       title: 'hexdump',
-      body: '<p>A tool (and a habit) for looking at a file as raw bytes, shown in hexadecimal — ' +
+      body: '<p>A tool (and a habit) for looking at a file as raw bytes, shown in hexadecimal. ' +
         '<code>hexdump -C students.tbl</code> prints offset, hex bytes, and printable characters per ' +
         'row, exactly like this lab’s page widget. When your test fails mysteriously, hexdump the ' +
         'file: the bytes never lie.</p>',
@@ -58,7 +58,7 @@
   if (!root) return;
   const SIZE = 64;
   const data = new Uint8Array(SIZE);
-  // role[i]: null | 'int' | 'len'  — drives the tint of each byte cell
+  // role[i]: null | 'int' | 'len'. Drives the tint of each byte cell
   let role = new Array(SIZE).fill(null);
 
   const hexEl = document.getElementById('pg-hex');
@@ -90,7 +90,7 @@
     dv.setInt32(off, val, true); // little-endian
     for (let i = off; i < off + 4; i++) role[i] = 'int';
     const bytes = [...data.slice(off, off + 4)].map(b => b.toString(16).padStart(2, '0')).join(' ');
-    msgEl.innerHTML = `<code>set_int(${off}, ${val})</code> wrote <code>${bytes}</code> — ` +
+    msgEl.innerHTML = `<code>set_int(${off}, ${val})</code> wrote <code>${bytes}</code>: ` +
       `4 bytes, least-significant first (little-endian).`;
     render([off, off + 4]);
   }
@@ -105,7 +105,7 @@
     for (let i = off + 4; i < off + 4 + enc.length; i++) role[i] = 'int';
     msgEl.innerHTML = `<code>set_string(${off}, "${s}")</code> wrote the length ` +
       `<code>${enc.length}</code> as a 4-byte int (green), then ${enc.length} UTF-8 byte${enc.length === 1 ? '' : 's'} (warm)` +
-      (enc.length !== s.length ? ` — note: ${s.length} characters became ${enc.length} bytes.` : '.');
+      (enc.length !== s.length ? `. Note that ${s.length} characters became ${enc.length} bytes.` : '.');
     render([off, off + 4 + enc.length]);
   }
 
@@ -123,7 +123,7 @@
     const len = dv.getInt32(off, true);
     if (len < 0 || off + 4 + len > SIZE) {
       msgEl.innerHTML = `<code>get_string(${off})</code>: the 4 bytes there decode to length ` +
-        `<code>${len}</code>, which runs off the page — is there really a string at ${off}?`;
+        `<code>${len}</code>, which runs off the page. Is there really a string at ${off}?`;
       render(null, [off, off + 4]);
       return;
     }

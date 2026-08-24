@@ -1,4 +1,4 @@
-"""microdb · part 1 — the disk & file layer.
+"""microdb · part 1: the disk & file layer.
 
 Lab 1 of Advanced Databases for Data Science (DS 6XXX, Fall 2026).
 
@@ -10,7 +10,7 @@ classes make up the whole layer:
     Page         a block-sized bytearray with typed get/set methods.
     FileManager  moves whole blocks between disk files and Pages.
 
-BYTE-LAYOUT SPEC (the contract every later lab depends on — do not change):
+BYTE-LAYOUT SPEC (the contract every later lab depends on; do not change):
 
     int     4 bytes, little-endian, signed          struct format '<i'
     bytes   4-byte length prefix (an int, as above), then the raw bytes
@@ -48,7 +48,7 @@ import struct
 
 
 class BlockId:
-    """Names block number `blknum` of file `filename`. Immutable + hashable —
+    """Names block number `blknum` of file `filename`. Immutable + hashable:
     in Lab 2 the buffer pool will use BlockIds as dictionary keys."""
 
     def __init__(self, filename: str, blknum: int):
@@ -70,7 +70,7 @@ class BlockId:
 class Page:
     """A block-sized region of memory with typed reads and writes.
 
-    The page does not know what file (if any) it came from — it is just
+    The page does not know what file (if any) it came from. It is just
     bytes plus the layout rules in the module docstring."""
 
     def __init__(self, block_size: int):
@@ -132,8 +132,8 @@ class FileManager:
 
     def _file(self, filename: str):
         """Return the cached open file object for `filename`, opening
-        (and creating on disk if necessary) on first use. Provided for you —
-        note the two-step create: 'w+b' would truncate an existing file."""
+        (and creating on disk if necessary) on first use. Provided for you.
+        Note the two-step create: 'w+b' would truncate an existing file."""
         f = self._files.get(filename)
         if f is None:
             path = os.path.join(self.db_dir, filename)
@@ -158,7 +158,7 @@ class FileManager:
         """Write `page` to `block` on disk.
 
         If `sync` is true, force the bytes to durable storage before
-        returning (flush + os.fsync) — this is the expensive promise you
+        returning (flush + os.fsync). This is the expensive promise you
         will measure in Part 3."""
         # TODO: seek, write page.contents(), flush, and fsync when sync.
         raise NotImplementedError

@@ -1,9 +1,9 @@
-"""Lab 1 test harness — run:  python3 test_filemanager.py
+"""Lab 1 test harness. Run:  python3 test_filemanager.py
 
 Two groups, mirroring the lab page:
 
-    PAGE  — Page get/set round-trips (no disk involved)
-    FILE  — FileManager read/write/append/length + durability across reopen
+    PAGE  : Page get/set round-trips (no disk involved)
+    FILE  : FileManager read/write/append/length + durability across reopen
 
 Every test prints PASS or FAIL with a reason. The Gradescope autograder
 runs a superset of these, so green here is necessary, not sufficient.
@@ -32,9 +32,9 @@ def check(group, name, fn):
         kind = type(e).__name__
         msg = str(e) or "(no message)"
         if isinstance(e, NotImplementedError):
-            print(f"  [FAIL] {group}: {name} — not implemented yet")
+            print(f"  [FAIL] {group}: {name} - not implemented yet")
         else:
-            print(f"  [FAIL] {group}: {name} — {kind}: {msg}")
+            print(f"  [FAIL] {group}: {name} - {kind}: {msg}")
             if "-v" in sys.argv:
                 traceback.print_exc()
 
@@ -78,9 +78,9 @@ def test_adjacent_values():
     p.set_int(0, 1)
     p.set_string(4, "ada")
     p.set_int(11, 39)
-    expect(p.get_int(0) == 1, "id clobbered — set_string wrote outside its range?")
-    expect(p.get_string(4) == "ada", "name clobbered — check offsets in set_int")
-    expect(p.get_int(11) == 39, "gpa clobbered — string length prefix wrong?")
+    expect(p.get_int(0) == 1, "id clobbered. Did set_string write outside its range?")
+    expect(p.get_string(4) == "ada", "name clobbered. Check the offsets in set_int.")
+    expect(p.get_int(11) == 39, "gpa clobbered. Is the string length prefix wrong?")
 
 
 # ---------------- FILE group ----------------
@@ -132,7 +132,7 @@ def test_block_independence():
         fm.write(b0, p0); fm.write(b1, p1)
         q = Page(BLOCK_SIZE)
         fm.read(b0, q)
-        expect(q.get_string(0) == "block zero", "writing block 1 clobbered block 0 — check seek offsets")
+        expect(q.get_string(0) == "block zero", "writing block 1 clobbered block 0. Check your seek offsets.")
         fm.read(b1, q)
         expect(q.get_string(0) == "block one", "block 1 read back wrong")
         fm.close()
@@ -164,7 +164,7 @@ def test_durability_across_reopen():
         q = Page(BLOCK_SIZE)
         fm2.read(BlockId("t.tbl", 0), q)
         expect(q.get_string(0) == "survives",
-               "data did not survive close + reopen — is write() actually writing?")
+               "data did not survive close + reopen. Is write() actually writing?")
         fm2.close()
     in_tmpdir(go)
 
