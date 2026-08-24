@@ -7,7 +7,7 @@ Three groups, mirroring the lab page:
     PROMPT   — build_prompt emits the exact format the grader (and an
                LLM) can parse, and answer() wires it all together
 
-Pure stdlib, fully offline. The Gradescope autograder runs a superset.
+Pure stdlib, fully offline. The Gradescope autograder runs this same harness.
 """
 
 import sys

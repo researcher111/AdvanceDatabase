@@ -56,7 +56,7 @@ def main():
         if any(k in line for k in ("PARQUET", "Filters", "month", "File")):
             print("   " + line.rstrip())
 
-    print("\nRecord all numbers, then answer in measurements.txt:")
+    print("\nRecord all numbers, then think about these for class:")
     print("  1. Parquet beat CSV on the same rows. Name the TWO separate")
     print("     reasons (think: parsing, and which bytes move at all).")
     print("  2. Your microdb stores rows; Parquet stores columns. For which")

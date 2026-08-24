@@ -7,7 +7,7 @@ Three groups, mirroring the lab page:
     DIRTY  — write-back: modified pages survive eviction and flush_all
 
 Every test prints PASS or FAIL with a reason. The Gradescope autograder
-runs a superset. Pure stdlib; no pytest needed.
+runs this same harness. Pure stdlib; no pytest needed.
 """
 
 import shutil

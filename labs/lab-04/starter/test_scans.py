@@ -6,7 +6,7 @@ Three groups, mirroring the lab page:
     PROJECT — field restriction and its fence
     PRODUCT — the nested loop, join queries, rewind, pin hygiene
 
-Pure stdlib; no pytest. The Gradescope autograder runs a superset.
+Pure stdlib; no pytest. The Gradescope autograder runs this same harness.
 """
 
 import shutil

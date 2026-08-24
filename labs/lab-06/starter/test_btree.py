@@ -6,7 +6,7 @@ Three groups, mirroring the lab page:
     SEARCH — point lookups, duplicates, ranges across the leaf chain
     INDEX  — the tree over a real table: same answers as a scan, way less touching
 
-Pure stdlib; no pytest. The Gradescope autograder runs a superset.
+Pure stdlib; no pytest. The Gradescope autograder runs this same harness.
 """
 
 import shutil

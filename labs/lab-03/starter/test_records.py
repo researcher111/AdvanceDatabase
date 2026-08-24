@@ -7,7 +7,7 @@ Four groups, mirroring the lab page:
     SCAN    — TableScan across block boundaries, deletes and updates
     CATALOG — the provided catalog works iff your record layer does
 
-Pure stdlib; no pytest. The Gradescope autograder runs a superset.
+Pure stdlib; no pytest. The Gradescope autograder runs this same harness.
 """
 
 import shutil

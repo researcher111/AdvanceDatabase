@@ -7,7 +7,7 @@ Four groups, mirroring the lab page:
     RECOVER  — a crashed database comes back consistent (subprocess kill!)
     LOCKS    — strict 2PL: conflicts refuse loudly, commit releases
 
-Pure stdlib; no pytest. The Gradescope autograder runs a superset.
+Pure stdlib; no pytest. The Gradescope autograder runs this same harness.
 """
 
 import os

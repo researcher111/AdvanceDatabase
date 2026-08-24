@@ -6,7 +6,7 @@ Two groups, mirroring the lab page:
     FILE  : FileManager read/write/append/length + durability across reopen
 
 Every test prints PASS or FAIL with a reason. The Gradescope autograder
-runs a superset of these, so green here is necessary, not sufficient.
+runs this same harness, so green here is the grade.
 Pure stdlib; no pytest needed.
 """
 

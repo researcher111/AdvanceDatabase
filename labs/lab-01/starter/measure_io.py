@@ -6,7 +6,7 @@ Writes the same 4 KB block over and over through your FileManager, two ways:
                  the bytes are on durable storage before write() returns
     sync=False   every write goes to the OS page cache and returns
 
-Record all three printed numbers in measurements.txt. Your absolute numbers
+Note all three printed numbers for class. Your absolute numbers
 will differ from your neighbor's (different SSDs, different laptops). The
 RATIO is the lesson.
 """
@@ -45,7 +45,7 @@ def main():
         print(f"buffered writes (sync=False): {rate_nosync:12,.0f} blocks/sec")
         print(f"durable  writes (sync=True):  {rate_sync:12,.0f} blocks/sec")
         print(f"ratio (buffered / durable):   {rate_nosync / rate_sync:12,.1f}x")
-        print("\nWrite these three numbers in measurements.txt, then answer:")
+        print("\nNote these three numbers, then think about these for class:")
         print("  if every microdb operation fsync'd every page it touched,")
         print("  how many row-updates/sec could the engine ever reach?")
     finally:

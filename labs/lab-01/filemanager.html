@@ -449,45 +449,9 @@ possible version of surviving a restart.</p>
 
 <p>Your file manager has a switch you haven't evaluated yet: <code>write(…, sync=True)</code> ends
 with <code>fsync</code>, the call that turns "the OS accepted my bytes" into "the bytes are on
-the SSD". Before you run the benchmark, commit to a prediction.</p>
+the SSD".</p>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the price of a promise</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Your SSD and OS can absorb a buffered 4&nbsp;KB
-    write in a few microseconds. How much slower is a write that must be <em>physically durable</em>
-    before returning: 2×? 10×? 1000×? Write your ratio down.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare predictions, then both run
-      <code>python3 measure_io.py</code> and compare <em>measurements</em>; laptops will differ,
-      sometimes wildly. Whose ratio is bigger, and what hardware difference explains it?</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence for the room: if durability
-      costs this much per write, how must a database that promises durability on every
-      <code>COMMIT</code> arrange its writes?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The honest answer is that <strong>nobody's intuition is reliable here</strong>, which
-      is why the lab makes you measure rather than guess. The instructor's laptop showed about
-      <strong>15×</strong> (465,849 buffered writes/sec against 30,788 durable). Fast SSDs with
-      write caches land in the 10 to 20 range; many laptops and most cloud disks show 100 to
-      1000×. Yours is right if your tests pass; the number is a property of your hardware, not of
-      your code.</p>
-      <p>The Share answer is the one that matters, and it sets up week 7. If durability costs that
-      much <em>per write</em>, a database that promises it on every <code>COMMIT</code> cannot
-      afford to pay it per page. So it arranges to pay <strong>once per transaction instead of
-      once per change</strong>, and to pay it on a <strong>sequential append</strong> rather than
-      scattered page writes. One small record forced to disk stands in for every page the
-      transaction touched. That is the write-ahead log, and your ratio is exactly the number that
-      makes it worth building.</p>
-    </details>
-  </details>
-</div>
-
-<p>Run it and record all three numbers in <code>measurements.txt</code>:</p>
+<p>Run it and note all three numbers; you will want them in class:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_io.py</span>
 buffered writes (sync=False):      465,849 blocks/sec
@@ -519,10 +483,18 @@ instructions (Canvas/Gradescope link on the course home).</p>
 <h3>Deliverables</h3>
 <ul>
   <li>☐ <code>file_manager.py</code>: all nine local tests pass (<code>9/9</code>).</li>
-  <li>☐ <code>measurements.txt</code>: your three numbers from <code>measure_io.py</code>, plus
+</ul>
+<p>That is the whole upload. The grade is the test harness: the score you see locally is the score
+Gradescope reports.</p>
+
+<h3>Discussion prompts (not graded)</h3>
+<p>The measurement and reflection questions are still the point of the later parts of the lab; they
+are just not turned in. Bring your numbers and your answers to class, where we compare them.</p>
+<ul>
+  <li>Your three numbers from <code>measure_io.py</code>, plus
   2–3 sentences: which number surprised you, and what does the ratio mean for a database that
   promises durability?</li>
-  <li>☐ Reflection answers (3–5 sentences total): (1)&nbsp;Why does <code>read()</code> take a
+  <li>Reflection (3–5 sentences total): (1)&nbsp;Why does <code>read()</code> take a
   page argument instead of returning a new Page? (2)&nbsp;Why must BlockId be immutable?</li>
 </ul>
 
@@ -540,14 +512,13 @@ instructions (Canvas/Gradescope link on the course home).</p>
 <table>
   <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
   <tbody>
-    <tr><td>Correctness</td><td>Autograder runs a superset of the local harness (more offsets, larger strings, more blocks; same spec)</td><td>70%</td></tr>
-    <tr><td>Measurement + answers</td><td>Three numbers present and plausible; explanation connects ratio → durability cost</td><td>20%</td></tr>
-    <tr><td>Code quality</td><td>Readable, uses struct as specified, no reimplemented plumbing</td><td>10%</td></tr>
+    <tr><td>Correctness</td><td>Gradescope runs the lab's test harness. Every test is worth the same share of
+    the points, and the local pass count is the grade.</td><td>100%</td></tr>
   </tbody>
 </table>
 
 <p>Suggested workflow: finish Build + Verify in class (the room is the best debugger you'll
-get), run Measure tonight, write the three sentences while the ratio is still surprising.</p>
+get), run Measure tonight, and bring your ratio to class while it is still surprising.</p>
 
 <!-- ============================================================ -->
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
@@ -572,8 +543,8 @@ absolute size.</p>
 <h3>I'm on macOS and my fsync ratio seems suspiciously small.</h3>
 <p class="keep-in-present">Sharp eyes. On macOS, <code>fsync</code> flushes to the drive but doesn't force the drive's
 own cache to persist; real engines use <code>F_FULLFSYNC</code> there, which is far slower.
-Your measurement is still valid for this lab; mention the caveat in
-<code>measurements.txt</code> for a nod of respect. (SQLite and Postgres both special-case
+Your measurement is still valid for this lab; mention the caveat when
+ratios get compared in class, for a nod of respect. (SQLite and Postgres both special-case
 this; databases collect such scars.)</p>
 
 <h3>Windows: anything different?</h3>

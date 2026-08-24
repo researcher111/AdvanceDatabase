@@ -15,8 +15,7 @@ import duckdb
 
 # Reference queries — the harness's own answers, computed at test time so
 # they can never drift from the data. (Yes, you could read these. The
-# point of the lab is understanding them, and the Gradescope superset
-# uses variants.)
+# point of the lab is understanding them.)
 REFERENCE = {
     1: ("SELECT count(*) AS n_rides, round(sum(fare + tip), 2) AS revenue FROM rides", False),
     2: ("SELECT month, round(sum(fare + tip), 2) AS revenue FROM rides "

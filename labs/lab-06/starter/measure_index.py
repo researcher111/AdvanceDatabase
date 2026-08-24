@@ -73,7 +73,7 @@ def main():
         fm.close()
     finally:
         shutil.rmtree(d, ignore_errors=True)
-    print("\nRecord all numbers, then answer in measurements.txt:")
+    print("\nRecord all numbers, then think about these for class:")
     print("  1. The scan touched 100,000 rows to return 1. What fraction of its")
     print("     work was wasted, and what decides that fraction? (Name: selectivity.)")
     print("  2. The index descended", "height-many", "nodes. How many would it")

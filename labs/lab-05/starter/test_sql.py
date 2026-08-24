@@ -6,7 +6,7 @@ Three groups, mirroring the lab page:
     PLAN  — QueryData becomes the right scan tree
     SQL   — end to end: CREATE, INSERT, SELECT through Database.execute
 
-Pure stdlib; no pytest. The Gradescope autograder runs a superset.
+Pure stdlib; no pytest. The Gradescope autograder runs this same harness.
 """
 
 import shutil

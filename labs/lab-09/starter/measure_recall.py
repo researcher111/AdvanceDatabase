@@ -52,7 +52,7 @@ def main():
         print(f"{'IVF':>12} | {probe:>5} | {avg_r:>13.3f} | {avg_c:>17,} | "
               f"{exact_cost / avg_c:>7.1f}x")
 
-    print("\nRecord the table, then answer in measurements.txt:")
+    print("\nRecord the table, then think about these for class:")
     print("  1. Between which two probe values does recall stop being worth")
     print("     the extra comparisons, for YOUR taste? Defend the cut.")
     print("  2. probe=20 probes every list. Why is its recall 1.0 by")

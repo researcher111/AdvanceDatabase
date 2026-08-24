@@ -10,7 +10,7 @@ The whole semester's promise, kept in one run:
     4. we reopen the wreckage, show you the corruption on disk,
        run YOUR recover() — and count the money
 
-Record the before/after balances in measurements.txt. The demo is
+Note the before/after balances for class. The demo is
 deterministic; the drama is real.
 """
 
@@ -94,7 +94,7 @@ def main():
     finally:
         import shutil
         shutil.rmtree(db, ignore_errors=True)
-    print("\nRecord the three balance lines, then answer in measurements.txt:")
+    print("\nRecord the three balance lines, then think about these for class:")
     print("  1. The $40 committed transfer survived. Which exact fsync made")
     print("     that promise binding, and when did it happen?")
     print("  2. The stolen page put A=$10 on disk before the crash. Why was")

@@ -7,7 +7,7 @@ Two workloads over a 50-block file, at several pool sizes:
     hot set  2,000 accesses where 90% go to 5 "hot" blocks and 10% are
              spread uniformly — the classic transactional pattern
 
-Record the hit rates in measurements.txt. Before running, predict: with a
+Note the hit rates for class. Before running, predict: with a
 49-frame pool and a 50-block file, what hit rate does the scan get?
 """
 
@@ -68,7 +68,7 @@ def main():
             r_hot = run(BufferManager(fm, n), hot)
             print(f"{n:>10} | {r_scan:>13.1%} | {r_hot:>15.1%}")
         fm.close()
-        print("\nRecord the table, then answer in measurements.txt:")
+        print("\nRecord the table, then think about these for class:")
         print("  1. Why does the scan get ~0% until the pool fits the WHOLE file?")
         print("  2. Why does the hot set do fine with a pool a tenth that size?")
         print("  3. Which workload is your ML feature pipeline?")

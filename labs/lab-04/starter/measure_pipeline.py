@@ -8,7 +8,7 @@ Same query, two plan shapes, and a counter on every edge of the tree:
     Plan B (filter EARLY): Project <- Select(join) <- Product(Select(gpa) x Select(dept))
 
 The CountingScan wrapper counts rows flowing through each edge. Record
-both tables in measurements.txt. All numbers are deterministic.
+both tables for class. All numbers are deterministic.
 """
 
 import shutil
@@ -95,7 +95,7 @@ def main():
         fm.close()
     finally:
         shutil.rmtree(d, ignore_errors=True)
-    print("\nRecord both tables, then answer in measurements.txt:")
+    print("\nRecord both tables, then think about these for class:")
     print("  1. Where did Plan B's advantage come from, mechanically?")
     print("  2. The majors filter kept 1 row yet 60 flowed through it. Explain.")
     print("  3. Plans A and B return identical rows. Who should pick between")

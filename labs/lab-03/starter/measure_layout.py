@@ -5,7 +5,7 @@ that do to a 10,000-row table? Then a real insert of 10,000 rows to prove
 the arithmetic against the actual file — plus the scan hit rate through an
 8-frame pool, which should look familiar from last week.
 
-All numbers are deterministic: record them in measurements.txt.
+All numbers are deterministic: note them for class.
 """
 
 import shutil
@@ -72,7 +72,7 @@ def prove_it():
 if __name__ == "__main__":
     arithmetic()
     prove_it()
-    print("\nRecord the table and both numbers, then answer in measurements.txt:")
+    print("\nRecord the table and both numbers, then think about these for class:")
     print("  1. Where do the wasted bytes in the wide schema go, exactly?")
     print("  2. ada's name uses 3 of its 8 reserved chars. What % of her slot is air?")
     print("  3. Why is the scan's hit rate ~0% even though the pool held 8 blocks?")

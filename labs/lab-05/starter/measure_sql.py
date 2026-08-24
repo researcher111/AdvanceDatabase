@@ -5,7 +5,7 @@ rows the join plan examines — exposing the honest truth: your planner is
 CORRECT but NAIVE. It never pushes filters below the product (Lab 4's 15×
 trick), because it doesn't know how. That gap has a name: week 9.
 
-All numbers are deterministic: record them in measurements.txt.
+All numbers are deterministic: note them for class.
 """
 
 import shutil

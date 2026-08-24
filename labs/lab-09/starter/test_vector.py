@@ -8,7 +8,7 @@ Three groups, mirroring the lab page:
     QUALITY — recall@10 clears the bar at probe 4, and comparisons
               actually drop vs brute force (the whole point)
 
-Pure stdlib. The Gradescope autograder runs a superset.
+Pure stdlib. The Gradescope autograder runs this same harness.
 """
 
 import os

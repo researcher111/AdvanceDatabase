@@ -8,8 +8,8 @@ Three groups, one per part:
 
 Skipped groups print [SKIP] and don't count toward the total, so the
 score is N/M over the tests your machine can run. The Gradescope
-autograder runs the OFFLINE group; Parts B and C are turned in as output
-pasted into measurements.txt (see the lab page).
+autograder runs the OFFLINE group, which is the whole grade; Parts B and C
+are for class discussion (see the lab page).
 """
 
 import re
