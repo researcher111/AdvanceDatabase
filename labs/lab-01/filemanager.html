@@ -112,46 +112,9 @@ Then try your own values and read them back.</p>
 <!-- ============================================================ -->
 <h2 id="big-idea">Why whole blocks</h2>
 
-<p>Before writing the code, settle the design question the whole layer is built on.</p>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the disk's contract</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A file is just a long array of bytes, and
-    the ada row is 15 bytes. Yesterday's latency ladder said a storage trip costs the same
-    whether it moves 8 bytes or 8&nbsp;KB. Given that one fact, design the read API.
-    Should <code>read()</code> fetch a row? A byte range? Something else? Commit to an answer.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare APIs. If you fetch exactly one row
-      per trip, what happens to the query from lecture that needed all six?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Agree on the unit a storage layer should
-      move, then check it against <a href="#the-api">the API below</a>.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><code>read()</code> should fetch a <strong>fixed-size block</strong>, not a row and not
-      an arbitrary byte range. If the trip costs the same either way, fetching only 15 bytes
-      throws away the rest of the trip you already paid for.</p>
-      <p>Fetch one row per trip and the six-row query from lecture pays six full storage trips for
-      data that was sitting in one neighbourhood. Fetch the block and it pays one, with the other
-      five rows arriving free. Why <em>fixed</em> size rather than "whatever was asked for"? Because it turns
-      finding a block into arithmetic. Block k starts at <code>k × block_size</code>, so with
-      4096-byte blocks, block 3 begins at byte 12288 and runs to byte 16383. Nothing has to be
-      recorded or looked up to find it. Blocks of varying size would need a table saying where
-      each one begins, maintained forever and consulted on every single read.</p>
-      <p>Fixed size pays a second time in memory. Every frame in next week's buffer pool is the
-      same size, so any block can be loaded into any free frame. That is what lets the pool be a
-      plain array of frames rather than a memory allocator. Every serious engine lands here:
-      4&nbsp;KB in microdb, 8&nbsp;KB in Postgres, up to 64&nbsp;KB in analytics systems.</p>
-    </details>
-  </details>
-</div>
-
-<p>Every serious engine lands on the same answer: move <strong>fixed-size blocks</strong>, and
-make them generous: 4&nbsp;KB in microdb, 8&nbsp;KB in Postgres, up to 64&nbsp;KB in analytics
+<p>Before writing the code, settle the design question the whole layer is built on: what unit
+should <code>read()</code> move? A row? An arbitrary byte range? Every serious engine lands on
+the same answer: move <strong>fixed-size blocks</strong>, and make them generous: 4&nbsp;KB in microdb, 8&nbsp;KB in Postgres, up to 64&nbsp;KB in analytics
 systems. Since the trip costs the same anyway, fetching the whole neighborhood is free insurance
 that the next request is already in memory. Fixed size (rather than "exactly what was asked
 for") is what makes the bookkeeping sane: block <code>k</code> of a file always lives at one
