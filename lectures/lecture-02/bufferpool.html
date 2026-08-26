@@ -98,7 +98,7 @@ arbitraging between them:</p>
     <tr><td>Access time</td><td>~100 ns</td><td>~25 µs – 10 ms</td><td>disk is 250× – 100,000× slower<sup class="src"><a href="#src-3" title="Latency Numbers Every Programmer Should Know (Jeff Dean / Peter Norvig numbers)">3</a></sup></td></tr>
     <tr><td>Capacity (a laptop)</td><td>16–32 GB</td><td>0.5–4 TB</td><td>disk holds ~50× more</td></tr>
     <tr><td>Survives power loss</td><td>no</td><td>yes</td><td>&nbsp;</td></tr>
-    <tr><td>Cost per GB</td><td>high</td><td>low</td><td>DRAM costs ~50–100× more<sup class="src"><a href="#src-14" title="DRAM vs SSD price per GB, 2024 to 2026 (rampricehistory.com)">14</a></sup></td></tr>
+    <tr><td>Cost per GB</td><td>high</td><td>low</td><td>DRAM costs ~50–100× more<sup class="src"><a href="#src-13" title="DRAM vs SSD price per GB, 2024 to 2026 (rampricehistory.com)">13</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -319,7 +319,7 @@ earned on it:</p>
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Postgres</span><span>clock-sweep (an LRU approximation with a usage counter), plus <strong>ring buffers</strong>: a big sequential scan gets a tiny private ring so it can't flood the shared pool<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">MySQL/InnoDB</span><span>midpoint LRU: new pages enter the <em>middle</em> of the list, not the head; a page must be touched again to reach the protected young region<sup class="src"><a href="#src-11" title="MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool">11</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">DuckDB</span><span>analytics engines take a different route. DuckDB still caches ordinary storage pages in its buffer manager and keeps them as long as memory allows, but a big scan streams through in fixed-size chunks, and the operators that need memory, such as the hash table a join builds, compete with those cached pages under one memory limit. When the limit is hit, intermediate results spill to disk instead of the whole pool being flushed<sup class="src"><a href="#src-15" title="DuckDB blog: Memory Management in DuckDB (2024)">15</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">DuckDB</span><span>analytics engines take a different route. DuckDB still caches ordinary storage pages in its buffer manager and keeps them as long as memory allows, but a big scan streams through in fixed-size chunks, and the operators that need memory, such as the hash table a join builds, compete with those cached pages under one memory limit. When the limit is hit, intermediate results spill to disk instead of the whole pool being flushed<sup class="src"><a href="#src-14" title="DuckDB blog: Memory Management in DuckDB (2024)">14</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The shared idea</span><span>detect "this access pattern won't reuse" and refuse to let it evict what will.</span></div>
 </div>
 
@@ -337,30 +337,9 @@ doesn't have yet, and must never lose track of that fact.</p>
     <tr><td><strong>Eviction</strong></td><td>the pool, inside <code>pin()</code></td><td>a miss with no free frame means a victim page is thrown out so its frame can hold the new block. If that victim is dirty, the pool writes it to disk first, then overwrites the frame; skip that write and the change exists nowhere</td></tr>
     <tr><td><strong><code>flush_all()</code></strong></td><td>shutdown / <span class="gloss" data-gloss="checkpoint">checkpoint</span></td><td>writes every dirty page in the pool to disk in one sweep. At shutdown that is how the changes outlive the process; at a checkpoint it puts a ceiling on how much work recovery has to redo after a crash, since everything before the checkpoint is already on disk</td></tr>
     <tr><td><strong>Never on unpin</strong></td><td>&nbsp;</td><td>unpin only says the caller is done with the page, not that it should be written. A hot page that many transactions touch stays dirty in memory for a long time, on purpose: writing it on every unpin would turn each small change into a disk trip</td></tr>
-    <tr><td><strong>Not at COMMIT</strong></td><td>the log instead</td><td>commit does not write the data pages. It forces the <em>write-ahead log</em> to disk instead, one sequential fsync of a small record, and the pages follow later at their own pace. That is the week-7 escape from the fsync ratio you measured in Lab 1<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup></td></tr>
+    <tr><td><strong>Not at <span class="gloss" data-gloss="commit">COMMIT</span></strong></td><td>the log instead</td><td>commit does not write the data pages. It forces the <em>write-ahead log</em> to disk instead, one sequential fsync of a small record, and the pages follow later at their own pace. That is the week-7 escape from the fsync ratio you measured in Lab 1<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup></td></tr>
   </tbody>
 </table>
-
-<p class="keep-in-present">Surprise worth savoring: on the day you commit a transaction, the
-table's pages are usually <em>not</em> written. One cheap log write stands in for many
-expensive page writes; the buffer pool and the WAL are two halves of one design.</p>
-
-<h3 class="new-slide" data-kicker="Dirty pages">A preview of week 7: force &amp; steal</h3>
-
-<p>Two yes/no questions define every engine's write-back personality, and the quadrant every
-serious engine picks is the one that <em>requires</em> a recovery log:</p>
-
-<table>
-  <thead><tr><th></th><th><strong>Force</strong> (flush dirty pages at commit)</th><th><strong>No-force</strong> (flush whenever)</th></tr></thead>
-  <tbody>
-    <tr><td><strong>No-steal</strong> (never flush uncommitted)</td><td>slow but simple, no log needed</td><td>needs redo after a crash</td></tr>
-    <tr><td><strong>Steal</strong> (may flush uncommitted)</td><td>needs undo after a crash</td><td><strong>needs both, and it's what everyone builds<sup class="src"><a href="#src-12" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging (Mohan et al., ACM TODS 1992)">12</a></sup></strong>, because it's the only fast quadrant</td></tr>
-  </tbody>
-</table>
-
-<p class="keep-in-present">No-force + steal means: commits don't wait for data pages, and the
-pool evicts whatever it likes, maximum freedom for the cache, paid for by ARIES-style
-recovery. Week 7 builds the payment.</p>
 
 <!-- ============================================================ -->
 <h2 id="math">The arithmetic of a cache</h2>
@@ -375,7 +354,7 @@ with t_mem = 100 ns, t_disk = 25 µs:
   h = 99%   →  T_avg =   349 ns    ≈ 3.5× slower than RAM
   h = 99.6% →  T_avg =   200 ns    =  2× RAM  ← the target</code></pre>
 
-<p class="keep-in-present">The miss term owns the average: at 90% hits, the 10% of misses<sup class="src"><a href="#src-13" title="Patterson and Hennessy, Computer Organization and Design (3rd ed.), In More Depth: Average Memory Access Time">13</a></sup>
+<p class="keep-in-present">The miss term owns the average: at 90% hits, the 10% of misses<sup class="src"><a href="#src-12" title="Patterson and Hennessy, Computer Organization and Design (3rd ed.), In More Depth: Average Memory Access Time">12</a></sup>
 contribute <strong>96%</strong> of the total time. Caches aren't good until they're
 <em>absurdly</em> good; this is why the cliff matters.</p>
 
@@ -505,10 +484,9 @@ document that supports the claim it is attached to.</p>
   <li id="src-9"><a href="https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf">Architecture of a Database System (Hellerstein, Stonebraker, Hamilton, 2007), section 5.3</a></li>
   <li id="src-10"><a href="https://15445.courses.cs.cmu.edu/fall2025/notes/04-bufferpool.pdf">CMU 15-445/645 Fall 2025 Lecture #04 notes: Memory and Disk Management</a></li>
   <li id="src-11"><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-buffer-pool.html">MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool</a></li>
-  <li id="src-12"><a href="https://cs.stanford.edu/people/chrismre/cs345/rl/aries.pdf">ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging (Mohan et al., ACM TODS 1992)</a></li>
-  <li id="src-13"><a href="https://course.khoury.northeastern.edu/cs3650/ssl/TEXT-CD/Content/COD3e/InMoreDepth/IMD7-Average-Memory-Access-Time.pdf">Patterson and Hennessy, Computer Organization and Design (3rd ed.), In More Depth: Average Memory Access Time</a></li>
-  <li id="src-14"><a href="https://rampricehistory.com/blog/ram-vs-ssd-price-trends-2026">DRAM vs SSD price per GB, 2024 to 2026 (rampricehistory.com)</a></li>
-  <li id="src-15"><a href="https://duckdb.org/2024/07/09/memory-management">DuckDB blog: Memory Management in DuckDB (2024)</a></li>
+  <li id="src-12"><a href="https://course.khoury.northeastern.edu/cs3650/ssl/TEXT-CD/Content/COD3e/InMoreDepth/IMD7-Average-Memory-Access-Time.pdf">Patterson and Hennessy, Computer Organization and Design (3rd ed.), In More Depth: Average Memory Access Time</a></li>
+  <li id="src-13"><a href="https://rampricehistory.com/blog/ram-vs-ssd-price-trends-2026">DRAM vs SSD price per GB, 2024 to 2026 (rampricehistory.com)</a></li>
+  <li id="src-14"><a href="https://duckdb.org/2024/07/09/memory-management">DuckDB blog: Memory Management in DuckDB (2024)</a></li>
 </ol>
 
 </main>
@@ -516,6 +494,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=4"></script>
+<script src="viz.js?v=6"></script>
 </body>
 </html>

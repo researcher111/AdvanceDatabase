@@ -50,6 +50,15 @@
         'flushed to disk first or the write is lost. Reads never dirty a page, and unpin does not ' +
         'write anything: a hot page can stay dirty in memory for a long time, on purpose.</p>',
     },
+    'commit': {
+      title: 'Commit',
+      body: '<p>The moment a transaction ends successfully and the database promises that its changes ' +
+        'are permanent. Before COMMIT, everything the transaction wrote is provisional and can be ' +
+        'rolled back; after it, the changes must survive a crash or a power cut, which is the D in ' +
+        'ACID. The promise is what costs money: something has to reach durable storage before the ' +
+        'database says “done.” The cheap way to keep it, covered in week 7, is to force a small log ' +
+        'record to disk at COMMIT and let the modified pages themselves be written later.</p>',
+    },
     'working-set': {
       title: 'Working set',
       body: '<p>The set of pages a workload actually re-touches over a window of time, not the ' +
@@ -69,7 +78,7 @@
       body: '<p>A periodic moment when the database flushes accumulated dirty pages to disk and ' +
         'records “everything before this point is safely down.” Checkpoints bound how much ' +
         'work crash recovery must replay; without them, a long-running database would need to ' +
-        're-run its entire log after a crash. You’ll meet them properly in week 7.</p>',
+        're-run its entire log after a crash. You will implement them in week 7.</p>',
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
