@@ -155,13 +155,13 @@ miss, and who gets evicted.</p>
 
 <h3 class="new-slide" data-kicker="Drive a buffer pool">What just happened</h3>
 
-<p>Two workloads, same pool, wildly different outcomes; that contrast is the whole lecture
-in miniature:</p>
+<p>Two workloads, same pool, wildly different outcomes; that contrast is the whole point of
+the lecture:</p>
 
 <table>
   <thead><tr><th>Workload</th><th>Pattern</th><th>Hit rate (3 frames)</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td><strong>Scan ×2</strong></td><td>0,1,2,…,7 then again</td><td><strong>0%</strong></td><td>by the time a block is needed again, LRU has evicted it, every time</td></tr>
+    <tr><td><strong>Scan ×2</strong></td><td>0,1,2,…,7 then again</td><td><strong>0%</strong></td><td>the pool evicts by <strong>LRU</strong>, <em>least recently used</em>: when all three frames are full, the block that has gone longest without being touched is thrown out to make room. In a scan that is always the block the scan will want next time around: block 0 is evicted to load block 3, block 1 to load block 4, and so on. By the time a block is needed again, LRU has evicted it, every time</td></tr>
     <tr><td><strong>Hot set</strong></td><td>mostly blocks 0–1, occasional others</td><td><strong>~70%</strong></td><td>the <span class="gloss" data-gloss="working-set">working set</span> fits in the pool, so repeats are free</td></tr>
   </tbody>
 </table>
