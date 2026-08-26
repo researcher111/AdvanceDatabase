@@ -159,40 +159,7 @@ then keep the byte-layout table close while you code, because the tests enforce 
 <p>An <code>int</code> is easy to lay out: always exactly 4 bytes, wherever it sits. A string
 is not, because its length changes from row to row, so the layout has to pin down where one
 ends before the next field begins. microdb settles that with a specific rule, stated in the
-contract table below. Work out your own version first.</p>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>store a string</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>You must store <code>"ada"</code> at offset 4
-    of a byte array, so that code which knows only <em>the offset</em> can read it back exactly.
-    The page around it is full of other data. Sketch the bytes you'd write. What goes wrong if
-    you just write the three letters?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare designs: length prefix, terminator
-      byte, or fixed width? What breaks a terminator if the string can contain any byte?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Check your design against the spec table
-      below; if yours differs, name the tradeoff you made.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Write the <strong>length first</strong>: a 4-byte int holding the byte count at
-      <code>off</code>, then the payload at <code>off+4</code>. So "ada" at offset 4 is
-      <code>03 00 00 00</code> then <code>61 64 61</code>, occupying bytes 4 through 10.</p>
-      <p>Just writing the three letters fails because the reader has no idea where to stop: the
-      page is full of other data, and <code>get_string(4)</code> would happily return "ada"
-      followed by whatever bytes came next. A <strong>terminator</strong> byte fixes that only if
-      the terminator can never appear in the data, which is false for arbitrary bytes and false
-      for UTF-8 in general, and it also makes reading O(length) instead of O(1).
-      <strong>Fixed width</strong> works but wastes space and imposes a maximum. The length prefix
-      costs 4 bytes, permits any byte in the payload, and tells you the size before you read it,
-      which is why it is the spec the tests enforce.</p>
-    </details>
-  </details>
-</div>
+contract table below.</p>
 
 <p>The contract, in one table. This exact layout is what <code>test_filemanager.py</code>
 round-trips, and every later lab assumes it:</p>
@@ -435,7 +402,7 @@ ratio (buffered / durable):           15.1x</code></pre>
 <p class="keep-in-present">Hold on to your ratio: it is the founding constraint of Lab 7.
 A database cannot fsync every page it touches and stay usable, yet it promises durability on
 every commit. The escape from that trap is called a write-ahead log, and the number you just
-wrote down is why it exists.</p>
+measured is why it exists.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>

@@ -86,42 +86,6 @@ and the discipline fits in four helper methods.</p>
 <!-- ============================================================ -->
 <h2 id="pipeline">Text is not a program</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the regex trap</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>You need to extract the table name and the
-    WHERE condition from SQL text. A classmate proposes one big regex:
-    <code>SELECT (.+) FROM (.+) WHERE (.+)</code>. Find three legal queries that break it;
-    then decide whether more regex can ever fix it. (Consider: commas, missing WHERE, a
-    student named <code>'from'</code>.)</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare breakers. What's the structural
-      thing regex lacks: the thing that knows a <code>'from'</code> inside quotes isn't the
-      keyword FROM?</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: what two separate jobs is
-      the one regex trying to do at once?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Three that break it: <code>SELECT name, gpa FROM students</code> (no WHERE at all, so
-      the regex simply fails to match), <code>SELECT * FROM students, majors WHERE mid = mid2</code>
-      (the greedy <code>(.+)</code> for the table list happily swallows the comma and anything
-      after it), and <code>SELECT name FROM students WHERE name = 'from'</code>, where the regex
-      cannot tell a quoted word from the keyword.</p>
-      <p>More regex cannot fix it, because the thing regex lacks is <em>state</em>: no way to
-      remember that it is currently inside quotes, and no way to nest. The Share answer names the
-      real fault: the one regex is doing two separate jobs at once, deciding what the
-      <em>characters</em> spell (is this a word, a number, a quoted string?) and deciding what the
-      <em>structure</em> is (may a WHERE follow here?). Split them and each half becomes easy: the
-      lexer settles spelling once, so a string token is a string token forever, and the parser
-      then reads tokens and never characters.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="Text is not a program">Split the job: lex, then parse</h3>
 
 <table>
@@ -201,42 +165,6 @@ design. By the time bytes are involved, SQL is a distant memory.</p>
 
 <!-- ============================================================ -->
 <h2 id="grammar">The grammar</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>write the rule</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Write a precise rule (precise enough to
-    hand a freshman) for what may legally follow <code>WHERE</code>. Cover:
-    <code>gpa &gt; 35</code>, <code>name = 'ada'</code>, <code>mid = mid2</code>, and chains
-    with <code>AND</code>. Notation is yours; ambiguity is the enemy.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Trade rules and attack: does your partner's
-      rule allow <code>35 &gt; gpa</code>? Forbid <code>gpa &gt;</code>? Decide what
-      <em>should</em> be legal before arguing about notation.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Compare with the grammar below; the
-      lab's tests enforce exactly it.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The grammar the lab enforces, in two lines:</p>
-      <pre><code>predicate := term { AND term }
-term      := field ( = | &lt; | &gt; ) value
-value     := number | 'string' | field</code></pre>
-      <p>Read it as a rule you could hand a freshman: a predicate is one or more terms joined by
-      AND; a term is always <em>field, operator, value</em> in that order; a value is a number, a
-      quoted string, or another field name. That last alternative is the whole join mechanism, and
-      it is why <code>mid = mid2</code> needs no new machinery.</p>
-      <p>The Pair attack is the useful part. <code>35 &gt; gpa</code> is <em>not</em> legal here,
-      because a term must start with a field, and being explicit about that beats discovering it
-      from a crash. <code>gpa &gt;</code> is not legal either, since a value is required. Neither
-      restriction is forced by nature; both are decisions, and writing the grammar down is what
-      turns them from accidents into decisions.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="The grammar">microSQL in seven lines</h3>
 
@@ -357,43 +285,6 @@ QueryData and build a better plan; the parser won't change by one line.</p>
 <!-- ============================================================ -->
 <h2 id="planner">The planner</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>description → tree</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>You hold
-    <code>QueryData(fields=["name","dept"], tables=["students","majors"],
-    predicate=mid=mid2 ∧ gpa&gt;35)</code> and Lab 4's four operator classes. Write the
-    recipe (as numbered steps) that turns <em>any</em> QueryData into a correct plan.
-    Where do multiple tables go? When do you skip a wrapper entirely?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare recipes against the four-step card
-      below. Did anyone try to be clever about filter placement? Hold that thought.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: why is the dumb recipe
-      always <em>correct</em>, whatever the data looks like?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Four steps, in this order. <strong>1.</strong> One TableScan per table in the FROM
-      list, with each Layout fetched from the Lab 3 catalog. <strong>2.</strong> Fold them
-      left to right into ProductScans: <code>((t1 × t2) × t3)</code>. <strong>3.</strong> One
-      SelectScan wrapping the whole WHERE predicate, if there is one. <strong>4.</strong> One
-      ProjectScan with the field list, unless the query said <code>*</code>. Skip a wrapper
-      entirely when it would do nothing, so <code>SELECT * FROM t</code> plans as a bare
-      TableScan.</p>
-      <p>Why is the dumb recipe always correct? Because the product produces every combination and
-      the predicate is then applied to all of them, so no row that should have survived can have
-      been dropped early. Correctness never depends on the data. What the recipe cannot do is be
-      <em>fast</em>: it always builds the full cartesian product first, which is the 900-pairs
-      shape from last week rather than the 60-pairs one. Anyone who tried to be clever about
-      filter placement was inventing predicate pushdown, which is right, and needs statistics to
-      do safely, which is week 9.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="The planner">The naive recipe: four steps, always correct</h3>
 
 <div class="layer-card">
@@ -433,39 +324,6 @@ August. Thursday you get to feel it.</p>
 
 <!-- ============================================================ -->
 <h2 id="errors">Dying well</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the error you deserve</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A student types
-    <code>SELECT name students</code> (missing FROM). Write the exact error message you'd
-    want back; then write the WORST message that is still technically true. What separates
-    them?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare bests and worsts. ("Error." is the
-      classic worst. Postgres's <code>syntax error at or near "students"</code> is… middling.)</li>
-      <li><span class="tps-phase">Share · 2 min</span>Agree on the two facts every parse error
-      owes its user.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The best message names two things: <strong>what the parser expected</strong> and
-      <strong>what it found instead</strong>, ideally with where. <code>expected 'from', found
-      'students'</code>. The worst message that is still technically true is <code>Error.</code>
-      or <code>invalid syntax</code>: both accurate, neither actionable, because they leave the
-      user to diff their query against a grammar they have never read.</p>
-      <p>So those are the two facts every parse error owes its user: expected, and found. Notice
-      you get them for free here rather than by writing error-handling code. Every grammar rule
-      funnels through one <code>expect()</code> helper, so improving that single function improves
-      every message in the language at once. Postgres's <code>syntax error at or near
-      "students"</code> is middling precisely because it reports the found half and leaves out the
-      expected half.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="Dying well">expect() is the whole error strategy</h3>
 

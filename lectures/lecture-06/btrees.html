@@ -86,42 +86,6 @@ everything else is keeping that map balanced on disk.</p>
 <!-- ============================================================ -->
 <h2 id="problem">Finding one row in a million</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the waste, quantified</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A million-row users table,
-    <code>WHERE uid = 77777</code>, exactly one match. Your Lab 4 SelectScan answers it.
-    Count its waste precisely: rows examined, rows returned, and the fraction of work that
-    accomplished nothing. Then propose ANY scheme that does better: sorted file?
-    Python dict? Something else? What does your scheme cost to <em>maintain</em>?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare schemes. A sorted file gives binary
-      search but inserts shift everything (Lab 3's nightmare). A dict is O(1) but lives in
-      RAM and can't do ranges. What would a structure need to dodge <em>both</em> traps?</li>
-      <li><span class="tps-phase">Share · 2 min</span>List the three requirements on the board:
-      fast lookup, cheap insert, range-friendly. Today's structure hits all three.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>One million rows examined, one returned: <strong>99.9999% of the work accomplished
-      nothing</strong>, and it gets worse linearly as the table grows. That is the cost of having
-      only one access path.</p>
-      <p>Every scheme people propose trades one trap for another. A <strong>sorted file</strong>
-      gives binary search, but every insert shifts the rows after it, which is exactly the
-      nightmare Lab 3 abolished. A <strong>Python dict</strong> is O(1), but it lives in RAM, dies
-      with the process, and hashing destroys order, so it cannot answer <code>gpa BETWEEN 30 AND
-      35</code> at all. The three requirements are therefore <strong>fast lookup, cheap insert,
-      and range-friendly</strong>, and a structure hits all three only by being <em>shallow and
-      sorted rather than flat</em>: keep the keys in order, but reach them through a few levels of
-      signposts instead of by shifting bytes. That is the B+ tree, and it is why it has been the
-      default since 1979.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="Finding one row in a million">The contenders</h3>
 
 <table>
@@ -223,43 +187,6 @@ can never serve them.</p>
 <!-- ============================================================ -->
 <h2 id="split">The split: one move, repeated</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the full node</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A leaf holds [28, 31, 34, 36] (full at
-    ORDER 4) and key 39 arrives. You must keep: sorted order, the every-leaf-same-depth
-    invariant, and the leaf chain. Design the repair. What goes where, and what does the
-    parent need to learn?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare repairs against: split at the
-      middle, right half moves out, middle key goes up as the parent's new signpost. Now the
-      hard case: what if the PARENT was also full?</li>
-      <li><span class="tps-phase">Share · 2 min</span>And if the splitting continues all the way
-      to the root? Say aloud what happens to the tree's height, and to the same-depth
-      invariant.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Split at the middle. The right sibling takes the upper half of the keys, the leaf
-      chain is repaired so the node points at its new sibling and the sibling at the old next, and
-      the middle key goes up to the parent as a signpost. In a <em>leaf</em> split the middle key
-      is <strong>copied</strong> up, because leaves must keep all the data; in an
-      <em>internal</em> split it is <strong>moved</strong> up, because internal keys are only
-      directions. So [28, 31, 34, 36] plus 39 becomes [28, 31] and [34, 36, 39], with 34 copied
-      into the parent.</p>
-      <p>If the parent is full too, it splits by the same move, and the repair walks upward. If it
-      reaches the root, a <strong>new root</strong> is made holding one key and two children, and
-      the height grows by one. That is the deep trick: the tree <em>grows at the top</em>, so
-      every leaf gets one level deeper at the same instant and the same-depth invariant cannot
-      break. Binary search trees grow at the leaves, which is exactly why they go lopsided and
-      need rebalancing passes. This one never does.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="The split">The move, precisely</h3>
 
 <table>
@@ -305,39 +232,6 @@ catch exactly this: correctness tests plus a quality bound.</p>
 
 <!-- ============================================================ -->
 <h2 id="fanout">Fan-out is the superpower</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>guess the height</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A real engine fits ~200 keys per
-    page-sized node (<span class="gloss" data-gloss="fanout">fan-out</span> 200). Guess the
-    height of a B+ tree indexing 100 <em>million</em> rows. Then compute it:
-    log₂₀₀(10⁸). Most people guess high, by a lot.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Check: 200³ = 8 million, 200⁴ = 1.6
-      billion. So 10⁸ rows → height <strong>4</strong>. What does the buffer pool do to the top
-      2–3 of those levels on a busy system?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Finish the thought: how many actual disk
-      reads does a point lookup on 100M rows cost, steady-state?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>Height 4</strong>, and almost everyone guesses far higher. 200³ is 8 million
-      and 200⁴ is 1.6 billion, so 10⁸ rows sits comfortably at four levels. A billion-row table is
-      five.</p>
-      <p>The buffer pool then takes most of that away. The root is touched by every single lookup
-      and the second level by nearly all of them, so on any busy system the top two or three
-      levels are permanently resident. Steady state, a point lookup on 100 million rows costs
-      about <strong>one or two actual disk reads</strong>: the leaf, and then the heap block
-      holding the row. That is the whole reason databases feel instant. Not magic, just a
-      logarithm with base 200, and the base is 200 because a node is sized to one of Lab 1's
-      blocks.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="Fan-out is the superpower">The height table to remember</h3>
 

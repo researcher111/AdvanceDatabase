@@ -141,44 +141,6 @@ contract yourself is how you'll know what you're renting.</p>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · micro-mapreduce <span class="part-time">~35 min in class · graded</span></h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the guarantee</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Reduce is handed <code>("the", [1, 1, 1,
-    …])</code> and simply sums; it never checks whether some other partition also has
-    "the" pairs. What property of <em>your</em> <code>shuffle</code> makes that laziness
-    safe? State it as an invariant, then predict: which harness test would catch you if you
-    routed pairs round-robin instead?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>The invariant: same key → same partition,
-      always, manufactured by routing on <code>hash(key)</code>, a function every mapper
-      computes identically without coordination. Round-robin scatters "the" across
-      partitions; both the grouping test and "answer independent of partition count"
-      catch it.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Why does the harness test with 1, 2,
-      and 7 partitions? What bug class does varying n expose that a single n never would?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The invariant: <strong>the same key always lands in the same partition</strong>,
-      guaranteed because routing is <code>hash(key) % n_partitions</code>, a pure function of the
-      key that every mapper computes identically without talking to anyone. That is what lets
-      reduce sum its list and stop: if a key is here, <em>all</em> of that key is here.</p>
-      <p>Route round-robin instead and "the" is scattered across every partition, so each reducer
-      emits a partial count and the final output has several rows per word with wrong values. The
-      grouping test catches it, and so does <code>answer independent of partition count</code>.</p>
-      <p>Why the harness varies n across 1, 2 and 7: <strong>with n=1 the bug is invisible</strong>,
-      because a single partition trivially contains every key however you route. Any routing rule,
-      including a broken one, passes at n=1. Varying n is what exposes rules that only accidentally
-      work, and the specific bug class it catches is routing that depends on something other than
-      the key: the pair's position, arrival order, or a hash of the whole (key, value) tuple.</p>
-    </details>
-  </details>
-</div>
-
 <ol>
   <li><strong>Read <code>run_mapreduce</code></strong> (5 min, provided): three phases,
   three lines each; the phase boundaries are where data would cross machines.</li>
@@ -230,45 +192,6 @@ The top-15 it prints must match Part 1's exactly; the harness checks the full di
 
 <!-- ============================================================ -->
 <h2 id="ray">Part 3 · Ray <span class="part-time">~15 min in class</span></h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>why not threads?</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>The job: 24 documents × 30 ms of
-    (simulated) model latency each. Before Ray: why doesn't
-    <code>threading</code> give Python a 10× speedup on 10 cores for CPU-bound work? And
-    predict: if you call <code>ray.get(future)</code> inside the launch loop, what speedup
-    do you get and why?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>The GIL lets one thread run Python
-      bytecode at a time; threads interleave, they don't parallelize CPU work. Ray sidesteps
-      it with worker <em>processes</em>. And get-inside-the-loop waits for each task before
-      launching the next: speedup 1.0×, serial with extra steps.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Your real project embedder holds a 2 GB
-      model. What goes wrong with 10,000 <em>tasks</em>, and which Ray feature fixes it?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Threads do not help because of the <strong>GIL</strong>: only one thread executes
-      Python bytecode at a time, so threads interleave rather than run simultaneously and
-      CPU-bound work sees no speedup on any number of cores. Ray sidesteps it by using worker
-      <em>processes</em>, each with its own interpreter and its own GIL. And
-      <code>ray.get(future)</code> inside the launch loop gives <strong>1.0×</strong>: you block
-      waiting for task 1 to finish before launching task 2, which is serial execution with
-      inter-process overhead added on top. Launch all, then gather.</p>
-      <p>Measured, the real thing gets <strong>5.7×</strong> on 10 cores rather than 10×, because
-      24 tasks × 30&nbsp;ms is a small job and Ray's fixed costs are visible at that scale.</p>
-      <p>With a 2&nbsp;GB model and 10,000 tasks, the disaster is that <strong>every task loads
-      the model</strong>: 10,000 loads and 2&nbsp;GB shipped to each worker, so setup dwarfs the
-      work. The fix is a Ray <strong>actor</strong>, <code>@ray.remote</code> on a
-      <em>class</em>: the model is loaded once in <code>__init__</code>, the actor stays alive, and
-      tasks become method calls against a warm process.</p>
-    </details>
-  </details>
-</div>
 
 <p>Two edits in <code>ray_speedup.py</code>: decorate <code>embed_remote</code> with
 <code>@ray.remote</code>, and write <code>embed_all_parallel</code> as launch-all-then-gather.

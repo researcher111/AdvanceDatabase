@@ -111,39 +111,6 @@ is <code>[4-byte flag][fields in schema order]</code>, every slot identical, so 
 is arithmetic, and a deleted row is a <span class="gloss" data-gloss="tombstone">tombstone</span>,
 not a hole.</p>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>where does row 9 live?</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>students rows are inserted 0,1,2,… into an
-    empty table: 24-byte slots, 128-byte blocks in the harness. Compute where row 9 lands:
-    block number, slot number, and the byte offset of its <code>gpa</code> within its block.
-    That (block, slot) pair is its <span class="gloss" data-gloss="rid">RID</span>.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare answers (5 slots per block:
-      9 = block 1, slot 4; gpa at 4×24+20 = byte 116). Now delete row 2 and insert a new row:
-      what's the <em>new</em> row's RID, and why?</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: why do stable RIDs matter to
-      a structure that stores "gpa 39 lives at (0,0)", like the index you'll build in week 6?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>128-byte blocks over 24-byte slots gives <strong>5 slots per block</strong>, so row 9
-      is <strong>block 1, slot 4</strong>, and its gpa sits at 4 × 24 + 20 =
-      <strong>byte 116</strong> of that block. Its RID is <code>(1, 4)</code>.</p>
-      <p>Delete row 2 and insert a new row: the new row takes RID <strong>(0, 2)</strong>, the
-      tombstone left behind, because <code>insert_after</code> hunts forward for the first EMPTY
-      slot and finds the recycled one before the file ever grows.</p>
-      <p>Why stability matters: an index stores "gpa 39 lives at (0, 0)". If a delete or an update
-      elsewhere could shift rows, every index entry, every cursor, and every saved position would
-      silently point at the wrong row. Fixed slots mean a RID handed out today is still correct in
-      week 6, which is what makes an index a pointer rather than a hint.</p>
-    </details>
-  </details>
-</div>
-
 <!-- ============================================================ -->
 <h2 id="the-api">The contract</h2>
 
@@ -160,41 +127,6 @@ block-hopping helpers are provided.</p>
   <div class="code-step" data-step="scan" data-step-name="TableScan.next" data-explain="Ask the current page for next_after(current_slot). While -1: last block → False; else _move_to_block(+1) (which unpins then pins) and ask from -1. Position and return True.">TableScan.next()                  # cross blocks, skip tombstones</div>
   <div class="code-step" data-step="scan" data-step-name="TableScan.insert" data-explain="insert_after on the current page; while -1: move to the next block, or _append_new_block() if this was the last; a fresh zeroed block is five EMPTY slots by construction.">TableScan.insert()                # recycle a tombstone, or grow the file</div>
   <div class="code-explain-panel">Hover a line for its spec; the harness tests them in exactly this order.</div>
-</div>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the full-block insert</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>insert() is called; the current block reports
-    -1 (no EMPTY slot); this is the last block of the file. Write the exact sequence your code
-    must perform: file operation, pin traffic, and where the new row's flag gets set. What did
-    Lab 1's <code>append()</code> promise about a fresh block's bytes that makes this safe?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare sequences: append (zeroed block =
-      all flags EMPTY) → move there (unpin old, pin new) → insert_after(-1) lands in slot 0.
-      What breaks if append handed back garbage bytes instead of zeros?</li>
-      <li><span class="tps-phase">Share · 2 min</span>The harness counts your file's blocks after
-      12 inserts and expects exactly 3. State the bug it's hunting in five words or fewer.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The sequence: <code>append()</code> a new block, <strong>unpin the old block, pin the
-      new one</strong>, then <code>insert_after(-1)</code>, which lands in slot 0, and the flag is
-      set to USED by <code>insert_after</code> itself before the caller writes any fields.</p>
-      <p>What makes it safe is Lab 1's promise that <code>append()</code> hands back a
-      <strong>zeroed</strong> block. Zero is the EMPTY flag value, so a fresh block is five valid
-      empty slots by construction, with no initialisation pass required. If append returned
-      garbage instead, random bytes would read as USED flags, and the scan would return rows that
-      were never inserted while insert refused to use slots that were actually free.</p>
-      <p>The bug the harness hunts, in five words: <strong>appending instead of reusing
-      tombstones</strong>. Skip the search and jump straight to a new block and you get 12 blocks
-      for 12 rows instead of 3, with four wasted slots in each. Every read still works, which is
-      exactly why only a block count catches it.</p>
-    </details>
-  </details>
 </div>
 
 <!-- ============================================================ -->
@@ -266,41 +198,6 @@ if TableScan ever holds two pins, the pool aborts on the spot.</p>
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the price of a wide column</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Same 4096-byte blocks. Schema A is
-    students (24-byte slots). Schema B swaps the name for <code>bio varchar(200)</code>.
-    Predict: rows per block for each, and how many blocks a 10,000-row table needs. Is B's file
-    5× bigger, 10× bigger, or something else?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Do the division together (4096 // slot).
-      Now the sharper question: if most bios are 40 chars, what fraction of B's file is
-      <span class="gloss" data-gloss="internal-fragmentation">air</span>?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Run <code>python3 measure_layout.py</code>
-      and check the table. One sentence: what does schema design have to do with I/O cost?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>4096 // 24 = <strong>170 rows per block</strong> for students, 16 bytes wasted.
-      4096 // 212 = <strong>19 rows per block</strong> for the wide schema, 68 bytes wasted. So
-      10,000 rows need <strong>59 blocks</strong> versus <strong>527</strong>: not 5× or 10× but
-      about <strong>8.9×</strong>, because what scales is rows-per-block, not the declared width.</p>
-      <p>If most bios are 40 characters, the bio field stores 44 useful bytes in 204 reserved,
-      so roughly <strong>78% of that field is air</strong>, and the file is close to eight times
-      larger than the data in it. Nobody wrote that waste; it followed from one
-      <code>varchar(200)</code>.</p>
-      <p>So what does schema design have to do with I/O cost? <strong>Everything, because column
-      width sets rows per block, and rows per block sets how many blocks a scan must read.</strong>
-      Declaring a generous varchar is not free insurance; it is a standing order to read nine
-      times more disk on every full scan for the life of the table.</p>
-    </details>
-  </details>
-</div>
 
 <p>The reference output is deterministic, so yours must match:</p>
 

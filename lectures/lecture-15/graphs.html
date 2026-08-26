@@ -92,46 +92,6 @@ an index pre-sorts your rows.</p>
 <!-- ============================================================ -->
 <h2 id="joins">When tables fight you</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>feel the join-depth wall</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Table <code>follows(src, dst)</code>.
-    Write (mentally or on paper) the SQL for "names of people ada follows," then for
-    "people <em>they</em> follow" (2 hops), then 3 hops. Watch what happens to your query
-    text at each depth, and to the number of rows the middle of the plan must produce
-    before the final filter. What's the cost's shape as a function of depth?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>One self-join per hop; the query grows
-      linearly in text and the intermediate result grows like (average follows)<sup>depth</sup>.
-      Every hop re-<em>discovers</em> neighbors by matching keys, even though the
-      neighbors never changed. Compare: did either of you know the SQL for "any depth up
-      to 5"? (There is one, it's coming, but you had to reach for it.)</li>
-      <li><span class="tps-phase">Share · 2 min</span>Design the fix: what could you store
-      <em>with each row</em> so that finding neighbors costs zero key-matching?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>One self-join per hop. The text grows linearly, one more <code>JOIN follows</code> per
-      level, and the intermediate result grows like <strong>d<sup>k</sup></strong> for average
-      degree d and depth k, since the middle of the plan must materialise every path before the
-      final filter thins it. Three hops on a graph with average degree 100 is a million-row
-      intermediate to answer a question whose answer might be twelve names. And nobody writes the
-      5-hop version by hand; there is a <code>WITH RECURSIVE</code> answer, but you had to reach
-      for it, which is itself the lesson about notation.</p>
-      <p>The waste is that every hop <em>re-discovers</em> the neighbours by matching keys, even
-      though the neighbours never changed between queries. So the fix is to store the answer with
-      the row: keep on each node a list of pointers to its actual neighbours, an
-      <strong>adjacency list</strong>. Then a hop is a pointer-follow instead of an index probe,
-      and the key matching is paid once at insert rather than once per query per hop. That is a
-      graph database, and it is the same trade as an index in Lab 6: pay organisation on write,
-      skip work forever after.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="When tables fight you">The two cost models</h3>
 
 <pre class="equation"><code>relational:  each hop = a JOIN     · find neighbors by MATCHING KEYS (hash/index probe per row)
@@ -298,42 +258,6 @@ adding a 1-hop expansion to retrieval.</p>
 
 <!-- ============================================================ -->
 <h2 id="synthesis">The whole course, one slide</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>compress the semester</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Before the reveal: write down the five
-    ideas YOU think this course keeps re-using. Test each candidate: does it appear in at
-    least three different weeks? (Be honest: "SQL" is a language, not an idea.)</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare lists with your neighbor and
-      merge to five. Where do you disagree with the table below, and can you defend a
-      sixth?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Each table nominates its most
-      contrarian pick to the room.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The five the course keeps re-using: <strong>block I/O and caching</strong> (file
-      manager and buffer pool, then SSTable blocks, Parquet row groups, shuffle spill files);
-      <strong>sorting and indexes</strong> (B+ tree, then IVF lists, Bloom-filtered SSTables, Hive
-      partitions, adjacency lists); <strong>log first, reorganise later</strong> (the WAL, then LSM
-      trees, Delta and Iceberg commit logs, Spark lineage); <strong>declarative query, plan,
-      execute</strong> (parser and planner and iterators, then EXPLAIN, Spark's DAG, Cypher's
-      MATCH); and <strong>partition to scale</strong> (the shuffle you hand-wrote, then tablets,
-      IVF lists, Hive folders).</p>
-      <p>Two tests for a candidate. Does it appear in at least three separate weeks, and is it an
-      <em>idea</em> rather than a technology? "SQL" fails the second test; it is a notation, and
-      the idea underneath it is the declarative one. A defensible sixth exists and tables often
-      nominate it: <strong>keep the old version rather than overwriting</strong>, which links
-      tombstones, MVCC, LSM compaction and time travel in Iceberg. Whether that is its own idea or
-      a corollary of log-first is exactly the argument worth having in the room.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="The whole course, one slide">Five ideas, fifteen costumes</h3>
 

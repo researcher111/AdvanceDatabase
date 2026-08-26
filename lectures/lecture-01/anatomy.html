@@ -277,37 +277,7 @@ you'll place by hand on Thursday.</p>
 <h2 id="layers">The five layers of every database</h2>
 
 <p>Now the box itself. Postgres, SQLite, DuckDB, Oracle: radically different engines, same
-five layers. Before you tour them, decide what they must be.</p>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>design the layers</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>You're given SQL text arriving on one side
-    and a disk full of bytes on the other. Write down the minimum set of components that must
-    exist in between for the query to come back with an answer. (Hint from the demo: what did
-    the query pass through?)</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Merge your component lists. Did either of you
-      include a layer whose only job is deciding <em>which bytes deserve to be in memory</em>?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Compare your merged design to
-      the stack on the next slide: name the one layer you missed.</li>
-    </ul>
-    <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Five layers, and most lists come back with four. A <strong>SQL front end</strong> turns
-      text into a plan; an <strong>execution engine</strong> turns the plan into rows; a
-      <strong>records and catalog</strong> layer turns bytes into rows and back; a
-      <strong>file manager</strong> moves whole blocks to and from disk. The one that usually
-      goes missing is the <strong>buffer pool</strong>, whose only job is deciding which blocks
-      are worth keeping in memory. It is easy to skip because it changes no answer, only how
-      long the answer takes, which is exactly why it gets a week of its own. The write-ahead log
-      is the sixth component, and it sits beside the stack rather than in it.</p>
-    </details>
-  </details>
-</div>
+five layers. Before you tour them, ask what they must be.</p>
 
 <h3 class="new-slide" data-kicker="The five layers">The universal stack</h3>
 
@@ -405,39 +375,7 @@ crash, replaying and undoing those notes restores a clean database.</p>
 <h2 id="storage">Why disks shaped everything</h2>
 
 <p>One design decision explains more of database architecture than any other: <em>storage is
-brutally slower than memory, and it pays by the trip, not by the byte.</em> First, calibrate
-your intuition.</p>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the latency ladder</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Rank these and guess each gap as a multiplier:
-    reading from CPU cache, from RAM, from an SSD, one disk seek on a spinning drive, one network
-    round-trip inside a datacenter. Write your multipliers down; out loud, most people are off
-    by 100× somewhere.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare ladders, then check against
-      the real one on the next slide. Which rung surprised each of you most?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Agree on one sentence: what should a system
-      that lives on the slow rungs do differently from one that lives in RAM?</li>
-    </ul>
-    <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Getting the order right is the easy half; the gaps are where almost everyone is wrong.
-      An L1 hit is about 1&nbsp;ns, RAM about 100&nbsp;ns (100× slower), an NVMe SSD about
-      25&nbsp;µs (another 250×), a datacenter round trip about 500&nbsp;µs, and a spinning-disk
-      seek about 10&nbsp;ms, which is ten million times the L1 hit. For the Share prompt: a
-      system living on the slow rungs stops counting instructions and starts counting
-      <em>trips</em>. It moves data in large chunks, because a trip costs the same either way,
-      and it keeps whatever it fetched, because the next request is cheap only if the bytes are
-      already there. Those two moves are the buffer pool and the block, and they are the next
-      two weeks.</p>
-    </details>
-  </details>
-</div>
+brutally slower than memory, and it pays by the trip, not by the byte.</em></p>
 
 <h3 class="new-slide" data-kicker="Why disks shaped everything">The ladder, measured</h3>
 
@@ -537,35 +475,6 @@ right block becomes enormous, and the right layout flips from rows to columns.</
 <p>Here is Act I as a build plan. Seven Thursdays, seven layers, bottom-up: each lab's code
 runs on top of the previous labs', and by the end you have a database engine you wrote every
 line of.</p>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>build order</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>We're building bottom-up: bytes first, SQL
-    last. Predict one concrete thing that would go wrong if we built top-down instead: parser
-    first, disk last. (What would the parser's tests run <em>against</em>?)</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Trade answers. Bottom-up means every week
-      ends with something that <em>runs against real bytes</em>; what does top-down end with?</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence per table: why do systems
-      courses (and systems teams) prefer the direction in which every layer sits on a real
-      implementation of the one below, with nothing stubbed out?</li>
-    </ul>
-    <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Built top-down, the parser has nothing underneath to run against, so its tests need a
-      pretend storage layer, and what you are really testing is the pretence. Each week ends
-      with a demo that works only because the thing below it was faked, and the whole
-      integration bill arrives at once, at the end, when the fakes come out. Built bottom-up,
-      every layer stands on a real implementation of the layer below it, so each week ends with
-      code that runs against actual bytes on an actual disk. Lab 5's parser is tested by running
-      real queries against the table you built in Lab 3, and there is nothing left to un-fake.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="The microdb plan">Seven labs, one engine</h3>
 

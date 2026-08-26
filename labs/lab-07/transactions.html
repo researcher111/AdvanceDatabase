@@ -110,44 +110,6 @@ before the page changes, and the COMMIT record's fsync is the moment of truth.</
 is an append-only file of JSON lines, which is not a toy stand-in;
 an append-only file with disciplined fsyncs <em>is</em> what a WAL is.</p>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>order the commit</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>commit() must do three things: flush the
-    dirty data pages, fsync a COMMIT record, release locks &amp; pins. Six orderings exist.
-    For each of the two wrong-looking ones (record-before-flush, and release-before-record),
-    construct the crash that burns you.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Record-before-flush: crash after the
-      record → recovery sees COMMIT, skips undo, but the data never hit disk (that's why
-      NO-FORCE engines need redo). Release-before-record: another tx reads your data, then
-      the crash uncommits you: a dirty read with extra steps.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Recite the safe order: flush · fsync ·
-      release. The tests check it by consequence.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>Record-before-flush:</strong> the COMMIT record is fsync'd, then the crash
-      arrives before the data pages are written. Recovery reads the log, sees a COMMIT, concludes
-      the transaction finished, and skips undo. But the changes never reached disk, so committed
-      work is silently missing. That is precisely why NO-FORCE engines must log <em>new</em> values
-      and redo them; microdb avoids the whole problem by flushing first.</p>
-      <p><strong>Release-before-record:</strong> locks are released, another transaction reads your
-      data and acts on it, and then the crash arrives before your COMMIT record was durable.
-      Recovery finds you unfinished and undoes you, so the other transaction read a value that
-      officially never existed. That is a dirty read with extra steps, and it can propagate
-      arbitrarily far before anyone notices.</p>
-      <p>The safe order is therefore <strong>flush, fsync the COMMIT record, then release</strong>:
-      make the data durable, make the decision durable, and only then let anyone else see it. The
-      tests check it by consequence rather than by inspection, which is why getting it merely
-      nearly right still fails them.</p>
-    </details>
-  </details>
-</div>
-
 <!-- ============================================================ -->
 <h2 id="the-api">The contract</h2>
 
@@ -161,42 +123,6 @@ write five things:</p>
   <div class="code-step" data-step="rb" data-step-name="rollback" data-explain="Walk lm.records_backwards(); for records of THIS tx: SET → restore the old value through the buffer (pin if needed); START → stop. Then a ROLLBACK record, flush, release, unpin. Newest-first matters when one slot was set twice.">rollback:  walk back · restore olds · receipt · release</div>
   <div class="code-step" data-step="rc" data-step-name="recover" data-explain="One backward pass over everything: COMMIT/ROLLBACK seen → that tx is finished; SET from an UNfinished tx → restore its old value. Then flush and write ROLLBACK receipts so a second recovery is a no-op (idempotence, tested).">recover:   fates first, then undo the unfinished · receipts</div>
   <div class="code-explain-panel">Hover a line: five jobs, and every one is an ordering discipline more than an algorithm.</div>
-</div>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>same slot, twice</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>One transaction sets A := 1 (logging
-    old=100), then A := 2 (logging old=1), then rolls back. Walk the undo BOTH directions:
-    oldest-first and newest-first. Which one leaves A = 100, and why does the other leave the
-    wrong answer with perfect confidence?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Newest-first: 2→1, then 1→100 ✓.
-      Oldest-first: 1→100, then… the old=1 record restores 1. Wrong, silently. The harness's
-      "same slot twice" test is exactly this trap.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: why undo must retrace steps
-      in reverse, like leaving a maze.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>Newest-first is correct.</strong> The records are old=100 then old=1. Walking
-      backwards: restore 1 (A becomes 1), then restore 100 (A becomes 100). Correct.</p>
-      <p>Oldest-first: restore 100 (A becomes 100), then restore 1 (A becomes <strong>1</strong>).
-      Wrong, and this is the dangerous part: nothing errors, no invariant is violated, and the
-      final value 1 is a perfectly plausible account balance. The undo ran to completion with
-      perfect confidence and left corrupted data. The harness's "same slot twice" test exists for
-      exactly this trap, because a rollback that touches each slot only once cannot tell the two
-      orders apart.</p>
-      <p>In one sentence: <strong>undo must retrace the steps in reverse because each log record
-      restores the state that existed immediately before its own change</strong>, so the records
-      are only valid when applied in the reverse of the order they were written. It is leaving a
-      maze: you have to walk the turns backwards, and taking them in the original order just gets
-      you lost somewhere new.</p>
-    </details>
-  </details>
 </div>
 
 <!-- ============================================================ -->

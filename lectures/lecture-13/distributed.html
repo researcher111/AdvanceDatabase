@@ -87,46 +87,6 @@ as possible, and everything else is packaging.</p>
 <!-- ============================================================ -->
 <h2 id="wall">The one-machine wall</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>design it yourself</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>10&nbsp;TB of web-server logs, 100
-    machines, and one question: count requests per URL. Sketch the plan. Splitting the logs
-    100 ways and counting locally is the easy 90%; so where's the hard 10%? Be precise about
-    the moment your design needs two machines to <em>agree</em> about something.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>The hard moment: machine 7 and machine
-      52 both counted <code>/checkout</code>; somebody must add those partial counts, which
-      means the counts for one URL must <em>travel to the same place</em>. Compare: how did
-      each of you route them, and how does every machine independently agree on where
-      <code>/checkout</code> lives?</li>
-      <li><span class="tps-phase">Share · 2 min</span>You've just invented the shuffle, and
-      probably hash partitioning too. Name the failure if one URL is 40% of all traffic.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The easy 90% is exactly as it sounds: give each machine its own 100&nbsp;GB, count
-      locally, done in about a minute. The hard 10% arrives the moment two machines hold partial
-      counts for the <em>same</em> URL. Machine 7 saw <code>/checkout</code> 4,000 times and
-      machine 52 saw it 9,000 times, and nobody can emit an answer for <code>/checkout</code>
-      until those two numbers meet in one place.</p>
-      <p>So the counts for one URL must <strong>travel to the same machine</strong>, and every
-      machine has to agree on which machine that is, without asking anyone. The trick is to make
-      the decision a pure function of the key: <code>hash(url) % n_reducers</code>. No
-      coordination, no lookup table, and every mapper independently routes <code>/checkout</code>
-      to the same place. You have just invented the <strong>shuffle</strong> and hash
-      partitioning.</p>
-      <p>The failure when one URL is 40% of traffic: that key hashes to exactly one reducer, so
-      one machine does 40% of the reduce work while 99 others finish and idle. The job takes as
-      long as its slowest task. That is <strong>skew</strong>, and the straggler it creates is the
-      thing you will actually spend your time fighting.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="The one-machine wall">What breaks, precisely</h3>
 
 <table>
@@ -266,46 +226,6 @@ see the routing arithmetic.</p>
 
 <!-- ============================================================ -->
 <h2 id="spark">Spark</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>you've seen this plan before</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Spark code chains transformations
-    (<code>lines.flatMap(…).map(…).reduceByKey(…)</code>) and <em>nothing executes</em> until
-    you call <code>.collect()</code>. Where in this course have you already met "build a
-    description of the computation first, run it on demand later"? Name the class, and name
-    one optimization that being lazy makes possible.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>It's microdb's Scan tree (Lab 4): compose
-      operators, then pull. Lazy = the engine sees the <em>whole</em> plan before running,
-      so it can fuse the per-partition steps into one pass and push filters before shuffles,
-      exactly like Lecture 9's optimizer.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Which chained calls can run without any
-      network, and which one forces the shuffle? Sort them into two piles.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Lab 4's <strong>Scan tree</strong>, and specifically the iterator model: composing
-      <code>ProjectScan(SelectScan(ProductScan(...)))</code> builds a description and executes
-      nothing, and the rows only move when something calls <code>next()</code>. Spark's
-      <code>.collect()</code> is that first <code>next()</code>, and its DAG is your plan tree.</p>
-      <p>What laziness buys is that the engine sees the <em>whole</em> plan before running any of
-      it, so it can rewrite it. Two optimizations you already know: <strong>fusing</strong> the
-      narrow steps so <code>flatMap</code> and <code>map</code> run in a single pass over each
-      partition instead of materialising an intermediate, and <strong>pushing filters below the
-      shuffle</strong> so less data crosses the network, which is Lecture 9's predicate pushdown
-      wearing a cluster costume.</p>
-      <p>Sorting the calls: <code>flatMap</code>, <code>map</code> and <code>filter</code> are
-      <strong>narrow</strong>, each partition handled alone, no network. <code>reduceByKey</code>
-      is <strong>wide</strong>: it needs every value for a key in one place, so it forces the
-      shuffle and the stage boundary. One call in that chain costs the network, and it is the same
-      call you hand-wrote in Part A.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="Spark">Word count, Spark edition</h3>
 

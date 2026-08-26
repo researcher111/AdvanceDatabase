@@ -92,46 +92,6 @@ during reads)), and every storage engine you'll ever meet sits somewhere on that
 <!-- ============================================================ -->
 <h2 id="problem">Google's 2004 problem</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>break your own engine</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>The workload: the web crawl,
-    billions of pages, rewritten continuously, hundreds of thousands of writes per second,
-    keyed by URL, on thousands of cheap machines with disks that die daily. Take microdb's
-    write path (pin page → WAL → update slot → flush at commit) and find the two places it
-    collapses under this load. Be specific: which structure, which operation.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Converge on: (1) every row update is a
-      <em>random</em> page write; B+-tree-organized storage turns a write flood into disk
-      seeks everywhere; (2) one machine's disks and RAM bound everything, and at thousands
-      of machines, "a machine died" is Tuesday, so recovery must be routine, not an event.</li>
-      <li><span class="tps-phase">Share · 2 min</span>You may keep any course idea. Which
-      survive unchanged? (Hint: the WAL does. Sequential appends are the one thing cheap
-      disks do brilliantly.)</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>(1) The write path is random I/O.</strong> Every update pins the page holding
-      that row and modifies it in place, so a flood of writes to billions of URLs scattered
-      through a B+ tree becomes seeks all over the disk. The structure that made reads cheap by
-      sorting on the way in is precisely what makes this write pattern expensive.
-      <strong>(2) One machine bounds everything:</strong> its disks, its RAM, its buffer pool. And
-      at thousands of machines a death is a daily event, so recovery cannot be an operator waking
-      up at 3am; it has to be routine.</p>
-      <p>What survives unchanged is the interesting half. The <strong>WAL</strong> survives
-      completely, because appending sequentially is the one thing cheap disks do brilliantly, and
-      it is already how the engine gets durability without paying per page. <strong>Sorted
-      structures</strong> survive, just not sorted-in-place: sort in memory, then write immutable
-      sorted files. <strong>Block I/O and caching</strong> survive verbatim. So the redesign is not
-      a repudiation of anything you built; it keeps the log, keeps sorting, and abandons only
-      "update the page where the row already lives". That single subtraction is the LSM tree.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="Google's 2004 problem">The insight: writes love sequential, reads love sorted</h3>
 
 <pre class="equation"><code>the tension:   fast writes  want  append-only, sequential I/O     (never seek, never overwrite)
@@ -316,47 +276,6 @@ poles: you built one and just drove the other.</p>
 
 <!-- ============================================================ -->
 <h2 id="cap">Replication &amp; CAP</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the partition forces your hand</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Key <code>k</code> is replicated on
-    servers A and B. The network between them fails: both alive, neither reachable from the
-    other. A write for <code>k</code> arrives at A; a read at B. You must decide <em>now</em>:
-    what are the only two coherent policies, and what does each cost the client?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Policy 1: refuse (one side errors or
-      blocks) is consistent but unavailable. Policy 2: both proceed is available, and B just
-      served a stale read; the replicas must reconcile later. There is no third policy;
-      that's the theorem.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Pick per application: the shopping
-      cart, the bank balance, the like counter. Which policy for each, and what does
-      "reconcile later" concretely mean for the cart?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Only two coherent policies exist, which is the whole content of the theorem.
-      <strong>Refuse:</strong> one side errors or blocks until the partition heals. The client
-      gets an error or a hang, but never a wrong answer, so the system is consistent and
-      unavailable (CP). <strong>Proceed:</strong> A takes the write and B answers the read from
-      what it has. Every request succeeds, and B just served a <em>stale</em> value, so the system
-      is available and inconsistent (AP), and the two replicas must be reconciled afterwards.
-      There is no third option: you cannot be both correct and answering when the two halves
-      cannot talk.</p>
-      <p>Per application: the <strong>bank balance</strong> refuses, because serving a stale
-      balance mints or destroys money. The <strong>like counter</strong> proceeds without
-      hesitation, because nobody is harmed by a count that is briefly low. The <strong>shopping
-      cart</strong> proceeds too, and it is the interesting one, because "reconcile later"
-      concretely means <em>union the two carts</em>: if you added a book on one side and a lamp on
-      the other, the merged cart holds both. That is Dynamo's actual answer, and it works because
-      an over-full cart is a recoverable annoyance while a rejected add-to-cart is lost
-      revenue.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="Replication &amp; CAP">CAP, stated honestly</h3>
 

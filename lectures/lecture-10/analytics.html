@@ -87,39 +87,6 @@ analytics is a different workload.</p>
 <!-- ============================================================ -->
 <h2 id="flip">The workload flip</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>count the wasted bytes</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>The rides table: 60,000 rows × 8 columns.
-    The query: <code>SELECT avg(fare) FROM rides</code>. In microdb's row layout, compute
-    roughly what fraction of every block read is bytes the query never needed. Then design
-    the layout that reads <em>only</em> what it needs.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>~7/8 of every block was other columns.
-      The fix everyone invents: store each column's values contiguously: fare's 60,000
-      doubles in a row. What did that layout just make MORE expensive?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Name the workload where reassembling a
-      whole row (one value from each of 8 far-apart places) is the common case.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The query needs one column of eight, so roughly <strong>7/8, about 87%, of every block
-      read is bytes the query never looks at</strong>. Rows are stored whole, so fetching
-      <code>fare</code> means dragging <code>pickup</code>, <code>payment</code>, and five other
-      columns through the disk, the bus, and the cache alongside it.</p>
-      <p>The layout everyone invents is to turn the table ninety degrees: store each column's
-      values contiguously, so <code>fare</code>'s 60,000 doubles sit in a row and the scan reads
-      only them. What that just made more expensive is <strong>reassembling a whole row</strong>,
-      which now means one read from each of eight far-apart places. The workload where that is the
-      common case is OLTP: fetch this one ride by id, update its tip. Which is microdb's entire
-      world, and the reason neither layout is simply better. Layout follows workload.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="The workload flip">OLTP vs OLAP, finally formal</h3>
 
 <table>
@@ -237,40 +204,6 @@ shows Parquet beating CSV <strong>89×</strong> on the same rows on the same lap
 
 <!-- ============================================================ -->
 <h2 id="duckdb">DuckDB &amp; Parquet</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>place the pushdown</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Parquet files carry min/max statistics per
-    column chunk, and can be laid out in folders like <code>month=12/</code>. For the query
-    <code>WHERE month = 12 AND fare &gt; 100</code>, list every level at which data can be
-    skipped WITHOUT reading it: file? chunk? row? Where have you seen this move before?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Folder pruning (11 of 12 files never
-      opened), chunk skipping (min/max says no fare &gt; 100 here), then row filtering. It's
-      Lab 4's predicate pushdown, pushed all the way into the filesystem.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: why "the fastest read is
-      the one you never do" keeps being the whole course.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Three levels, coarsest first. <strong>Files:</strong> with
-      <code>month=12/</code> folders, eleven of the twelve directories are never opened at all.
-      <strong>Column chunks:</strong> each carries min/max statistics, so a chunk whose max fare
-      is 40 is skipped whole for <code>fare &gt; 100</code> without decoding a byte.
-      <strong>Rows:</strong> only what survives both gets tested individually.</p>
-      <p>You have seen this move three times already. It is Lab 4's predicate pushdown, pushed
-      further each week: below the join, then into the scan, and now out of the engine entirely and
-      into the filesystem layout. And it is the same idea as the B+ tree skipping blocks and the
-      buffer pool skipping the disk. "The fastest read is the one you never do" keeps being the
-      whole course because every layer only ever has two moves available, make a read cheaper or
-      avoid it, and avoiding it wins by orders of magnitude every single time.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="DuckDB &amp; Parquet">The analyst's stack, one pip install</h3>
 

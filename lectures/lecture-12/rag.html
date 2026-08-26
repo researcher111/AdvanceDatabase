@@ -88,43 +88,6 @@ retrieval quality is measurable</strong>, with an eval set, not with vibes.</p>
 <!-- ============================================================ -->
 <h2 id="why">Why the model needs a database</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>teach the model your data</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Your team has 50,000 internal documents and
-    an LLM API. Users ask questions the documents answer. List every approach you can think of
-    for getting document knowledge into the model's answers, and for each, name its cost in
-    money, staleness, or capacity.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Cluster your ideas; most fall into three
-      families: change the weights (fine-tune), send everything (stuff the context), or send
-      only what's relevant (retrieve). What does each cost per <em>update</em> and per
-      <em>question</em>?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Commit to one for the 50k-document case,
-      and name the database machinery your choice quietly assumes.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Three families, and they price out completely differently.
-      <strong>Fine-tune the weights:</strong> a training run per update, cheap per question, and
-      it goes stale the moment a document changes; it also recalls specific passages unreliably
-      and cannot cite. <strong>Stuff the context:</strong> free per update, but you pay for every
-      token on every question, and 50,000 documents do not fit in any context window; what does
-      fit gets skimmed. <strong>Retrieve, then generate:</strong> re-embed only the changed
-      document, and pay for one top-k query plus k chunks of tokens per question.</p>
-      <p>For 50k documents it is retrieval, and it is not close. What that choice quietly assumes
-      is a pile of database machinery: documents chunked into <em>records</em>, an embedding
-      stored as a <em>column</em>, an <em>index</em> over those embeddings, a <em>top-k query</em>
-      against it, and a way to <em>measure</em> whether the right thing came back. You have built
-      a version of every one of those. That is the lecture's claim: the retrieval half of RAG is
-      not an AI technique, it is a database.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="Why the model needs a database">Three ways to teach a model your data</h3>
 
 <table>
@@ -203,43 +166,6 @@ isn't retrieved, no prompt engineering can quote it.</strong></p>
 <!-- ============================================================ -->
 <h2 id="chunking">Chunking</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>what's the row?</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Why not skip chunking and embed each whole
-    document as one vector? And why not go the other way, one vector per sentence? Predict a
-    concrete failure for each extreme (think about what a mean-of-many-topics vector points
-    at, and what a lone sentence no longer says).</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Whole-doc: a 30-page document about ten
-      topics embeds to a muddy average: similar to everything, retrievable for nothing.
-      Per-sentence: "It also flushes the log first" retrieves fine and means nothing without
-      its neighbors. Compare failure stories.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Propose a default: unit, size, and what
-    you'd do at unit boundaries. Carry it into the next slide.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>Whole document:</strong> a 30-page document covering ten topics averages into
-      one muddy vector that points at nothing in particular. It looks mildly similar to every
-      query and is the best match for none, so it is retrievable for nothing. And when it does
-      come back you have shipped 30 pages of context to answer one question.
-      <strong>Per sentence:</strong> "It also flushes the log first" embeds and retrieves
-      perfectly well, and means nothing on arrival, because "it" and "the log" were defined two
-      sentences earlier. You retrieve pronouns and orphans.</p>
-      <p>A sensible default: the <strong>paragraph</strong>, roughly 100 to 300 words, one topic
-      per vector, big enough to be a self-contained claim. At boundaries, <strong>overlap</strong>
-      by a sentence or so, so a claim split across a boundary survives whole in one of the two
-      chunks, and carry <strong>metadata</strong> (document id, title, position) on every chunk so
-      the answer can cite. That is record design, exactly as in Lab 3: pick the unit, fix its
-      shape, keep the addressing honest.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="Chunking">Chunk size is record design</h3>
 
 <table>
@@ -279,44 +205,6 @@ decision.</p>
 
 <!-- ============================================================ -->
 <h2 id="eval">Measuring retrieval</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>grade the retriever, not the essay</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Your team changes the chunk size and the
-    demo "feels better." Design a <em>number</em> that would settle it, without paying anyone
-    to read generated answers. What data do you need to collect once, and what do you compute
-    per experiment?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>The standard answer: an eval set, questions
-      paired with the doc(s) that answer them, labeled once. Then every experiment is "did the
-      right doc come back, and at what rank?" Compare: did you both separate retrieval
-      quality from answer quality?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Your retriever returns the right doc at
-      rank 3. hit@3 says 1.0; is that fine? What about rank 7 with k=5 sent to the model?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Collect once: an <strong>eval set</strong> of questions paired with the ids of the
-      documents that actually answer them, labelled by hand. Compute per experiment:
-      <strong>hit@k</strong>, the fraction of questions with a relevant doc in the top k, and
-      <strong>MRR</strong>, the mean of 1/rank of the first relevant doc. Both run in
-      milliseconds, so "it feels better" becomes a number before lunch. The separation that
-      matters is retrieval quality from answer quality: if the right chunk never arrived, no
-      amount of prompt tuning will save the answer, and grading essays cannot tell you which
-      happened.</p>
-      <p>The Share case is the trap. Rank 3 with hit@3 = 1.0 is fine only if you actually send at
-      least 3 chunks to the model. Rank 7 while sending k = 5 means hit@5 = 0: the document was
-      found by the index and then thrown away before the model ever saw it, and hit@10 would have
-      cheerfully reported success. So measure hit@k at the <em>k you really send</em>, and watch
-      MRR alongside it, because rank still matters even when the chunk gets through: models attend
-      best to the start and end of a context.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="Measuring retrieval">Two numbers, labeled once, computed forever</h3>
 

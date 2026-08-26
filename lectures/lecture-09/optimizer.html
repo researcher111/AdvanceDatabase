@@ -86,42 +86,6 @@ budget</strong>; respect it for guessing well, and know how to catch it guessing
 <!-- ============================================================ -->
 <h2 id="gap">The 15× left on the table</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>what would the machine need to know?</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>You proved pushing <code>gpa &gt; 35</code>
-    below the product saved 15×. For a machine to make that move safely and profitably, list
-    the facts it needs: about the predicate, and about the data. Which of those facts can it
-    know <em>without running the query</em>?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Safety needs field analysis (which side
-      owns the term's fields, pure syntax). Profit needs a guess at how many rows survive;
-      that's data knowledge. Where could such knowledge live?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Name the missing organ: a place the
-      engine keeps facts <em>about</em> its own tables. (You built its little sibling in
-      Lab 3.)</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Two different kinds of fact, and only one of them is free.
-      <strong>Safety</strong> is pure syntax: which side of the product owns the fields the term
-      mentions. <code>gpa &gt; 35</code> touches only students, so it can be pushed onto the
-      students input; <code>mid = mid2</code> touches both, so it cannot be pushed anywhere. The
-      engine can settle that by inspecting the query alone, without looking at a single row.</p>
-      <p><strong>Profit</strong> cannot. Whether pushing helps depends on how many rows actually
-      survive the filter: pushing a predicate that keeps 99% of the table buys nothing, while one
-      that keeps 20% bought the 15×. That is knowledge about the <em>data</em>, not the query, and
-      the engine cannot get it by running the query, because the whole point is to decide before
-      running. So it must have been collected earlier and stored somewhere. The missing organ is
-      <strong>table statistics</strong>, kept in the catalog, whose little sibling you built in
-      Lab 3.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="The 15× left on the table">The optimizer's three organs</h3>
 
 <table>
@@ -156,42 +120,6 @@ and that's where your query went wrong.</p>
 
 <!-- ============================================================ -->
 <h2 id="stats">Statistics &amp; selectivity</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>guess the survivors</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Without running anything, estimate the
-    survivors of <code>gpa &gt; 35</code> on 300 students, given only: (a) nothing;
-    (b) min=20, max=39; (c) a 10-bucket <span class="gloss" data-gloss="histogram">histogram</span> of gpa counts. Write your three estimates
-    and rank their trustworthiness.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>(a) is folklore (1/3 by convention);
-      (b) assumes uniformity: (39−35)/(39−20) ≈ 21%; (c) just reads the buckets. More
-      knowledge, better guess, and all of it is cheap to keep.</li>
-      <li><span class="tps-phase">Share · 2 min</span>What could make even the histogram
-      wrong? (When was it computed?)</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>(a) With nothing at all, guess by convention: a third, so about
-      <strong>100 rows</strong>. Pure folklore, but it beats having no number.
-      (b) With min = 20 and max = 39, assume the values spread evenly and take the fraction of the
-      range above 35: (39 − 35) / (39 − 20) ≈ 21%, so about <strong>63 rows</strong>.
-      (c) With a 10-bucket histogram you stop assuming and simply add up the buckets above 35,
-      which is right even when gpas cluster.</p>
-      <p>Trustworthiness runs in exactly that order, and the cost of all three is negligible. What
-      can still make even the histogram wrong is <strong>staleness</strong>: it describes the
-      table as of the last <code>ANALYZE</code>. Bulk-load a million rows, skip the refresh, and
-      the planner is reasoning confidently about a table that no longer exists. That is one of the
-      two classic reasons a plan that was fine yesterday is catastrophic at 3am; the other is the
-      independence assumption, which is why <code>city = 'Charlottesville' AND state = 'VA'</code>
-      is not two independent filters.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="Statistics &amp; selectivity">What the engine keeps, and the formulas it runs</h3>
 

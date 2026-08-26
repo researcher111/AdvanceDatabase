@@ -116,45 +116,6 @@ its rule owns, using four verbs on the token stream
 (<code>peek · next · match · expect</code>). Your <code>parse_query</code> is the same song
 with two new verses: the <code>*</code> alternative and the optional WHERE.</p>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>read like a parser</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Without running anything, trace
-    <code>parse_insert</code> on <code>INSERT INTO majors VALUES (4, 'math')</code>: write the
-    sequence of expect/match calls and what each consumes. Now do it on
-    <code>INSERT INTO majors VALUES (4 'math')</code>, missing comma. Which call dies, and
-    with what message?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare traces. The comma failure is
-      subtle: the <code>while match(",")</code> loop simply <em>ends</em>, and it's the
-      <code>expect(")")</code> after it that dies. Did you both catch that?</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: why "the loop ends and the
-      next expect dies" still produces a correct, helpful error.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The good trace: <code>expect(KEYWORD,'insert')</code>,
-      <code>expect(KEYWORD,'into')</code>, <code>expect(ID)</code> which returns "majors",
-      <code>expect(KEYWORD,'values')</code>, <code>expect(PUNCT,'(')</code>, then a literal, then
-      <code>while match(',')</code> consuming the comma and another literal, then
-      <code>expect(PUNCT,')')</code>.</p>
-      <p>With the comma missing, nothing dies where you would expect. <code>match(',')</code>
-      simply sees <code>'math'</code> instead of a comma and returns False, so the loop
-      <strong>ends normally</strong>; the parser believes the value list is finished. It is the
-      <code>expect(PUNCT,')')</code> on the next line that dies, reporting
-      <code>expected ')', found 'math'</code>.</p>
-      <p>That error is still correct and still helpful, because it reports the parser's honest
-      state: given the grammar, a value list really can end there, so the first thing that is
-      definitely wrong is the missing close paren. The message names what was expected and what
-      was found, which is enough to walk the user to the fault even though the diagnosis lands one
-      token later than the typo.</p>
-    </details>
-  </details>
-</div>
-
 <!-- ============================================================ -->
 <h2 id="the-api">The contract</h2>
 
@@ -166,45 +127,6 @@ with two new verses: the <code>*</code> alternative and the optional WHERE.</p>
   <div class="code-step" data-step="pt" data-step-name="_parse_term" data-explain="expect an ID (the field); take the operator, checking it's =, < or >; then the fork: NUM/STR tokens are literals, an ID becomes F(name); that one isinstance-shaped decision is what makes joins expressible.">_parse_term        # field, op, then the F fork for join terms</div>
   <div class="code-step" data-step="pl" data-step-name="plan_query" data-explain="The lecture's four-step recipe verbatim: TableScans from the catalog, fold products left to right, SelectScan if predicate, ProjectScan unless ['*']. No useless wrappers; the shape tests check.">Database.plan_query  # scans → products → select? → project?</div>
   <div class="code-explain-panel">Hover a line: between them they touch every layer you've built since August.</div>
-</div>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>one token, two meanings</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>In <code>WHERE name = 'ada'</code> the
-    right-hand side means <em>the string ada</em>. In <code>WHERE mid = mid2</code> it means
-    <em>the field mid2</em>. Both arrive at your <code>_parse_term</code> as single
-    <span class="gloss" data-gloss="token">tokens</span>.
-    What distinguishes them, and what must your code produce differently for each? What would
-    silently go wrong if you returned the string <code>"mid2"</code> for the second?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Work the failure: the predicate would
-      compare each row's <code>mid</code> (an int) to the literal string
-      <code>"mid2"</code>: never equal, join returns zero rows, no error anywhere. The
-      harness's join-term test exists for exactly this.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: token <em>kind</em> is
-      information; STR vs ID is the lexer telling you which meaning survived the quotes.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The <strong>token kind</strong> distinguishes them. <code>'ada'</code> arrives as a
-      STR token because the lexer saw quotes; <code>mid2</code> arrives as an ID because it did
-      not. So <code>_parse_term</code> must produce a plain Python value for a STR or NUM, and an
-      <strong><code>F("mid2")</code> field marker</strong> for an ID.</p>
-      <p>Return the bare string <code>"mid2"</code> for the second and the failure is silent and
-      total: the predicate compares each row's <code>mid</code>, an int, against the literal
-      string <code>"mid2"</code>. They are never equal, so the join returns zero rows, and nothing
-      anywhere raises. A query that should join two tables quietly returns nothing, which is the
-      hardest class of bug to notice because empty looks like a legitimate answer. That is exactly
-      what the harness's join-term test exists to catch.</p>
-      <p>In one sentence: <strong>the token kind is information, and STR versus ID is the lexer
-      telling you which meaning survived the quotes.</strong> Throw that distinction away in the
-      parser and no later layer can reconstruct it.</p>
-    </details>
-  </details>
 </div>
 
 <!-- ============================================================ -->
@@ -277,44 +199,6 @@ expressed as text and a pin-leak audit of <code>execute()</code>.</p>
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>your planner, predicted</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Before running the measurement: your
-    <code>plan_query</code> follows the four-step recipe. For the three-filter join query over
-    300 students × 3 majors, how many pairs will YOUR plan examine, 60 or 900? Now defend the
-    recipe anyway: why is the shape that examines 900 the only <em>safe</em> default for a
-    planner that knows nothing about the data?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Construct the trap together: invent a
-      predicate where pushing a filter below the product would be flat-out WRONG. (Hint: what
-      if a term references fields from <em>both</em> tables?)</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: what a planner must know
-      about each term before it may push it down.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>900.</strong> The four-step recipe builds the full product first and applies
-      the whole WHERE above it, so your planner examines every pair, exactly the shape Lab 4
-      called Plan A.</p>
-      <p>Defend it anyway: a planner that knows nothing about the data cannot tell whether pushing
-      a filter helps. Filters-above-product is <em>always correct</em>, whatever the tables
-      contain, and correctness that does not depend on the data is the right default when you have
-      no statistics. Naive and honest beats clever and occasionally wrong.</p>
-      <p>The trap: a term referencing fields from <strong>both</strong> tables, such as
-      <code>mid = mid2</code>, cannot be pushed to either side, because neither input can evaluate
-      it alone. Push it below the product and the scan is asked for a field it does not have. So
-      the rule a planner must establish before pushing any term is
-      <strong>which input owns every field the term mentions</strong>: push it only onto an input
-      that can answer all of them. That test is pure syntax and free; deciding whether pushing is
-      <em>worth</em> it needs statistics, and that is week 9.</p>
-    </details>
-  </details>
-</div>
 
 <p><code>measure_sql.py</code> prints the plan tree your planner builds for three queries,
 using the provided <code>render_plan</code>, then counts the join plan's work. Your planner

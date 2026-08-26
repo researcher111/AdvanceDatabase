@@ -117,77 +117,8 @@ The craft is knowing which method each operator actually changes:</p>
   </tbody>
 </table>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>who answers get_val?</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A ProductScan of students × majors is asked
-    <code>get_val("dept")</code>. Neither side was told which fields exist where. Design the
-    routing rule, and then decide: what should happen if <em>both</em> sides had a field named
-    <code>id</code>?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare rules. microdb says "ask
-      has_field, left wins ties"; what does real SQL make you do about ambiguous columns
-      instead? (You've seen the error message.)</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: why the tests name majors'
-      key <code>mid2</code>, not <code>mid</code>.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The routing rule: <strong>ask the left side <code>has_field</code>; if it says yes,
-      delegate there, otherwise delegate right.</strong> Neither side needs to know anything about
-      the other, which is what lets any scan sit on any other scan.</p>
-      <p>If both sides have a field called <code>id</code>, microdb's rule silently answers from
-      the left. Real SQL refuses: Postgres raises <code>column reference "id" is ambiguous</code>
-      and makes you qualify it, <code>students.id</code>, because guessing is worse than
-      complaining. microdb documents its simple rule and then arranges never to rely on it, which
-      is why the tests name the majors key <strong><code>mid2</code> rather than
-      <code>mid</code></strong>: with distinct names the tie rule never fires, so a passing test
-      proves your routing works rather than proving your tie-break happened to match the
-      reference. A teaching engine should be predictable before it is featureful.</p>
-    </details>
-  </details>
-</div>
-
 <!-- ============================================================ -->
 <h2 id="the-api">The contract</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>loud or silent?</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A ProjectScan kept only <code>name</code>,
-    and some code above it asks for <code>gpa</code> anyway. Three possible behaviors: return
-    the value (it IS still down there), return None, or raise. Pick one and defend it: what
-    does each choice do to the poor soul debugging a wrong query result at 2am?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare choices. Which one turns a caller
-      bug into a wrong-but-plausible <em>answer</em>? That's the one that costs a retraction.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: what "loud beats silent"
-      means as an API design rule.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>Raise.</strong> A ProjectScan is a fence, not a filter, and asking it for a
-      field it does not publish is a bug in the caller, not a question with an answer.</p>
-      <p>Compare the costs at 2am. <em>Raise</em> gives you a stack trace pointing at the exact
-      line that asked for the wrong field: minutes to fix. <em>Return None</em> gives you a
-      <code>None</code> that flows onward and surfaces as a crash or a wrong comparison somewhere
-      far away, with nothing connecting it to the projection. <em>Return the value</em> is the
-      genuinely dangerous one: it produces a <strong>wrong-but-plausible answer</strong> with no
-      error at all, so the query looks like it worked and the projection silently meant nothing.
-      That is the choice that costs a retraction rather than an afternoon.</p>
-      <p>"Loud beats silent" as an API rule: <strong>when a caller violates the contract, fail
-      immediately and say so, rather than inventing a plausible result</strong>. The cost of an
-      exception is bounded and lands on the person who caused it; the cost of a plausible wrong
-      answer is unbounded and lands on whoever trusted it.</p>
-    </details>
-  </details>
-</div>
 
 <p>Everything you write today, in one annotated card. These are the actual lines of the
 reference solution, shown because reading them is most of the work:</p>
@@ -271,39 +202,6 @@ after a full join runs and closes, no frame may remain pinned.</p>
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>predict the traffic</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>300 students (a third in cs, gpas evenly
-    20–39), 3 majors. The query: names of cs students with gpa &gt; 35. Plan A filters after
-    the product; Plan B filters both inputs first. Predict each plan's pairs-built number.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare: A = 300 × 3 = 900. B = 60
-      survivors × 1 major = 60. Now the trap: the counter on B's <em>majors filter</em> reads
-      60, not 1. Why might that be?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Run it, read the note under the table
-      aloud, and agree on what the nested loop does to its right input.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>A builds 900 pairs</strong> (300 × 3), <strong>B builds 60</strong> (60 gpa
-      survivors × 1 cs major), and both return the same 20 rows: a <strong>15×</strong> difference
-      in work from filter placement alone.</p>
-      <p>The trap is the counter on B's majors filter, which reads <strong>60, not 1</strong>. The
-      filter really does keep only one row, but the nested loop <strong>re-runs its right input
-      once per left row</strong>: 60 surviving students, so the majors scan is rewound and walked
-      60 times, and the filter is asked 60 times over. It kept 1 row, sixty separate times.</p>
-      <p>That is the second lesson, and it is the one people forget: in a nested-loop join the
-      right side's cost is multiplied by the left side's cardinality. It is why "put the small
-      table on the right" is folklore, and why week 9's hash join exists at all, since building a
-      hash table once beats re-scanning sixty times.</p>
-    </details>
-  </details>
-</div>
 
 <p>Reference output is deterministic, yours must match:</p>
 

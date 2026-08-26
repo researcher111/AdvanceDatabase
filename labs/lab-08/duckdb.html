@@ -116,43 +116,6 @@ which your Act I knowledge decodes:</p>
   </tbody>
 </table>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the tie that bites</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Q4 asks for the five most expensive rides
-    with <code>ORDER BY fare DESC, ride_id</code>. Suppose you wrote only
-    <code>ORDER BY fare DESC LIMIT 5</code> and two rides tie at the 5th-highest fare. What
-    can happen to your result between runs, and why would an autograder (or a dashboard
-    diff, or a re-run report) care?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Ties are returned in ANY order the engine
-      likes; parallel scans make it genuinely nondeterministic. The tiebreak column makes
-      results reproducible. Where else in DS does nondeterministic ordering quietly poison
-      reproducibility?</li>
-      <li><span class="tps-phase">Share · 2 min</span>House rule, one sentence: every ORDER BY
-      that feeds a LIMIT or a diff gets a total order.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>With a tie at the fifth-highest fare, <strong>which of the tied rides appears is
-      undefined</strong>, and it can differ between runs of the same query on the same data.
-      DuckDB scans partitions in parallel, so the order rows arrive in is a scheduling accident,
-      not a property of the data.</p>
-      <p>That is why an autograder cares: your answer is not wrong, it is <em>unstable</em>, and a
-      diff against a reference answer fails on some runs and passes on others. The same poison
-      shows up all over data science: a train/test split that ties on a sort key, a "top 10
-      customers" dashboard that reshuffles overnight, a groupby whose first-per-group depends on
-      arrival order.</p>
-      <p>House rule: <strong>every <code>ORDER BY</code> feeding a <code>LIMIT</code> or a diff
-      gets a total order.</strong> Add a unique tiebreak column, here <code>ride_id</code>, so the
-      sort has exactly one correct answer rather than a set of equally legal ones.</p>
-    </details>
-  </details>
-</div>
-
 <!-- ============================================================ -->
 <h2 id="the-api">The seven questions</h2>
 
@@ -224,43 +187,6 @@ questions exactly, unordered ones as sets.</p>
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>call all three shots</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Before running
-    <code>measure_parquet.py</code>, predict: (a) Parquet vs CSV on a full-column sum:
-    2×, 10×, or 50×+? (b) can reading 2 columns of 8 beat reading 1 column of 1 file?
-    (c) for <code>month = 12</code> over 12 partition files, how many files does DuckDB
-    open?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Run it. The EXPLAIN output literally
-      prints <code>Scanning Files: 1/12</code>; find that line and read it aloud; it is
-      predicate pushdown's furthest push.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence connecting today's three
-      numbers to a BigQuery bill.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>(a) 89×.</strong> Two separate sins compound: CSV must be parsed (every byte
-      of every column becomes text to scan), and it has no column structure, so the whole file
-      moves even for one column. Parquet stores typed binary columns with per-chunk statistics.
-      <strong>(b) Yes, easily.</strong> Reading 2 columns of 8 from Parquet took 0.8&nbsp;ms
-      against CSV's 42&nbsp;ms for one column, because "one column of CSV" still means dragging
-      the whole file through a parser. <strong>(c) One.</strong> <code>EXPLAIN</code> prints it
-      literally: <code>Scanning Files: 1/12</code>, with the other eleven directories never
-      opened.</p>
-      <p>Connecting all three to a bill: scan-priced warehouses like BigQuery charge by
-      <strong>bytes scanned</strong>, so format, projection and pruning are not performance
-      tuning, they are line items. The same query costs 89× more against CSV, several times more
-      if you write <code>SELECT *</code>, and twelve times more if the table is not partitioned on
-      the column you filter by. Schema and layout decisions are a budgeting skill.</p>
-    </details>
-  </details>
-</div>
 
 <p>Reference run (times representative of an Apple-silicon laptop; counts exact):</p>
 

@@ -86,39 +86,6 @@ entry in another table.</strong> Both halves are Thursday's lab.</p>
 <!-- ============================================================ -->
 <h2 id="gap">Bytes don't know they're rows</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>rename ben</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>In Lab 1 you packed the ada row tight:
-    15 bytes, fields back-to-back, ben's row packed right after at byte 15. Now ben legally
-    changes his name to <code>benjamin</code>: 5 more bytes. Write down everything that has
-    to move, and who has to know it moved. Then try deleting ada entirely. What's left?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare damage lists. Did either of you
-      catch that every stored <em>pointer to</em> a shifted row is now wrong too?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Propose the fix in one phrase: what shape
-      must storage have so that updates and deletes move <em>nothing</em>?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Renaming ben shifts <em>every later byte in the block</em> five to the right, so cyd,
-      dee, eli and fay all move, and the block has to be rewritten. Worse, anything that
-      remembered where a row lived is now quietly wrong: a saved cursor, an index entry, the
-      offset you wrote down last week. Nothing raises an error; the reads just return the wrong
-      bytes. Deleting ada is the mirror image: either shift everything left and break the same
-      pointers, or leave a 15-byte hole that nobody tracks and nothing can reuse.</p>
-      <p>The fix in one phrase: <strong>fixed-size slots</strong>. Reserve the maximum bytes a
-      record could need, make every slot identical, and updates overwrite in place while deletes
-      flip a flag. Nothing moves, so every stored address stays true, and finding row n becomes
-      multiplication instead of parsing. You pay for it in wasted space, which is the trade the
-      next section prices.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="Bytes don't know they're rows">What tight packing costs</h3>
 
 <p>Worked out in bytes: renaming ben in a packed page shifts every later byte in the block,
@@ -188,41 +155,6 @@ what "structured" means to a storage engine.</p>
 
 <!-- ============================================================ -->
 <h2 id="layout">Schema → Layout</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>design the layout</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>You're given
-    <code>students(id int, name varchar(8), gpa int)</code> and the Lab 1 byte rules (int = 4
-    bytes, string = 4-byte length + payload). Design the slot: assign every byte, including
-    space to mark a slot as deleted. Write down each field's offset and your total slot size.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare byte maps. Did you both reserve the
-      string's <em>maximum</em> (4+8), or did someone size it for "ada"? What breaks their way?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Check against the worked table two slides
-      down; any difference is a design decision worth defending aloud.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The flag has to come first so a scan can test a slot without parsing it, and the
-      string has to reserve its maximum. That gives:</p>
-      <pre><code>bytes  0..3    in-use flag
-bytes  4..7    id        (int)
-bytes  8..19   name      (4-byte length + 8 bytes of payload)
-bytes 20..23   gpa       (int)
-slot_size = 24</code></pre>
-      <p>Sizing the string for "ada" instead (4 + 3 = 7 bytes, slot_size 19) works beautifully
-      until someone stores a name of eight characters, at which point the row must grow and shove
-      its neighbours along, which is precisely the disaster the previous section just walked
-      through. Reserving the declared maximum is what buys the promise that a row never moves.
-      At 24 bytes a 4&nbsp;KB block holds 170 rows with 16 bytes left over, and Thursday's
-      measurement makes you prove that against a real file.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="Schema → Layout">Two small classes carry it all</h3>
 
@@ -342,39 +274,6 @@ need a vacuum process: all one design decision, visible in your 24-byte slots.</
 <!-- ============================================================ -->
 <h2 id="tablescan">TableScan: the whole table</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the cursor at the edge</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A scan's cursor sits on the last USED slot
-    of block 3 of a 7-block table, and <code>next()</code> is called. List every step that must
-    happen before it can return True, and be precise about <em>pins</em>: which block is pinned
-    when, and what goes wrong if you pin block 4 before unpinning block 3 in a 1-frame pool?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare step lists. What should happen if
-      blocks 4 and 5 turn out to be all tombstones: does your next() keep walking?</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: why "one pinned block at a
-      time" is the scan's whole memory footprint, no matter how big the table.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Ask <code>next_after(current_slot)</code> and get −1, meaning this block is exhausted.
-      Check whether this is the last block: if so, return False forever. Otherwise
-      <strong>unpin block 3, then pin block 4</strong>, and ask <code>next_after(-1)</code>,
-      starting the search from before the first slot rather than from the old slot number.</p>
-      <p>Pinning block 4 first in a one-frame pool is a <code>BufferAbortError</code>: the only
-      frame is still held, and there is nothing to evict. Thursday's harness runs a scan through a
-      two-frame pool for exactly this reason. If blocks 4 and 5 are entirely tombstones, the loop
-      keeps walking, which is why the code is a <code>while</code> and not an <code>if</code>. And
-      the memory footprint answer: a scan holds a <em>cursor</em>, not the data, so one pinned
-      frame at a time serves a table of six rows or six billion. That is the property the whole
-      iterator model in week 4 is built on.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="TableScan">next(), annotated</h3>
 
 <div class="code-annotated" data-lang="python">
@@ -419,42 +318,6 @@ the model itself.</p>
 
 <!-- ============================================================ -->
 <h2 id="catalog">The catalog</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>chicken and egg</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Decision: table schemas will be stored
-    <em>in a table</em>: <code>field_catalog(tblname, fldname, type, length, offset)</code>.
-    To read any table you need its Layout; to get a Layout you read <code>field_catalog</code>;
-    to read <code>field_catalog</code> you need <em>its</em> Layout, which is stored in… uh oh.
-    Break the cycle. (There is more than one honest answer.)</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare escapes: hardcode the catalog's own
-      layout? A special file format just for it? Store it in itself anyway, carefully?</li>
-      <li><span class="tps-phase">Share · 2 min</span>microdb hardcodes the two catalog layouts
-      at import time: <span class="gloss" data-gloss="bootstrap">bootstrapping</span>. Argue in
-      one sentence why Postgres does essentially the same thing.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Break the cycle by refusing to look the first layout up: <strong>hardcode it</strong>.
-      microdb builds the two catalog tables' Layouts in Python at import time, so
-      <code>field_catalog</code> can be read without consulting anything. Everything else is then
-      ordinary: read <code>field_catalog</code> with a normal TableScan and rebuild any other
-      table's Layout from the rows you find. That is bootstrapping, the same move as a compiler
-      whose first version is written in another language.</p>
-      <p>Postgres does essentially this. The shapes of <code>pg_class</code> and
-      <code>pg_attribute</code> are compiled into the server binary, because at startup it must
-      read its own catalog before it can know how to read anything. The other honest answers are
-      real too: a special file format for the catalog alone, or storing it in itself with a
-      carefully fixed layout for the first page. All three amount to the same admission, that
-      something at the bottom has to be known rather than looked up.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="The catalog">The catalog rows for students, for real this time</h3>
 

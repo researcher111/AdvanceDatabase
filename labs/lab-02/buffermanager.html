@@ -109,43 +109,8 @@ another word.</p>
 <!-- ============================================================ -->
 <h2 id="big-idea">Why pin/unpin exists</h2>
 
-<p>Before the code, earn the protocol. It exists because of one hazard, and once you've named
+<p>Before the code, the protocol. It exists because of one hazard, and once you can name
 it, every rule in this lab follows.</p>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the vanishing page</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Suppose the pool had only
-    <code>get_page(block)</code> (no pin, no unpin) and evicted by LRU whenever it needed room.
-    Your code gets a page reference and starts reading row 2 from it. Construct the exact
-    sequence of events where your read returns <em>another table's data</em> without any error
-    being raised.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare sequences. Whose disaster is quieter:
-      a wrong read, or a write landing in a frame that now holds a different block?</li>
-      <li><span class="tps-phase">Share · 2 min</span>State the fix as a rule about who may evict
-      what, when, then check it against the contract below.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The sequence: you call <code>get_page(block 3)</code> and get a reference to frame 1.
-      Before you read row 2, another part of the query misses on block 9, the pool is full, and
-      LRU picks frame 1 as its victim. It loads block 9 into that memory. Your reference is still
-      perfectly valid and still points at frame 1, which now holds block 9. You read row 2 and get
-      bytes from a different block, possibly a different table. <strong>No exception, no warning,
-      no way to detect it.</strong></p>
-      <p>The quieter disaster is the <em>write</em>. A wrong read produces a wrong answer that
-      someone might notice; a write landing in a frame that now holds a different block corrupts
-      that other block, gets flushed to disk as though it were legitimate, and outlives the query
-      that caused it. The rule that fixes both: <strong>a frame that someone is using may never
-      be chosen as a victim</strong>. Callers declare use with <code>pin</code> and end it with
-      <code>unpin</code>, and eviction skips any frame with a non-zero pin count.</p>
-    </details>
-  </details>
-</div>
 
 <p>The hazard: between your <code>get_page</code> and your read, <em>someone else's miss</em>
 evicts your frame and loads a different block into the same memory. Your reference still
@@ -169,39 +134,6 @@ coding; the tests check it literally.</p>
   <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Tick first (self._tick += 1). Existing frame -> hits += 1. Otherwise victim or raise BufferAbortError; misses += 1; victim.assign_to_block(block), which flushes the victim if dirty, then reads. Both paths: pins += 1, last_used = tick.">def pin(block) -> Buffer                        # hit, or evict + load</div>
   <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="pins -= 1, but first: if pins is already 0, raise ValueError. A double-unpin is always a caller bug, and silent pin-count corruption is the nastiest bug family in this lab.">def unpin(buf)                                  # release the lease</div>
   <div class="code-explain-panel">Hover a line for its spec and the tool that implements it.</div>
-</div>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>design the victim rule</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>The pool is full and a new block needs a
-    frame. Write your eviction rule as one sentence precise enough to code, including the
-    tie-breaker and what happens if no frame qualifies. Would your rule survive the "pinned
-    reader" hazard from the last section?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Swap rules and attack each other's: does it
-      evict a pinned frame? Does a <em>hit</em> refresh recency, or only a load?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Compare the table's spec against your rule.
-      The difference is exactly what the tests will catch in your code.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The rule, precise enough to code: <strong>evict the frame with the smallest
-      <code>last_used</code> among frames whose <code>pins</code> is 0; if no frame qualifies,
-      raise <code>BufferAbortError</code>.</strong></p>
-      <p>Two details decide whether your version passes. First, <code>last_used</code> is stamped
-      on <strong>every successful pin, hits included</strong>, not only on loads. Stamp only on
-      misses and you have built insertion order wearing an LRU costume, and the LRU-order test is
-      built to catch exactly that. Second, <strong>pinned is untouchable regardless of age</strong>:
-      the oldest frame in the pool is not a candidate if someone holds it, which is what makes the
-      rule survive the previous section's hazard. And "no frame qualifies" must be a loud error
-      rather than a silent stall, because in a single-threaded engine waiting would wait
-      forever.</p>
-    </details>
-  </details>
 </div>
 
 <p>The LRU spec, exactly as the tests measure it:</p>
@@ -291,41 +223,7 @@ its own eviction, and <code>flush_all</code> must push everything down before sh
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
 <p>Your buffer manager now has a hit-rate counter. Time to see the number every database
-engineer carries around, but commit to a prediction first.</p>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>one frame short</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A 50-block file, scanned start to finish,
-    twice. Your pool has <strong>49 frames</strong>, room for all but one block. Predict the
-    hit rate on the second pass: roughly 98%? 50%? Something else? Reason it through with LRU's
-    rule before you peek.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Walk the pointer: when the scan re-reads
-      block 0, which block did LRU just evict to make room for block 49? And then?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Run <code>python3 measure_hits.py</code> and
-      read the table out loud. One sentence on why 49 frames buys <em>nothing</em>.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>0%.</strong> Not 98%, not 50%: exactly zero hits on the second pass, and
-      <code>measure_hits.py</code> prints it.</p>
-      <p>Walk the pointer. Reading block 49 needs a frame, and the least recently used block is
-      block 0, so block 0 is evicted. The scan then wraps to block 0, which is now missing, and
-      loading it evicts block 1, which is the very next block the scan wants. Every single access
-      misses, forever, because LRU evicts each block exactly one step before the scan returns to
-      it. Add one more frame, 50 for 50 blocks, and the hit rate jumps to 50%.</p>
-      <p>So why does 49 frames buy nothing? Because a cache does not reward the <em>amount</em> of
-      data you touched, it rewards <strong>re-use that fits</strong>. A working set one block too
-      large for the pool is, for LRU, exactly as good as no cache at all. That cliff is the reason
-      real engines detect sequential scans and give them a small private ring rather than letting
-      them flood the pool.</p>
-    </details>
-  </details>
-</div>
+engineer carries around.</p>
 
 <p>The reference solution's output (yours should match it exactly, since the workloads are
 seeded):</p>

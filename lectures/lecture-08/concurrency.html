@@ -84,41 +84,6 @@ waiting, with aborts, or with old versions. There is no free level.</p>
 <!-- ============================================================ -->
 <h2 id="anomalies">Ways to be wrong together</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>break the bank yourselves</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Account A holds $100. Two cashiers each
-    run: <em>read A; add $10; write A back</em>. Both transactions are individually perfect.
-    Find the interleaving of their four steps where a deposit vanishes, and say exactly which
-    step destroyed it.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare interleavings: both read 100 →
-      both write 110 → one $10 is gone. No crash, no error, no log entry: which of last
-      Thursday's machinery even noticed?</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: what property did the
-      serial (one-then-the-other) schedule have that the interleaved one lost?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The killing interleaving is: T1 reads 100, T2 reads 100, T1 writes 110, T2 writes 110.
-      The step that destroys the deposit is <strong>T2's read</strong>, not its write: it read a
-      value that was already stale-in-waiting, because T1 was going to change it. The write merely
-      carries out the damage. Final balance $110 where it should be $120, and one customer's $10
-      has vanished.</p>
-      <p>What noticed? <strong>Nothing.</strong> No crash, no error, no rollback, and the log is
-      perfectly happy, because both transactions committed and every write it recorded did land on
-      disk. Last Thursday's machinery guarantees durability and atomicity, and neither was
-      violated. That is the point: this is a new category of bug. The property the serial schedule
-      had and the interleaved one lost is that each transaction saw the <em>whole</em> effect of
-      every transaction before it and <em>none</em> of any transaction after it. Restoring that
-      property is what isolation means, and it is the I this whole lecture is about.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="Ways to be wrong together">The anomaly zoo: learn the names</h3>
 
 <table>
@@ -214,43 +179,6 @@ conflict table:        S      X
 <!-- ============================================================ -->
 <h2 id="levels">Isolation levels</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>price the safety</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Your dashboard runs a 10-minute analytics
-    query over the orders table while checkouts commit constantly. Full serializability would
-    block or abort someone for 10 minutes. Which anomalies from the zoo could you TOLERATE in
-    a dashboard, in exchange for never blocking checkouts? Which could a bank transfer
-    tolerate?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Dashboards shrug at non-repeatable reads;
-      transfers cannot shrug at lost updates. Different queries deserve different contracts;
-      that's why levels exist per-transaction, not per-database.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Guess before the next slide: which level
-      is Postgres's default?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>A dashboard can shrug at almost all of them. A non-repeatable read or a phantom just
-      means the ten-minute report reflects a slightly different instant in different places, which
-      for a revenue chart is noise next to the fact that it is ten minutes stale by the time anyone
-      reads it. Even a dirty read is often survivable there. A <strong>bank transfer can tolerate
-      none of it</strong>, and least of all the lost update, which is the one that silently
-      destroys money.</p>
-      <p>That asymmetry is why isolation is set <em>per transaction</em> rather than per database:
-      <code>SET TRANSACTION ISOLATION LEVEL …</code>. The same database serves both, and each
-      query buys only the safety it needs.</p>
-      <p>The guess: Postgres's default is <strong>READ COMMITTED</strong>, not SERIALIZABLE. Most
-      people assume the strongest is the default, and the fact that it is not is the whole
-      economics of this lecture: safety is bought with waiting, and databases sell it by the
-      transaction.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="Isolation levels">The menu, explorable</h3>
 
 <div class="viz" id="viz-iso">
@@ -273,43 +201,6 @@ implementations, and write skew slips between them (FAQ).</p>
 
 <!-- ============================================================ -->
 <h2 id="mvcc">MVCC: readers don't block</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the reader who wants yesterday</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>The 10-minute report doesn't need the
-    <em>latest</em> data; it needs a <em>consistent</em> view, as of its start. Design a
-    scheme where writers never wait for it and it never waits for writers. Hint from Lab 3:
-    what if UPDATE didn't overwrite the row?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Converge on: keep old versions; stamp each
-      with its creator; let each reader see the versions current at its <span class="gloss" data-gloss="snapshot">snapshot</span>. What new
-      chore does this create? (Someone must take out the trash.)</li>
-      <li><span class="tps-phase">Share · 2 min</span>Name a Lab 3 design decision that made
-      "just keep the old row" cheap.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Do not overwrite. An <code>UPDATE</code> writes a <em>new version</em> of the row and
-      leaves the old one in place, each version stamped with the transaction that created it and
-      the one that deleted it. Every reader carries a <strong>snapshot</strong>, the set of
-      transactions committed when it started, and sees exactly the versions that were current
-      then. Readers never block writers and writers never block readers, because neither takes a
-      lock to do it: visibility is a two-field arithmetic test on the stamps, which is really just
-      a Predicate from Lab 4.</p>
-      <p>The new chore is <strong>garbage</strong>. Old versions accumulate forever unless someone
-      reclaims the ones no living snapshot can still see, which is what VACUUM does, and why a
-      long-running report makes vacuum's job harder: its snapshot keeps old versions alive. The
-      Lab 3 decision that made "just keep the old row" cheap is <strong>deletion as a bit
-      flip</strong> with tombstone slots that get recycled. Superseding a row is the same move as
-      deleting it, and reclaiming a dead version is the same move as reusing a tombstone. MVCC is
-      that idea, industrialized.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="MVCC">How Postgres actually does it</h3>
 

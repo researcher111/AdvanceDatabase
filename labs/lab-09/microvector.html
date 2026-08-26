@@ -103,43 +103,6 @@ space</em>, and then a query only searches the few partitions its neighborhood c
 plausibly live in. The cost of the analogy's imperfection (space has no clean fences; near
 things straddle borders) is exactly what recall@k measures.</p>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>where do misses live?</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>IVF at probe 1 scored 0.758 recall; it
-    missed about 1 true neighbor in 4. Those misses aren't random. Describe geometrically
-    WHERE a query's missed neighbors live, and predict: are queries near a centroid or near a
-    boundary hurt more? What about a dataset with more cluster overlap?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Misses live just across unprobed borders;
-      boundary queries suffer most; overlap makes everything worse (and real embedding topics
-      overlap; the dataset generator was built to). Check your prediction against the
-      lecture's 2-D widget.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: why probe buys recall back:
-      whose borders get covered?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>The misses live <strong>just across the borders of clusters you did not probe</strong>.
-      A true neighbour can be geometrically very close to the query and still be assigned to a
-      different centroid, and if that list is not probed the vector is never scored at all. It is
-      not out-ranked, it is unseen.</p>
-      <p>So <strong>queries near a boundary are hurt far more</strong> than queries sitting near a
-      centroid: a query in the middle of its cluster has most of its true neighbours in that same
-      list, while a boundary query has them split across two or three. More cluster overlap makes
-      everything worse, and real embedding topics <em>do</em> overlap, which is why the lab's
-      generator was built to produce it rather than clean, well-separated blobs.</p>
-      <p>Why probe buys recall back: raising probe covers <strong>more of the borders</strong>.
-      Probe 2 adds the second-nearest centroid, which is exactly where a boundary query's missing
-      neighbours were hiding. That is also why recall can only rise as probe rises, never fall,
-      and why a "probe more, recall dropped" result is always a bug rather than a discovery.</p>
-    </details>
-  </details>
-</div>
-
 <!-- ============================================================ -->
 <h2 id="the-api">The contract</h2>
 
@@ -148,41 +111,6 @@ things straddle borders) is exactly what recall@k measures.</p>
   <div class="code-step" data-step="bu" data-step-name="IVFIndex._build" data-explain="For each vector, find its nearest centroid (max dot) and append its id to that list. Every id lands exactly once; the harness counts.">IVFIndex._build()              # bucket every id under its centroid</div>
   <div class="code-step" data-step="se" data-step-name="IVFIndex.search" data-explain="Score all C centroids (count them!), take the probe best lists, brute-force only their ids (count those too), return top-k. The comparison counter is graded; it IS the speedup claim.">IVFIndex.search(q, k, probe)   # probe lists, then brute-force inside</div>
   <div class="code-explain-panel">Hover a line: dot(), normalize(), kmeans(), and recall_at_k() ship complete and are worth reading first.</div>
-</div>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>count what you claim</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>The harness checks
-    <code>self.comparisons</code> as strictly as it checks results. Compute by hand what the
-    counter should read for one IVF search: 20 clusters, probe 4, lists averaging 200 ids.
-    Now: which subtle bug would give the RIGHT answers with a WRONG (too high) count?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>~20 + 4×200 = 820. The classic bug:
-      scoring every vector but only <em>keeping</em> results from probed lists: right
-      answers, zero speedup, and the counter confesses. Instrumentation as honesty.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Where did this course previously grade a
-      counter, not just an answer? (Lab 3's blocks; Lab 6's nodes. Pattern's a pattern.)</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>About 820:</strong> 20 centroid dot products to pick the probes, plus 4 lists
-      × roughly 200 ids each = 800 candidate comparisons.</p>
-      <p>The subtle bug that yields <em>right answers with a too-high count</em>: scoring every
-      vector in the dataset and then only keeping results whose ids belong to the probed lists.
-      Every returned neighbour is correct, every test on results passes, and you have implemented
-      brute force with extra bookkeeping. The counter is the only thing that notices, reading 4,000
-      instead of 820. Instrumentation as honesty: the number you claim is graded as strictly as
-      the answer you return, because the whole point of the structure is the number.</p>
-      <p>Where the course graded a counter before: <strong>Lab 3</strong> counted your file's
-      blocks after 12 inserts, catching a scan that worked but grew the file 4× too fast, and
-      <strong>Lab 6</strong> counted tree nodes touched per lookup. Same pattern each time: a
-      correct answer obtained the expensive way is a bug, and only a counter can see it.</p>
-    </details>
-  </details>
 </div>
 
 <!-- ============================================================ -->

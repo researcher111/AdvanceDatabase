@@ -86,42 +86,6 @@ place</strong>; everything else is bookkeeping that makes that one fsync suffici
 <!-- ============================================================ -->
 <h2 id="promise">What COMMIT promises</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the interrupted transfer</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A transfer moves $40 from account A to B:
-    subtract, then add: two writes, possibly on two different pages. List every moment a
-    crash could strike, and what the on-disk balances look like at each. Which outcomes are
-    merely annoying, and which one is <em>unacceptable</em>?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare: crash before = fine (nothing
-      happened); crash after = fine (all happened); crash <em>between</em> = money destroyed
-      or minted. What single capability turns "between" into "before"?</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: the promise a database must
-      make about multi-write operations.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Three moments. <strong>Before</strong> either write reaches disk: nothing happened, A
-      and B are untouched, and the transfer simply did not occur. Annoying, correct.
-      <strong>After</strong> both: the transfer happened in full. Correct. <strong>Between</strong>
-      the two writes: A has been debited $40 and B never credited, so <strong>$40 has been
-      destroyed</strong>, and on the reverse ordering it would have been minted. That is the
-      unacceptable one, and no amount of care in the application can prevent it, because the crash
-      lands between two instructions.</p>
-      <p>The capability that turns "between" into "before" is the ability to <em>undo</em>: if the
-      engine can put A back the way it was, the half-done transfer becomes the same as the
-      never-started one. And to undo after a crash you must have written the old value somewhere
-      that survives the crash, which is the log. So the promise, in one sentence: a multi-write
-      operation happens <strong>entirely or not at all</strong>, whatever the moment of failure.
-      That is the A in ACID.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="What COMMIT promises">ACID, with two letters in focus</h3>
 
 <table>
@@ -166,39 +130,6 @@ writes, log writes, and one murder, then run recovery and count the money.</p>
 
 <!-- ============================================================ -->
 <h2 id="wal">The write-ahead rule</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>design the insurance</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>You must be able to UNDO any page write
-    after a crash, but the crash erases everything not yet on disk. Design the minimal
-    insurance: what must be written, where, and (the crucial part) <em>in what order</em>
-    relative to the page write it insures? What goes wrong with the opposite order?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Run the bad order: page write hits disk,
-      crash, no log record; the old value is gone from the universe. Nothing can undo it.
-      Agree: the log entry must exist <em>first</em>, always.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Name the rule. (It's the lecture title.)</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Write the <strong>old value</strong> of whatever you are about to change, to an
-      <strong>append-only file</strong>, <strong>before</strong> the page write it insures. One
-      small record per change: which transaction, which file, which block, which offset, and what
-      was there before.</p>
-      <p>Run the opposite order and the failure is total. The page write reaches disk, the crash
-      arrives, and the log record was never written: the old value now exists nowhere in the
-      universe, so nothing can undo it. The insurance has to be bought before the risk is taken,
-      not after. That is the rule, and it is the lecture's title:
-      <strong>write-ahead logging</strong>. The log is append-only because sequential writes are
-      the one thing disks do at full speed, which is why logging every change costs far less than
-      it sounds.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="The write-ahead rule">The rule, and the record</h3>
 
@@ -282,42 +213,6 @@ interrupted by the disaster it repairs.</strong></p>
 
 <!-- ============================================================ -->
 <h2 id="policies">Force, steal, and ARIES</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the 2×2, cashed in</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Week 2's grid: FORCE = flush data pages at
-    commit; STEAL = the pool may flush uncommitted pages anytime. For each quadrant, decide:
-    does recovery need UNDO? REDO? Both? Neither? (Reason from what could be on disk at crash
-    time.)</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Check: steal puts <em>uncommitted</em>
-      data on disk → undo needed. No-force leaves <em>committed</em> data off disk → redo
-      needed. microdb picks force+steal: undo only.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Why does every real engine pick the
-      quadrant needing BOTH?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Reason from what the disk can hold at the moment of the crash. <strong>Steal</strong>
-      lets uncommitted data reach disk, so recovery needs <strong>undo</strong>.
-      <strong>No-force</strong> lets committed data still be missing from disk, so recovery needs
-      <strong>redo</strong>. That gives the grid: no-steal + force needs neither, no-steal +
-      no-force needs redo, steal + force needs undo (microdb's corner), and steal + no-force needs
-      both.</p>
-      <p>Every real engine picks the both corner, because the other three buy their simple
-      recovery by crippling normal operation. Force means every commit waits for scattered random
-      page writes, so commit latency is hostage to the data pages rather than to one sequential
-      log write. No-steal means the buffer pool may not evict a dirty page belonging to a live
-      transaction, so a long transaction can pin the pool solid. Steal plus no-force gives the pool
-      complete freedom and makes commit cost exactly one sequential fsync; the price is a recovery
-      algorithm with two passes, which is a price you pay only after a crash.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="Force, steal, and ARIES">The quadrant, explorable</h3>
 

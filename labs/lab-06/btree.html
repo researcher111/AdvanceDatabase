@@ -109,41 +109,6 @@ choose what goes where. Get three in a row right and the code is transcription.<
 and the reference TableScan gained a three-line <code>move_to_rid()</code> so a scan can jump
 wherever the tree points. An index is a second, sorted road into the same heap.</p>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>why not sort the table itself?</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Instead of a side structure, why not keep
-    the heap file itself sorted by uid: binary search, no extra space? List what breaks,
-    using what Lab 3 taught about inserts and stable RIDs. Then: what if you want fast lookup
-    by uid AND by name?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare damage lists: inserts shift rows
-      (RIPs for every RID), and one physical order can serve one key at most. A side tree
-      dodges both; that's the entire design argument for indexes.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: what does "the heap stays
-      dumb, the smartness lives beside it" buy an engine?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Two things break, and Lab 3 taught both. <strong>Inserts:</strong> keeping the heap
-      sorted means every insert shifts the rows after it to make room, which is the packed-page
-      nightmare that fixed slots abolished, and every shift invalidates every RID pointing past
-      it. <strong>Only one order:</strong> a file has exactly one physical arrangement, so sorting
-      by <code>uid</code> makes lookup by <code>name</code> no better than a full scan. You cannot
-      sort one file two ways.</p>
-      <p>A side structure dodges both. The heap keeps its fast unordered inserts and its stable
-      RIDs, and the sorted thing lives beside it holding (key, RID) pairs. Want a second access
-      path by name? Build a second tree. What that buys an engine is
-      <strong>independence</strong>: access paths can be added, dropped and rebuilt without
-      touching the data or invalidating anything, and each one is paid for only by the writes that
-      maintain it. The heap stays dumb precisely so that the smartness can be plural.</p>
-    </details>
-  </details>
-</div>
-
 <!-- ============================================================ -->
 <h2 id="the-api">The contract</h2>
 
@@ -156,43 +121,6 @@ ship complete. You write the four methods that make the structure a structure:</
   <div class="code-step" data-step="sp" data-step-name="_split" data-explain="mid = len//2. Leaf: sibling takes keys[mid:]+rids, hoisted key COPIED up, chain fixed (node→sibling→old next). Internal: sibling takes keys[mid+1:]+children, hoisted key MOVED up. No parent → new root of one key, height += 1.">_split(node, parent)  # the lecture table, transcribed</div>
   <div class="code-step" data-step="ra" data-step-name="range" data-explain="Descend to lo's leaf, then walk: through this leaf's sorted keys, across .next to the sibling, collecting rids while key <= hi. Return them in key order.">range(lo, hi)    # descend once, then walk the chain</div>
   <div class="code-explain-panel">Hover a line. Read the provided Node class first; its docstring shows both node shapes with real values.</div>
-</div>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the off-by-one museum</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Three classic split bugs: (a) the leaf's
-    middle key is <em>moved</em> up instead of copied; (b) the internal split gives the sibling
-    <code>keys[mid:]</code> instead of <code>keys[mid+1:]</code>; (c) the leaf chain skips the
-    new sibling. For each: which harness test catches it, and what symptom would you see?
-    (The test names are on this page.)</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Match: (a) → "a LEAF split must keep every
-      key in the leaves"; (b) → the invariants check (children ≠ keys+1); (c) → "range walks
-      the leaf chain" silently missing keys. Agreeing on symptoms now is debugging later, prepaid.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: why copy-vs-move differs
-      between leaf and internal at all.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>(a) Moving the leaf's middle key up instead of copying it</strong> is caught
-      by "a LEAF split must keep every key in the leaves": the key vanishes from the data level, so
-      searching for it returns nothing and a range scan skips it, while the tree looks perfectly
-      well formed. <strong>(b) Giving the internal sibling <code>keys[mid:]</code></strong> is
-      caught by the invariants check, because an internal node must have exactly one more child
-      than keys; keep the middle key and the counts no longer line up. <strong>(c) Forgetting the
-      leaf chain</strong> passes every point lookup and is caught only by "range walks the leaf
-      chain", which silently returns too few keys.</p>
-      <p>Why copy versus move differs at all: <strong>leaves hold the data, internal nodes hold
-      only directions.</strong> A key in a leaf is a real entry with a RID attached, so it must
-      stay there; the parent gets a <em>copy</em> to use as a signpost. A key in an internal node
-      is already just a signpost, so promoting it moves it, with nothing left behind to lose. The
-      rule follows from what each kind of node is for.</p>
-    </details>
-  </details>
 </div>
 
 <!-- ============================================================ -->
@@ -260,41 +188,6 @@ row for row, while touching exactly <code>height</code> nodes.</p>
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>call the shot</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>100,000 rows, ORDER-4 tree. Before running:
-    predict the tree's height (compute: how many keys fit in a height-h ORDER-4 tree at ~half
-    occupancy?), the nodes one search touches, and (the brave one) the speedup over the full
-    scan. Write all three down.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Run it. Score each other's predictions:
-      height is computable (~11), the speedup usually humbles everyone in the good direction.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Re-answer with real-page fan-out 200:
-      height for the same table? For 100M rows?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Height about <strong>11</strong>, one search touching <strong>11 nodes plus 1 heap
-      block</strong>, against a scan of 100,000 rows across 294 blocks. Measured:
-      <strong>128&nbsp;ms versus 0.03&nbsp;ms, a 4,091× speedup</strong>, and the speedup is the
-      number that humbles everyone, always in the good direction. (Dividing the two printed times
-      gives about 4,300; the script reports 4,091 because it divides the unrounded timings.)</p>
-      <p>Height is computable rather than guessable: an ORDER-4 tree at roughly half occupancy
-      holds about 2 keys per node, so height ≈ log₂(100,000) ≈ 17 at worst and about 11 in
-      practice, since real occupancy runs better than the worst case.</p>
-      <p>Re-answered at real-page fan-out 200: the same 100,000 rows need
-      <strong>height 3</strong>, and <strong>100 million rows need height 4</strong>. That is the
-      whole point of sizing nodes to blocks. Your ORDER-4 tree pays 11 node visits for what a real
-      engine does in 4, and the difference is not a better algorithm, it is a bigger base on the
-      same logarithm.</p>
-    </details>
-  </details>
-</div>
 
 <p>Reference run (counts deterministic; milliseconds representative of an Apple-silicon laptop):</p>
 

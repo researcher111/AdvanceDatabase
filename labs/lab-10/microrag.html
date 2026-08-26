@@ -167,47 +167,6 @@ while keeping every other line.</p>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>design the retriever</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span><code>BruteForceIndex</code> stores plain
-    vectors and returns <code>(score, i)</code> pairs; it has never heard of text. Sketch
-    <code>Retriever.__init__</code> and <code>retrieve</code>: what gets embedded when, and
-    how does an integer <code>i</code> from the index turn back into a chunk with a title?
-    What silently breaks if you build the index from a <em>filtered</em> copy of the chunk
-    list?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Converge on the invariant: index id
-      <code>i</code> ↔ <code>self.chunks[i]</code>, forever. Filter, sort, or dedupe the list
-      after building and every retrieval silently returns the wrong chunk with a confident
-      score; the eval set is how you'd ever notice.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Embedding 25 chunks: build time or
-      query time? Defend with what each choice costs per question.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><code>__init__</code> embeds <em>every chunk's text</em> once and builds a
-      <code>BruteForceIndex</code> over those vectors, keeping the index order aligned with
-      <code>self.chunks</code>. <code>retrieve</code> embeds the <em>question</em>, calls
-      <code>self.index.search(qv, k)</code>, and turns each returned integer <code>i</code> back
-      into a chunk by <code>self.chunks[i]</code>, attaching the score to a <em>copy</em>.</p>
-      <p>The invariant is <strong>index id <code>i</code> ↔ <code>self.chunks[i]</code>,
-      forever</strong>. Build the index from a filtered, sorted or deduped copy and the ids now
-      address a different list: every retrieval returns the <em>wrong chunk with a confident
-      score</em>, the own-text test still passes, and nothing raises. Only the eval set catches it,
-      which is precisely why the eval set exists.</p>
-      <p>Embed at <strong>build time</strong>. Embedding is the expensive step, the chunks do not
-      change between questions, and doing it per query would pay 25 embeddings on every single
-      question to answer one. Build time costs 25 embeddings once; query time then costs exactly
-      one, for the question. That is the same trade as building an index in Lab 6: pay
-      organisation once, skip work forever.</p>
-    </details>
-  </details>
-</div>
-
 <ol>
   <li><strong>Read the provided half</strong> (8 min): the module docstring's pipeline
   table, <code>chunk_corpus</code>, <code>embed</code> (annotated above), and
@@ -270,45 +229,6 @@ while keeping every other line.</p>
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>predict the collapse</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>The embedder hashes words into DIM
-    dimensions. Predict the hit@3 column of the DIM sweep before running it: what happens at
-    DIM=64, where ~700 corpus words share 64 dimensions? And predict the two buffer-pool
-    phrasings from the widget above: which retrieves, which doesn't, and why?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Two different failure mechanisms: DIM
-      shrink = <em>collisions</em> (unrelated words merged by the hash), synonym miss =
-      <em>vocabulary</em> (no shared content words at any DIM). Which one does buying a
-      bigger DIM fix? Which needs a different embedder entirely?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Your project uses a learned embedding
-      model. Which of the two failures does it cure, and which can it still have?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>At <strong>DIM=64</strong> hit@3 collapses to <strong>0.42</strong> (MRR 0.21), because
-      roughly 700 corpus words are being hashed into 64 dimensions, so unrelated words are merged
-      by collision and the vectors stop distinguishing documents. At 256 it recovers to 0.83, and
-      at 2048 to 0.92. For the two buffer-pool phrasings: the one containing the words
-      <em>cache</em> and <em>page</em> retrieves the bufferpool document; the paraphrase "what
-      keeps the most popular pages sitting in memory" does not, because it shares no content words
-      with the target at all.</p>
-      <p>These are <strong>two different mechanisms</strong>, and that is the point. Collisions are
-      a <em>capacity</em> problem, cured by buying more dimensions. The synonym wall is a
-      <em>vocabulary</em> problem: bag-of-words matches words, not meaning, so no DIM fixes it.
-      That is why 4096 buys nothing over 2048 once collisions are gone.</p>
-      <p>A learned embedding model cures the second, since it places paraphrases near each other in
-      the space regardless of shared words. It does not make you immune to the first: a learned
-      model still has a fixed dimensionality and can still be too small for the domain, and it adds
-      failure modes of its own, such as being trained on a distribution unlike your corpus.</p>
-    </details>
-  </details>
-</div>
 
 <p>The measurement is deterministic; yours must match:</p>
 

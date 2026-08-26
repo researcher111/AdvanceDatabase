@@ -87,39 +87,6 @@ pool is winning.</strong> Everything else is commentary.</p>
 <!-- ============================================================ -->
 <h2 id="problem">The gap you measured</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>your fsync ratio</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Take out Thursday's <code>measurements.txt</code>.
-    Suppose microdb went to disk for <em>every</em> page it touched, durable every time. Using your
-    measured durable-writes-per-second: how many of the query-journey demo's queries (2 block
-    reads each) could your laptop serve per second? Is that a usable database?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare ratios: whose laptop is faster, and
-      does it matter to the conclusion?</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: what must a storage engine do,
-      structurally, to escape its own disk?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Whatever your laptop measured, the answer lands in the hundreds per second, and the
-      shape of it is the same for everyone: a durable write costs milliseconds, so a database
-      that pays that price on every page touch serves a few hundred queries a second and no
-      more. No, that is not a usable database. Whose laptop is faster does not change the
-      verdict, which is why the ratio, not the absolute number, was the thing worth writing
-      down.</p>
-      <p>Structurally there are only two escapes, and this course builds both. Stop going to
-      disk for reads by keeping hot blocks in memory, which is today's buffer pool. Stop paying
-      for durability page by page by writing one small sequential record to a log instead, which
-      is week 7's write-ahead log. Every engine you will ever meet is some arrangement of those
-      two moves.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="The gap you measured">The problem, stated honestly</h3>
 
 <p>The two resources at hand have opposite virtues, and the buffer pool's whole job is
@@ -202,42 +169,6 @@ in miniature:</p>
 
 <!-- ============================================================ -->
 <h2 id="pool">Frames, pin &amp; unpin</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the cache you already have</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>Your OS <em>already</em> caches file reads in
-    spare RAM; Lab 1's buffered writes were fast precisely because of it. So why does every
-    serious database (Postgres, MySQL, Oracle, SQLite) build and manage its <em>own</em> cache
-    on top? List at least two things the database knows or needs that the OS cannot.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Merge lists. Did either of you think about
-      what happens if the OS evicts a page the database is <em>mid-way through modifying</em>?</li>
-      <li><span class="tps-phase">Share · 2 min</span>Keep your list visible; the "why not the
-      OS" slide below grades it.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Four things, and the first is the one that forces the issue. <strong>Pinning:</strong>
-      the OS offers no way to say "do not evict this page, I am reading it right now," and a
-      database must hold a page still while it walks the rows inside. <strong>Write
-      ordering:</strong> correctness after a crash requires the log record to reach disk before
-      the page it describes, and the OS flushes on its own schedule.
-      <strong>Workload-aware eviction:</strong> the database knows a sequential scan will not
-      re-read its blocks, so it can refuse to cache them; the OS sees anonymous bytes.
-      <strong>Predictability:</strong> the OS cache can stall or evict at any moment, for
-      reasons belonging to some other process.</p>
-      <p>The mid-modification case in the Pair step is the sharpest one: if the OS wrote a
-      half-updated page out at a moment of its choosing, recovery would have no way to know. That
-      is exactly the argument of the CIDR 2022 paper in the citations, whose title asks whether
-      you are sure you want to use mmap. The OS cache still helps underneath; the database pool
-      is not instead of it, it is the layer that adds the guarantees.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="Frames, pin &amp; unpin">Anatomy of the pool</h3>
 
@@ -383,41 +314,6 @@ two workloads, pool sizes from 5 to 55:</p>
 <p>Reads were the easy half. Once queries <em>modify</em> pages, the pool holds data the disk
 doesn't have yet, and must never lose track of that fact.</p>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>the modified page</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>A page in frame 2 was modified in memory.
-    List every moment you can think of when those bytes <em>must</em> or <em>could</em> be
-    written to disk, and one moment when writing them would be premature. (Hint for the last
-    one: what if the transaction that made the change hasn't committed?)</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare moment-lists against the table below.
-      The "premature" case is the deepest question in this course; file it for week 7.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Agree: who should decide when a dirty page
-      is written: the query, the pool, or the log?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>Must:</strong> at eviction, when the frame is about to be reused, since
-      otherwise the modification is simply lost. <strong>Could:</strong> at
-      <code>flush_all()</code>, at shutdown, or at a checkpoint, all of which exist to bound how
-      much log recovery has to replay. <strong>Never:</strong> on unpin, which means "I am done
-      reading," not "write this"; hot pages stay dirty in memory for a long time on purpose.</p>
-      <p>The surprising one is <code>COMMIT</code>: it does <em>not</em> write the data pages. It
-      forces the log, one sequential fsync, and the pages drift out later. That is precisely the
-      escape from your Lab 1 fsync ratio.</p>
-      <p>The premature case is writing an uncommitted change to disk before the log record that
-      describes it is durable. Do that and a crash leaves a change on disk that nothing can undo,
-      because the only record of the old value never made it. So the answer to the Share prompt
-      is that the pool decides <em>when</em> a dirty page is written, but the log decides
-      <em>whether</em> it is allowed to be. Week 7 gives that rule its name.</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="Dirty pages">When do bytes actually reach disk?</h3>
 
 <table>
@@ -453,37 +349,6 @@ recovery. Week 7 builds the payment.</p>
 
 <!-- ============================================================ -->
 <h2 id="math">The arithmetic of a cache</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>how good is good enough?</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>RAM access: 100 ns. Disk access: 25 µs.
-    Guess, then compute if you can: what hit rate does the pool need so that the <em>average</em>
-    access is no worse than 2× pure RAM speed? 80%? 95%? 99%? Commit to a number.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Compare guesses, then check against the
-      slider on the next slide. Most people are low by an order of magnitude.</li>
-      <li><span class="tps-phase">Share · 2 min</span>One sentence: what does this say about
-      "we cached 90% of it, we're done"?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>About <strong>99.6%</strong>, and nearly everyone guesses far too low. Solve
-      T = h·100 ns + (1 − h)·25 µs ≤ 200 ns and you get h ≥ 24,800 / 24,900 = 0.99598.</p>
-      <p>The neighbouring numbers are what make the point. At 90% hits the average is 2,590 ns,
-      about 26× slower than RAM. At 99% it is 349 ns, still 3.5× slower. Only the last fraction
-      of a percent buys the last factor of two, because the miss term owns the average: at 90%
-      hits, the 10% of accesses that miss contribute 96% of the total time.</p>
-      <p>So "we cached 90% of it, we're done" is nearly meaningless. A cache is not good until it
-      is absurdly good, and the only thing that gets you there is the working set fitting in the
-      pool. That is why the next section's cliff, where 49 frames buy exactly nothing, is the
-      lesson rather than a curiosity.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="The arithmetic of a cache">Effective access time</h3>
 

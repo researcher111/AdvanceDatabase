@@ -87,43 +87,6 @@ an explicit dial</strong>, and you are responsible for reading the dial.</p>
 <!-- ============================================================ -->
 <h2 id="similar">The similarity query</h2>
 
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>index the un-indexable</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>4,000 chunk embeddings (32-dim unit
-    vectors); query: the 10 nearest by cosine. Try to apply your tools: can a B+ tree on…
-    what, exactly… help? A hash index? Sorting by the first coordinate? For each, say
-    precisely where it breaks.</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Converge: order needs ONE dimension
-      (which coordinate?), equality needs exact match (embeddings never repeat), and nearness
-      in 32-dim space survives neither. This is genuinely a new problem.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Salvage something: what WOULD group
-      similar vectors near each other, even roughly?</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p>Every tool breaks, and for a different reason. A <strong>B+ tree</strong> needs a total
-      order, and a 32-dimensional vector has no single key to sort on; index the first coordinate
-      and you group vectors that agree on one number while differing wildly on the other 31, which
-      is not nearness in any useful sense. A <strong>hash index</strong> needs exact equality, and
-      two embeddings are essentially never bit-identical, so every lookup misses; worse, hashing
-      deliberately destroys locality, which is the one property you needed. <strong>Sorting by one
-      coordinate</strong> fails for the same reason as the tree: proximity in 32-D does not survive
-      projection to 1-D.</p>
-      <p>The salvage is the whole next section. Order is the wrong tool, but
-      <strong>grouping</strong> is not: cluster the vectors by proximity in the full space, so
-      vectors that are near each other land in the same bucket. You already know an algorithm for
-      that from your ML courses, k-means, and it turns "find the nearest" into "look in the few
-      buckets it is most likely to be in." That is IVF, and its price is that "most likely" is not
-      "certainly".</p>
-    </details>
-  </details>
-</div>
-
 <h3 class="new-slide" data-kicker="The similarity query">The setup, precisely</h3>
 
 <pre class="equation"><code>store:   n vectors, d dims (n = millions, d = 384-3072 for real embedding models)
@@ -186,43 +149,6 @@ scale, like always.</p>
 
 <!-- ============================================================ -->
 <h2 id="ann">ANN: IVF and HNSW</h2>
-
-<div class="callout tps">
-  <span class="label">Think · Pair · Share · <em>invent IVF</em></span>
-  <ul class="tps-steps">
-    <li><span class="tps-phase">Think · 2 min</span>You may preprocess the 4,000 vectors
-    however you like. Design a scheme where each query compares against far fewer than 4,000,
-    using only tools you know (clustering counts). What's stored, what happens per query, and
-    where can it be WRONG?</li>
-  </ul>
-  <details class="tps-reveal">
-    <summary>I've done the Think step. Reveal Pair &amp; Share</summary>
-    <ul class="tps-steps">
-      <li><span class="tps-phase">Pair · 3 min</span>Most tables invent IVF: k-means the
-      vectors, search only the nearest cluster(s). Where's the wrongness? The true neighbor
-      can live just across a cluster border you didn't probe.</li>
-      <li><span class="tps-phase">Share · 2 min</span>Name the knob that trades the wrongness
-      back for work.</li>
-    </ul>
-      <details class="tps-answer">
-      <summary>Show the answer</summary>
-      <p><strong>Stored:</strong> C cluster centroids from k-means, plus an inverted list per
-      centroid holding the ids of the vectors assigned to it. Built once, offline.
-      <strong>Per query:</strong> score the query against the C centroids, take the best P of them
-      (the "probe"), and brute-force only the vectors in those lists. Cost is roughly
-      C + P·(n/C) instead of n, so 4,000 vectors with C = 20 and P = 4 compare about 880 instead
-      of 4,000.</p>
-      <p><strong>Where it is wrong:</strong> a true neighbour can sit just across a cluster border
-      you did not probe. It is not scored, so it cannot be returned, and nothing in the output
-      reveals that it was missed. Queries near a boundary suffer most, which is exactly what the
-      widget shows when you place a query on a border and probe 1.</p>
-      <p>The knob that buys the wrongness back is <strong>probe</strong> (<code>nprobe</code> in
-      FAISS and pgvector). Raise it and you search more lists, recover more true neighbours, and
-      do more work. Probe every list and you are back to brute force with extra steps. That dial
-      is the entire product category.</p>
-    </details>
-  </details>
-</div>
 
 <h3 class="new-slide" data-kicker="ANN">IVF: cluster, then probe</h3>
 
