@@ -5,7 +5,7 @@
 <title>Lecture 3 · Record Layout &amp; the Catalog · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -46,12 +46,12 @@ Two weeks ago you placed the ada row into a page by hand, byte by byte. Today we
 placement <em>systematic</em>: a schema computes every field's offset, rows live in fixed-size
 slots inside the <span class="gloss" data-gloss="heap-file">heap file</span>, a scan walks
 every row of a table through your buffer pool, and the layout rules themselves get stored
-in tables, because in a relational system even the schema is data. Thursday, microdb learns
+in tables, because in a relational system even the schema is data<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: Chapter 52. System Catalogs">1</a></sup>. Thursday, microdb learns
 what a row is.
 </p>
 
 <div class="cite">
-  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6 (record management) &amp; ch. 7 (metadata) ·
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6 (record management) &amp; ch. 7 (metadata)<sup class="src"><a href="#src-2" title="Database Design and Implementation: Second Edition (Google Books listing)">2</a></sup> ·
   how the grown-ups do it: PostgreSQL's
   <a href="https://www.postgresql.org/docs/current/storage-page-layout.html">page layout docs</a> and
   <a href="https://www.postgresql.org/docs/current/catalogs.html">system catalogs</a>.
@@ -203,7 +203,7 @@ different schemas.</p>
   <p class="keep-in-present">ada's name is 3 chars in a 8-char reservation: 5 bytes of air.
   Every varchar carries its worst case everywhere. That waste inside allocated space is
   <span class="gloss" data-gloss="internal-fragmentation">internal fragmentation</span>: the
-  deliberate rent paid for O(1) addressing. A <code>bio varchar(200)</code> schema fits only 19
+  deliberate rent paid for O(1) addressing<sup class="src"><a href="#src-3" title="Operating Systems: Three Easy Pieces, chapter 17, Free-Space Management">3</a></sup>. A <code>bio varchar(200)</code> schema fits only 19
   rows per block; whether that rent is fair depends entirely on how full a typical value runs.</p>
 </div>
 
@@ -229,15 +229,15 @@ different schemas.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">microdb</span><span>ducks the question: every field always has a value (0, ""). Honest for a teaching engine; real data isn't so tidy.</span></div>
-  <div class="lc-row"><span class="lc-k">Real engines</span><span>a <strong>null bitmap</strong> per record: one bit per column, stored beside the flag. NULL costs a bit, not a field's bytes, and reading a field first checks its bit.</span></div>
-  <div class="lc-row"><span class="lc-k">The DS connection</span><span>this is why <code>NULL</code> and <code>0</code> and <code>""</code> are genuinely different things in SQL: the bitmap distinguishes "absent" from any value your bytes could spell.</span></div>
+  <div class="lc-row"><span class="lc-k">Real engines</span><span>a <strong>null bitmap</strong> per record: one bit per column, stored beside the flag. NULL costs a bit, not a field's bytes, and reading a field first checks its bit<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">The DS connection</span><span>this is why <code>NULL</code> and <code>0</code> and <code>""</code> are genuinely different things in SQL: the bitmap distinguishes "absent" from any value your bytes could spell<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 9.2. Comparison Functions and Operators">5</a></sup>.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="Schema → Layout">And truly variable data? TOAST</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The problem</span><span>a 2&nbsp;MB essay can't reserve worst-case capacity in every slot; reservation only works when maxima are modest.</span></div>
-  <div class="lc-row"><span class="lc-k">Postgres's answer</span><span><span class="gloss" data-gloss="toast">TOAST</span>: big values move to a side table (compressed, chunked); the slot keeps an 18-byte pointer. The row stays fixed-ish; the elephant lives elsewhere.</span></div>
+  <div class="lc-row"><span class="lc-k">Postgres's answer</span><span><span class="gloss" data-gloss="toast">TOAST</span>: big values move to a side table (compressed, chunked); the slot keeps an 18-byte pointer<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>. The row stays fixed-ish; the elephant lives elsewhere.</span></div>
   <div class="lc-row"><span class="lc-k">The pattern</span><span>fixed where you can, indirection where you must, the same trick you'll see again in column stores (week 10) and vector storage (week 11).</span></div>
 </div>
 
@@ -267,9 +267,9 @@ different schemas.</p>
 
 <p class="keep-in-present">A deleted row's bytes are still on disk; the slot is a
 <span class="gloss" data-gloss="tombstone">tombstone</span> waiting for reuse, not a hole.
-Nothing compacts, nothing shifts, scans simply skip EMPTY flags. This is why "deleted" data is
+Nothing compacts, nothing shifts, scans simply skip EMPTY flags<sup class="src"><a href="#src-7" title="Database Forensic Analysis with DBCarver (Wagner et al., CIDR 2017)">7</a></sup>. This is why "deleted" data is
 recoverable in forensics, why <code>DELETE</code> doesn't shrink files, and why real engines
-need a vacuum process: all one design decision, visible in your 24-byte slots.</p>
+need a vacuum process: all one design decision, visible in your 24-byte slots<sup class="src"><a href="#src-8" title="PostgreSQL Documentation: 24.1. Routine Vacuuming">8</a></sup>.</p>
 
 <!-- ============================================================ -->
 <h2 id="tablescan">TableScan: the whole table</h2>
@@ -298,8 +298,8 @@ need a vacuum process: all one design decision, visible in your 24-byte slots.</
 <p class="keep-in-present">A row's identity in the storage engine is its
 <span class="gloss" data-gloss="rid">RID</span>: <strong>(block&nbsp;#, slot&nbsp;#)</strong>:
 ada is <code>(0, 0)</code>, row twelve is <code>(2, 1)</code>. Fixed slots make RIDs stable:
-updates and deletes move nothing, so the address keeps working. File this away carefully:
-<em>an index (week 6) is nothing but a map from values to RIDs.</em></p>
+updates and deletes move nothing, so the address keeps working<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 8.19. Object Identifier Types (tid)">9</a></sup>. File this away carefully:
+<em>an index (week 6) is nothing but a map from values to RIDs<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 64.1. Basic API Structure for Indexes">10</a></sup>.</em></p>
 
 <h3 class="new-slide" data-kicker="TableScan">This loop is the floor of the query engine</h3>
 
@@ -342,8 +342,8 @@ does.</p>
 <h3 class="new-slide" data-kicker="The catalog">The same idea, grown up</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Postgres</span><span><code>pg_class</code> (one row per table) and <code>pg_attribute</code> (one per column); <code>\d students</code> is a catalog query, not magic.</span></div>
-  <div class="lc-row"><span class="lc-k">Everything is a row</span><span>indexes, views, functions, permissions, even the catalog's own tables: all rows in catalog tables. One mechanism, everywhere.</span></div>
+  <div class="lc-row"><span class="lc-k">Postgres</span><span><code>pg_class</code> (one row per table) and <code>pg_attribute</code> (one per column); <code>\d students</code> is a catalog query, not magic<sup class="src"><a href="#src-11" title="PostgreSQL Documentation: 52.7. pg_attribute">11</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Everything is a row</span><span>indexes, views, functions, permissions, even the catalog's own tables: all rows in catalog tables<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 52.11. pg_class">12</a></sup>. One mechanism, everywhere.</span></div>
   <div class="lc-row"><span class="lc-k">Why it matters to DS</span><span>every schema-introspection tool you've used (<code>df.info()</code>-style table explorers, ORMs, BI dashboards) is reading these tables. Now you know what they're reading.</span></div>
 </div>
 
@@ -405,28 +405,49 @@ Join stack on your TableScan. Quiz 3 opens class: records &amp; the catalog.</p>
 
 <h3>Why 4 whole bytes for a flag that stores 0 or 1?</h3>
 <p class="keep-in-present">Alignment and honesty: microdb's Page speaks ints, so the flag is an int. Real engines pack
-flags, null bitmaps, and bookkeeping into a per-page header plus a compact slot directory;
-same idea, tighter belt. (Postgres spends ~23 bytes per <em>row</em> on headers; our 4 is shy.)</p>
+flags, null bitmaps, and bookkeeping into a per-page header plus a compact slot directory<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>;
+same idea, tighter belt. (Postgres spends ~23 bytes per <em>row</em> on headers; our 4 is shy<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.)</p>
 
 <h3>Isn't reserving max capacity for every varchar wasteful?</h3>
 <p class="keep-in-present">Yes, deliberately. It's the rent for in-place updates and stable addresses. Postgres
 actually stores varchars variably <em>within</em> the page (via a slot directory) and pays with
-extra indirection; TOAST handles the truly huge. The tradeoff triangle (space, address
+extra indirection; TOAST handles the truly huge<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>. The tradeoff triangle (space, address
 stability, update cost) has no free corner.</p>
 
 <h3>What if a table needs more rows than one file can hold?</h3>
 <p class="keep-in-present">microdb: one file per table, and Python's file size limit is nobody's problem at our scale.
-Postgres: tables are split into 1&nbsp;GB segment files, invisible above the storage layer;
+Postgres: tables are split into 1&nbsp;GB segment files, invisible above the storage layer<sup class="src"><a href="#src-13" title="PostgreSQL Documentation: 66.1. Database File Layout">13</a></sup>;
 the block abstraction doesn't care how many OS files stand behind it.</p>
 
 <h3>Does the catalog slow everything down? Every query needs layouts!</h3>
 <p class="keep-in-present">It would, so real engines cache catalog entries in memory aggressively (Postgres's
 "relcache"). microdb re-scans the catalog on each <code>get_layout</code>, which is honest,
-measurable, and exactly the kind of thing the buffer pool quietly rescues.</p>
+measurable, and exactly the kind of thing the buffer pool quietly rescues<sup class="src"><a href="#src-14" title="Postgres: caches and invalidation (Amit Langote, PostgreSQL committer)">14</a></sup>.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://www.postgresql.org/docs/current/catalogs.html">PostgreSQL Documentation: Chapter 52. System Catalogs</a></li>
+  <li id="src-2"><a href="https://books.google.com/books/about/Database_Design_and_Implementation.html?id=6GTTDwAAQBAJ">Database Design and Implementation: Second Edition (Google Books listing)</a></li>
+  <li id="src-3"><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/vm-freespace.pdf">Operating Systems: Three Easy Pieces, chapter 17, Free-Space Management</a></li>
+  <li id="src-4"><a href="https://www.postgresql.org/docs/current/storage-page-layout.html">PostgreSQL Documentation: 66.6. Database Page Layout</a></li>
+  <li id="src-5"><a href="https://www.postgresql.org/docs/current/functions-comparison.html">PostgreSQL Documentation: 9.2. Comparison Functions and Operators</a></li>
+  <li id="src-6"><a href="https://www.postgresql.org/docs/current/storage-toast.html">PostgreSQL Documentation: 66.2. TOAST</a></li>
+  <li id="src-7"><a href="http://cidrdb.org/cidr2017/papers/p128-wagner-cidr17.pdf">Database Forensic Analysis with DBCarver (Wagner et al., CIDR 2017)</a></li>
+  <li id="src-8"><a href="https://www.postgresql.org/docs/current/routine-vacuuming.html">PostgreSQL Documentation: 24.1. Routine Vacuuming</a></li>
+  <li id="src-9"><a href="https://www.postgresql.org/docs/current/datatype-oid.html">PostgreSQL Documentation: 8.19. Object Identifier Types (tid)</a> <span class="src-note">PostgreSQL's ctid is exactly a (block number, tuple index) pair, but because of MVCC an UPDATE writes a new row version with a new ctid, so in Postgres updates do move the address; the stability claim holds for microdb's in-place layout, not for Postgres.</span></li>
+  <li id="src-10"><a href="https://www.postgresql.org/docs/current/indexam.html">PostgreSQL Documentation: 64.1. Basic API Structure for Indexes</a></li>
+  <li id="src-11"><a href="https://www.postgresql.org/docs/current/catalog-pg-attribute.html">PostgreSQL Documentation: 52.7. pg_attribute</a> <span class="src-note">pg_attribute has exactly one row per column of every table; pg_class has one row per relation, which includes indexes, sequences, views, materialized views, composite types and TOAST tables, not only tables; psql's -E / --echo-hidden option echoes the actual catalog queries \d generates.</span></li>
+  <li id="src-12"><a href="https://www.postgresql.org/docs/current/catalog-pg-class.html">PostgreSQL Documentation: 52.11. pg_class</a></li>
+  <li id="src-13"><a href="https://www.postgresql.org/docs/current/storage-file-layout.html">PostgreSQL Documentation: 66.1. Database File Layout</a></li>
+  <li id="src-14"><a href="https://amitlan.com/2019/06/14/caches-inval.html">Postgres: caches and invalidation (Amit Langote, PostgreSQL committer)</a></li>
+</ol>
 
 </main>
 

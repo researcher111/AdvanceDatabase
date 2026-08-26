@@ -5,7 +5,7 @@
 <title>Lecture 9 · The Query Optimizer · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -93,7 +93,7 @@ budget</strong>; respect it for guessing well, and know how to catch it guessing
   <tbody>
     <tr><td><strong>Statistics</strong></td><td>how many rows will survive this predicate?</td><td>catalog tables, refreshed by <span class="gloss" data-gloss="analyze"><code>ANALYZE</code></span></td></tr>
     <tr><td><strong>Cost model</strong></td><td>what would this plan cost, in blocks, without running it?</td><td>formulas over the statistics</td></tr>
-    <tr><td><strong>Plan search</strong></td><td>which of the exponentially many equivalent shapes is cheapest?</td><td>dynamic programming over join orders (System R's gift)</td></tr>
+    <tr><td><strong>Plan search</strong></td><td>which of the exponentially many equivalent shapes is cheapest?</td><td>dynamic programming over join orders (System R's gift)<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: 60.1. Query Handling as a Complex Optimization Problem">1</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -108,34 +108,34 @@ plan for our join, annotated; hover every line.</p>
   <div class="code-step" data-step="e1" data-step-name="the join node" data-explain="Read plans INSIDE-OUT: deepest nodes ran first. This top node is a hash join: build a hash table on one side, probe with the other. cost=a..b are OPTIMIZER GUESSES in abstract units; actual time is measured reality, in ms.">Hash Join  (cost=1.07..8.72 rows=20 width=13) (actual time=0.04..0.11 rows=20 loops=1)</div>
   <div class="code-step" data-step="e2" data-explain="The join condition, as the executor sees it.">  Hash Cond: (students.mid = majors.mid2)</div>
   <div class="code-step" data-step="e3" data-step-name="the outer side" data-explain="A sequential scan (your TableScan) with the filter pushed INTO it (pushdown, mechanically applied). rows=60: the planner PREDICTED 60 survivors from statistics; actual rows=60 means the guess was perfect.">  ->  Seq Scan on students  (cost=0.00..6.75 rows=60 ...) (actual ... rows=60 ...)</div>
-  <div class="code-step" data-step="e4" data-explain="The pushed-down predicate, plus a count of what it removed.">        Filter: (gpa > 35)   Rows Removed by Filter: 240</div>
+  <div class="code-step" data-step="e4" data-explain="The pushed-down predicate, plus a count of what it removed.">        Filter: (gpa > 35)   Rows Removed by Filter: 240<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></div>
   <div class="code-step" data-step="e5" data-step-name="the inner side" data-explain="The build side: tiny majors is read once into an in-memory hash table, the CachingScan idea from Lab 4's Going Further, industrialized.">  ->  Hash  (cost=1.03..1.03 rows=3 ...)  ->  Seq Scan on majors (rows=3)</div>
-  <div class="code-step" data-step="e6" data-step-name="the verdict" data-explain="Planning took longer than executing, normal for tiny data. When ESTIMATED rows and ACTUAL rows diverge wildly on big data, you've caught the optimizer guessing badly: stale statistics, usually. That comparison is the whole diagnostic art.">Planning Time: 0.28 ms   Execution Time: 0.15 ms</div>
+  <div class="code-step" data-step="e6" data-step-name="the verdict" data-explain="Planning took longer than executing, normal for tiny data. When ESTIMATED rows and ACTUAL rows diverge wildly on big data, you've caught the optimizer guessing badly: stale statistics, usually. That comparison is the whole diagnostic art.">Planning Time: 0.28 ms   Execution Time: 0.15 ms<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></div>
   <div class="code-explain-panel">Hover a line: estimated-vs-actual is the diagnostic; inside-out is the reading order.</div>
 </div>
 
 <p class="keep-in-present">The two habits: <strong>read inside-out</strong>, and <strong>compare
 estimated rows to actual rows</strong>; where they diverge, the optimizer was flying blind,
-and that's where your query went wrong.</p>
+and that's where your query went wrong<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</p>
 
 <!-- ============================================================ -->
 <h2 id="stats">Statistics &amp; selectivity</h2>
 
 <h3 class="new-slide" data-kicker="Statistics &amp; selectivity">What the engine keeps, and the formulas it runs</h3>
 
-<pre class="equation"><code>per table:   N rows, B blocks          per column:  distinct values V, min/max, histogram
+<pre class="equation"><code>per table:   N rows, B blocks          per column:  distinct values V, min/max, histogram<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner">3</a></sup>
 
-selectivity guesses (System R's, still everywhere):
+selectivity guesses (System R's, still everywhere):<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>
   field = literal      1 / V(field)
   field = field (join) 1 / max(V(left), V(right))
   field > literal      (max − literal) / (max − min)     ← uniformity assumed
 
-survivors(σ) = N × selectivity       , chain them for ANDed terms (independence assumed!)</code></pre>
+survivors(σ) = N × selectivity       , chain them for ANDed terms (independence assumed!)<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 76.1. Row Estimation Examples">5</a></sup></code></pre>
 
 <p class="keep-in-present">Two famous lies power everything: <em>uniformity</em> (values
 spread evenly) and <em>independence</em> (predicates don't correlate). When plans go bad at
 3am, one of these lies is usually why: <code>city = 'Charlottesville' AND state = 'VA'</code>
-is not two independent filters.</p>
+is not two independent filters<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner (Extended Statistics)">3</a></sup>.</p>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · be the planner for one minute</span>
@@ -164,13 +164,13 @@ in place of reality. The currency has never changed:</p>
 
 <pre class="equation"><code>cost(TableScan)          = B(table)                      ← week 1's lesson, formalized
 cost(IndexSelect, eq)    = height + matching RIDs        ← week 6
-cost(NestedLoopJoin)     = B(left) + N(left) × B(right)  ← the multiplier that hurts
+cost(NestedLoopJoin)     = B(left) + N(left) × B(right)  ← the multiplier that hurts<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>
 cost(HashJoin)           = B(left) + B(right)            ← read each side once (+ memory)
 cost(MergeJoin)          = sort costs + B(left) + B(right)
 
 pick the plan with the smallest TOTAL, computed from statistics, before running anything.</code></pre>
 
-<p class="keep-in-present">Same currency since Lecture 1: count block touches. The optimizer
+<p class="keep-in-present">Same currency since Lecture 1: count block touches<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>. The optimizer
 is your Lab 4 CountingScan experiment, run <em>hypothetically</em> over every candidate shape.</p>
 
 <h3 class="new-slide" data-kicker="Costing a plan">Watch the plan flip</h3>
@@ -207,19 +207,19 @@ combinatorially. Both were foreshadowed weeks ago:</p>
 <table>
   <thead><tr><th>Algorithm</th><th>Idea</th><th>Shines when</th><th>You've basically built it</th></tr></thead>
   <tbody>
-    <tr><td><strong>Nested loop</strong></td><td>for each left row, walk right</td><td>tiny right side, or an index on it</td><td>Lab 4's ProductScan</td></tr>
-    <tr><td><strong>Hash join</strong></td><td>hash the small side into memory; probe with the big side</td><td>equality joins, one side fits in RAM</td><td>Lab 4's Going-Further CachingScan + a dict</td></tr>
-    <tr><td><strong>Merge join</strong></td><td>sort both sides, zip through in step</td><td>inputs already sorted (indexes! B+ leaves!)</td><td>Lab 6's chained leaves are a sorted stream</td></tr>
+    <tr><td><strong>Nested loop</strong></td><td>for each left row, walk right</td><td>tiny right side, or an index on it<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>Lab 4's ProductScan</td></tr>
+    <tr><td><strong>Hash join</strong></td><td>hash the small side into memory; probe with the big side<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>equality joins, one side fits in RAM<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 36.15. Operator Optimization Information (HASHES)">7</a></sup></td><td>Lab 4's Going-Further CachingScan + a dict</td></tr>
+    <tr><td><strong>Merge join</strong></td><td>sort both sides, zip through in step</td><td>inputs already sorted (indexes! B+ leaves!)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>Lab 6's chained leaves are a sorted stream</td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Join order">Order matters exponentially</h3>
 
 <p class="keep-in-present">Joining n tables admits a catalan-number explosion of orders:10
-tables ≈ 17 <em>billion</em> shapes. System R's dynamic programming prunes it to feasible;
-modern planners add heuristics and genetic search above ~12 tables (all descendants of
+tables ≈ 17 <em>billion</em> shapes. System R's dynamic programming prunes it to feasible<sup class="src"><a href="#src-8" title="Introduction to the Join Ordering Problem (Querify Labs)">8</a></sup>;
+modern planners add heuristics and genetic search above ~12 tables<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 19.7. Query Planning (geqo_threshold)">9</a></sup> (all descendants of
 System R's <span class="gloss" data-gloss="access-path">access-path</span> selection). The reason your dashboards
-sometimes "flip plans" overnight: statistics shifted, a different order won the auction. Now
+sometimes "flip plans" overnight: statistics shifted, a different order won the auction<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>. Now
 you know who to interrogate (<code>EXPLAIN</code>) and what to refresh
 (<code>ANALYZE</code>).</p>
 
@@ -275,7 +275,7 @@ you can pass it walking backwards.</p>
 <ul class="checklist">
   <li>☐ Re-run each lab's <code>measure_*.py</code> and explain every printed line aloud to a
   patient friend. This is 80% of the exam.</li>
-  <li>☐ Replay each lecture's TPS prompts cold; the questions were mined from them.</li>
+  <li>☐ Re-answer each lab's discussion prompts cold; the questions were mined from them.</li>
   <li>☐ Re-read the five FAQ sections you skimmed. (You know which ones.)</li>
   <li>☐ Do NOT memorize API signatures, flag names, or exact byte offsets beyond the ada row;
   the exam tests why, not what.</li>
@@ -287,7 +287,7 @@ you can pass it walking backwards.</p>
 
 <ul class="recap-list">
   <li><strong>The optimizer = statistics + cost model + search.</strong> All three are
-  guesses; estimated-vs-actual in EXPLAIN is where the guessing shows.</li>
+  guesses; estimated-vs-actual in EXPLAIN is where the guessing shows<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</li>
   <li><strong>Selectivity runs the show</strong>, and its two convenient lies (uniformity,
   independence) are where production plans go to die.</li>
   <li><strong>Act I is complete.</strong> You built an engine and can now read any engine's
@@ -312,10 +312,10 @@ make it a final-project appendix; it's a good one.</p>
 <p class="keep-in-present">The optimizer prices <em>first rows</em> differently from
 <em>all rows</em>: a plan that streams cheap early rows (nested loop via an index) can beat
 one with a big setup cost (hash join) when only 10 are wanted. Cost models track both
-startup and total cost for exactly this reason.</p>
+startup and total cost for exactly this reason<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</p>
 
 <h3 class="keep-in-present">Is the exam cumulative with the quizzes? Same style?</h3>
-<p class="keep-in-present">Same style, same sources (TPS prompts, measured numbers, FAQ
+<p class="keep-in-present">Same style, same sources (lab discussion prompts, measured numbers, FAQ
 subtleties), longer sitting. If your quiz scores have been comfortable, the midterm will feel
 like a long quiz. Bring a pencil; scratch paper is provided and not collected.</p>
 
@@ -327,6 +327,22 @@ force/steal grid and the WAL ordering; the exam enjoys orderings.</p>
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://www.postgresql.org/docs/current/geqo-intro.html">PostgreSQL Documentation: 60.1. Query Handling as a Complex Optimization Problem</a></li>
+  <li id="src-2"><a href="https://www.postgresql.org/docs/current/using-explain.html">PostgreSQL Documentation: 14.1. Using EXPLAIN</a></li>
+  <li id="src-3"><a href="https://www.postgresql.org/docs/current/planner-stats.html">PostgreSQL Documentation: 14.2. Statistics Used by the Planner</a> <span class="src-note">Postgres stores reltuples and relpages in pg_class and n_distinct, most_common_vals and histogram_bounds in pg_statistic (via ANALYZE); there is no separate min/max statistic, the histogram's end bounds serve that role.</span></li>
+  <li id="src-4"><a href="https://courses.cs.duke.edu/compsci516/cps216/spring03/papers/selinger-etal-1979.pdf">Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)</a></li>
+  <li id="src-5"><a href="https://www.postgresql.org/docs/current/row-estimation-examples.html">PostgreSQL Documentation: 76.1. Row Estimation Examples</a></li>
+  <li id="src-6"><a href="https://www.postgresql.org/docs/current/planner-optimizer.html">PostgreSQL Documentation: 50.5. Planner/Optimizer</a></li>
+  <li id="src-7"><a href="https://www.postgresql.org/docs/current/xoper-optimization.html">PostgreSQL Documentation: 36.15. Operator Optimization Information (HASHES)</a></li>
+  <li id="src-8"><a href="https://www.querifylabs.com/blog/introduction-to-the-join-ordering-problem">Introduction to the Join Ordering Problem (Querify Labs)</a> <span class="src-note">The exact count is 17,643,225,600 = 10! x C(9), i.e. leaf permutations times the Catalan number of tree shapes; the Catalan number alone (C(9) = 4,862) counts only shapes, so the 17 billion figure is the combined count, not a Catalan number by itself.</span></li>
+  <li id="src-9"><a href="https://www.postgresql.org/docs/current/runtime-config-query.html">PostgreSQL Documentation: 19.7. Query Planning (geqo_threshold)</a></li>
+</ol>
 
 </main>
 

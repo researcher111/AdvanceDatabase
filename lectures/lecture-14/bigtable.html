@@ -5,7 +5,7 @@
 <title>Lecture 14 · Bigtable, LSM Trees &amp; NoSQL · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -44,7 +44,7 @@
 </header>
 
 <p class="lede">
-In 2006 Google described the store behind web search, Maps, and Gmail: Bigtable. Read today,
+In 2006 Google described the store behind web search, Maps, and Gmail: Bigtable<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>. Read today,
 the paper is a reunion tour: a WAL (week 7), a sorted in-memory buffer flushed to immutable
 sorted files (your B+ tree's ideas, rearranged), range partitioning (last week), and caching
 (week 2), all riding on <span class="gloss" data-gloss="commodity">commodity machines</span>
@@ -56,7 +56,7 @@ RocksDB, LevelDB, and the storage engine of half the databases shipped since. No
 
 <div class="cite">
   Companion reading: Chang et&nbsp;al., <a href="https://research.google/pubs/pub27898/"><em>Bigtable: A Distributed Storage System for Structured Data</em></a> (OSDI 2006) ·
-  O'Neil et&nbsp;al., <a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf"><em>The Log-Structured Merge-Tree</em></a> (1996, the idea predates the need) ·
+  O'Neil et&nbsp;al., <a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf"><em>The Log-Structured Merge-Tree</em></a> (1996, the idea predates the need<sup class="src"><a href="#src-2" title="The Log-Structured Merge-Tree (LSM-Tree)">2</a></sup>) ·
   RocksDB's <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Overview">architecture overview</a> (the modern production LSM).
 </div>
 
@@ -76,7 +76,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 world.</p>
 
 <ol class="agenda">
-  <li><strong>Google's 2004 problem</strong>: why sharded MySQL wasn't the answer.</li>
+  <li><strong>Google's 2004 problem</strong>: why sharded MySQL wasn't the answer<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>.</li>
   <li><strong>The Bigtable model</strong>: a sorted map wearing a table costume.</li>
   <li><strong>Tablets</strong>: last week's range partitioning, productized.</li>
   <li><strong>The LSM tree</strong>: never overwrite: buffer, flush, merge.</li>
@@ -107,7 +107,7 @@ tolerable with memory, sorted files, and filters.</code></pre>
 <h2 id="model">The Bigtable data model</h2>
 
 <p class="keep-in-present">The paper's own sentence, unpacked: "a sparse, distributed,
-persistent, multidimensional sorted map." Not a relational table, a map:</p>
+persistent, multidimensional sorted map." Not a relational table, a map<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>:</p>
 
 <pre class="equation"><code>(row_key, column_family:qualifier, timestamp)  →  bytes
 
@@ -123,7 +123,7 @@ timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, rea
     <tr><td>rows sorted by key, always</td><td>range scans + natural range partitioning</td><td>B+ tree leaves; Lab 8's folder partitions</td></tr>
     <tr><td><span class="gloss" data-gloss="wide-column">sparse columns</span>, no fixed row width</td><td>a million anchor columns, zero storage for absent ones</td><td>the null-bitmap discussion, taken to its limit</td></tr>
     <tr><td>versions instead of overwrites</td><td>lock-free reads of a consistent past</td><td>MVCC, week 8, almost verbatim</td></tr>
-    <tr><td>no joins, no SQL, single-row transactions only</td><td>every operation's cost is knowable and local</td><td>what you give up, the price tag NoSQL hid in the fine print</td></tr>
+    <tr><td>no joins, no SQL, single-row transactions only<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></td><td>every operation's cost is knowable and local</td><td>what you give up, the price tag NoSQL hid in the fine print</td></tr>
   </tbody>
 </table>
 
@@ -133,9 +133,9 @@ timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, rea
 <p class="keep-in-present">Because rows are sorted, the table splits into contiguous key
 ranges: <strong>tablets</strong>, ~100–200&nbsp;MB each. A tablet is last week's range
 partition with an ops team: a master assigns tablets to tablet servers, hot or overgrown
-tablets split, cold ones merge, and a dead server's tablets are reassigned in seconds;
+tablets split, cold ones merge, and a dead server's tablets are reassigned in seconds<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>;
 recovery is routine precisely because the data (in GFS, replicated 3×) never lived on the
-server's own disk. The server is a cache and a pen; the file system is the truth.</p>
+server's own disk. The server is a cache and a pen; the file system is the truth<sup class="src"><a href="#src-3" title="The Google File System (SOSP 2003)">3</a></sup>.</p>
 
 <p class="keep-in-present">Note the row-key design consequence: keys prefixed by timestamp
 make the newest tablet the <span class="gloss" data-gloss="hotspot">hotspot</span> every
@@ -224,8 +224,8 @@ from being a disaster:</p>
 <h3 class="new-slide" data-kicker="The read path">Three read rescues</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Bloom filters</span><span>each SSTable carries a <span class="gloss" data-gloss="bloom">Bloom filter</span>, a tiny bitmap that answers "definitely absent" or "maybe here." Most SSTables are skipped without touching disk; the filter is wrong (a false "maybe") ~1% of the time and never wrong the dangerous way.</span></div>
-  <div class="lc-row"><span class="lc-k">Sparse indexes + caches</span><span>an SSTable stores every Nth key in memory: binary search the sparse index, read one block. Week 2's buffer-pool logic caches the hot blocks; week 6's "index = skip most of the data" logic finds the rest.</span></div>
+  <div class="lc-row"><span class="lc-k">Bloom filters</span><span>each SSTable carries a <span class="gloss" data-gloss="bloom">Bloom filter</span>, a tiny bitmap that answers "definitely absent" or "maybe here." Most SSTables are skipped without touching disk; the filter is wrong (a false "maybe") ~1% of the time and never wrong the dangerous way<sup class="src"><a href="#src-4" title="RocksDB Bloom Filter (RocksDB wiki)">4</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Sparse indexes + caches</span><span>an SSTable stores every Nth key in memory: binary search the sparse index, read one block<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>. Week 2's buffer-pool logic caches the hot blocks; week 6's "index = skip most of the data" logic finds the rest.</span></div>
   <div class="lc-row"><span class="lc-k">Compaction itself</span><span>fewer, bigger, non-overlapping files = fewer places a key can hide. Compaction is a background tax on write throughput paid to keep <span class="gloss" data-gloss="read-amp">read amplification</span> bounded, the engine's central tuning dial.</span></div>
 </div>
 
@@ -285,10 +285,10 @@ poles: you built one and just drove the other.</p>
   A  availability  every request gets a (possibly stale)   → replicas diverge; reconcile later
                    answer
 
-No partition, no choice: normal operation can have both. "P" isn't chosen; networks fail.
+No partition, no choice: normal operation can have both. "P" isn't chosen; networks fail.<sup class="src"><a href="#src-5" title="CAP Twelve Years Later: How the 'Rules' Have Changed (Eric Brewer, IEEE Computer 2012)">5</a></sup>
 
   CP lineage:  Bigtable, HBase, Spanner    (refuse rather than lie)
-  AP lineage:  Dynamo, Cassandra, Riak     (answer, then reconcile: <span class="gloss" data-gloss="eventual">eventual consistency</span>)</code></pre>
+  AP lineage:  Dynamo, Cassandra, Riak<sup class="src"><a href="#src-6" title="Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)">6</a></sup>     (answer, then reconcile: <span class="gloss" data-gloss="eventual">eventual consistency</span>)</code></pre>
 
 <!-- ============================================================ -->
 <h2 id="descendants">The descendants</h2>
@@ -302,10 +302,10 @@ refracted through open source, and the LSM engine outlived the movement's maxima
   <thead><tr><th>System</th><th>Lineage</th><th>One-line identity</th></tr></thead>
   <tbody>
     <tr><td>HBase</td><td>Bigtable, literally</td><td>the open-source clone, on Hadoop's HDFS-as-GFS</td></tr>
-    <tr><td>Cassandra</td><td>Bigtable's engine × Dynamo's replication</td><td>masterless AP wide-column store; tunable consistency per query</td></tr>
-    <tr><td>DynamoDB</td><td>Dynamo, productized</td><td>AWS's managed key-value store: pay-per-request, single-digit-ms</td></tr>
-    <tr><td>RocksDB / LevelDB</td><td>Bigtable's tablet engine, extracted</td><td>the LSM as a <em>library</em>, inside Kafka Streams, Flink, CockroachDB, your ML feature store</td></tr>
-    <tr><td>Spanner</td><td>Bigtable's successor</td><td>Google's admission: the world wanted SQL and transactions back, at global scale, with atomic clocks</td></tr>
+    <tr><td>Cassandra</td><td>Bigtable's engine × Dynamo's replication</td><td>masterless AP wide-column store; tunable consistency per query<sup class="src"><a href="#src-7" title="Apache Cassandra documentation: Architecture overview and Dynamo">7</a></sup></td></tr>
+    <tr><td>DynamoDB</td><td>Dynamo, productized</td><td>AWS's managed key-value store: pay-per-request, single-digit-ms<sup class="src"><a href="#src-8" title="Amazon DynamoDB product page">8</a></sup></td></tr>
+    <tr><td>RocksDB / LevelDB</td><td>Bigtable's tablet engine, extracted<sup class="src"><a href="#src-9" title="LevelDB implementation notes (doc/impl.md)">9</a></sup></td><td>the LSM as a <em>library</em>, inside Kafka Streams, Flink, CockroachDB, your ML feature store<sup class="src"><a href="#src-10" title="Cockroach Labs blog: Introducing Pebble, a RocksDB-inspired key-value store written in Go; Kafka Streams config docs">10</a></sup></td></tr>
+    <tr><td>Spanner</td><td>Bigtable's successor</td><td>Google's admission: the world wanted SQL and transactions back, at global scale, with atomic clocks<sup class="src"><a href="#src-11" title="Spanner: Google's Globally-Distributed Database (OSDI 2012)">11</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -315,13 +315,13 @@ model wasn't the bottleneck; the 2004 storage engine was. Which is why this cour
 you engines, not brand names.</p>
 
 <div class="callout note">
-  <span class="label">War story · Discord's trillion messages, 2023</span>
+  <span class="label">War story · Discord's trillion messages, 2023<sup class="src"><a href="#src-12" title="How Discord Stores Trillions of Messages (Discord Engineering blog)">12</a></sup></span>
   <p class="keep-in-present">Every dial on this slide's engines shows up in Discord's
   engineering blog, which reads like this lecture's final exam. Their message store (a
   Cassandra cluster holding trillions of rows) suffered exactly the pathologies you can now
   name: hot partitions (busy channels are skew), compaction falling behind (write
   amplification winning the three-way budget), and JVM garbage-collection pauses turning one
-  slow node into cluster-wide latency. Their 2023 migration to ScyllaDB (same LSM design,
+  slow node into cluster-wide latency<sup class="src"><a href="#src-12" title="How Discord Stores Trillions of Messages (Discord Engineering blog)">12</a></sup>. Their 2023 migration to ScyllaDB (same LSM design,
   no JVM) plus a Rust data layer is a case study in a truth this course keeps landing on:
   they didn't change the <em>ideas</em> (memtables, SSTables, compaction, tablets) they
   changed the implementation's constants. The ideas are the part you now own.</p>
@@ -361,11 +361,11 @@ the embedded-engine niche (RocksDB). The honest question is never "SQL or NoSQL"
 shadows older versions during reads and merges, until a compaction that can see every copy
 finally drops both. Week 3's tombstone flag, escalated: in Cassandra, tombstone pile-ups
 are a famous operational pathology (delete-heavy workloads make reads wade through
-graveyards), and "why is my read slow" often means "tombstones."</p>
+graveyards), and "why is my read slow" often means "tombstones<sup class="src"><a href="#src-13" title="Apache Cassandra data modeling documentation (queue anti-pattern) and cassandra.yaml">13</a></sup>."</p>
 
 <h3 class="keep-in-present">Does my phone really run an LSM tree?</h3>
 <p class="keep-in-present">Very likely several. LevelDB and RocksDB are embedded in Chrome
-(IndexedDB), many Android components, and countless apps' local storage; SQLite (B+ tree)
+(IndexedDB), many Android components, and countless apps' local storage<sup class="src"><a href="#src-14" title="Chromium IndexedDB backing store documentation">14</a></sup>; SQLite (B+ tree)
 runs alongside them. The two poles of today's table are probably both in your pocket,
 serving the workloads each is shaped for; the cleanest possible proof that neither
 "won."</p>
@@ -380,6 +380,27 @@ lecture's table from your own code, which is the course's whole method in one ex
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf">Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)</a> <span class="src-note">The OSDI 2006 paper names web indexing, Google Earth (which serves the maps.google.com interface), Google Finance, Analytics, Orkut, Personalized Search and Writely among more than sixty users; Gmail is not mentioned in the paper.</span></li>
+  <li id="src-2"><a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf">The Log-Structured Merge-Tree (LSM-Tree)</a></li>
+  <li id="src-3"><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/gfs-sosp2003.pdf">The Google File System (SOSP 2003)</a></li>
+  <li id="src-4"><a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter">RocksDB Bloom Filter (RocksDB wiki)</a></li>
+  <li id="src-5"><a href="https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/">CAP Twelve Years Later: How the 'Rules' Have Changed (Eric Brewer, IEEE Computer 2012)</a></li>
+  <li id="src-6"><a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf">Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)</a></li>
+  <li id="src-7"><a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html">Apache Cassandra documentation: Architecture overview and Dynamo</a></li>
+  <li id="src-8"><a href="https://aws.amazon.com/dynamodb/">Amazon DynamoDB product page</a></li>
+  <li id="src-9"><a href="https://github.com/google/leveldb/blob/main/doc/impl.md">LevelDB implementation notes (doc/impl.md)</a></li>
+  <li id="src-10"><a href="https://www.cockroachlabs.com/blog/pebble-rocksdb-kv-store/">Cockroach Labs blog: Introducing Pebble, a RocksDB-inspired key-value store written in Go; Kafka Streams config docs</a> <span class="src-note">Kafka Streams (default persistent state store) and Flink (EmbeddedRocksDBStateBackend) are confirmed, but CockroachDB replaced RocksDB with its own Go LSM engine, Pebble, as the default in version 20.2 in fall 2020.</span></li>
+  <li id="src-11"><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/spanner-osdi2012.pdf">Spanner: Google's Globally-Distributed Database (OSDI 2012)</a></li>
+  <li id="src-12"><a href="https://discord.com/blog/how-discord-stores-trillions-of-messages">How Discord Stores Trillions of Messages (Discord Engineering blog)</a> <span class="src-note">The blog post is dated March 6, 2023, but it says the messages database was switched over to ScyllaDB in May 2022; the C++ / no-garbage-collector and Rust data services details are confirmed.</span></li>
+  <li id="src-13"><a href="https://cassandra.apache.org/doc/latest/cassandra/developing/data-modeling/data-modeling_logical.html">Apache Cassandra data modeling documentation (queue anti-pattern) and cassandra.yaml</a></li>
+  <li id="src-14"><a href="https://chromium.googlesource.com/chromium/src/+/main/content/browser/indexed_db/docs/README.md">Chromium IndexedDB backing store documentation</a></li>
+</ol>
 
 </main>
 

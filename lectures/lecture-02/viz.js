@@ -1,4 +1,4 @@
-/* Lecture 2 — Memory & the Buffer Pool · widgets.
+/* Lecture 2: Memory & the Buffer Pool · widgets.
    Presentation toggle, TOC tracking, glossary + annotated-code engines
    are owned by ../../labs/_shared/lab-base.js. */
 
@@ -9,21 +9,50 @@
       title: 'OS page cache',
       body: '<p>The operating system keeps its own cache of recently used file data in ' +
         'otherwise-free RAM: writes land there first and reads of recent blocks are served from ' +
-        'it without touching the disk. It helps every program automatically — but it offers no ' +
+        'it without touching the disk. It helps every program automatically, but it offers no ' +
         'pinning and no control over when or in what order bytes reach disk, which is why ' +
         'databases build their own cache on top.</p>',
     },
     'mmap': {
       title: 'mmap',
       body: '<p>A system call that maps a file directly into a program’s memory, so reading ' +
-        'the file looks like reading an array — the OS pages data in and out behind the scenes. ' +
+        'the file looks like reading an array; the OS pages data in and out behind the scenes. ' +
         'Tempting as a free buffer pool, but the database loses control of eviction and write ' +
         'ordering, and any read can silently stall on a page fault. Several engines tried it; ' +
         'most retreated.</p>',
     },
+    'hash-table': {
+      title: 'Hash table',
+      body: '<p>A dictionary that finds a value by its key in constant time, no matter how many entries ' +
+        'it holds. A hash function turns the key (here a <code>BlockId</code>) into a slot number; the ' +
+        'value (the frame holding that block) is stored at that slot, so a lookup is one computation and ' +
+        'one array access instead of a search. Python’s <code>dict</code> is one. That is why Lab 1 made ' +
+        '<code>BlockId</code> hashable: the pool asks “is block <em>b</em> here?” thousands of times a ' +
+        'second and cannot afford to scan the frames to answer.</p>',
+    },
+    'pin-count': {
+      title: 'Pin count',
+      body: '<p>A per-frame counter of how many callers are using the page right now. ' +
+        '<code>pin(block)</code> adds one and hands back the frame; <code>unpin(buffer)</code> subtracts ' +
+        'one when the caller is done. While the count is above zero the pool treats the frame as ' +
+        'off limits: it will never evict it, however old it is, because a caller still holds a ' +
+        'reference to that memory. At zero the frame is a candidate again. The count nests, so two ' +
+        'readers of one block make it 2 and the frame survives until both release. Forgetting an ' +
+        'unpin is the classic leak: the frame stays pinned forever, and a pool of pinned frames ' +
+        'raises <code>BufferAbortError</code> on the next miss.</p>',
+    },
+    'dirty': {
+      title: 'Dirty flag',
+      body: '<p>A per-frame bit that says the page in memory has been written since it was loaded, so it ' +
+        'no longer matches the block on disk. It is set when a caller modifies the page (in microdb, ' +
+        'by calling <code>set_modified()</code> after writing into it) and cleared when the frame is ' +
+        'written back. A clean frame can be evicted by just forgetting it; a dirty frame must be ' +
+        'flushed to disk first or the write is lost. Reads never dirty a page, and unpin does not ' +
+        'write anything: a hot page can stay dirty in memory for a long time, on purpose.</p>',
+    },
     'working-set': {
       title: 'Working set',
-      body: '<p>The set of pages a workload actually re-touches over a window of time — not the ' +
+      body: '<p>The set of pages a workload actually re-touches over a window of time, not the ' +
         'size of the whole database. If the working set fits in the buffer pool, hit rates soar; ' +
         'if it doesn’t, no amount of tuning saves you. Most real databases are far larger than ' +
         'RAM and still fast, precisely because their working set isn’t.</p>',
@@ -31,7 +60,7 @@
     'thrashing': {
       title: 'Thrashing',
       body: '<p>The failure mode where a system spends its time moving data in and out of a ' +
-        'too-small cache instead of doing work — each new page evicts one that’s needed again ' +
+        'too-small cache instead of doing work: each new page evicts one that’s needed again ' +
         'moments later. The sequential-flooding cliff is a controlled demonstration of it: ' +
         'hit rate pinned at zero while the disk works flat out.</p>',
     },
@@ -39,7 +68,7 @@
       title: 'Checkpoint',
       body: '<p>A periodic moment when the database flushes accumulated dirty pages to disk and ' +
         'records “everything before this point is safely down.” Checkpoints bound how much ' +
-        'work crash recovery must replay — without them, a long-running database would need to ' +
+        'work crash recovery must replay; without them, a long-running database would need to ' +
         're-run its entire log after a crash. You’ll meet them properly in week 7.</p>',
     },
   };
@@ -83,7 +112,7 @@
     const total = hits + misses;
     statsEl.textContent =
       `accesses: ${total}    hits: ${hits}    misses: ${misses}\n` +
-      `hit rate: ${total ? (100 * hits / total).toFixed(0) + '%' : '—'}`;
+      `hit rate: ${total ? (100 * hits / total).toFixed(0) + '%' : '–'}`;
   }
 
   function access(k) {
@@ -133,9 +162,9 @@
   const HOT  = [0,1,0,2,1,0,1,5,0,1,0,3,1,0,1,0];
 
   $('bs-scan').addEventListener('click', () =>
-    runSequence(SCAN, 'Scan done: <strong>{rate} hits</strong>. Every block was evicted exactly one step before its second use — LRU + scan is the perfect anti-pattern.'));
+    runSequence(SCAN, 'Scan done: <strong>{rate} hits</strong>. Every block was evicted exactly one step before its second use. LRU + scan is the perfect anti-pattern.'));
   $('bs-hot').addEventListener('click', () =>
-    runSequence(HOT, 'Hot set done: <strong>{rate} hits</strong>. Blocks 0 and 1 never left the pool — the working set fit, so repeats were free.'));
+    runSequence(HOT, 'Hot set done: <strong>{rate} hits</strong>. Blocks 0 and 1 never left the pool: the working set fit, so repeats were free.'));
   $('bs-reset').addEventListener('click', reset);
 
   reset();
@@ -192,7 +221,7 @@
       `<span class="eat-track"><span class="eat-bar" style="width:${Math.max(4, w).toFixed(1)}%"></span></span>` +
       `<span class="eat-val">${fmt(t)} · ${slow.toFixed(1)}× RAM</span></div>` +
       `<div class="eat-note">at this hit rate, misses are ${(missShare * 100).toFixed(0)}% of all time spent` +
-      (h >= 0.996 ? ' — you’ve reached the 2×-RAM zone from the TPS' : '') + `</div>`;
+      (h >= 0.996 ? ', and average access time is within 2× of RAM' : '') + `</div>`;
   }
   slider.addEventListener('input', render);
   render();

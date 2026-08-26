@@ -5,7 +5,7 @@
 <title>Lab 7 · Transactions &amp; Recovery · microdb part 7</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -119,7 +119,7 @@ write five things:</p>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="si" data-step-name="set_int / set_string" data-explain="The WAL rule as four lines: xlock(block) · read the OLD value from the buffer's page · append the SET record carrying it · write the new value + set_modified. The harness literally checks the log holds the old value.">set_int:   xlock · log OLD value · write new · set_modified</div>
-  <div class="code-step" data-step="cm" data-step-name="commit" data-explain="The safe order from the TPS: bm.flush_all() (FORCE: data first) · lm.append(COMMIT, sync=True), which is THE fsync · release locks · unpin. Four calls; the order is the content.">commit:    flush pages · fsync COMMIT · release · unpin</div>
+  <div class="code-step" data-step="cm" data-step-name="commit" data-explain="The safe order: bm.flush_all() (FORCE: data first) · lm.append(COMMIT, sync=True), which is THE fsync · release locks · unpin. Four calls; the order is the content.">commit:    flush pages · fsync COMMIT · release · unpin</div>
   <div class="code-step" data-step="rb" data-step-name="rollback" data-explain="Walk lm.records_backwards(); for records of THIS tx: SET → restore the old value through the buffer (pin if needed); START → stop. Then a ROLLBACK record, flush, release, unpin. Newest-first matters when one slot was set twice.">rollback:  walk back · restore olds · receipt · release</div>
   <div class="code-step" data-step="rc" data-step-name="recover" data-explain="One backward pass over everything: COMMIT/ROLLBACK seen → that tx is finished; SET from an UNfinished tx → restore its old value. Then flush and write ROLLBACK receipts so a second recovery is a no-op (idempotence, tested).">recover:   fates first, then undo the unfinished · receipts</div>
   <div class="code-explain-panel">Hover a line: five jobs, and every one is an ordering discipline more than an algorithm.</div>

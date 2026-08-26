@@ -5,7 +5,7 @@
 <title>Lecture 1 · Anatomy of a Database · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
@@ -185,7 +185,7 @@ build this semester:</p>
 <p class="keep-in-present">Those four fixes aren't features; they're a <em>contract</em>. When a database says a write
 is committed, it is promising the write is <span class="gloss" data-gloss="acid">atomic,
 consistent, isolated, and durable</span>: all-or-nothing, rule-preserving, safe from
-concurrent readers, and crash-proof. Everything heavy inside an engine exists to keep that
+concurrent readers, and crash-proof<sup class="src"><a href="#src-1" title="Hellerstein, Stonebraker and Hamilton, Architecture of a Database System (Section 6.1 A Note on ACID)">1</a></sup>. Everything heavy inside an engine exists to keep that
 promise while staying fast. pandas never signed it, which is exactly why pandas is light.</p>
 
 <!-- ============================================================ -->
@@ -208,7 +208,7 @@ is this six-row table:</p>
 
 <h3 class="new-slide" data-kicker="The relational model, fast">Keys: a promise about the future</h3>
 
-<p class="keep-in-present">A <strong>key</strong> is a minimal set of fields that uniquely identifies a row:
+<p class="keep-in-present">A <strong>key</strong> is a minimal set of fields that uniquely identifies a row<sup class="src"><a href="#src-2" title="E. F. Codd, A Relational Model of Data for Large Shared Data Banks (CACM 1970)">2</a></sup>:
 <code>id</code> here. The subtlety students miss: a key is not a fact about the rows you
 have, it's a <em>promise about every row you will ever have</em>. <code>name</code> works
 until the second ada enrolls; <code>id</code> exists precisely to be meaningless and
@@ -309,7 +309,7 @@ the speed.</p>
   <div class="lc-row"><span class="lc-k">Job</span><span>Run the plan: a pipeline of operators, each answering one question, "give me your next row."</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span>plan tree → result rows, streamed one at a time</span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>Scan reads rows · Select filters them · Project trims columns · Join pairs them · all the same interface, stacked</span></div>
-  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 4 · <code>scans.py</code>: the iterator (Volcano) model, the pattern every real engine uses</span></div>
+  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 4 · <code>scans.py</code>: the iterator (Volcano) model, the pattern every real engine uses<sup class="src"><a href="#src-1" title="Hellerstein, Stonebraker and Hamilton, Architecture of a Database System (Section 4.4)">1</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>every node in an <span class="gloss" data-gloss="explain"><code>EXPLAIN</code></span> output is one of these operators</span></div>
 </div>
 
@@ -323,7 +323,7 @@ can stack them in any order without the operators knowing or caring; plans are L
   <div class="lc-row"><span class="lc-k">In → out</span><span>"row 2 of students" → the exact byte offsets holding <code>(2, 'ben', 31)</code></span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>record pages (fixed layout per schema), table scans (walk every record), the catalog (tables about tables)</span></div>
   <div class="lc-row"><span class="lc-k">You build</span><span>Lab 3 · <code>record_page.py</code>, <code>table_scan.py</code>, <code>catalog.py</code></span></div>
-  <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>Postgres's <code>\d students</code> is a catalog query; its heap tuples are this layer's records</span></div>
+  <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>Postgres's <code>\d students</code> is a catalog query; its heap tuples are this layer's records<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: psql">3</a></sup></span></div>
 </div>
 
 <p class="keep-in-present">Below this layer nothing knows what a "row" is; above it nothing knows what a "byte" is.
@@ -332,11 +332,11 @@ That clean cut is what lets Thursday's file manager stay so simple.</p>
 <h3 class="new-slide" data-kicker="Layer 4 of 5">Buffer pool: the reason databases are fast</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Job</span><span>Keep the hottest blocks in a fixed set of memory frames so most reads never touch the disk.</span></div>
+  <div class="lc-row"><span class="lc-k">Job</span><span>Keep the hottest blocks in a fixed set of memory frames so most reads never touch the disk<sup class="src"><a href="#src-1" title="Hellerstein, Stonebraker and Hamilton, Architecture of a Database System (Section 5.3 Buffer Management)">1</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span>"I need block 7 of students.tbl" → a pinned page in memory (from cache if possible)</span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>pin/unpin protocol, an eviction policy (<span class="gloss" data-gloss="lru">LRU</span>), and the hit-rate arithmetic that decides everything</span></div>
   <div class="lc-row"><span class="lc-k">You build</span><span>Lab 2 · <code>buffer_manager.py</code>, and you measure its hit rate on a real workload</span></div>
-  <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>Postgres's <code>shared_buffers</code> setting sizes exactly this; the demo's warm run was this layer</span></div>
+  <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>Postgres's <code>shared_buffers</code> setting sizes exactly this; the demo's warm run was this layer<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup></span></div>
 </div>
 
 <p class="keep-in-present">Rule of thumb you can already defend: a database is fast when its
@@ -350,7 +350,7 @@ about this layer.</p>
   <div class="lc-row"><span class="lc-k">In → out</span><span>BlockId('students.tbl', 1) → 4096 bytes, moved between disk and a <span class="gloss" data-gloss="page">Page</span></span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>seek to <code>block × block_size</code> · read/write · and <span class="gloss" data-gloss="fsync">fsync</span> when durability demands it</span></div>
   <div class="lc-row"><span class="lc-k">You build</span><span>Lab 1 · <code>file_manager.py</code>: <strong>Thursday.</strong> Three classes, twelve methods, nine tests.</span></div>
-  <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>SQLite's whole file format doc is this layer, grown up; Postgres's is <code>storage/smgr</code></span></div>
+  <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>SQLite's whole file format doc is this layer, grown up; Postgres's is<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/smgr/README">5</a></sup> <code>storage/smgr</code></span></div>
 </div>
 
 <p class="keep-in-present">No SQL, no rows, no meaning, just bytes at computed offsets. It's the least glamorous
@@ -361,7 +361,7 @@ layer and the one everything else stands on, which is exactly why you build it f
 <p class="keep-in-present">One component sits beside the stack rather than in it, touching everything: the
 write-ahead log. Before any layer changes a page,
 it writes a note ("I am about to change X from a to b") to an append-only file. After a
-crash, replaying and undoing those notes restores a clean database.</p>
+crash, replaying and undoing those notes restores a clean database<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: Write-Ahead Logging (WAL)">6</a></sup>.</p>
 
 <div class="callout insight">
   <span class="label">The kill -9 test</span>
@@ -383,7 +383,7 @@ brutally slower than memory, and it pays by the trip, not by the byte.</em></p>
   <div class="viz-title">The latency ladder</div>
   <p class="viz-description">Log scale: every gridline is 10× the one to its left, so bar
   <em>length</em> counts decades, not multiples: the disk bar is three times the L1 bar and ten
-  million times the latency. That is why the true ratio is printed on the right. Toggle human
+  million times the latency. That is why the true ratio is printed on the right<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>. Toggle human
   scale to feel it: if one L1 cache hit took one second, a spinning-disk seek would take four
   months.</p>
   <div class="qj-controls">
@@ -420,10 +420,10 @@ fetch from disk</em>. That is the course's first cost model, crude and genuinely
 
 <pre class="equation"><code>T(query)  ≈  blocks_from_disk × t_disk  +  blocks_from_memory × t_mem
 
-     t_disk  ≈   25 µs    one NVMe trip
-     t_mem   ≈  100 ns    one buffer-pool hit
+     t_disk  ≈   25 µs    one NVMe trip<sup class="src"><a href="#src-8" title="Latency Numbers Every Programmer Should Know (interactive)">8</a></sup>
+     t_mem   ≈  100 ns    one buffer-pool hit<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>
      one disk trip therefore costs what 250 memory reads cost
-     (100,000 of them, if the disk spins)
+     (100,000 of them, if the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>
 
 students lives in 2 blocks, so the demo's two runs of the same query cost:
 
@@ -460,9 +460,9 @@ analytics engines, which scan far more than they seek, should have chosen bigger
   <thead><tr><th>System</th><th>Unit of I/O</th><th>Size</th><th>Workload it's tuned for</th></tr></thead>
   <tbody>
     <tr><td>microdb (Thursday)</td><td>block</td><td>4 KB</td><td>learning: small enough to hexdump</td></tr>
-    <tr><td>SQLite</td><td>page</td><td>4 KB default</td><td>one app, one file, mixed reads/writes</td></tr>
-    <tr><td>PostgreSQL</td><td>page</td><td>8 KB</td><td>transactional (<span class="gloss" data-gloss="oltp">OLTP</span>): many small reads/writes</td></tr>
-    <tr><td>DuckDB / Parquet</td><td>row group</td><td>~100 K rows / MBs</td><td>analytical (<span class="gloss" data-gloss="oltp">OLAP</span>): scan a few columns of everything</td></tr>
+    <tr><td>SQLite</td><td>page</td><td>4 KB default</td><td>one app, one file, mixed reads/writes<sup class="src"><a href="#src-9" title="SQLite Pragma Statements: PRAGMA page_size">9</a></sup></td></tr>
+    <tr><td>PostgreSQL</td><td>page</td><td>8 KB</td><td>transactional (<span class="gloss" data-gloss="oltp">OLTP</span>): many small reads/writes<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: Database Page Layout">10</a></sup></td></tr>
+    <tr><td>DuckDB / Parquet</td><td>row group</td><td>~100 K rows / MBs</td><td>analytical (<span class="gloss" data-gloss="oltp">OLAP</span>): scan a few columns of everything<sup class="src"><a href="#src-11" title="DuckDB Documentation: Tuning Workloads">11</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -527,8 +527,8 @@ lecture; it explains the buffer pool before I say a word.</p>
 
 <p><code>set_int(0, 1)</code> has to put four bytes somewhere, and the order it puts them in is a
 decision, not a fact. Both answers are in use: your laptop's CPU is little-endian, every integer
-that crosses a network is big-endian, and SQLite's file header is big-endian inside files your
-little-endian machine wrote. Thursday's spec picks one, <code>struct '&lt;i'</code>, and the tests
+that crosses a network is big-endian, and SQLite's file header is big-endian inside files your<sup class="src"><a href="#src-12" title="RFC 1700: Assigned Numbers (Data Notations)">12</a></sup>
+little-endian machine wrote<sup class="src"><a href="#src-13" title="SQLite Database File Format">13</a></sup>. Thursday's spec picks one, <code>struct '&lt;i'</code>, and the tests
 enforce it literally.</p>
 
 <div class="viz" id="viz-endian">
@@ -544,7 +544,7 @@ enforce it literally.</p>
   </div>
   <div class="en-rows" id="en-rows"></div>
   <div class="en-note" id="en-note"></div>
-  <p class="viz-caption">microdb, x86 and ARM are little-endian, so the small end goes first.
+  <p class="viz-caption">microdb, x86 and ARM are little-endian, so the small end goes first<sup class="src"><a href="#src-14" title="Intel 64 and IA-32 Architectures Software Developer's Manual, Section 1.3.1 Bit and Byte Order">14</a></sup>.
   Get it wrong in one direction only and the bytes still round-trip perfectly on your machine,
   which is precisely why the bug survives until someone else reads your file.</p>
 </div>
@@ -610,6 +610,27 @@ the deep version of any week.</p>
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf">Hellerstein, Stonebraker and Hamilton, Architecture of a Database System (Section 6.1 A Note on ACID)</a></li>
+  <li id="src-2"><a href="https://github.com/tpn/pdfs/blob/master/A%20Relational%20Model%20of%20Data%20for%20Large%20Shared%20Data%20Banks%20-%20E.F.%20Codd%20(1970).pdf">E. F. Codd, A Relational Model of Data for Large Shared Data Banks (CACM 1970)</a></li>
+  <li id="src-3"><a href="https://www.postgresql.org/docs/current/app-psql.html">PostgreSQL Documentation: psql</a></li>
+  <li id="src-4"><a href="https://www.postgresql.org/docs/current/runtime-config-resource.html">PostgreSQL Documentation: Resource Consumption (shared_buffers)</a></li>
+  <li id="src-5"><a href="https://github.com/postgres/postgres/blob/master/src/backend/storage/smgr/README">PostgreSQL source: src/backend/storage/smgr/README</a></li>
+  <li id="src-6"><a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL Documentation: Write-Ahead Logging (WAL)</a></li>
+  <li id="src-7"><a href="https://static.googleusercontent.com/media/research.google.com/en//people/jeff/stanford-295-talk.pdf">Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)</a> <span class="src-note">With Dean's figures (L1 0.5 ns, seek 10 ms) the ratio is 2 x 10^7 (about 8 months); with Colin Scott's 2020 model (L1 about 1 ns, seek about 2.5 ms) it is 2.5 x 10^6 (about 1 month); 10^7 sits between the two.</span></li>
+  <li id="src-8"><a href="https://colin-scott.github.io/personal_website/research/interactive_latency.html">Latency Numbers Every Programmer Should Know (interactive)</a> <span class="src-note">The cited latency page models SSD random read at 16,000 ns (16 us) for 2014 onward, so 25 us is the same order of magnitude but not the page's figure.</span></li>
+  <li id="src-9"><a href="https://www.sqlite.org/pragma.html#pragma_page_size">SQLite Pragma Statements: PRAGMA page_size</a></li>
+  <li id="src-10"><a href="https://www.postgresql.org/docs/current/storage-page-layout.html">PostgreSQL Documentation: Database Page Layout</a></li>
+  <li id="src-11"><a href="https://duckdb.org/docs/current/guides/performance/how_to_tune_workloads">DuckDB Documentation: Tuning Workloads</a> <span class="src-note">DuckDB's native row group is 122,880 rows; the Parquet project itself recommends much larger row groups of 512 MB to 1 GB.</span></li>
+  <li id="src-12"><a href="https://www.rfc-editor.org/rfc/rfc1700">RFC 1700: Assigned Numbers (Data Notations)</a></li>
+  <li id="src-13"><a href="https://www.sqlite.org/fileformat.html">SQLite Database File Format</a></li>
+  <li id="src-14"><a href="https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-1-manual.pdf">Intel 64 and IA-32 Architectures Software Developer's Manual, Section 1.3.1 Bit and Byte Order</a> <span class="src-note">Intel's manual states IA-32/Intel 64 processors are little endian; ARM is bi-endian by design, but little-endian is the default (GCC generates little-endian code for aarch64-* targets unless aarch64_be is chosen).</span></li>
+</ol>
 
 </main>
 

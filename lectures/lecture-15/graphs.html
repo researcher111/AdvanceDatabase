@@ -5,7 +5,7 @@
 <title>Lecture 15 · Graph Databases &amp; Course Synthesis · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -48,7 +48,7 @@ One data shape has quietly resisted everything we've built: deep relationships.
 "Who follows ada?" is a join; "who's within three hops of ada?" is a join chained onto a
 join onto a join, with SQL getting longer and the plan getting worse at every depth. Graph
 databases store the relationships <em>as pointers on the data itself</em> and replace join
-chains with traversal; you'll watch it live in Kuzu, an embeddable graph engine that is to
+chains with traversal; you'll watch it live in Kuzu, an embeddable graph engine that is to<sup class="src"><a href="#src-1" title="Kuzu documentation: Welcome to Kuzu (docs source, kuzudb/kuzu-docs)">1</a></sup>
 Neo4j what DuckDB is to Postgres. Then the real last act: the whole semester compressed to
 five ideas, and the argument that every system you'll meet for the rest of your career is a
 remix of them.
@@ -125,14 +125,14 @@ touches.</p>
   <div class="bs-stats" id="walk-stats"></div>
   <p class="viz-caption">Start at <strong>ada</strong> and step to depth 3: the reached set
   matches query 3 of the Kuzu demo below, and the fay→ada edge shows why "within 3 hops"
-  needs cycle handling either way.</p>
+  needs cycle handling either way<sup class="src"><a href="#src-2" title="DuckDB documentation: WITH Clause (recursive CTEs)">2</a></sup>.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="model">The property graph</h2>
 
 <p class="keep-in-present">The data model every mainstream graph database shares (Neo4j,
-Kuzu, Neptune, Memgraph):</p>
+Kuzu, Neptune, Memgraph):<sup class="src"><a href="#src-3" title="What Is Amazon Neptune? (AWS Neptune User Guide)">3</a></sup></p>
 
 <pre class="equation"><code>node   (:Student {name: 'ada', gpa: 39})          a record with a label + properties
 edge   (ada)-[:Follows {since: 2026}]->(ben)      ALSO a record: typed, directed, with properties
@@ -142,7 +142,7 @@ storage:  each node keeps its <span class="gloss" data-gloss="adjacency-list">ad
 
 <p class="keep-in-present">Say it in this course's vocabulary: <strong>a graph database
 materializes the join at write time.</strong> Adding the edge does the key-matching once;
-every future traversal follows the stored pointer. The trade should feel familiar by now:
+every future traversal follows the stored pointer<sup class="src"><a href="#src-4" title="Native vs. Non-Native Graph Technology (Neo4j blog)">4</a></sup>. The trade should feel familiar by now:
 it's the index trade (Lab 6) with the cost moved to a different operation: writes pay,
 reads ride. Even the failure mode is familiar: a <span class="gloss" data-gloss="supernode">supernode</span>
 is skew (Lecture 13) wearing a graph costume.</p>
@@ -151,7 +151,7 @@ is skew (Lecture 13) wearing a graph costume.</p>
 <h2 id="cypher">Cypher vs recursive SQL</h2>
 
 <p class="keep-in-present">SQL <em>can</em> traverse: <code>WITH RECURSIVE</code> is a loop
-in the algebra, and it's genuinely how you should do shallow graph work in Postgres or
+in the algebra, and it's genuinely how you should do shallow graph work in Postgres or<sup class="src"><a href="#src-5" title="PostgreSQL documentation: 7.8. WITH Queries (Common Table Expressions)">5</a></sup>
 DuckDB. The same question, both notations, both verified against their engines on the
 six-student data (both return <code>ben cyd dee eli fay</code>):</p>
 
@@ -209,7 +209,7 @@ loaded 6 students, 9 follows edges
     [['ada', 'cyd', 'eli', 'fay']]</code></pre>
 
 <p class="keep-in-present">Query 4 is the one to savor: <em>how does ada reach fay</em> is a
-shortest-path search (BFS under the hood) expressed in one <code>MATCH</code>. Ask it of
+shortest-path search (BFS under the hood) expressed in one<sup class="src"><a href="#src-6" title="Kuzu 0.7.0 Release (Kuzu blog)">6</a></sup> <code>MATCH</code>. Ask it of
 the SQL version and you're implementing Dijkstra in a CTE; ask it of Kuzu and it's Tuesday.
 When the <em>path itself</em> is the answer (recommendations, fraud rings, lineage,
 dependency chains) that's the graph database's home turf.</p>
@@ -221,21 +221,21 @@ dependency chains) that's the graph database's home turf.</p>
   <thead><tr><th>Signal</th><th>Reach for</th><th>Why</th></tr></thead>
   <tbody>
     <tr><td>fixed, shallow relationships (1–2 hops)</td><td>SQL joins, even at scale</td><td>the planner's home game; a join or two is what B+ trees and hash joins are FOR</td></tr>
-    <tr><td>variable/unknown depth, path-shaped answers</td><td>graph DB (Kuzu, Neo4j)</td><td><code>*1..k</code>, SHORTEST, cycles: first-class instead of CTE gymnastics</td></tr>
-    <tr><td>whole-graph analytics (PageRank, communities)</td><td>graph <em>compute</em> (NetworkX, Spark GraphFrames)</td><td>batch algorithms over all nodes: Lecture 13's shape, not a query</td></tr>
+    <tr><td>variable/unknown depth, path-shaped answers</td><td>graph DB (Kuzu, Neo4j)</td><td><code>*1..k</code>, SHORTEST, cycles: first-class instead of CTE gymnastics<sup class="src"><a href="#src-7" title="Kuzu documentation: MATCH clause (docs source, kuzudb/kuzu-docs)">7</a></sup></td></tr>
+    <tr><td>whole-graph analytics (PageRank, communities)</td><td>graph <em>compute</em> (NetworkX, Spark GraphFrames)</td><td>batch algorithms over all nodes: Lecture 13's shape, not a query<sup class="src"><a href="#src-8" title="graphframes/graphframes (GitHub README)">8</a></sup></td></tr>
     <tr><td>relationships that are really just foreign keys</td><td>stay relational</td><td>most schemas with edges are not graph <em>workloads</em>; don't pay a second store's sync tax (Lecture 11's lesson, again)</td></tr>
   </tbody>
 </table>
 
 <div class="callout note">
   <span class="label">War story · the Panama Papers, 2016</span>
-  <p class="keep-in-present">The second row of that table won a Pulitzer. When 11.5 million
-  leaked documents from the law firm Mossack Fonseca reached the International Consortium of
+  <p class="keep-in-present">The second row of that table won a Pulitzer<sup class="src"><a href="#src-9" title="ICIJ: Panama Papers wins Pulitzer Prize">9</a></sup>. When 11.5 million
+  leaked documents from the law firm Mossack Fonseca reached the International Consortium of<sup class="src"><a href="#src-10" title="ICIJ: Panama Papers, About the Investigation">10</a></sup>
   Investigative Journalists, the questions that mattered were pure traversal: which officers
   connect to which shell companies, through which intermediaries, to which real owners:
   paths of unknown depth through millions of entities. ICIJ loaded the extracted entities and
-  relationships into Neo4j and gave hundreds of reporters a visual graph-query front end;
-  reporters with no database training followed edges to prime ministers. The relational
+  relationships into Neo4j and gave hundreds of reporters a visual graph-query front end<sup class="src"><a href="#src-11" title="How the ICIJ Used Neo4j to Unravel the Panama Papers (Neo4j blog)">11</a></sup>;
+  reporters with no database training followed edges to prime ministers<sup class="src"><a href="#src-11" title="How the ICIJ Used Neo4j to Unravel the Panama Papers (Neo4j blog)">11</a></sup>. The relational
   version of that investigation is a self-join per hop with the hops unknown in advance;
   possible, and nobody would have finished it. Data model chosen to match the question:
   that's the course's thesis, holding up under journalism's brightest spotlight.</p>
@@ -247,7 +247,7 @@ dependency chains) that's the graph database's home turf.</p>
 <p class="keep-in-present">Your project retrieves by <em>similarity</em>: question vector →
 nearest chunks. Its known blind spot is questions whose answer is <em>spread across</em>
 documents ("how do the WAL and the buffer pool interact?"; no single chunk says it).
-GraphRAG's move: extract an entity graph from the corpus at ingest (WAL constrains→ page
+GraphRAG's move: extract an entity graph from the corpus at ingest<sup class="src"><a href="#src-12" title="From Local to Global: A Graph RAG Approach to Query-Focused Summarization (arXiv 2404.16130)">12</a></sup> (WAL constrains→ page
 flushing; buffer pool defers→ writes), retrieve by <em>traversing</em> from mentioned
 entities, and hand the LLM connected subgraphs instead of disconnected paragraphs.
 Similarity finds what a question <em>sounds like</em>; traversal finds what it's
@@ -314,23 +314,23 @@ presentations. It has been a genuine pleasure building databases with you. · DG
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Is Kuzu real enough to use, or a teaching toy?</h3>
-<p class="keep-in-present">Real: columnar storage, a vectorized query processor, full
-Cypher, active development, and it holds its own on benchmarks against Neo4j for embedded
+<p class="keep-in-present">Real: columnar storage, a vectorized query processor, full<sup class="src"><a href="#src-13" title="kuzudb/kuzu README (GitHub)">13</a></sup>
+Cypher, active development, and it holds its own on benchmarks against Neo4j for embedded<sup class="src"><a href="#src-14" title="The Data Quarry: Embedded databases (2): Kuzu, an extremely fast embedded graph database">14</a></sup>
 analytics. Like DuckDB, its niche is in-process work rather than serving a fleet of
 concurrent clients. For a server deployment with users and auth, Neo4j or Neptune; for
 "I have a graph problem in a notebook," Kuzu is exactly right.</p>
 
 <h3 class="keep-in-present">Why did we not cover [Mongo/Redis/Elasticsearch/…]?</h3>
 <p class="keep-in-present">Deliberate: those are products, and products rotate. Mongo is a
-document store over a B+ tree engine (WiredTiger) with a WAL; Redis is a data-structure
-server with an append-only log; Elasticsearch is inverted indexes (BM25, Lecture 12) over
-segment files that behave like SSTables. You have the parts list. An afternoon with any of
+document store over a B+ tree engine (WiredTiger) with a WAL<sup class="src"><a href="#src-15" title="WiredTiger Architecture Guide: B-Trees">15</a></sup>; Redis is a data-structure
+server with an append-only log<sup class="src"><a href="#src-16" title="Redis persistence (Redis documentation)">16</a></sup>; Elasticsearch is inverted indexes (BM25, Lecture 12) over
+segment files that behave like SSTables<sup class="src"><a href="#src-17" title="Elasticsearch from the Bottom Up, Part 1 (Elastic blog)">17</a></sup>. You have the parts list. An afternoon with any of
 their architecture pages will slot them into the five-ideas table; try it; it's the best
 exam this course doesn't give.</p>
 
 <h3 class="keep-in-present">What should I learn next after this course?</h3>
 <p class="keep-in-present">Three worthy directions, pick by taste: <em>depth</em>, read
-the Red Book (Bailis, Hellerstein, Stonebraker's <em>Readings in Database Systems</em>) and
+the Red Book (Bailis, Hellerstein, Stonebraker's<sup class="src"><a href="#src-18" title="Readings in Database Systems, Fifth Edition (PDF)">18</a></sup> <em>Readings in Database Systems</em>) and
 the Spanner and Aurora papers; <em>breadth</em>, Kleppmann's <em>Designing Data-Intensive
 Applications</em>, which is this course's Act II at production scale; <em>craft</em>,
 extend microdb (MVCC, an LSM engine, the optimizer); nothing teaches like the engine you
@@ -345,6 +345,31 @@ semester has been the same sentence: <em>show the numbers that made you decide.<
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://raw.githubusercontent.com/kuzudb/kuzu-docs/main/src/content/docs/index.mdx">Kuzu documentation: Welcome to Kuzu (docs source, kuzudb/kuzu-docs)</a></li>
+  <li id="src-2"><a href="https://duckdb.org/docs/current/sql/query_syntax/with.html">DuckDB documentation: WITH Clause (recursive CTEs)</a></li>
+  <li id="src-3"><a href="https://docs.aws.amazon.com/neptune/latest/userguide/intro.html">What Is Amazon Neptune? (AWS Neptune User Guide)</a></li>
+  <li id="src-4"><a href="https://neo4j.com/blog/cypher-and-gql/native-vs-non-native-graph-technology/">Native vs. Non-Native Graph Technology (Neo4j blog)</a></li>
+  <li id="src-5"><a href="https://www.postgresql.org/docs/current/queries-with.html">PostgreSQL documentation: 7.8. WITH Queries (Common Table Expressions)</a></li>
+  <li id="src-6"><a href="https://kuzudb.github.io/blog/post/kuzu-0.7.0-release/">Kuzu 0.7.0 Release (Kuzu blog)</a> <span class="src-note">Kuzu's docs do not name the algorithm; the 0.7.0 release post says recursive path finding was rewritten to mimic frontier-based parallel graph systems such as Ligra, Pregel and GraphChi (a BFS-style frontier expansion), and Neo4j documents its shortestPath as bidirectional BFS.</span></li>
+  <li id="src-7"><a href="https://raw.githubusercontent.com/kuzudb/kuzu-docs/main/src/content/docs/cypher/query-clauses/match.md">Kuzu documentation: MATCH clause (docs source, kuzudb/kuzu-docs)</a></li>
+  <li id="src-8"><a href="https://github.com/graphframes/graphframes">graphframes/graphframes (GitHub README)</a></li>
+  <li id="src-9"><a href="https://www.icij.org/investigations/panama-papers/panama-papers-wins-pulitzer-prize/">ICIJ: Panama Papers wins Pulitzer Prize</a></li>
+  <li id="src-10"><a href="https://www.icij.org/investigations/panama-papers/pages/panama-papers-about-the-investigation/">ICIJ: Panama Papers, About the Investigation</a></li>
+  <li id="src-11"><a href="https://neo4j.com/blog/cypher-and-gql/icij-neo4j-unravel-panama-papers/">How the ICIJ Used Neo4j to Unravel the Panama Papers (Neo4j blog)</a></li>
+  <li id="src-12"><a href="https://arxiv.org/abs/2404.16130">From Local to Global: A Graph RAG Approach to Query-Focused Summarization (arXiv 2404.16130)</a></li>
+  <li id="src-13"><a href="https://github.com/kuzudb/kuzu">kuzudb/kuzu README (GitHub)</a></li>
+  <li id="src-14"><a href="https://thedataquarry.com/blog/embedded-db-2/">The Data Quarry: Embedded databases (2): Kuzu, an extremely fast embedded graph database</a></li>
+  <li id="src-15"><a href="https://source.wiredtiger.com/develop/arch-btree.html">WiredTiger Architecture Guide: B-Trees</a> <span class="src-note">WiredTiger's architecture guide says tables are B-Trees whose leaf pages hold keys and values (the B+ shape) without using the term 'B+ tree'; MongoDB's docs confirm WiredTiger is the default engine and uses a write-ahead log (the journal) with checkpoints.</span></li>
+  <li id="src-16"><a href="https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/">Redis persistence (Redis documentation)</a></li>
+  <li id="src-17"><a href="https://www.elastic.co/blog/found-elasticsearch-from-the-bottom-up">Elasticsearch from the Bottom Up, Part 1 (Elastic blog)</a></li>
+  <li id="src-18"><a href="https://www.bailis.org/papers/redbook-5th-edition.pdf">Readings in Database Systems, Fifth Edition (PDF)</a></li>
+</ol>
 
 </main>
 

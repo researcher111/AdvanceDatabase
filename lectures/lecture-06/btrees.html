@@ -5,7 +5,7 @@
 <title>Lecture 6 · B+ Trees from First Principles · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -37,7 +37,7 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 6 · Tuesday September 29, 2026</div>
   <h1>B+ Trees from First Principles</h1>
-  <div class="subtitle">The forty-year-old data structure that finds one row in a billion by reading four nodes.</div>
+  <div class="subtitle">The forty-year-old data structure that finds one row in a billion by reading four nodes<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, Boeing Scientific Research Laboratories Report No. 20, 1970)">1</a></sup>.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
@@ -94,12 +94,12 @@ everything else is keeping that map balanced on disk.</p>
     <tr><td>Heap file + scan (now)</td><td>O(n), everything</td><td>O(1), any free slot</td><td>O(n)</td><td>great at inserts, terrible at finding</td></tr>
     <tr><td>Sorted file</td><td>O(log n) binary search</td><td>O(n), shift or re-sort</td><td>excellent</td><td>Lab 3 taught us why not</td></tr>
     <tr><td>Hash table</td><td>O(1)</td><td>O(1)</td><td><strong>impossible</strong>, hashing destroys order</td><td>real, but a specialist (see FAQ)</td></tr>
-    <tr><td><strong>B+ tree</strong></td><td>O(log n), base ~200</td><td>O(log n)</td><td>excellent, leaves are chained</td><td>the general-purpose winner since 1979</td></tr>
+    <tr><td><strong>B+ tree</strong></td><td>O(log n), base ~200</td><td>O(log n)</td><td>excellent, leaves are chained</td><td>the general-purpose winner since 1979<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup></td></tr>
   </tbody>
 </table>
 
 <p class="keep-in-present">The B+ tree is the structure that refuses to be bad at anything,
-which is why <em>every</em> relational engine defaults to it.</p>
+which is why <em>every</em> relational engine defaults to it<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 11.2. Index Types">3</a></sup>.</p>
 
 <h3 class="new-slide" data-kicker="Finding one row in a million">An index is a second road</h3>
 
@@ -156,7 +156,7 @@ rebalancing pass because there isn't one: the split <em>is</em> the balance.</p>
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Leaves</span><span>hold the actual index entries, <code>(key, RID)</code> pairs in sorted order, and a <code>next</code> pointer to the right-hand sibling. <strong>All data lives at the bottom.</strong></span></div>
   <div class="lc-row"><span class="lc-k">Internal nodes</span><span>hold routing keys only: <em>k</em> keys fence <em>k+1</em> children; "keys &lt; 10 go left, ≥ 10 go right." Pure directions, no data.</span></div>
-  <div class="lc-row"><span class="lc-k">The leaf chain</span><span>siblings linked left-to-right make ranges a walk: descend once to <code>lo</code>, then follow <code>next</code> until a key passes <code>hi</code>. This chain is the "+" in B+.</span></div>
+  <div class="lc-row"><span class="lc-k">The leaf chain</span><span>siblings linked left-to-right make ranges a walk: descend once to <code>lo</code>, then follow <code>next</code> until a key passes <code>hi</code>. This chain is the "+" in B+<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The invariant</span><span>every leaf is the same distance from the root, always. Not by luck: the split maintains it, as the next section shows.</span></div>
 </div>
 
@@ -201,7 +201,7 @@ can never serve them.</p>
 
 <p class="keep-in-present">Growing at the <em>root</em> is the deep trick: every leaf gets one
 level deeper at the same instant, so the same-depth invariant can't break. Trees that grow at
-the leaves (like binary search trees) can go lopsided; this one structurally cannot.</p>
+the leaves (like binary search trees) can go lopsided; this one structurally cannot<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, 1970/1972)">1</a></sup>.</p>
 
 <h3 class="new-slide" data-kicker="The split">The cascade, hand-traced</h3>
 
@@ -221,7 +221,7 @@ invariant after the dust settles.</p>
 <table>
   <thead><tr><th>Pivot choice</th><th>Result</th><th>Long-run occupancy</th></tr></thead>
   <tbody>
-    <tr><td><code>mid = len // 2</code></td><td>two half-full nodes</td><td>≥ 50% guaranteed; the height bound holds</td></tr>
+    <tr><td><code>mid = len // 2</code></td><td>two half-full nodes</td><td>≥ 50% guaranteed; the height bound holds<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, 1970/1972)">1</a></sup></td></tr>
     <tr><td><code>mid = 1</code> (skewed)</td><td>one starving node, one fat one</td><td>craters under sequential inserts; more nodes, taller tree, same data</td></tr>
   </tbody>
 </table>
@@ -245,7 +245,7 @@ catch exactly this: correctness tests plus a quality bound.</p>
 
 <p class="keep-in-present">This is why databases feel instant: not magic, just a logarithm
 with base 200. And the base is 200 <em>because</em> nodes are sized to Lab 1's blocks: the
-tree is shaped by the disk it lives on.</p>
+tree is shaped by the disk it lives on<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.</p>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · run the cascade</span>
@@ -309,10 +309,10 @@ amplification</span>:</p>
 <table>
   <thead><tr><th>You pay</th><th>When</th><th>How much</th></tr></thead>
   <tbody>
-    <tr><td>Maintenance</td><td>every INSERT/UPDATE/DELETE</td><td>one O(log n) tree update <em>per index on the table</em>: five indexes, six writes per insert</td></tr>
+    <tr><td>Maintenance</td><td>every INSERT/UPDATE/DELETE</td><td>one O(log n) tree update <em>per index on the table</em>: five indexes, six writes per insert<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 11.1. Indexes Introduction">5</a></sup></td></tr>
     <tr><td>Space</td><td>always</td><td>roughly another copy of the indexed column + RIDs, often 10–30% of the table, each</td></tr>
     <tr><td>Build time</td><td>CREATE INDEX</td><td>one full scan + n inserts (you'll measure ~0.5s per 100k rows)</td></tr>
-    <tr><td>Planner risk</td><td>query time</td><td>an index used on a low-<span class="gloss" data-gloss="selectivity">selectivity</span> predicate is <em>slower</em> than the scan it replaced (random hops vs one smooth read)</td></tr>
+    <tr><td>Planner risk</td><td>query time</td><td>an index used on a low-<span class="gloss" data-gloss="selectivity">selectivity</span> predicate is <em>slower</em> than the scan it replaced (random hops vs one smooth read)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">6</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -335,7 +335,7 @@ that judgment.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The trick</span><span>store the columns a hot query needs <em>inside</em> the index entries, then answer from the index alone, zero heap visits.</span></div>
-  <div class="lc-row"><span class="lc-k">The name</span><span>a <span class="gloss" data-gloss="covering-index">covering index</span>; Postgres calls the resulting plan an index-only scan and offers <code>INCLUDE</code> to build one deliberately.</span></div>
+  <div class="lc-row"><span class="lc-k">The name</span><span>a <span class="gloss" data-gloss="covering-index">covering index</span>; Postgres calls the resulting plan an index-only scan and offers <code>INCLUDE</code> to build one deliberately<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 11.9. Index-Only Scans and Covering Indexes">7</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The price</span><span>fatter entries → lower fan-out → the write bill grows again. Every index decision is the same triangle: read speed, write cost, space.</span></div>
   <div class="lc-row"><span class="lc-k">Try it</span><span>Thursday's Going Further builds the toy version and measures the jumps it saves.</span></div>
 </div>
@@ -378,7 +378,7 @@ real heap file, via the RIDs Lab 3 promised would stay stable.</p>
   <li><strong>One move keeps it balanced:</strong> split the full node, push the middle up,
   grow at the root. Same-depth leaves are structural, not lucky.</li>
   <li><strong>Fan-out beats cleverness.</strong> log base 200 makes a billion rows five reads,
-  and the base is 200 because nodes are disk blocks. Every layer you've built shows up in this
+  and the base is 200 because nodes are disk blocks<sup class="src"><a href="#src-8" title="How does B-tree make your queries fast? (Allegro Tech Blog)">8</a></sup>. Every layer you've built shows up in this
   one structure.</li>
 </ul>
 
@@ -390,24 +390,24 @@ the write-ahead log: what COMMIT actually promises. Quiz 6 lands Tue Oct 13.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Why not a hash index? O(1) beats O(log n).</h3>
-<p class="keep-in-present">For pure equality it does, and Postgres offers one. But hashing
-destroys order: no ranges, no prefix matches, no sorted output for free. The B+ tree is two
+<p class="keep-in-present">For pure equality it does, and Postgres offers one<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 65.2. Hash Indexes">9</a></sup>. But hashing
+destroys order: no ranges, no prefix matches, no sorted output for free<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 11.4. Indexes and ORDER BY">10</a></sup>. The B+ tree is two
 comparisons slower and infinitely more versatile; the default for a reason. (Bigtable's
-world, week 14, makes the opposite bet and pays with different machinery.)</p>
+world, week 14, makes the opposite bet and pays with different machinery<sup class="src"><a href="#src-11" title="Bigtable: A Distributed Storage System for Structured Data (Chang et al., OSDI 2006)">11</a></sup>.)</p>
 
 <h3 class="keep-in-present">Is the binary search tree from my algorithms class the same thing?</h3>
 <p class="keep-in-present">Same idea, wrong constants for disks: fan-out 2 means height 27
-for 100M rows, 27 disk reads. The B+ tree is a BST re-engineered for Lab 1's block economics:
+for 100M rows, 27 disk reads<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup>. The B+ tree is a BST re-engineered for Lab 1's block economics:
 one node = one block = one trip = 200 decisions. Data structures change when I/O is the
 currency.</p>
 
 <h3 class="keep-in-present">What about deletes? Nodes can get too empty.</h3>
 <p class="keep-in-present">Textbook trees rebalance by merging underfull nodes, the split's
 mirror. Real engines mostly… don't: they tolerate thin nodes and reclaim lazily (vacuum),
-because merges cost writes and thin nodes only cost a little height. The lab follows the
-engines; Sciore ch. 12 has the full ritual if you want it.</p>
+because merges cost writes and thin nodes only cost a little height<sup class="src"><a href="#src-12" title="PostgreSQL source: src/backend/access/nbtree/README">12</a></sup>. The lab follows the
+engines; Sciore ch. 12 has the full ritual if you want it<sup class="src"><a href="#src-13" title="Database Design and Implementation: Second Edition (Edward Sciore, Springer 2020)">13</a></sup>.</p>
 
-<h3 class="keep-in-present">Does Postgres really rebuild indexes at startup like ours?</h3>
+<h3 class="keep-in-present">Does Postgres really rebuild indexes at startup like ours?<sup class="src"><a href="#src-14" title="PostgreSQL Documentation: 65.1. B-Tree Indexes (Implementation)">14</a></sup></h3>
 <p class="keep-in-present">No: real trees live in pages on disk (each Node a block, child
 pointers as block numbers) and survive restarts; that's the part we traded for a 75-minute
 lab. The algorithm you write is byte-for-byte the same logic; persistence is Lab 1 plumbing
@@ -416,6 +416,27 @@ plus care. Going Further sketches the mapping.</p>
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://infolab.usc.edu/csci585/Spring2010/den_ar/indexing.pdf">Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, Boeing Scientific Research Laboratories Report No. 20, 1970)</a> <span class="src-note">Bayer and McCreight described B-trees in a July 1970 Boeing report (published in Acta Informatica in 1972), so the structure is over fifty years old in 2026, not forty.</span></li>
+  <li id="src-2"><a href="https://dl.acm.org/doi/10.1145/356770.356776">The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)</a></li>
+  <li id="src-3"><a href="https://www.postgresql.org/docs/current/indexes-types.html">PostgreSQL Documentation: 11.2. Index Types</a></li>
+  <li id="src-4"><a href="https://www.postgresql.org/docs/current/storage-page-layout.html">PostgreSQL Documentation: 66.6. Database Page Layout</a> <span class="src-note">PostgreSQL stores every index as an array of fixed-size pages (usually 8 kB); a page holds hundreds of entries, and Allegro's worked example fits about 375 BIGINT keys per 8 kB page, so 200 is a conservative round figure.</span></li>
+  <li id="src-5"><a href="https://www.postgresql.org/docs/current/indexes-intro.html">PostgreSQL Documentation: 11.1. Indexes Introduction</a></li>
+  <li id="src-6"><a href="https://www.postgresql.org/docs/current/using-explain.html">PostgreSQL Documentation: 14.1. Using EXPLAIN</a></li>
+  <li id="src-7"><a href="https://www.postgresql.org/docs/current/indexes-index-only-scans.html">PostgreSQL Documentation: 11.9. Index-Only Scans and Covering Indexes</a></li>
+  <li id="src-8"><a href="https://blog.allegro.tech/2023/11/how-does-btree-make-your-queries-fast.html">How does B-tree make your queries fast? (Allegro Tech Blog)</a> <span class="src-note">200^4 is 1.6 billion, so a billion keys fit in a height-4 tree (four index pages plus one heap page); Allegro's PostgreSQL walkthrough with ~375 keys per page reaches the same four-level conclusion, and Postgres Professional reports real trees of depth 4 to 5 for very large tables.</span></li>
+  <li id="src-9"><a href="https://www.postgresql.org/docs/current/hash-index.html">PostgreSQL Documentation: 65.2. Hash Indexes</a></li>
+  <li id="src-10"><a href="https://www.postgresql.org/docs/current/indexes-ordering.html">PostgreSQL Documentation: 11.4. Indexes and ORDER BY</a></li>
+  <li id="src-11"><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf">Bigtable: A Distributed Storage System for Structured Data (Chang et al., OSDI 2006)</a> <span class="src-note">Bigtable does replace B-trees with a log-structured design (memtable plus immutable SSTables), but it is not a hash-style, orderless system: the paper says data is kept in lexicographic row-key order so that short row-range scans are efficient, so the opposite bet is write-optimized storage rather than giving up ordering.</span></li>
+  <li id="src-12"><a href="https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README">PostgreSQL source: src/backend/access/nbtree/README</a> <span class="src-note">True for PostgreSQL, whose nbtree README says pages are deleted (by VACUUM) only when completely empty and partly-full pages are never merged; but MySQL InnoDB does merge an index page with a neighbor when it falls below MERGE_THRESHOLD (default 50%), so 'mostly' overstates the case.</span></li>
+  <li id="src-13"><a href="https://link.springer.com/book/10.1007/978-3-030-33836-7">Database Design and Implementation: Second Edition (Edward Sciore, Springer 2020)</a></li>
+  <li id="src-14"><a href="https://www.postgresql.org/docs/current/btree.html">PostgreSQL Documentation: 65.1. B-Tree Indexes (Implementation)</a></li>
+</ol>
 
 </main>
 

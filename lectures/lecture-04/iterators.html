@@ -5,7 +5,7 @@
 <title>Lecture 4 · The Iterator Model · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -51,8 +51,8 @@ and a stack of these operators <em>is</em> the query plan you saw in Lecture 1.
 </p>
 
 <div class="cite">
-  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 8 (query processing) ·
-  Graefe, <a href="https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf"><em>Volcano: An Extensible and Parallel Query Evaluation System</em></a> (the paper the model is named for).
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 8 (query processing)<sup class="src"><a href="#src-1" title="Database Design and Implementation, Second Edition (Penn State University Libraries catalog record with contents)">1</a></sup> ·
+  Graefe, <a href="https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf"><em>Volcano: An Extensible and Parallel Query Evaluation System</em></a> (the paper the model is named for<sup class="src"><a href="#src-2" title="Volcano: An Extensible and Parallel Query Evaluation System (IEEE TKDE, 1994)">2</a></sup>).
 </div>
 
 <p class="glossary-hint">
@@ -89,7 +89,7 @@ objects</strong>, and you already built the bottom one.</p>
 <h3 class="new-slide" data-kicker="Queries without room to run">The fix: pull, don't build</h3>
 
 <p class="keep-in-present">Instead of each stage <em>building its whole output</em>, each stage
-answers <strong>"give me your next row"</strong> by pulling just enough from the stage below.
+answers <strong>"give me your next row"</strong> by pulling just enough from the stage below<sup class="src"><a href="#src-3" title="PostgreSQL source: src/backend/executor/README">3</a></sup>.
 One row in flight per operator; memory use is the plan's <em>depth</em>, not the data's
 <em>size</em>. Each stage just remembers its <span class="gloss" data-gloss="cursor">cursor</span>.
 Your TableScan already works this way (one pinned block, remember), so the
@@ -100,7 +100,7 @@ entire query engine can too.</p>
   <tbody>
     <tr><td>Memory</td><td>O(intermediate results), can exceed the data</td><td>O(plan depth), a few rows</td></tr>
     <tr><td>First result arrives</td><td>after the whole stage finishes</td><td>almost immediately</td></tr>
-    <tr><td>When it's forced anyway</td><td colspan="2">sort and group-by must see everything before emitting; they break the pipeline on purpose (week 9)</td></tr>
+    <tr><td>When it's forced anyway</td><td colspan="2">sort and group-by must see everything before emitting; they break the pipeline on purpose (week 9)<sup class="src"><a href="#src-2" title="Volcano: An Extensible and Parallel Query Evaluation System (IEEE TKDE, 1994)">2</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -111,7 +111,7 @@ entire query engine can too.</p>
   <tbody>
     <tr><td>Python</td><td>a generator (<code>yield</code>), <code>range()</code></td><td>a list comprehension</td></tr>
     <tr><td>pandas</td><td><code>read_csv(chunksize=…)</code></td><td><code>read_csv()</code> whole</td></tr>
-    <tr><td>Deep learning</td><td>a DataLoader streaming batches</td><td>the dataset as one tensor</td></tr>
+    <tr><td>Deep learning</td><td>a DataLoader streaming batches<sup class="src"><a href="#src-4" title="PyTorch documentation: torch.utils.data">4</a></sup></td><td>the dataset as one tensor</td></tr>
     <tr><td>microdb, today</td><td><strong>a scan</strong></td><td>the intermediate table we refuse to build</td></tr>
   </tbody>
 </table>
@@ -157,10 +157,10 @@ down and the row back up.</p>
   <div class="code-step" data-step="gv" data-step-name="get_val" data-explain="Read a field of the current row. Schema-aware in TableScan (ints vs strings); wrappers mostly delegate it downward.">def get_val(fld)            # read a field of the current row</div>
   <div class="code-step" data-step="hf" data-step-name="has_field" data-explain="Does this scan produce that field? The product uses it to route get_val to the correct side; the project uses it to fence.">def has_field(fld) -> bool  # do I produce this field?</div>
   <div class="code-step" data-step="cl" data-step-name="close" data-explain="Release everything underneath: for a TableScan that's an unpin; for a product it's both sides. A leaked close is a leaked pin, and week 2's pool aborts loudly.">def close()                 # release pins, recursively</div>
-  <div class="code-explain-panel">Hover a line: five methods, and every operator in every real engine speaks a dialect of them.</div>
+  <div class="code-explain-panel">Hover a line: five methods, and every operator in every real engine speaks a dialect of them<sup class="src"><a href="#src-2" title="Volcano: An Extensible and Parallel Query Evaluation System (IEEE TKDE, 1994)">2</a></sup>.</div>
 </div>
 
-<p class="keep-in-present">Python needs no formal interface declaration;
+<p class="keep-in-present">Python needs no formal interface declaration<sup class="src"><a href="#src-5" title="Python documentation: Glossary (duck-typing)">5</a></sup>;
 <span class="gloss" data-gloss="duck-typing">duck typing</span> means anything with these five
 methods <em>is</em> a scan. TableScan qualifies already; Thursday you write three more.</p>
 
@@ -298,7 +298,7 @@ watch what <code>before_first()</code> must do to the left side before anything 
   <div class="code-step" data-step="j1" data-explain="">        Predicate(("mid", "=", F("mid2")), ("gpa", ">", 35))),</div>
   <div class="code-step" data-step="j1" data-explain="">    ["name", "dept"])</div>
   <div class="code-step" data-step="j2" data-step-name="the result" data-explain="ada→cs, cyd→cs, eli→stat. No special join operator exists yet: product + select IS the join. Better join algorithms (hash, merge, week 9) are optimizations of exactly this.">#  (ada, cs)  (cyd, cs)  (eli, stat)</div>
-  <div class="code-explain-panel">Hover a line: <span class="gloss" data-gloss="cartesian-product">cartesian product</span> plus predicate equals join. Everything else is performance.</div>
+  <div class="code-explain-panel">Hover a line: <span class="gloss" data-gloss="cartesian-product">cartesian product</span> plus predicate equals join. Everything else is performance.<sup class="src"><a href="#src-6" title="Database System Concepts, 7th ed., Chapter 16 slides: Query Optimization (Silberschatz, Korth, Sudarshan)">6</a></sup></div>
 </div>
 
 <h3 class="new-slide" data-kicker="Product">The cost, honestly</h3>
@@ -359,7 +359,7 @@ Remember this table when the number surprises you anyway.</p>
 
 <p class="keep-in-present">Fifteen-fold less work from sliding filters below the product;
 this move is called <span class="gloss" data-gloss="predicate-pushdown">predicate
-pushdown</span>, and it's the first rewrite every optimizer learns. Same answer is
+pushdown</span>, and it's the first rewrite every optimizer learns<sup class="src"><a href="#src-6" title="Database System Concepts, 7th ed., Chapter 16 slides: Query Optimization (Silberschatz, Korth, Sudarshan)">6</a></sup>. Same answer is
 <em>guaranteed</em> by relational algebra; that guarantee is why the machine is allowed to
 choose.</p>
 
@@ -375,9 +375,9 @@ choose.</p>
 <h3 class="new-slide" data-kicker="Same query, different shapes">Pushdown in the wild</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Postgres</span><span>pushes predicates below joins automatically, and into index conditions when week 6's structures exist.</span></div>
-  <div class="lc-row"><span class="lc-k">Parquet / DuckDB</span><span>pushes filters into the <em>file format</em>: column chunks carry min/max stats, so whole blocks are skipped unread (week 10 measures it).</span></div>
-  <div class="lc-row"><span class="lc-k">Spark</span><span>pushes filters across the <em>network</em>, to the node holding the data, before the shuffle (week 13's whole story).</span></div>
+  <div class="lc-row"><span class="lc-k">Postgres</span><span>pushes predicates below joins automatically, and into index conditions when week 6's structures exist<sup class="src"><a href="#src-7" title="PostgreSQL source: src/backend/optimizer/README">7</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Parquet / DuckDB</span><span>pushes filters into the <em>file format</em>: column chunks carry min/max stats, so whole blocks are skipped unread (week 10 measures it)<sup class="src"><a href="#src-8" title="Apache Parquet format README (parquet-format) and DuckDB Indexing guide">8</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Spark</span><span>pushes filters across the <em>network</em>, to the node holding the data, before the shuffle (week 13's whole story)<sup class="src"><a href="#src-9" title="Deep Dive into Spark SQL's Catalyst Optimizer (Databricks engineering blog)">9</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">One idea, five weeks</span><span>do the cheap discarding as close to the data as possible. You just measured it for the first time; you will not stop meeting it.</span></div>
 </div>
 
@@ -431,20 +431,20 @@ out. Quiz 4 opens class: the iterator model.</p>
 
 <h3>Is this really how Postgres works?</h3>
 <p class="keep-in-present">Yes: the executor is a tree of nodes each implementing (roughly)
-<code>ExecProcNode</code>, pulled from the top exactly like today's widget. Modern analytics
+<code>ExecProcNode</code>, pulled from the top exactly like today's widget<sup class="src"><a href="#src-10" title="PostgreSQL source: src/backend/executor/execProcnode.c (header comment)">10</a></sup>. Modern analytics
 engines (DuckDB, week 10) pull <em>batches of ~1000 rows</em> instead of single rows to be
 kinder to CPUs; same model, bigger sips.</p>
 
 <h3>Why does the product re-read its right side instead of caching it?</h3>
-<p class="keep-in-present">Caching is memory, the thing we swore off. Re-reading costs I/O
+<p class="keep-in-present">Caching is memory, the thing we swore off<sup class="src"><a href="#src-11" title="PostgreSQL documentation: Planner/Optimizer">11</a></sup>. Re-reading costs I/O
 instead… except your week-2 buffer pool usually still has those blocks, which is the two
 layers quietly cooperating. When the right side is huge, real engines do materialize or hash
-it; that's week 9's hash join, a considered trade, not a default.</p>
+it; that's week 9's hash join, a considered trade, not a default<sup class="src"><a href="#src-11" title="PostgreSQL documentation: Planner/Optimizer">11</a></sup>.</p>
 
 <h3>Where are ORDER BY and GROUP BY?</h3>
 <p class="keep-in-present">They need to see <em>all</em> rows before emitting one (you can't
 know the smallest row until you've seen the last). They're the operators that legitimately
-break the pipeline and spill to disk: week 9, alongside the optimizer.</p>
+break the pipeline and spill to disk<sup class="src"><a href="#src-12" title="PostgreSQL documentation: Resource Consumption (work_mem)">12</a></sup>: week 9, alongside the optimizer.</p>
 
 <h3>What about OR in predicates?</h3>
 <p class="keep-in-present">microdb's Predicate is AND-only for readability; OR arrives with
@@ -454,6 +454,25 @@ predicates are just a boolean box the SelectScan consults.</p>
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://catalog.libraries.psu.edu/catalog/29987751">Database Design and Implementation, Second Edition (Penn State University Libraries catalog record with contents)</a></li>
+  <li id="src-2"><a href="https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf">Volcano: An Extensible and Parallel Query Evaluation System (IEEE TKDE, 1994)</a></li>
+  <li id="src-3"><a href="https://raw.githubusercontent.com/postgres/postgres/master/src/backend/executor/README">PostgreSQL source: src/backend/executor/README</a></li>
+  <li id="src-4"><a href="https://docs.pytorch.org/docs/2.13/data.html">PyTorch documentation: torch.utils.data</a></li>
+  <li id="src-5"><a href="https://docs.python.org/3/glossary.html">Python documentation: Glossary (duck-typing)</a></li>
+  <li id="src-6"><a href="https://www.db-book.com/slides-dir/PDF-dir/ch16.pdf">Database System Concepts, 7th ed., Chapter 16 slides: Query Optimization (Silberschatz, Korth, Sudarshan)</a></li>
+  <li id="src-7"><a href="https://raw.githubusercontent.com/postgres/postgres/master/src/backend/optimizer/README">PostgreSQL source: src/backend/optimizer/README</a></li>
+  <li id="src-8"><a href="https://duckdb.org/docs/current/guides/performance/indexing.html">Apache Parquet format README (parquet-format) and DuckDB Indexing guide</a></li>
+  <li id="src-9"><a href="https://www.databricks.com/blog/2015/04/13/deep-dive-into-spark-sqls-catalyst-optimizer.html">Deep Dive into Spark SQL's Catalyst Optimizer (Databricks engineering blog)</a></li>
+  <li id="src-10"><a href="https://raw.githubusercontent.com/postgres/postgres/master/src/backend/executor/execProcnode.c">PostgreSQL source: src/backend/executor/execProcnode.c (header comment)</a></li>
+  <li id="src-11"><a href="https://www.postgresql.org/docs/current/planner-optimizer.html">PostgreSQL documentation: Planner/Optimizer</a></li>
+  <li id="src-12"><a href="https://www.postgresql.org/docs/current/runtime-config-resource.html">PostgreSQL documentation: Resource Consumption (work_mem)</a></li>
+</ol>
 
 </main>
 

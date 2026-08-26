@@ -5,7 +5,7 @@
 <title>Lecture 13 · Distributed Compute · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -52,7 +52,7 @@ function on many cores." Thursday you build the pattern raw, then run both produ
 </p>
 
 <div class="cite">
-  Companion reading: Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce: Simplified Data Processing on Large Clusters</em></a> (OSDI 2004, 13 readable pages) ·
+  Companion reading: Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce: Simplified Data Processing on Large Clusters</em></a> (OSDI 2004, 13 readable pages)<sup class="src"><a href="#src-1" title="MapReduce: Simplified Data Processing on Large Clusters (Google Research publication page)">1</a></sup> ·
   Zaharia et&nbsp;al., <a href="https://www.usenix.org/conference/nsdi12/technical-sessions/presentation/zaharia"><em>Resilient Distributed Datasets</em></a> (the Spark paper) ·
   Ray's <a href="https://docs.ray.io/en/latest/ray-core/walkthrough.html">core walkthrough</a> (tasks in ten minutes).
 </div>
@@ -92,9 +92,9 @@ as possible, and everything else is packaging.</p>
 <table>
   <thead><tr><th>Resource</th><th>One machine</th><th>10 TB job needs</th><th>The distributed answer</th></tr></thead>
   <tbody>
-    <tr><td>Disk read</td><td>~2 GB/s sequential</td><td>~85 min just to read once</td><td>100 machines read their own 100 GB in ~1 min</td></tr>
+    <tr><td>Disk read</td><td>~2 GB/s sequential</td><td>~85 min just to read once<sup class="src"><a href="#src-2" title="What is PCIe Gen 4 for SSDs, and how does it compare to Gen 3 and Gen 5? (Samsung Business Insights)">2</a></sup></td><td>100 machines read their own 100 GB in ~1 min</td></tr>
     <tr><td>Memory</td><td>hundreds of GB</td><td>working sets past RAM</td><td>each partition's working set fits its machine</td></tr>
-    <tr><td>Failure</td><td>rare, fatal</td><td>~guaranteed across 100 machines × hours</td><td>re-run the failed piece, which requires pieces</td></tr>
+    <tr><td>Failure</td><td>rare, fatal</td><td>~guaranteed across 100 machines × hours<sup class="src"><a href="#src-3" title="Designs, Lessons and Advice from Building Large Distributed Systems (Jeff Dean, LADIS 2009 keynote)">3</a></sup></td><td>re-run the failed piece, which requires pieces</td></tr>
   </tbody>
 </table>
 
@@ -115,8 +115,8 @@ record. Two rules cover practically everything, and you have used both:</p>
   <thead><tr><th></th><th>Hash partitioning</th><th>Range partitioning</th></tr></thead>
   <tbody>
     <tr><td>Rule</td><td><code>owner = hash(key) % n</code></td><td>owner holds a key interval (a–f, g–m, …)</td></tr>
-    <tr><td>Strength</td><td>spreads uniformly, no planning, any machine can compute the route alone</td><td>range queries touch few partitions; sorted neighbors stay together</td></tr>
-    <tr><td>Weakness</td><td>range queries touch <em>every</em> partition</td><td>needs split points chosen well; hot ranges overload one machine</td></tr>
+    <tr><td>Strength</td><td>spreads uniformly, no planning, any machine can compute the route alone<sup class="src"><a href="#src-4" title="Hashed Sharding (MongoDB Manual)">4</a></sup></td><td>range queries touch few partitions; sorted neighbors stay together</td></tr>
+    <tr><td>Weakness</td><td>range queries touch <em>every</em> partition</td><td>needs split points chosen well; hot ranges overload one machine<sup class="src"><a href="#src-5" title="Design a schema (Google Cloud Bigtable documentation)">5</a></sup></td></tr>
     <tr><td>You've used it as</td><td>Thursday's shuffle; every hash join's build side</td><td>Lab 8's Hive folders (<code>month=12/</code>); B+ tree leaves are ranges</td></tr>
   </tbody>
 </table>
@@ -149,8 +149,8 @@ record. Two rules cover practically everything, and you have used both:</p>
 <em>across rows</em>: if one key carries 40% of the records
 (<span class="gloss" data-gloss="skew">skew</span>, the "celebrity problem"), its partition
 becomes the <span class="gloss" data-gloss="straggler">straggler</span> the whole job waits on. Real engines salt the hot key (append a random
-suffix, aggregate twice) or handle it separately. Diagnosis first: Spark's UI shows one task
-running long after 99 finished; now you know what that means.</p>
+suffix, aggregate twice) or handle it separately<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup>. Diagnosis first: Spark's UI shows one task
+running long after 99 finished; now you know what that means<sup class="src"><a href="#src-7" title="Skew and spill (Databricks on AWS documentation)">7</a></sup>.</p>
 
 <div class="viz" id="viz-skew">
   <div class="viz-title">skew · one famous key vs eight partitions</div>
@@ -173,11 +173,11 @@ running long after 99 finished; now you know what that means.</p>
   <p class="keep-in-present">Skew has a celebrity mascot. Instagram's early engineers spoke
   openly about what they called the Justin Bieber problem: any data keyed by account behaved
   beautifully for millions of users and melted for the handful whose every post drew millions
-  of likes: one key, one shard, all the load. Their fixes were this slide's menu: denormalize
+  of likes: one key, one shard, all the load<sup class="src"><a href="#src-8" title="Scaling Instagram Infrastructure (Lisa Guo, QCon San Francisco 2016 slides)">8</a></sup>. Their fixes were this slide's menu: denormalize
   the hot counts, special-case celebrity accounts, redesign keys so no single row is the
   whole story. The general lesson travels everywhere partitioning does: real-world
   popularity is power-law distributed, so "uniform hash, uniform load" is an assumption
-  your most famous key will personally violate.</p>
+  your most famous key will personally violate<sup class="src"><a href="#src-9" title="Zipf's law and the Internet (Adamic and Huberman, Glottometrics 3, 2002)">9</a></sup>.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -185,12 +185,12 @@ running long after 99 finished; now you know what that means.</p>
 
 <p class="keep-in-present">Google's 2004 observation: nearly every batch job over partitioned
 data fits one shape, and if you write just the two computation functions, the framework can
-own placement, movement, retry, and skew for every job forever:</p>
+own placement, movement, retry, and skew for every job forever<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup>:</p>
 
 <pre class="equation"><code>map(record)         → zero or more (key, value) pairs      runs on each partition, no coordination
 shuffle             route pairs so ALL values for a key     the only network step:
                     land on the same machine, grouped        hash(key) % n_reducers
-reduce(key, values) → one result per key                    runs per key, sees everything for it
+reduce(key, values) → one result per key                    runs per key, sees everything for it<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup>
 
 word count:  map:    "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
              shuffle: every (the,1) (from every machine) arrives at the same reducer
@@ -221,7 +221,7 @@ see the routing arithmetic.</p>
   <div id="mr-stage"></div>
   <p class="viz-caption">Nothing about the map or reduce boxes would change with 4,000
   machines; only the width of the shuffle in the middle. That's the pattern's sales
-  pitch, verbatim from the 2004 paper.</p>
+  pitch, verbatim from the 2004 paper<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup>.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -232,7 +232,7 @@ see the routing arithmetic.</p>
 <pre><code class="language-python">counts = (lines                                       # an RDD, split into 4 partitions
     .flatMap(lambda t: re.findall(r"[a-z]+", t.lower()))   # your map_words
     .map(lambda word: (word, 1))
-    .reduceByKey(lambda a, b: a + b))                 # your shuffle + reduce, one call
+    .reduceByKey(lambda a, b: a + b))                 # your shuffle + reduce, one call<sup class="src"><a href="#src-11" title="RDD Programming Guide (Apache Spark documentation)">11</a></sup>
 
 counts.collect()                                      # NOW it runs</code></pre>
 
@@ -240,7 +240,7 @@ counts.collect()                                      # NOW it runs</code></pre>
 entire cost model: <strong>narrow</strong> ones (<code>flatMap</code>, <code>map</code>,
 <code>filter</code>) stay inside each partition: free to chain, and Spark fuses them into
 one pass. <strong>Wide</strong> ones (<code>reduceByKey</code>, <code>join</code>,
-<code>groupBy</code>) need matching keys together, so they trigger the shuffle. Count the
+<code>groupBy</code>) need matching keys together, so they trigger the shuffle<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup>. Count the
 wide transformations in a Spark job and you've counted its
 <span class="gloss" data-gloss="stage">stages</span>.</p>
 
@@ -258,7 +258,7 @@ wide transformations in a Spark job and you've counted its
 <p class="keep-in-present">Read it bottom-up like an <code>EXPLAIN</code>: the indentation
 break is the stage boundary, and the stage boundary <em>is</em> the shuffle. Spark also keeps
 this plan around as <span class="gloss" data-gloss="lineage">lineage</span>: if a machine
-dies mid-job, its partitions are recomputed from the plan rather than restored from a backup.
+dies mid-job, its partitions are recomputed from the plan rather than restored from a backup<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup>.
 The plan is the fault tolerance.</p>
 
 <!-- ============================================================ -->
@@ -276,7 +276,7 @@ def embed_remote(text):
     return embed(text)
 
 futures = [embed_remote.remote(t) for t in texts]   # all launched, returns instantly
-vectors = ray.get(futures)                          # wait; order preserved</code></pre>
+vectors = ray.get(futures)                          # wait; order preserved<sup class="src"><a href="#src-13" title="ray.get (Ray Core API reference)">13</a></sup></code></pre>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span><span class="t-mute">             # Part C, measured on a 10-core laptop</span>
 24 documents, 30 ms simulated model latency each
@@ -285,10 +285,10 @@ parallel:    0.16 s     speedup: 5.7x
 identical results: True</code></pre>
 
 <p class="keep-in-present">The measured run, Thursday's Part C. The classic mistake is
-<code>ray.get()</code> inside the launch loop; wait-per-task is serial with extra steps, and
+<code>ray.get()</code> inside the launch loop; wait-per-task is serial with extra steps, and<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup>
 the lab's timing test catches it. For state that must live <em>on</em> a worker (a loaded
 model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors</span>:
-<code>@ray.remote</code> on a class instead of a function.</p>
+<code>@ray.remote</code> on a class instead of a function<sup class="src"><a href="#src-15" title="Actors (Ray Core documentation)">15</a></sup>.</p>
 
 <h3 class="new-slide" data-kicker="Ray">Choosing: the one-table version</h3>
 
@@ -334,7 +334,7 @@ products:</p>
 </ul>
 
 <p class="keep-in-present"><strong>Thursday:</strong> Lab 11. <strong>Next Tuesday:</strong>
-Google's other 2004-era gift: Bigtable, LSM trees, and how NoSQL stores write at absurd
+Google's other 2004-era gift: Bigtable, LSM trees, and how NoSQL stores write at absurd<sup class="src"><a href="#src-16" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006 paper PDF)">16</a></sup>
 rates. Quiz 11 opens class: MapReduce, Spark &amp; Ray.</p>
 
 <!-- ============================================================ -->
@@ -342,23 +342,23 @@ rates. Quiz 11 opens class: MapReduce, Spark &amp; Ray.</p>
 
 <h3 class="keep-in-present">Is MapReduce dead? I've heard "nobody writes MapReduce anymore."</h3>
 <p class="keep-in-present">The <em>API</em> retired; the <em>pattern</em> runs everything.
-Spark, DuckDB's parallel aggregation, BigQuery, Snowflake: all execute map-shuffle-reduce
+Spark, DuckDB's parallel aggregation, BigQuery, Snowflake: all execute map-shuffle-reduce<sup class="src"><a href="#src-17" title="Parallel Grouped Aggregation in DuckDB (DuckDB blog)">17</a></sup>
 under nicer front ends. It's COBOL vs. the ledger: the notation aged, the accounting is
 eternal. When a Spark job stalls, the diagnosis is always in this lecture's vocabulary:
 which stage, which shuffle, which skewed key.</p>
 
 <h3 class="keep-in-present">Why did we learn DuckDB if Spark exists?</h3>
 <p class="keep-in-present">Because a 2025-era laptop crunches hundreds of GB in DuckDB with
-zero cluster tax: no JVM, no shuffle, no ops. The honest decision procedure: DuckDB until
+zero cluster tax: no JVM, no shuffle, no ops<sup class="src"><a href="#src-18" title="Memory Management in DuckDB (DuckDB blog)">18</a></sup>. The honest decision procedure: DuckDB until
 data or memory genuinely doesn't fit, then Spark. Teams that skip step one pay the
 distribution tax on data that fit in RAM all along.</p>
 
 <h3 class="keep-in-present">Where does the shuffle physically put the data?</h3>
 <p class="keep-in-present">Mappers write their output partitioned by destination into local
-files; reducers pull their slice from every mapper over the network; disk on both ends,
+files; reducers pull their slice from every mapper over the network; disk on both ends<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup>,
 which is why the shuffle dominates job cost and why "shuffle spill" is the first metric a
 Spark tuner checks. Cloud engines increasingly shuffle through object storage (S3), trading
-latency for elasticity; the storage/compute split from Lecture 10, again.</p>
+latency for elasticity; the storage/compute split from Lecture 10, again<sup class="src"><a href="#src-19" title="Cloud Shuffle Storage Plugin for Apache Spark (AWS Glue Developer Guide)">19</a></sup>.</p>
 
 <h3 class="keep-in-present">Could our RAG project need Spark or Ray?</h3>
 <p class="keep-in-present">The retrieval path shouldn't; your corpus fits comfortably on one
@@ -369,6 +369,32 @@ final re-embed that way; note it in your writeup if you do.</p>
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://research.google/pubs/pub62/">MapReduce: Simplified Data Processing on Large Clusters (Google Research publication page)</a></li>
+  <li id="src-2"><a href="https://insights.samsung.com/2024/03/07/what-is-pcie-gen-4-for-ssds-and-how-does-it-compare-to-gen-3-and-gen-5/">What is PCIe Gen 4 for SSDs, and how does it compare to Gen 3 and Gen 5? (Samsung Business Insights)</a> <span class="src-note">10 TB at 2 GB/s is 5000 s, about 83 min; 2 GB/s is conservative since current PCIe Gen 3 drives read 3,500 MB/s and Gen 4 drives 7,000 to 7,450 MB/s, which would cut the time to 22 to 48 min.</span></li>
+  <li id="src-3"><a href="https://www.cs.cornell.edu/projects/ladis2009/talks/dean-keynote-ladis2009.pdf">Designs, Lessons and Advice from Building Large Distributed Systems (Jeff Dean, LADIS 2009 keynote)</a> <span class="src-note">Dean's LADIS 2009 keynote reports about 1000 individual machine failures and thousands of disk failures per year in a new Google cluster of thousands of machines; at 100 machines for a few hours a failure is likely but not guaranteed, though the MapReduce paper states failures are common at hundreds-to-thousands scale.</span></li>
+  <li id="src-4"><a href="https://www.mongodb.com/docs/manual/core/hashed-sharding/">Hashed Sharding (MongoDB Manual)</a></li>
+  <li id="src-5"><a href="https://docs.cloud.google.com/bigtable/docs/schema-design">Design a schema (Google Cloud Bigtable documentation)</a></li>
+  <li id="src-6"><a href="https://aws.amazon.com/blogs/big-data/detect-and-handle-data-skew-on-aws-glue/">Detect and handle data skew on AWS Glue (AWS Big Data Blog)</a></li>
+  <li id="src-7"><a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-page">Skew and spill (Databricks on AWS documentation)</a></li>
+  <li id="src-8"><a href="https://qconsf.com/sf2016/system/files/presentation-slides/scaling_instagram_infrastructure_-_qcon_sf_2016.pdf">Scaling Instagram Infrastructure (Lisa Guo, QCon San Francisco 2016 slides)</a> <span class="src-note">Instagram's QCon SF 2016 slides show the move from select count(*) on user_likes_media (100s of ms) to a denormalized media_likes counter (10s of us) plus a memcache lease, and Sarah Frier's No Filter documents Bieber's posts taking the servers down, but no primary Instagram source using the exact phrase 'Justin Bieber problem' was found.</span></li>
+  <li id="src-9"><a href="https://people.computing.clemson.edu/~jmarty/courses/ProbabilityStatsTutorial/zipf-Internet.pdf">Zipf's law and the Internet (Adamic and Huberman, Glottometrics 3, 2002)</a></li>
+  <li id="src-10"><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/mapreduce-osdi04.pdf">MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)</a></li>
+  <li id="src-11"><a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html">RDD Programming Guide (Apache Spark documentation)</a></li>
+  <li id="src-12"><a href="https://people.csail.mit.edu/matei/papers/2012/nsdi_spark.pdf">Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)</a></li>
+  <li id="src-13"><a href="https://docs.ray.io/en/latest/ray-core/api/doc/ray.get.html">ray.get (Ray Core API reference)</a></li>
+  <li id="src-14"><a href="https://docs.ray.io/en/latest/ray-core/patterns/ray-get-loop.html">Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)</a></li>
+  <li id="src-15"><a href="https://docs.ray.io/en/latest/ray-core/actors.html">Actors (Ray Core documentation)</a></li>
+  <li id="src-16"><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf">Bigtable: A Distributed Storage System for Structured Data (OSDI 2006 paper PDF)</a> <span class="src-note">The Bigtable paper was published at OSDI 2006 and says the system was designed and built over the preceding two and a half years with production use since April 2005, so design work began around early 2004.</span></li>
+  <li id="src-17"><a href="https://duckdb.org/2022/03/07/aggregate-hashtable">Parallel Grouped Aggregation in DuckDB (DuckDB blog)</a> <span class="src-note">DuckDB's own blog describes thread-local hash tables radix-partitioned on the group hash, then per-partition merging across threads, which is the same partition-by-hash-then-combine shape but within one process; the BigQuery and Snowflake parts of the claim were not checked.</span></li>
+  <li id="src-18"><a href="https://duckdb.org/2024/07/09/memory-management">Memory Management in DuckDB (DuckDB blog)</a></li>
+  <li id="src-19"><a href="https://docs.aws.amazon.com/glue/latest/dg/cloud-shuffle-storage-plugin.html">Cloud Shuffle Storage Plugin for Apache Spark (AWS Glue Developer Guide)</a></li>
+</ol>
 
 </main>
 

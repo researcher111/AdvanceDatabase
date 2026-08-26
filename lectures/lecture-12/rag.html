@@ -5,7 +5,7 @@
 <title>Lecture 12 · RAG as a Systems Problem · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -44,7 +44,7 @@
 
 <p class="lede">
 A language model answers from <span class="gloss" data-gloss="parametric">parametric
-knowledge</span>, whatever its training run baked into the weights. Your documents aren't in
+knowledge</span>, whatever its training run baked into the weights<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup>. Your documents aren't in
 there, and its <span class="gloss" data-gloss="context-window">context window</span> is too
 small to hold them all. Retrieval-augmented generation is the standard fix, and here is the
 secret this lecture makes explicit: the "retrieval" half is not an AI technique. It is a
@@ -54,9 +54,9 @@ working RAG pipeline; your project is the same wiring at real scale.
 </p>
 
 <div class="cite">
-  Companion reading: Lewis et&nbsp;al., <a href="https://arxiv.org/abs/2005.11401"><em>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</em></a> (the paper that named it) ·
+  Companion reading: Lewis et&nbsp;al., <a href="https://arxiv.org/abs/2005.11401"><em>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</em></a> (the paper that named it)<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup> ·
   Liu et&nbsp;al., <a href="https://arxiv.org/abs/2307.03172"><em>Lost in the Middle: How Language Models Use Long Contexts</em></a> ·
-  pgvector + Postgres full-text: <a href="https://github.com/pgvector/pgvector#hybrid-search">hybrid search in one query</a>.
+  pgvector + Postgres full-text: <a href="https://github.com/pgvector/pgvector#hybrid-search">hybrid search in one query<sup class="src"><a href="#src-2" title="pgvector README, Hybrid Search">2</a></sup></a>.
 </div>
 
 <p class="glossary-hint">
@@ -93,7 +93,7 @@ retrieval quality is measurable</strong>, with an eval set, not with vibes.</p>
 <table>
   <thead><tr><th>Approach</th><th>Per update</th><th>Per question</th><th>Where it breaks</th></tr></thead>
   <tbody>
-    <tr><td><strong>Fine-tune</strong> the weights</td><td>a training run</td><td>cheap</td><td>stale the moment a document changes; recalls facts unreliably; can't cite</td></tr>
+    <tr><td><strong>Fine-tune</strong> the weights</td><td>a training run</td><td>cheap</td><td>stale the moment a document changes; recalls facts unreliably<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup>; can't cite</td></tr>
     <tr><td><strong>Stuff the context</strong> with everything</td><td>free</td><td>pay for every token, every time</td><td>50k documents don't fit; what does fit gets skimmed (lost in the middle)</td></tr>
     <tr><td><strong>Retrieve</strong>, then generate</td><td>re-embed the changed doc</td><td>one top-k query + k chunks of tokens</td><td>only as good as retrieval, which is why you measure retrieval</td></tr>
   </tbody>
@@ -171,17 +171,17 @@ isn't retrieved, no prompt engineering can quote it.</strong></p>
 <table>
   <thead><tr><th>Choice</th><th>Retrieval precision</th><th>Context delivered</th><th>Failure mode</th></tr></thead>
   <tbody>
-    <tr><td>whole document</td><td>poor: one muddy average vector</td><td>huge, mostly irrelevant</td><td>similar to everything, retrieved for nothing</td></tr>
-    <tr><td>paragraph / ~100–300 words</td><td>good: one topic per vector</td><td>a self-contained claim</td><td>the sweet spot most systems ship</td></tr>
+    <tr><td>whole document</td><td>poor: one muddy average vector<sup class="src"><a href="#src-4" title="Effective Chunking Strategies for RAG (Cohere)">4</a></sup></td><td>huge, mostly irrelevant</td><td>similar to everything, retrieved for nothing</td></tr>
+    <tr><td>paragraph / ~100–300 words</td><td>good: one topic per vector</td><td>a self-contained claim</td><td>the sweet spot most systems ship<sup class="src"><a href="#src-5" title="Evaluating Chunking Strategies for Retrieval (Chroma Research)">5</a></sup></td></tr>
     <tr><td>sentence</td><td>sharp but brittle</td><td>too little to answer from</td><td>retrieves pronouns and orphaned "it"s</td></tr>
   </tbody>
 </table>
 
 <p class="keep-in-present">Production refinements are record design too: <strong>overlap</strong>
-(repeat ~10–15% at boundaries so a claim split across chunks survives whole in one of them)
+(repeat ~10–15% at boundaries so a claim split across chunks survives whole in one of them)<sup class="src"><a href="#src-6" title="Chunk large documents for vector search solutions in Azure AI Search">6</a></sup>
 and <strong>metadata</strong> (store doc id, title, position with each chunk; Thursday's
 chunks carry <code>doc</code> and <code>title</code> precisely so answers can cite). Sciore
-would call this a layout decision; LangChain calls it a text splitter; it is the same
+would call this a layout decision; LangChain calls it a text splitter<sup class="src"><a href="#src-7" title="LangChain Docs: Text splitters">7</a></sup>; it is the same
 decision.</p>
 
 <h3 class="new-slide" data-kicker="Chunking">The dial, measured on Thursday's corpus</h3>
@@ -211,7 +211,7 @@ decision.</p>
 <pre class="equation"><code>eval set:  (question, {relevant doc ids})  ×  12 pairs   ← labeled by hand, once
 
 hit@k  =  fraction of questions with a relevant doc in the top k        (did it come back?)
-MRR    =  mean over questions of  1 / rank of first relevant doc        (how high?)
+MRR    =  mean over questions of  1 / rank of first relevant doc<sup class="src"><a href="#src-8" title="Building a Question Answering Test Collection (Voorhees and Tice, SIGIR 2000)">8</a></sup>        (how high?)
 
            rank 1 → 1.0      rank 2 → 0.5      rank 3 → 0.33      absent → 0</code></pre>
 
@@ -219,7 +219,7 @@ MRR    =  mean over questions of  1 / rank of first relevant doc        (how hig
 
 <p class="keep-in-present">Thursday's embedder is hashed bag-of-words with a width dial.
 Shrink the width and unrelated words <em>collide</em> onto shared dimensions, and the eval
-set catches the damage without anyone reading an answer:</p>
+set catches the damage without anyone reading an answer<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup>:</p>
 
 <table>
   <thead><tr><th>Embedding width (DIM)</th><th>hit@3</th><th>MRR</th></tr></thead>
@@ -257,7 +257,7 @@ makes.</p>
 <h3 class="new-slide" data-kicker="How RAG fails">The rest of the failure catalog</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Lost in the middle</span><span>models attend best to the start and end of a long context; retrieved-but-buried evidence gets skimmed (Liu et&nbsp;al. above measured the U-shape). Mitigation: retrieve less, order deliberately, put the best chunk first.</span></div>
+  <div class="lc-row"><span class="lc-k">Lost in the middle</span><span>models attend best to the start and end of a long context; retrieved-but-buried evidence gets skimmed (Liu et&nbsp;al. above measured the U-shape)<sup class="src"><a href="#src-10" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172)">10</a></sup>. Mitigation: retrieve less, order deliberately, put the best chunk first.<sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Right doc, wrong rank</span><span>hit@3 passes while the model gets the good chunk third of five; MRR is the metric that notices; assembly order is the fix.</span></div>
   <div class="lc-row"><span class="lc-k">Stale index</span><span>documents changed; vectors didn't. The index answers from the past with full confidence, the RAG version of the <span class="gloss" data-gloss="stale-cache">cache-invalidation problem</span>, solved the same way: re-embed on write, version the index.</span></div>
   <div class="lc-row"><span class="lc-k">Confident grounding failure</span><span>retrieval returns weak chunks; the model answers anyway, citing them. Defenses: score thresholds ("if the best cosine is 0.09, say so"), and prompts that permit "the sources don't answer this."</span></div>
@@ -267,9 +267,9 @@ makes.</p>
 <div class="callout note">
   <span class="label">War story · Mata v. Avianca, 2023</span>
   <p class="keep-in-present">The failure catalog has case law. In 2023, lawyers in a routine
-  New York airline suit filed a brief citing several judicial opinions that did not exist;
-  ChatGPT had generated them, complete with plausible names, docket numbers, and quotes, and
-  when asked to verify, it cheerfully vouched for its own inventions. A federal judge
+  New York airline suit filed a brief citing several judicial opinions that did not exist<sup class="src"><a href="#src-12" title="Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions">12</a></sup>;
+  ChatGPT had generated them, complete with plausible names, docket numbers, and quotes<sup class="src"><a href="#src-12" title="Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions">12</a></sup>, and
+  when asked to verify, it cheerfully vouched for its own inventions<sup class="src"><a href="#src-12" title="Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions">12</a></sup>. A federal judge
   sanctioned the lawyers, and "check whether the case is real" entered legal practice
   overnight. Read it as an architecture lesson: an LLM answering from
   <em>parametric</em> memory fabricates fluently, and only a retrieval layer over a real,
@@ -288,9 +288,9 @@ retrieval stack, each one a database idea you can now name:</p>
 <table>
   <thead><tr><th>Upgrade</th><th>What it is</th><th>Database idea underneath</th></tr></thead>
   <tbody>
-    <tr><td><strong>Hybrid search</strong></td><td>run <span class="gloss" data-gloss="bm25">BM25</span> keyword search AND vector search, merge the ranked lists</td><td>two indexes over one table, union of access paths: exact names beat the synonym wall, vectors beat exact names; each covers the other's miss</td></tr>
-    <tr><td><strong>Reranking</strong></td><td>retrieve a generous top-50 cheaply, then let a <span class="gloss" data-gloss="reranker">reranker</span> model re-order and keep 5</td><td>the two-phase plan: cheap selective scan first, expensive operator on the survivors; predicate pushdown's cost logic, applied to models</td></tr>
-    <tr><td><strong>Metadata filtering</strong></td><td>"top-k similar AND team = 'infra' AND date &gt; 2025"</td><td>a predicate combined with an index scan, and the reason vectors-inside-your-database (pgvector, DuckDB VSS) beats a detached vector service for filtered workloads</td></tr>
+    <tr><td><strong>Hybrid search</strong></td><td>run <span class="gloss" data-gloss="bm25">BM25</span> keyword search AND vector search, merge the ranked lists<sup class="src"><a href="#src-13" title="LlamaIndex: Reciprocal Rerank Fusion Retriever">13</a></sup></td><td>two indexes over one table, union of access paths: exact names beat the synonym wall, vectors beat exact names; each covers the other's miss</td></tr>
+    <tr><td><strong>Reranking</strong></td><td>retrieve a generous top-50 cheaply, then let a <span class="gloss" data-gloss="reranker">reranker</span> model re-order and keep 5<sup class="src"><a href="#src-14" title="Cohere Docs: Reranking with Cohere">14</a></sup></td><td>the two-phase plan: cheap selective scan first, expensive operator on the survivors; predicate pushdown's cost logic, applied to models</td></tr>
+    <tr><td><strong>Metadata filtering</strong></td><td>"top-k similar AND team = 'infra' AND date &gt; 2025"</td><td>a predicate combined with an index scan, and the reason vectors-inside-your-database (pgvector, DuckDB VSS) beats a detached vector service for filtered workloads<sup class="src"><a href="#src-15" title="pgvector README, Filtering">15</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -337,13 +337,13 @@ Quiz 10 opens class: RAG.</p>
 
 <h3 class="keep-in-present">Context windows keep growing: will long context kill RAG?</h3>
 <p class="keep-in-present">Long context raises the ceiling on <em>how much</em> you can send,
-not on whether sending everything is wise: you pay per token per question, latency grows, and
+not on whether sending everything is wise: you pay per token per question, latency grows<sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup>, and
 "lost in the middle" means capacity ≠ attention. Retrieval is the per-question cost
 optimizer; the bigger the corpus, the more it saves. The honest answer: windows grow, corpora
 grow faster.</p>
 
 <h3 class="keep-in-present">Why not fine-tune on our documents instead?</h3>
-<p class="keep-in-present">Fine-tuning teaches style and skills well and facts poorly: recall
+<p class="keep-in-present">Fine-tuning teaches style and skills well and facts poorly<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup>: recall
 of specific passages is unreliable, updates require retraining, and there's no citation trail.
 The strong pattern is both: fine-tune for domain <em>behavior</em>, retrieve for domain
 <em>facts</em>. For a corpus that changes daily, retrieval is the only option that stays
@@ -351,7 +351,7 @@ current by updating an index.</p>
 
 <h3 class="keep-in-present">Is the hashed bag-of-words embedder just a toy?</h3>
 <p class="keep-in-present">It's the real hashing trick (scikit-learn ships it as
-<code>HashingVectorizer</code>) with a real limitation the lab measures instead of hiding.
+<code>HashingVectorizer</code>) with a real limitation the lab measures instead of hiding<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup>.
 Everything downstream of <code>embed()</code> (index, retrieval, eval) is exactly what runs
 under a learned model. That's the point of the design: your project swaps one function and
 keeps the pipeline.</p>
@@ -365,6 +365,28 @@ asks for exactly this because it's the difference between engineering and vibes.
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://arxiv.org/abs/2005.11401">Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)</a></li>
+  <li id="src-2"><a href="https://github.com/pgvector/pgvector#hybrid-search">pgvector README, Hybrid Search</a></li>
+  <li id="src-3"><a href="https://arxiv.org/abs/2312.05934">Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)</a></li>
+  <li id="src-4"><a href="https://docs.cohere.com/page/chunking-strategies">Effective Chunking Strategies for RAG (Cohere)</a></li>
+  <li id="src-5"><a href="https://www.trychroma.com/research/evaluating-chunking">Evaluating Chunking Strategies for Retrieval (Chroma Research)</a> <span class="src-note">Azure's guidance names 200 words as a semantically meaningful paragraph chunk, and Chroma's chunking evaluation found a 200-token recursive splitter performs well; sources give one figure rather than a 100-300 word range.</span></li>
+  <li id="src-6"><a href="https://learn.microsoft.com/en-us/azure/search/vector-search-how-to-chunk-documents">Chunk large documents for vector search solutions in Azure AI Search</a></li>
+  <li id="src-7"><a href="https://docs.langchain.com/oss/python/integrations/splitters">LangChain Docs: Text splitters</a></li>
+  <li id="src-8"><a href="https://www.egr.msu.edu/~jchai/QAPapers/qa-testcollection.pdf">Building a Question Answering Test Collection (Voorhees and Tice, SIGIR 2000)</a></li>
+  <li id="src-9"><a href="https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.HashingVectorizer.html">scikit-learn: HashingVectorizer</a></li>
+  <li id="src-10"><a href="https://arxiv.org/abs/2307.03172">Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172)</a></li>
+  <li id="src-11"><a href="https://arxiv.org/pdf/2307.03172">Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF</a></li>
+  <li id="src-12"><a href="https://www.law.berkeley.edu/wp-content/uploads/archive/2025/12/Mata-v-Avianca-Inc.pdf">Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions</a></li>
+  <li id="src-13"><a href="https://developers.llamaindex.ai/python/examples/retrievers/reciprocal_rerank_fusion/">LlamaIndex: Reciprocal Rerank Fusion Retriever</a></li>
+  <li id="src-14"><a href="https://docs.cohere.com/v2/docs/reranking-with-cohere">Cohere Docs: Reranking with Cohere</a> <span class="src-note">Cohere's documentation describes exactly this two-stage pattern, but its worked example retrieves top-100 (not top-50) candidates with lexical or semantic search before reranking and keeping top_n.</span></li>
+  <li id="src-15"><a href="https://github.com/pgvector/pgvector#filtering">pgvector README, Filtering</a> <span class="src-note">pgvector's README documents several ways to index nearest-neighbor queries with a WHERE clause (including iterative index scans and partial indexes), but DuckDB's VSS documentation only describes accelerating ORDER BY distance LIMIT queries and does not document pushing WHERE filters into the HNSW index.</span></li>
+</ol>
 
 </main>
 

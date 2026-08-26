@@ -5,7 +5,7 @@
 <title>Lecture 7 · Transactions &amp; the Write-Ahead Log · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -51,8 +51,8 @@ in an append-only file, and every promise becomes keepable with a single well-pl
 </p>
 
 <div class="cite">
-  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 5 (transactions) ·
-  the full monty: Mohan et&nbsp;al., <a href="https://dl.acm.org/doi/10.1145/128765.128770"><em>ARIES</em></a> (1992) ·
+  Companion reading: Sciore,<sup class="src"><a href="#src-1" title="Database Design and Implementation: Second Edition (Google Books)">1</a></sup> <em>Database Design and Implementation</em>, ch. 5 (transactions) ·
+  the full monty: Mohan et&nbsp;al.,<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup> <a href="https://dl.acm.org/doi/10.1145/128765.128770"><em>ARIES</em></a> (1992) ·
   Postgres's <a href="https://www.postgresql.org/docs/current/wal-intro.html">WAL introduction</a>.
 </div>
 
@@ -94,7 +94,7 @@ place</strong>; everything else is bookkeeping that makes that one fsync suffici
     <tr><td><strong>A</strong>tomic</td><td>all of the transaction, or none of it</td><td>the log + rollback/recovery</td><td><strong>today</strong></td></tr>
     <tr><td><strong>C</strong>onsistent</td><td>integrity rules still hold afterward</td><td>constraints + A and I doing their jobs</td><td>implied</td></tr>
     <tr><td><strong>I</strong>solated</td><td>concurrent users can't see half-done work</td><td>locks / MVCC</td><td>Tuesday</td></tr>
-    <tr><td><strong>D</strong>urable</td><td>committed means survives-anything</td><td>the log + one fsync</td><td><strong>today</strong></td></tr>
+    <tr><td><strong>D</strong>urable</td><td>committed means survives-anything<sup class="src"><a href="#src-3" title="Principles of Transaction-Oriented Database Recovery (Haerder and Reuter, ACM Computing Surveys 15(4), 1983)">3</a></sup></td><td>the log + one fsync</td><td><strong>today</strong></td></tr>
   </tbody>
 </table>
 
@@ -133,17 +133,17 @@ writes, log writes, and one murder, then run recovery and count the money.</p>
 
 <h3 class="new-slide" data-kicker="The write-ahead rule">The rule, and the record</h3>
 
-<pre class="equation"><code>WRITE-AHEAD:   log(old value)  happens-before  page write  happens-before  page flush
+<pre class="equation"><code>WRITE-AHEAD:   log(old value)  happens-before  page write  happens-before  page flush<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup>
 
 one record per change:   {"kind": "SET_INT", "tx": 2, "file": "acct.tbl",
                           "blk": 0, "off": 0, "old": 100}
 
 the log itself:  an APPEND-ONLY file, no seeks, no slots, no structure.
                  Sequential writes are the one thing disks do at full speed,
-                 which is why logging every change costs less than it sounds.</code></pre>
+                 which is why logging every change costs less than it sounds.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 28.1 Reliability (WAL introduction)">4</a></sup></code></pre>
 
 <p class="keep-in-present">The log stores <em>old</em> values because our recovery only ever
-undoes. (ARIES logs new values too, so it can also redo; same rule, more insurance.)</p>
+undoes. (ARIES logs new values too, so it can also redo; same rule, more insurance.)<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup></p>
 
 <h3 class="new-slide" data-kicker="The write-ahead rule">Where the fsyncs go, and don't</h3>
 
@@ -152,7 +152,7 @@ undoes. (ARIES logs new values too, so it can also redo; same rule, more insuran
   <tbody>
     <tr><td>each SET record</td><td>no, buffered append</td><td>the record must merely be <em>ahead of</em> its page; pages flush rarely</td></tr>
     <tr><td>data pages at commit</td><td>yes (our FORCE policy)</td><td>data on disk before the commit record exists</td></tr>
-    <tr><td><strong>the COMMIT record</strong></td><td><strong>yes, THE fsync</strong></td><td>when it returns, the promise is binding; before it, the tx never happened</td></tr>
+    <tr><td><strong>the COMMIT record</strong></td><td><strong>yes, THE fsync</strong></td><td>when it returns, the promise is binding; before it, the tx never happened<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 3.4 Transactions">5</a></sup></td></tr>
     <tr><td>ROLLBACK records</td><td>at leisure</td><td>a lost rollback record just means recovery re-undoes, harmless (idempotence)</td></tr>
   </tbody>
 </table>
@@ -164,12 +164,12 @@ can promise durability and still be fast.</p>
 <div class="callout note">
   <span class="label">War story · "fsyncgate," 2018</span>
   <p class="keep-in-present">If one fsync carries the entire durability promise, its error
-  handling had better be perfect, and for twenty years, Postgres's wasn't. In 2018 the
-  community discovered that on Linux, when an fsync fails with an I/O error, the kernel can
+  handling had better be perfect, and for twenty years, Postgres's wasn't.<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: A Brief History of PostgreSQL">6</a></sup> In 2018 the
+  community discovered that on Linux, when an fsync fails with an I/O error, the kernel can<sup class="src"><a href="#src-7" title="PostgreSQL's handling of fsync() errors is unsafe and risks data loss at least on XFS (pgsql-hackers, Craig Ringer, 2018-03-28)">7</a></sup>
   mark the dirty pages clean anyway; <em>retrying</em> the fsync then returns success while
-  the data never reached disk. Postgres had assumed retry-until-success was safe. The fix,
+  the data never reached disk. Postgres had assumed retry-until-success was safe.<sup class="src"><a href="#src-8" title="PostgreSQL 11.2 Release Notes">8</a></sup> The fix,
   shipped urgently across every supported version, was brutal honesty: if THE fsync fails,
-  crash the whole server and run recovery from the WAL, because the log is now the only
+  crash the whole server and run recovery from the WAL, because the log is now the only<sup class="src"><a href="#src-8" title="PostgreSQL 11.2 Release Notes">8</a></sup>
   copy you can trust. Search "fsyncgate" for the full thread; it is the best systems reading
   of that year, and it is exactly this slide's table with real stakes.</p>
 </div>
@@ -216,7 +216,7 @@ interrupted by the disaster it repairs.</strong></p>
 
 <h3 class="new-slide" data-kicker="Force, steal, and ARIES">The quadrant, explorable</h3>
 
-<p>Check your TPS answer: click any quadrant and reason from what the disk can hold at the
+<p>Click any quadrant and reason from what the disk can hold at the
 moment of the crash; that single fact decides everything recovery must do.</p>
 
 <div class="viz" id="viz-quad">
@@ -226,7 +226,7 @@ moment of the crash; that single fact decides everything recovery must do.</p>
       <div class="quad-corner"></div>
       <div class="quad-axis">NO-STEAL<br><span>dirty pages of live txs may NOT be flushed</span></div>
       <div class="quad-axis">STEAL<br><span>the pool may flush them anytime</span></div>
-      <div class="quad-axis side">FORCE<br><span>flush all dirty pages at commit</span></div>
+      <div class="quad-axis side">FORCE<br><span>flush all dirty pages at commit<sup class="src"><a href="#src-3" title="Principles of Transaction-Oriented Database Recovery (Haerder and Reuter, ACM Computing Surveys 15(4), 1983)">3</a></sup></span></div>
       <button type="button" class="quad-cell" data-q="fn"></button>
       <button type="button" class="quad-cell" data-q="fs"></button>
       <div class="quad-axis side">NO-FORCE<br><span>commit = log fsync only</span></div>
@@ -237,7 +237,7 @@ moment of the crash; that single fact decides everything recovery must do.</p>
   </div>
   <p class="viz-caption">The diagonal is the story: microdb takes the simplest correct
   corner; every production engine takes the corner needing <em>both</em> passes, because
-  both freedoms (commit without data I/O, evict whenever memory needs it) are worth their
+  both freedoms (commit without data I/O, evict whenever memory needs it) are worth their<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup>
   recovery complexity.</p>
 </div>
 
@@ -254,7 +254,7 @@ moment of the crash; that single fact decides everything recovery must do.</p>
 </table>
 
 <p class="keep-in-present">ARIES is this lecture plus bookkeeping: log new values too (redo),
-number every record (LSNs), checkpoint so recovery reads days less log. The <em>rule</em>,
+number every record (LSNs), checkpoint so recovery reads days less log.<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup> The <em>rule</em>,
 log before page, never changes.</p>
 
 <!-- ============================================================ -->
@@ -297,7 +297,7 @@ pieces that keep the promises.</p>
 </ul>
 
 <p class="keep-in-present"><strong>Tuesday:</strong> the I in ACID: lost updates and
-phantoms live, two-phase locking, and how Postgres reads without blocking writers (MVCC).
+phantoms live, two-phase locking, and how Postgres reads without blocking writers (MVCC).<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 13.1 Introduction (Concurrency Control)">9</a></sup>
 Quiz 6 opens class: B+ trees. <strong>Next Thursday:</strong> Lab 7, build, then
 <code>kill -9</code>.</p>
 
@@ -305,32 +305,54 @@ Quiz 6 opens class: B+ trees. <strong>Next Thursday:</strong> Lab 7, build, then
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">If the log is so critical, what happens when IT gets corrupted?</h3>
-<p class="keep-in-present">Real WALs checksum every record and treat the first bad checksum
-as end-of-log; a <span class="gloss" data-gloss="torn-write">torn</span> final record just means that transaction never committed (its fsync
+<p class="keep-in-present">Real WALs checksum every record and treat the first bad checksum<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 28.2 Data Checksums / WAL Reliability">10</a></sup>
+as end-of-log; a <span class="gloss" data-gloss="torn-write">torn</span> final record just means that transaction never committed (its fsync<sup class="src"><a href="#src-11" title="Re: Behavior for crash recovery when it detects a corrupt WAL record (pgsql-hackers, Heikki Linnakangas, 2012-10-09)">11</a></sup>
 can't have returned). The log's append-only shape is what makes this safe: corruption can
 only live at the tail.</p>
 
 <h3 class="keep-in-present">Doesn't logging every change double the write traffic?</h3>
 <p class="keep-in-present">Roughly, but the log's writes are sequential appends (the fast
 kind, Lab 1) while the pages they protect are random writes that can now be deferred and
-batched. Net effect on real hardware: WAL made databases <em>faster</em>, which is the
+batched. Net effect on real hardware: WAL made databases<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 28.1 Reliability (WAL introduction)">4</a></sup> <em>faster</em>, which is the
 punchline nobody expects.</p>
 
 <h3 class="keep-in-present">What's a checkpoint actually for, then?</h3>
 <p class="keep-in-present">Bounding recovery time. Without one, a year-old database replays a
-year of log; a checkpoint records "everything before here is on disk," so recovery starts
+year of log; a checkpoint records "everything before here is on disk," so recovery starts<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 28.5 WAL Configuration">12</a></sup>
 there. Week 2's table said "flush at checkpoints"; this is the debt that line was
 foreshadowing.</p>
 
-<h3 class="keep-in-present">Does SQLite have a WAL? My phone doesn't feel like a bank.</h3>
+<h3 class="keep-in-present">Does SQLite have a WAL? My phone doesn't feel like a bank.<sup class="src"><a href="#src-13" title="SQLite: Write-Ahead Logging">13</a></sup></h3>
 <p class="keep-in-present">It does (<code>PRAGMA journal_mode=WAL</code>), and your phone
-uses it constantly; every messaging app is a little bank of messages that must not vanish.
-The other SQLite mode (rollback journal) is the same insurance with the copies made before
+uses it constantly; every messaging app is a little bank of messages that must not vanish.<sup class="src"><a href="#src-14" title="Android Open Source Project: Compatibility write-ahead logging for apps">14</a></sup>
+The other SQLite mode (rollback journal) is the same insurance with the copies made before<sup class="src"><a href="#src-15" title="SQLite: Atomic Commit In SQLite">15</a></sup>
 changes instead of beside them.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://books.google.com/books/about/Database_Design_and_Implementation.html?id=6GTTDwAAQBAJ">Database Design and Implementation: Second Edition (Google Books)</a></li>
+  <li id="src-2"><a href="https://web.stanford.edu/class/cs345d-01/rl/aries.pdf">ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging</a></li>
+  <li id="src-3"><a href="https://cs-people.bu.edu/mathan/reading-groups/papers-classics/recovery.pdf">Principles of Transaction-Oriented Database Recovery (Haerder and Reuter, ACM Computing Surveys 15(4), 1983)</a></li>
+  <li id="src-4"><a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL Documentation: 28.1 Reliability (WAL introduction)</a></li>
+  <li id="src-5"><a href="https://www.postgresql.org/docs/current/tutorial-transactions.html">PostgreSQL Documentation: 3.4 Transactions</a></li>
+  <li id="src-6"><a href="https://www.postgresql.org/docs/current/history.html">PostgreSQL Documentation: A Brief History of PostgreSQL</a> <span class="src-note">PostgreSQL 6.0 dates to 1996 to 1997, so the project was about 21 to 22 years old in 2018; sources describe the flaw as long-standing but none pins an exact age, so twenty years is a reasonable round figure rather than a documented one.</span></li>
+  <li id="src-7"><a href="https://www.postgresql.org/message-id/CAMsr+YHh+5Oq4xziwwoEfhoTZgr07vdGG+hu=1adXx59aTeaoQ@mail.gmail.com">PostgreSQL's handling of fsync() errors is unsafe and risks data loss at least on XFS (pgsql-hackers, Craig Ringer, 2018-03-28)</a></li>
+  <li id="src-8"><a href="https://www.postgresql.org/docs/release/11.2/">PostgreSQL 11.2 Release Notes</a></li>
+  <li id="src-9"><a href="https://www.postgresql.org/docs/current/mvcc-intro.html">PostgreSQL Documentation: 13.1 Introduction (Concurrency Control)</a></li>
+  <li id="src-10"><a href="https://www.postgresql.org/docs/current/wal-reliability.html">PostgreSQL Documentation: 28.2 Data Checksums / WAL Reliability</a></li>
+  <li id="src-11"><a href="https://www.postgresql.org/message-id/50742FB9.7040906%40vmware.com">Re: Behavior for crash recovery when it detects a corrupt WAL record (pgsql-hackers, Heikki Linnakangas, 2012-10-09)</a></li>
+  <li id="src-12"><a href="https://www.postgresql.org/docs/current/wal-configuration.html">PostgreSQL Documentation: 28.5 WAL Configuration</a></li>
+  <li id="src-13"><a href="https://www.sqlite.org/wal.html">SQLite: Write-Ahead Logging</a></li>
+  <li id="src-14"><a href="https://source.android.com/docs/core/perf/compatibility-wal">Android Open Source Project: Compatibility write-ahead logging for apps</a> <span class="src-note">Android 9 and later enable (compatibility) WAL by default for app databases, and Room enables full WAL by default; the source does not speak to every messaging app specifically, and iOS behavior is not documented here.</span></li>
+  <li id="src-15"><a href="https://www.sqlite.org/atomiccommit.html">SQLite: Atomic Commit In SQLite</a></li>
+</ol>
 
 </main>
 

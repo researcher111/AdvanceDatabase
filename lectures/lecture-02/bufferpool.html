@@ -5,7 +5,7 @@
 <title>Lecture 2 · Memory &amp; the Buffer Pool · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -51,9 +51,9 @@ minutes. On Thursday you write one; today you learn why every design choice in i
 </p>
 
 <div class="cite">
-  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 4 (SimpleDB's buffer manager) ·
+  Companion reading: Sciore, <em>Database Design and Implementation<sup class="src"><a href="#src-1" title="Database Design and Implementation, Second Edition (Sciore, Springer 2020), table of contents">1</a></sup></em>, ch. 4 (SimpleDB's buffer manager) ·
   Hellerstein et&nbsp;al., <a href="https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf"><em>Architecture of a Database System</em></a>, §4 ·
-  the case against mmap: Crotty et&nbsp;al., <a href="https://db.cs.cmu.edu/mmap-cidr2022/"><em>Are You Sure You Want to Use MMAP in Your DBMS?</em></a> (CIDR 2022).
+  the case against mmap: Crotty et&nbsp;al., <a href="https://db.cs.cmu.edu/mmap-cidr2022/"><em>Are You Sure You Want to Use MMAP in Your DBMS?<sup class="src"><a href="#src-2" title="Are You Sure You Want to Use MMAP in Your Database Management System? (CIDR 2022 project page)">2</a></sup></em></a> (CIDR 2022).
 </div>
 
 <p class="glossary-hint">
@@ -95,7 +95,7 @@ arbitraging between them:</p>
 <table>
   <thead><tr><th></th><th>DRAM</th><th>SSD / disk</th><th>Ratio</th></tr></thead>
   <tbody>
-    <tr><td>Access time</td><td>~100 ns</td><td>~25 µs – 10 ms</td><td>disk is 250× – 100,000× slower</td></tr>
+    <tr><td>Access time</td><td>~100 ns</td><td>~25 µs – 10 ms</td><td>disk is 250× – 100,000× slower<sup class="src"><a href="#src-3" title="Latency Numbers Every Programmer Should Know (Jeff Dean / Peter Norvig numbers)">3</a></sup></td></tr>
     <tr><td>Capacity (a laptop)</td><td>16–32 GB</td><td>0.5–4 TB</td><td>disk holds ~50× more</td></tr>
     <tr><td>Survives power loss</td><td>no</td><td>yes</td><td>&nbsp;</td></tr>
     <tr><td>Cost per GB</td><td>high</td><td>low</td><td>DRAM costs ~10–20× more</td></tr>
@@ -175,9 +175,9 @@ the lecture:</p>
 <h3 class="new-slide" data-kicker="Frames, pin &amp; unpin">Anatomy of the pool</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The pool</span><span>N fixed <strong>frames</strong>, allocated once at startup; Postgres calls the setting <code>shared_buffers</code>. Each frame holds exactly one block's page.</span></div>
-  <div class="lc-row"><span class="lc-k">The lookup</span><span>"is block <em>b</em> already here?": microdb scans its handful of frames; real engines keep a hash table from BlockId → frame so the answer costs O(1).</span></div>
-  <div class="lc-row"><span class="lc-k">The bookkeeping</span><span>per frame: which block · a <strong>pin count</strong> · a <strong>dirty</strong> flag · a <strong>last-used tick</strong>. Twelve bytes of metadata that decide everything.</span></div>
+  <div class="lc-row"><span class="lc-k">The pool</span><span>N fixed <strong>frames</strong>, allocated once at startup; Postgres calls the setting<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup> <code>shared_buffers</code>. Each frame holds exactly one block's page.</span></div>
+  <div class="lc-row"><span class="lc-k">The lookup</span><span>"is block <em>b</em> already here?": microdb scans its handful of frames; real engines keep a <span class="gloss" data-gloss="hash-table">hash table</span> from BlockId → frame so the answer costs O(1).</span></div>
+  <div class="lc-row"><span class="lc-k">The bookkeeping</span><span>per frame: which block · a <strong><span class="gloss" data-gloss="pin-count">pin count</span></strong> · a <strong><span class="gloss" data-gloss="dirty">dirty</span></strong> flag · a <strong>last-used tick</strong>. Twelve bytes of metadata that decide everything.</span></div>
   <div class="lc-row"><span class="lc-k">The interface</span><span>two verbs only: <code>pin(block)</code> and <code>unpin(buffer)</code>. Every read and write in the rest of microdb goes through them, forever.</span></div>
 </div>
 
@@ -190,7 +190,7 @@ and how fast you can answer it decides whether the pool itself becomes the bottl
   <thead><tr><th>Approach</th><th>Cost per pin</th><th>Who uses it</th></tr></thead>
   <tbody>
     <tr><td>Scan every frame</td><td>O(frames)</td><td>microdb: fine at 3 frames, honest at 50</td></tr>
-    <tr><td>Hash table: BlockId → frame</td><td>O(1)</td><td>every real engine (Postgres: the "buffer mapping table")</td></tr>
+    <tr><td><span class="gloss" data-gloss="hash-table">Hash table</span>: BlockId → frame</td><td>O(1)</td><td>every real engine (Postgres: the "buffer mapping table")<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -210,17 +210,17 @@ with two sides:</p>
   <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="Caller's side: 'done.' The pin count drops; at zero the frame becomes an eviction candidate again. Forgetting this leaks frames until the pool aborts.">bm.unpin(buf)                              # "you may evict it now"</div>
 </div>
 
-<p class="keep-in-present">Pin counts <em>nest</em>: two readers of one block means
+<p class="keep-in-present"><span class="gloss" data-gloss="pin-count">Pin counts</span> <em>nest</em>: two readers of one block means
 <code>pins == 2</code>, and the frame survives until both release. And a frame with
 <code>pins &gt; 0</code> is <strong>never</strong> evicted, no matter how old.</p>
 
 <h3 class="new-slide" data-kicker="Frames, pin &amp; unpin">Why not just use the OS cache?</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Pinning</span><span>The OS offers no "don't evict this, I'm using it." A database must be able to hold a page mid-operation; that alone forces its own pool.</span></div>
-  <div class="lc-row"><span class="lc-k">Write ordering</span><span>Recovery (week 7) requires the log to reach disk <em>before</em> the data page it describes. The OS flushes whenever it likes; the database must control the order.</span></div>
-  <div class="lc-row"><span class="lc-k">Smarter eviction</span><span>The database knows its own future ("this is a one-pass scan, don't cache it"), and can pick policies per workload. The OS sees anonymous bytes.</span></div>
-  <div class="lc-row"><span class="lc-k">The <span class="gloss" data-gloss="mmap">mmap</span> trap</span><span>Mapping the file into memory looks like a free buffer pool; the CIDR 2022 paper in the citations is titled "Are you sure?" for a reason: no pinning, no write ordering, surprise stalls.</span></div>
+  <div class="lc-row"><span class="lc-k">Pinning</span><span>The OS offers no "don't evict this, I'm using it."<sup class="src"><a href="#src-6" title="Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)">6</a></sup> A database must be able to hold a page mid-operation; that alone forces its own pool.</span></div>
+  <div class="lc-row"><span class="lc-k">Write ordering</span><span>Recovery (week 7) requires the log to reach disk <em>before</em> the data page it describes. The OS flushes whenever it likes; the database must control the order<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Smarter eviction</span><span>The database knows its own future ("this is a one-pass scan, don't cache it"), and can pick policies per workload<sup class="src"><a href="#src-8" title="Operating System Support for Database Management (Stonebraker, Communications of the ACM, July 1981)">8</a></sup>. The OS sees anonymous bytes.</span></div>
+  <div class="lc-row"><span class="lc-k">The <span class="gloss" data-gloss="mmap">mmap</span> trap</span><span>Mapping the file into memory looks like a free buffer pool; the CIDR 2022 paper in the citations is titled "Are you sure?" for a reason: no pinning, no write ordering, surprise stalls<sup class="src"><a href="#src-6" title="Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)">6</a></sup>.</span></div>
 </div>
 
 <p class="keep-in-present">The OS cache still exists underneath, doing its best. The database
@@ -278,8 +278,8 @@ instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
   <tbody>
     <tr><td><strong>FIFO</strong></td><td>evict the oldest <em>load</em></td><td>trivial</td><td>ignores re-use entirely: a hot page ages out mid-popularity</td></tr>
     <tr><td><strong>Random</strong></td><td>evict anyone unpinned</td><td>trivial</td><td>surprisingly decent on average; no protection for the working set</td></tr>
-    <tr><td><strong>LRU</strong></td><td>evict the coldest <em>use</em></td><td>a timestamp per access</td><td>the scan cliff you're about to see</td></tr>
-    <tr><td><strong>Clock</strong></td><td>LRU's cheap approximation: one bit + a sweeping hand</td><td>nearly free</td><td>same cliff, coarser recency</td></tr>
+    <tr><td><strong>LRU</strong></td><td>evict the coldest <em>use</em></td><td>a timestamp per access</td><td>one full-table scan evicts the whole working set and the hit rate collapses to zero (next slide)<sup class="src"><a href="#src-9" title="Architecture of a Database System (Hellerstein, Stonebraker, Hamilton, 2007), section 5.3">9</a></sup></td></tr>
+    <tr><td><strong>Clock</strong></td><td>LRU's cheap approximation: one bit + a sweeping hand<sup class="src"><a href="#src-10" title="CMU 15-445/645 Fall 2025 Lecture #04 notes: Memory and Disk Management">10</a></sup></td><td>nearly free</td><td>same cliff, coarser recency</td></tr>
   </tbody>
 </table>
 
@@ -288,25 +288,38 @@ most workloads, and Thursday you implement the honest version, tick and all.</p>
 
 <h3 class="new-slide" data-kicker="Eviction: who leaves?">The sequential-flooding cliff</h3>
 
-<p>Now the dark side of LRU, measured for real by Thursday's lab code: a 50-block file,
-two workloads, pool sizes from 5 to 55:</p>
+<p>Now the dark side of LRU, measured for real by Thursday's lab code. The setup: one file of
+50 blocks, an LRU pool whose size we vary from 5 frames to 55, and two workloads run against
+it. The <strong>sequential scan</strong> reads blocks 0 through 49 in order, then reads them all
+again in the same order. The first pass can never hit (nothing is loaded yet), so the best
+any pool can score on this workload is 50%: every block a hit on the second pass. The
+<strong>hot set</strong> workload sends 90% of its accesses to the same 5 blocks and scatters the
+other 10% across the file. Each row below is one pool size and the hit rate each workload
+earned on it:</p>
 
 <div class="viz" id="viz-cliff">
   <div class="viz-title">Measured hit rate vs pool size · Lab 2's <code>measure_hits.py</code></div>
   <p class="viz-description">Sequential scan (two passes over all 50 blocks) vs a hot-set
   workload (90% of accesses to 5 blocks). Same file, same LRU pool.</p>
   <div class="cf-rows" id="cf-rows"></div>
-  <p class="viz-caption">The scan earns <strong>exactly 0%</strong> at 49 frames (one frame
-  short of the file), and jumps to 50% at 50. LRU + scan is a perfect anti-pattern: each block
-  is evicted precisely one step before it's needed again.</p>
+  <p class="viz-caption">The scan column: with 49 frames the pool ends the first pass holding
+  blocks 1 through 49, so the second pass asks for block 0, misses, and evicts block 1, exactly
+  the next request. That chain runs to the end, so any pool smaller than the file scores 0%.
+  At 50 the file fits and the score jumps to the 50% ceiling.</p>
+  <p class="viz-caption">The hot-set column is the more instructive number. Five hot blocks fit
+  in five frames, so why <strong>77.6%</strong> and not 100%? The other 10% of accesses. Each
+  cold access misses, and to load it LRU evicts one of the five hot blocks; the next request
+  for that hot block misses too. Every cold access costs about two misses, which is close to
+  the 22% miss rate you see. Extra frames let the pool hold a few cold blocks without evicting
+  a hot one, so the rate climbs, and it tops out at 97.5% once the whole file fits.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="Eviction: who leaves?">What real engines do about it</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Postgres</span><span>clock-sweep (an LRU approximation with a usage counter), plus <strong>ring buffers</strong>: a big sequential scan gets a tiny private ring so it can't flood the shared pool.</span></div>
-  <div class="lc-row"><span class="lc-k">MySQL/InnoDB</span><span>midpoint LRU: new pages enter the <em>middle</em> of the list, not the head; a page must be touched again to reach the protected young region.</span></div>
-  <div class="lc-row"><span class="lc-k">DuckDB &amp; friends</span><span>analytics engines mostly don't fight it: scans stream, and the pool is reserved for what genuinely re-reads (metadata, hash tables, hot columns).</span></div>
+  <div class="lc-row"><span class="lc-k">Postgres</span><span>clock-sweep (an LRU approximation with a usage counter), plus <strong>ring buffers</strong>: a big sequential scan gets a tiny private ring so it can't flood the shared pool<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">MySQL/InnoDB</span><span>midpoint LRU: new pages enter the <em>middle</em> of the list, not the head; a page must be touched again to reach the protected young region<sup class="src"><a href="#src-11" title="MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool">11</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">DuckDB</span><span>analytics engines take a different route: a big scan streams straight through and is never cached at all, because it will not be read again. The buffer pool is kept for data that really is reused: table metadata, the hash tables a join builds, and the few columns that many queries touch.</span></div>
   <div class="lc-row"><span class="lc-k">The shared idea</span><span>detect "this access pattern won't reuse" and refuse to let it evict what will. Your Going-Further in Lab 2 builds a taste of it.</span></div>
 </div>
 
@@ -324,7 +337,7 @@ doesn't have yet, and must never lose track of that fact.</p>
     <tr><td><strong>Eviction</strong></td><td>the pool, inside <code>pin()</code></td><td>the frame is being reused: flush-if-dirty first, or the modification is lost</td></tr>
     <tr><td><strong><code>flush_all()</code></strong></td><td>shutdown / <span class="gloss" data-gloss="checkpoint">checkpoint</span></td><td>bound how much replay recovery needs</td></tr>
     <tr><td><strong>Never on unpin</strong></td><td>&nbsp;</td><td>unpin means "not using it", not "write it"; hot pages stay dirty in memory for ages, on purpose</td></tr>
-    <tr><td><strong>Not at COMMIT</strong></td><td>the log instead</td><td>commit forces the <em>WAL</em> to disk (one sequential fsync), not the data pages; that's the week-7 escape from your fsync ratio</td></tr>
+    <tr><td><strong>Not at COMMIT</strong></td><td>the log instead</td><td>commit forces the <em>WAL</em> to disk (one sequential fsync), not the data pages; that's the week-7 escape from your fsync ratio<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -341,7 +354,7 @@ serious engine picks is the one that <em>requires</em> a recovery log:</p>
   <thead><tr><th></th><th><strong>Force</strong> (flush dirty pages at commit)</th><th><strong>No-force</strong> (flush whenever)</th></tr></thead>
   <tbody>
     <tr><td><strong>No-steal</strong> (never flush uncommitted)</td><td>slow but simple, no log needed</td><td>needs redo after a crash</td></tr>
-    <tr><td><strong>Steal</strong> (may flush uncommitted)</td><td>needs undo after a crash</td><td><strong>needs both, and it's what everyone builds</strong>, because it's the only fast quadrant</td></tr>
+    <tr><td><strong>Steal</strong> (may flush uncommitted)</td><td>needs undo after a crash</td><td><strong>needs both, and it's what everyone builds<sup class="src"><a href="#src-12" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging (Mohan et al., ACM TODS 1992)">12</a></sup></strong>, because it's the only fast quadrant</td></tr>
   </tbody>
 </table>
 
@@ -360,9 +373,9 @@ with t_mem = 100 ns, t_disk = 25 µs:
 
   h = 90%   →  T_avg = 2,590 ns    ≈ 26× slower than RAM
   h = 99%   →  T_avg =   349 ns    ≈ 3.5× slower than RAM
-  h = 99.6% →  T_avg =   200 ns    =  2× RAM  ← the TPS answer</code></pre>
+  h = 99.6% →  T_avg =   200 ns    =  2× RAM  ← the target</code></pre>
 
-<p class="keep-in-present">The miss term owns the average: at 90% hits, the 10% of misses
+<p class="keep-in-present">The miss term owns the average: at 90% hits, the 10% of misses<sup class="src"><a href="#src-13" title="Patterson and Hennessy, Computer Organization and Design (3rd ed.), In More Depth: Average Memory Access Time">13</a></sup>
 contribute <strong>96%</strong> of the total time. Caches aren't good until they're
 <em>absurdly</em> good; this is why the cliff matters.</p>
 
@@ -383,7 +396,7 @@ contribute <strong>96%</strong> of the total time. Caches aren't good until they
 <h3 class="new-slide" data-kicker="The arithmetic of a cache">Sizing pools in the wild</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Postgres</span><span><code>shared_buffers</code>: the classic starting rule is ~25% of RAM, leaving the OS cache to serve as a fuzzy second tier underneath.</span></div>
+  <div class="lc-row"><span class="lc-k">Postgres</span><span><code>shared_buffers</code>: the classic starting rule is ~25% of RAM, leaving the OS cache to serve as a fuzzy second tier underneath<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">Why not 100%?</span><span>double-caching (every page would live in both tiers), and everything else on the machine still needs memory; a pool that causes swapping is a pool that made things worse: <span class="gloss" data-gloss="thrashing">thrashing</span>.</span></div>
   <div class="lc-row"><span class="lc-k">The real target</span><span>not a percentage, the working set. If the pages a workload actually re-touches fit in the pool, hit rates go asymptotic; if not, no tuning saves you.</span></div>
   <div class="lc-row"><span class="lc-k">Your Thursday number</span><span>Lab 2's measurement is exactly this chart for your own code: hit rate as the pool shrinks, on two workloads with opposite working sets.</span></div>
@@ -476,11 +489,31 @@ run Thursday shows the first two regimes on real code.</p>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
 
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://link.springer.com/book/10.1007/978-3-030-33836-7">Database Design and Implementation, Second Edition (Sciore, Springer 2020), table of contents</a></li>
+  <li id="src-2"><a href="https://db.cs.cmu.edu/mmap-cidr2022/">Are You Sure You Want to Use MMAP in Your Database Management System? (CIDR 2022 project page)</a> <span class="src-note">The paper (Crotty, Leis, Pavlo, CIDR 2022) exists, but its full title ends in Database Management System rather than DBMS.</span></li>
+  <li id="src-3"><a href="https://gist.github.com/jboner/2841832">Latency Numbers Every Programmer Should Know (Jeff Dean / Peter Norvig numbers)</a> <span class="src-note">The classic latency table gives DRAM 100 ns, SSD random read 150 us and disk seek 10 ms, so the low end of the range (25 us, 250x) is optimistic; a 2021 SSD survey puts a random SSD read at about 100 us.</span></li>
+  <li id="src-4"><a href="https://www.postgresql.org/docs/current/runtime-config-resource.html">PostgreSQL Documentation: Resource Consumption (shared_buffers)</a></li>
+  <li id="src-5"><a href="https://github.com/postgres/postgres/blob/master/src/backend/storage/buffer/README">PostgreSQL source: src/backend/storage/buffer/README</a></li>
+  <li id="src-6"><a href="https://db.cs.cmu.edu/papers/2022/cidr2022-p13-crotty.pdf">Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)</a> <span class="src-note">POSIX mlock can pin mapped pages, but the CIDR 2022 paper explains the OS limits how much a process can lock and mlock does not stop the OS from flushing dirty pages, so there is no usable equivalent of a buffer-pool pin.</span></li>
+  <li id="src-7"><a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)</a></li>
+  <li id="src-8"><a href="https://www.cs.cmu.edu/~natassa/courses/15-721/papers/p412-stonebraker.pdf">Operating System Support for Database Management (Stonebraker, Communications of the ACM, July 1981)</a></li>
+  <li id="src-9"><a href="https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf">Architecture of a Database System (Hellerstein, Stonebraker, Hamilton, 2007), section 5.3</a></li>
+  <li id="src-10"><a href="https://15445.courses.cs.cmu.edu/fall2025/notes/04-bufferpool.pdf">CMU 15-445/645 Fall 2025 Lecture #04 notes: Memory and Disk Management</a></li>
+  <li id="src-11"><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-buffer-pool.html">MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool</a></li>
+  <li id="src-12"><a href="https://cs.stanford.edu/people/chrismre/cs345/rl/aries.pdf">ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging (Mohan et al., ACM TODS 1992)</a></li>
+  <li id="src-13"><a href="https://course.khoury.northeastern.edu/cs3650/ssl/TEXT-CD/Content/COD3e/InMoreDepth/IMD7-Average-Memory-Access-Time.pdf">Patterson and Hennessy, Computer Organization and Design (3rd ed.), In More Depth: Average Memory Access Time</a></li>
+</ol>
+
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=1"></script>
+<script src="viz.js?v=4"></script>
 </body>
 </html>

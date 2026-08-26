@@ -5,7 +5,7 @@
 <title>Lecture 5 · From SQL Text to Plan · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=18">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -51,8 +51,8 @@ whole seven-week stack fires at once.
 </p>
 
 <div class="cite">
-  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 9 (parsing) &amp; ch. 10 (planning) ·
-  for the compiler-curious: Crafting Interpreters' free chapter on
+  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 9 (parsing) &amp; ch. 10 (planning)<sup class="src"><a href="#src-1" title="Database Design and Implementation: Second Edition, Edward Sciore (Google Books record)">1</a></sup> ·
+  for the compiler-curious: Crafting Interpreters' free chapter on<sup class="src"><a href="#src-2" title="Crafting Interpreters, chapter 6: Parsing Expressions (Robert Nystrom)">2</a></sup>
   <a href="https://craftinginterpreters.com/parsing-expressions.html">recursive descent</a>.
 </div>
 
@@ -104,11 +104,11 @@ characters. Two simple machines beat one clever regex.</p>
 <div class="callout note">
   <span class="label">War story · the regex that stopped the internet, 2019</span>
   <p class="keep-in-present">On July 2, 2019, Cloudflare (which fronts a large slice of the
-  web) deployed one new firewall rule containing a regex that could backtrack
+  web) deployed one new firewall rule containing a regex that could backtrack<sup class="src"><a href="#src-3" title="Details of the Cloudflare outage on July 2, 2019 (Cloudflare Blog)">3</a></sup>
   catastrophically. On real traffic it pinned every CPU in every datacenter to 100%, and for
-  about 27 minutes a good fraction of the internet returned errors. Their postmortem is
+  about 27 minutes a good fraction of the internet returned errors<sup class="src"><a href="#src-3" title="Details of the Cloudflare outage on July 2, 2019 (Cloudflare Blog)">3</a></sup>. Their postmortem is
   admirably blunt: a regex was doing structural work a regex cannot bound. That is this
-  slide's TPS at planetary scale: when text has structure, you want a lexer and a parser
+slide's lesson at planetary scale: when text has structure, you want a lexer and a parser
   whose worst case you can state, not one clever pattern whose worst case you discover in
   production.</p>
 </div>
@@ -124,7 +124,7 @@ characters. Two simple machines beat one clever regex.</p>
 
 <p class="keep-in-present">Five token kinds cover all of microSQL: <code>KEYWORD · ID · NUM ·
 STR · PUNCT</code>. Keywords are just words that appear in one privileged set, which is why
-you can't name a table <code>select</code>, in microdb or in Postgres.</p>
+you can't name a table <code>select</code>, in microdb or in Postgres<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</p>
 
 <!-- ============================================================ -->
 <h2 id="try-it">Watch SQL become a plan</h2>
@@ -177,7 +177,7 @@ value   :=  number | 'string' | field          ← field here means: a join!
 insert  :=  INSERT INTO table VALUES ( value { , value } )</code></pre>
 
 <p class="keep-in-present">This notation is <span class="gloss" data-gloss="bnf">BNF</span>,
-and reading it is a superpower: every database, config format, and language you'll ever use
+and reading it is a superpower: every database, config format, and language you'll ever use<sup class="src"><a href="#src-5" title="ISO/IEC 14977:1996 Extended BNF (final draft text)">5</a></sup>
 publishes one of these. <code>{ }</code> means repeat, <code>[ ]</code> means optional, and
 each line becomes <strong>one Python method</strong>.</p>
 
@@ -199,7 +199,7 @@ debugging: the readability rule, applied to languages.</p>
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The rule</span><span>the lexer promotes any word in its keyword set to KEYWORD, before context exists, so <code>select</code> can never reach the parser as a table name.</span></div>
   <div class="lc-row"><span class="lc-k">What we bought</span><span>a one-regex lexer and a parser that never second-guesses a token's kind.</span></div>
-  <div class="lc-row"><span class="lc-k">What Postgres bought</span><span>flexible naming, via reserved/non-reserved keyword tiers and thousands of grammar lines to referee them.</span></div>
+  <div class="lc-row"><span class="lc-k">What Postgres bought</span><span>flexible naming, via reserved/non-reserved keyword tiers and thousands of grammar lines to referee them<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The lesson</span><span>language design is budget allocation: every naming freedom is paid for in parser complexity, forever.</span></div>
 </div>
 
@@ -343,8 +343,8 @@ August. Thursday you get to feel it.</p>
   <thead><tr><th>Engine</th><th>For <code>SELECT name students</code></th><th>Grade</th></tr></thead>
   <tbody>
     <tr><td>microdb (yours)</td><td><code>expected 'from', found 'students'</code></td><td>says both facts</td></tr>
-    <tr><td>Postgres</td><td><code>syntax error at or near "students"</code></td><td>says where, not what it wanted</td></tr>
-    <tr><td>a certain era of MySQL</td><td><code>You have an error in your SQL syntax; check the manual…</code></td><td>says to go away</td></tr>
+    <tr><td>Postgres</td><td><code>syntax error at or near "students"</code></td><td>says where, not what it wanted<sup class="src"><a href="#src-6" title="PostgreSQL Documentation, 36.5. Query Language (SQL) Functions">6</a></sup></td></tr>
+    <tr><td>a certain era of MySQL</td><td><code>You have an error in your SQL syntax; check the manual<sup class="src"><a href="#src-7" title="mysql-server/share/messages_to_clients.txt (MySQL source, GitHub)">7</a></sup>…</code></td><td>says to go away</td></tr>
   </tbody>
 </table>
 
@@ -403,10 +403,10 @@ million without scanning. Quiz 5 opens class: parsing &amp; planning.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Is real SQL parsed this way?</h3>
-<p class="keep-in-present">SQLite hand-writes its parser's lexer and uses a generated parser
-(Lemon); Postgres uses a grammar file compiled by Bison, generated cousins of what you're
-writing. DuckDB forked Postgres's. Recursive descent by hand is how Lua, Go, and most
-teaching compilers do it, because it's the readable one.</p>
+<p class="keep-in-present">SQLite hand-writes its parser's lexer and uses a generated parser<sup class="src"><a href="#src-8" title="Architecture of SQLite">8</a></sup>
+(Lemon); Postgres uses a grammar file compiled by Bison<sup class="src"><a href="#src-9" title="PostgreSQL Documentation, 51.3. The Parser Stage">9</a></sup>, generated cousins of what you're
+writing. DuckDB forked Postgres's<sup class="src"><a href="#src-10" title="DuckDB v2.0: Your Database Deserves a Better Parser (DuckDB blog)">10</a></sup>. Recursive descent by hand is how Lua, Go, and most<sup class="src"><a href="#src-11" title="The Implementation of Lua 5.0 (Ierusalimschy, de Figueiredo, Celes), Journal of Universal Computer Science, 2005">11</a></sup>
+teaching compilers do it, because it's the readable one<sup class="src"><a href="#src-12" title="Go compiler internals: adding a new statement to Go - Part 1 (Eli Bendersky)">12</a></sup>.</p>
 
 <h3 class="keep-in-present">Why does microSQL forbid naming a column <code>select</code>?</h3>
 <p class="keep-in-present">The lexer promotes any word in the keyword set, context-free.
@@ -417,11 +417,11 @@ Postgres bought flexible naming with three thousand lines of grammar.</p>
 <h3 class="keep-in-present">What about SQL injection? Is that a parsing thing?</h3>
 <p class="keep-in-present">It's a <em>string-building</em> thing: gluing untrusted text into
 SQL before the parser sees it. The parser can't tell your intent from the attacker's; both
-arrive as valid tokens. The fix (parameterized queries) hands values around the parser
+arrive as valid tokens. The fix (parameterized queries) hands values around the parser<sup class="src"><a href="#src-13" title="OWASP SQL Injection Prevention Cheat Sheet">13</a></sup>
 entirely. Week 15's security lecture returns to this with your new eyes.</p>
 
 <h3 class="keep-in-present">Could the planner cache plans for repeated queries?</h3>
-<p class="keep-in-present">Yes: real engines hash the text and reuse plans (prepared
+<p class="keep-in-present">Yes: real engines hash the text and reuse plans (prepared<sup class="src"><a href="#src-14" title="PostgreSQL Documentation, PREPARE">14</a></sup>
 statements make it explicit). microdb re-plans every time, which costs microseconds at our
 scale and keeps the code readable. The interesting caching questions arrive when plans
 depend on statistics that drift, week 9 territory.</p>
@@ -429,6 +429,27 @@ depend on statistics that drift, week 9 territory.</p>
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
+
+<!-- ============================================================ -->
+<h2 id="sources">Sources</h2>
+<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
+document that supports the claim it is attached to.</p>
+<ol class="sources">
+  <li id="src-1"><a href="https://books.google.com/books/about/Database_Design_and_Implementation.html?id=6GTTDwAAQBAJ">Database Design and Implementation: Second Edition, Edward Sciore (Google Books record)</a></li>
+  <li id="src-2"><a href="https://craftinginterpreters.com/parsing-expressions.html">Crafting Interpreters, chapter 6: Parsing Expressions (Robert Nystrom)</a></li>
+  <li id="src-3"><a href="https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/">Details of the Cloudflare outage on July 2, 2019 (Cloudflare Blog)</a></li>
+  <li id="src-4"><a href="https://www.postgresql.org/docs/current/sql-keywords-appendix.html">PostgreSQL Documentation, Appendix C. SQL Key Words</a></li>
+  <li id="src-5"><a href="https://www.cl.cam.ac.uk/~mgk25/iso-14977.pdf">ISO/IEC 14977:1996 Extended BNF (final draft text)</a> <span class="src-note">Braces for repetition and square brackets for optional items are Extended BNF (EBNF) conventions standardized in ISO/IEC 14977; plain BNF as introduced for ALGOL 60 has neither construct.</span></li>
+  <li id="src-6"><a href="https://www.postgresql.org/docs/current/xfunc-sql.html">PostgreSQL Documentation, 36.5. Query Language (SQL) Functions</a></li>
+  <li id="src-7"><a href="https://github.com/mysql/mysql-server/blob/trunk/share/messages_to_clients.txt">mysql-server/share/messages_to_clients.txt (MySQL source, GitHub)</a></li>
+  <li id="src-8"><a href="https://www.sqlite.org/arch.html">Architecture of SQLite</a></li>
+  <li id="src-9"><a href="https://www.postgresql.org/docs/current/parser-stage.html">PostgreSQL Documentation, 51.3. The Parser Stage</a></li>
+  <li id="src-10"><a href="https://duckdb.org/2026/08/20/duckdb-20-peg-parser">DuckDB v2.0: Your Database Deserves a Better Parser (DuckDB blog)</a> <span class="src-note">True for DuckDB from its first 2018 commit through v1.x (it used the PostgreSQL parser repackaged as libpg_query), but DuckDB v2.0, announced August 20, 2026, replaced the PostgreSQL-derived parser with a PEG-based parser.</span></li>
+  <li id="src-11"><a href="https://www.lua.org/doc/jucs05.pdf">The Implementation of Lua 5.0 (Ierusalimschy, de Figueiredo, Celes), Journal of Universal Computer Science, 2005</a></li>
+  <li id="src-12"><a href="https://eli.thegreenplace.net/2019/go-compiler-internals-adding-a-new-statement-to-go-part-1/">Go compiler internals: adding a new statement to Go - Part 1 (Eli Bendersky)</a></li>
+  <li id="src-13"><a href="https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html">OWASP SQL Injection Prevention Cheat Sheet</a></li>
+  <li id="src-14"><a href="https://www.postgresql.org/docs/current/sql-prepare.html">PostgreSQL Documentation, PREPARE</a></li>
+</ol>
 
 </main>
 
