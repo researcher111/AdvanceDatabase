@@ -432,8 +432,9 @@ out. Quiz 4 opens class: the iterator model.</p>
 <h3>Is this really how Postgres works?</h3>
 <p class="keep-in-present">Yes: the executor is a tree of nodes each implementing (roughly)
 <code>ExecProcNode</code>, pulled from the top exactly like today's widget<sup class="src"><a href="#src-10" title="PostgreSQL source: src/backend/executor/execProcnode.c (header comment)">10</a></sup>. Modern analytics
-engines (DuckDB, week 10) pull <em>batches of ~1000 rows</em> instead of single rows to be
-kinder to CPUs; same model, bigger sips.</p>
+engines (DuckDB, week 10) move <em>batches of 2048 rows</em> instead of single rows to be
+kinder to CPUs, and push them up the tree rather than pulling; same operators, bigger sips,
+opposite direction<sup class="src"><a href="#src-13" title="DuckDB documentation: Overview of DuckDB Internals (vectors, push-based execution)">13</a></sup>.</p>
 
 <h3>Why does the product re-read its right side instead of caching it?</h3>
 <p class="keep-in-present">Caching is memory, the thing we swore off<sup class="src"><a href="#src-11" title="PostgreSQL documentation: Planner/Optimizer">11</a></sup>. Re-reading costs I/O
@@ -472,6 +473,7 @@ document that supports the claim it is attached to.</p>
   <li id="src-10"><a href="https://raw.githubusercontent.com/postgres/postgres/master/src/backend/executor/execProcnode.c">PostgreSQL source: src/backend/executor/execProcnode.c (header comment)</a></li>
   <li id="src-11"><a href="https://www.postgresql.org/docs/current/planner-optimizer.html">PostgreSQL documentation: Planner/Optimizer</a></li>
   <li id="src-12"><a href="https://www.postgresql.org/docs/current/runtime-config-resource.html">PostgreSQL documentation: Resource Consumption (work_mem)</a></li>
+  <li id="src-13"><a href="https://duckdb.org/docs/current/internals/overview.html">DuckDB documentation: Overview of DuckDB Internals (vectors, push-based execution)</a></li>
 </ol>
 
 </main>

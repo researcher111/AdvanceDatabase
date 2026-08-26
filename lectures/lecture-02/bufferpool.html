@@ -52,7 +52,7 @@ minutes. On Thursday you write one; today you learn why every design choice in i
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation<sup class="src"><a href="#src-1" title="Database Design and Implementation, Second Edition (Sciore, Springer 2020), table of contents">1</a></sup></em>, ch. 4 (SimpleDB's buffer manager) ·
-  Hellerstein et&nbsp;al., <a href="https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf"><em>Architecture of a Database System</em></a>, §4 ·
+  Hellerstein et&nbsp;al., <a href="https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf"><em>Architecture of a Database System</em></a>, §5.3 ·
   the case against mmap: Crotty et&nbsp;al., <a href="https://db.cs.cmu.edu/mmap-cidr2022/"><em>Are You Sure You Want to Use MMAP in Your DBMS?<sup class="src"><a href="#src-2" title="Are You Sure You Want to Use MMAP in Your Database Management System? (CIDR 2022 project page)">2</a></sup></em></a> (CIDR 2022).
 </div>
 
@@ -98,7 +98,7 @@ arbitraging between them:</p>
     <tr><td>Access time</td><td>~100 ns</td><td>~25 µs – 10 ms</td><td>disk is 250× – 100,000× slower<sup class="src"><a href="#src-3" title="Latency Numbers Every Programmer Should Know (Jeff Dean / Peter Norvig numbers)">3</a></sup></td></tr>
     <tr><td>Capacity (a laptop)</td><td>16–32 GB</td><td>0.5–4 TB</td><td>disk holds ~50× more</td></tr>
     <tr><td>Survives power loss</td><td>no</td><td>yes</td><td>&nbsp;</td></tr>
-    <tr><td>Cost per GB</td><td>high</td><td>low</td><td>DRAM costs ~10–20× more</td></tr>
+    <tr><td>Cost per GB</td><td>high</td><td>low</td><td>DRAM costs ~50–100× more<sup class="src"><a href="#src-14" title="DRAM vs SSD price per GB, 2024 to 2026 (rampricehistory.com)">14</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -319,7 +319,7 @@ earned on it:</p>
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Postgres</span><span>clock-sweep (an LRU approximation with a usage counter), plus <strong>ring buffers</strong>: a big sequential scan gets a tiny private ring so it can't flood the shared pool<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">MySQL/InnoDB</span><span>midpoint LRU: new pages enter the <em>middle</em> of the list, not the head; a page must be touched again to reach the protected young region<sup class="src"><a href="#src-11" title="MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool">11</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">DuckDB</span><span>analytics engines take a different route: a big scan streams straight through and is never cached at all, because it will not be read again. The buffer pool is kept for data that really is reused: table metadata, the hash tables a join builds, and the few columns that many queries touch.</span></div>
+  <div class="lc-row"><span class="lc-k">DuckDB</span><span>analytics engines take a different route. DuckDB still caches ordinary storage pages in its buffer manager and keeps them as long as memory allows, but a big scan streams through in fixed-size chunks, and the operators that need memory, such as the hash table a join builds, compete with those cached pages under one memory limit. When the limit is hit, intermediate results spill to disk instead of the whole pool being flushed<sup class="src"><a href="#src-15" title="DuckDB blog: Memory Management in DuckDB (2024)">15</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The shared idea</span><span>detect "this access pattern won't reuse" and refuse to let it evict what will. Your Going-Further in Lab 2 builds a taste of it.</span></div>
 </div>
 
@@ -507,6 +507,8 @@ document that supports the claim it is attached to.</p>
   <li id="src-11"><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-buffer-pool.html">MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool</a></li>
   <li id="src-12"><a href="https://cs.stanford.edu/people/chrismre/cs345/rl/aries.pdf">ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging (Mohan et al., ACM TODS 1992)</a></li>
   <li id="src-13"><a href="https://course.khoury.northeastern.edu/cs3650/ssl/TEXT-CD/Content/COD3e/InMoreDepth/IMD7-Average-Memory-Access-Time.pdf">Patterson and Hennessy, Computer Organization and Design (3rd ed.), In More Depth: Average Memory Access Time</a></li>
+  <li id="src-14"><a href="https://rampricehistory.com/blog/ram-vs-ssd-price-trends-2026">DRAM vs SSD price per GB, 2024 to 2026 (rampricehistory.com)</a></li>
+  <li id="src-15"><a href="https://duckdb.org/2024/07/09/memory-management">DuckDB blog: Memory Management in DuckDB (2024)</a></li>
 </ol>
 
 </main>
