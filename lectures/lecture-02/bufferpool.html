@@ -279,7 +279,7 @@ instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
     <tr><td><strong>FIFO</strong></td><td>evict the oldest <em>load</em></td><td>trivial</td><td>ignores re-use entirely: a hot page ages out mid-popularity</td></tr>
     <tr><td><strong>Random</strong></td><td>evict anyone unpinned</td><td>trivial</td><td>surprisingly decent on average; no protection for the working set</td></tr>
     <tr><td><strong>LRU</strong></td><td>evict the coldest <em>use</em></td><td>a timestamp per access</td><td>one full-table scan evicts the whole working set and the hit rate collapses to zero (next slide)<sup class="src"><a href="#src-9" title="Architecture of a Database System (Hellerstein, Stonebraker, Hamilton, 2007), section 5.3">9</a></sup></td></tr>
-    <tr><td><strong>Clock</strong></td><td>LRU's cheap approximation: one bit + a sweeping hand<sup class="src"><a href="#src-10" title="CMU 15-445/645 Fall 2025 Lecture #04 notes: Memory and Disk Management">10</a></sup></td><td>nearly free</td><td>same cliff, coarser recency</td></tr>
+    <tr><td><strong>Clock</strong></td><td>LRU's cheap approximation: one bit + a sweeping hand<sup class="src"><a href="#src-10" title="CMU 15-445/645 Fall 2025 Lecture #04 notes: Memory and Disk Management">10</a></sup></td><td>nearly free</td><td>fails the same way under a scan: each page's bit is cleared before the scan comes back for it, so one big scan still flushes the working set. And because the bit only records "touched since the hand last passed," not when, it ranks recency more coarsely than true LRU</td></tr>
   </tbody>
 </table>
 
@@ -320,7 +320,7 @@ earned on it:</p>
   <div class="lc-row"><span class="lc-k">Postgres</span><span>clock-sweep (an LRU approximation with a usage counter), plus <strong>ring buffers</strong>: a big sequential scan gets a tiny private ring so it can't flood the shared pool<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">MySQL/InnoDB</span><span>midpoint LRU: new pages enter the <em>middle</em> of the list, not the head; a page must be touched again to reach the protected young region<sup class="src"><a href="#src-11" title="MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool">11</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">DuckDB</span><span>analytics engines take a different route. DuckDB still caches ordinary storage pages in its buffer manager and keeps them as long as memory allows, but a big scan streams through in fixed-size chunks, and the operators that need memory, such as the hash table a join builds, compete with those cached pages under one memory limit. When the limit is hit, intermediate results spill to disk instead of the whole pool being flushed<sup class="src"><a href="#src-15" title="DuckDB blog: Memory Management in DuckDB (2024)">15</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">The shared idea</span><span>detect "this access pattern won't reuse" and refuse to let it evict what will. Your Going-Further in Lab 2 builds a taste of it.</span></div>
+  <div class="lc-row"><span class="lc-k">The shared idea</span><span>detect "this access pattern won't reuse" and refuse to let it evict what will.</span></div>
 </div>
 
 <!-- ============================================================ -->
@@ -334,10 +334,10 @@ doesn't have yet, and must never lose track of that fact.</p>
 <table>
   <thead><tr><th>Moment</th><th>Who triggers it</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td><strong>Eviction</strong></td><td>the pool, inside <code>pin()</code></td><td>the frame is being reused: flush-if-dirty first, or the modification is lost</td></tr>
-    <tr><td><strong><code>flush_all()</code></strong></td><td>shutdown / <span class="gloss" data-gloss="checkpoint">checkpoint</span></td><td>bound how much replay recovery needs</td></tr>
-    <tr><td><strong>Never on unpin</strong></td><td>&nbsp;</td><td>unpin means "not using it", not "write it"; hot pages stay dirty in memory for ages, on purpose</td></tr>
-    <tr><td><strong>Not at COMMIT</strong></td><td>the log instead</td><td>commit forces the <em>WAL</em> to disk (one sequential fsync), not the data pages; that's the week-7 escape from your fsync ratio<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup></td></tr>
+    <tr><td><strong>Eviction</strong></td><td>the pool, inside <code>pin()</code></td><td>a miss with no free frame means a victim page is thrown out so its frame can hold the new block. If that victim is dirty, the pool writes it to disk first, then overwrites the frame; skip that write and the change exists nowhere</td></tr>
+    <tr><td><strong><code>flush_all()</code></strong></td><td>shutdown / <span class="gloss" data-gloss="checkpoint">checkpoint</span></td><td>writes every dirty page in the pool to disk in one sweep. At shutdown that is how the changes outlive the process; at a checkpoint it puts a ceiling on how much work recovery has to redo after a crash, since everything before the checkpoint is already on disk</td></tr>
+    <tr><td><strong>Never on unpin</strong></td><td>&nbsp;</td><td>unpin only says the caller is done with the page, not that it should be written. A hot page that many transactions touch stays dirty in memory for a long time, on purpose: writing it on every unpin would turn each small change into a disk trip</td></tr>
+    <tr><td><strong>Not at COMMIT</strong></td><td>the log instead</td><td>commit does not write the data pages. It forces the <em>write-ahead log</em> to disk instead, one sequential fsync of a small record, and the pages follow later at their own pace. That is the week-7 escape from the fsync ratio you measured in Lab 1<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup></td></tr>
   </tbody>
 </table>
 
