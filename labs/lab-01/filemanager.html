@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=19">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
 
@@ -15,6 +15,7 @@
   <ul>
     <li><a href="#try-it">Poke a page</a></li>
     <li><a href="#big-idea">Why whole blocks</a></li>
+    <li><a href="#file-vs-page">A file is not a page</a></li>
     <li><a href="#the-api">Three classes, one contract</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
@@ -133,6 +134,61 @@ with <span class="gloss" data-gloss="fsync">fsync</span>. The gap between those 
 write-ahead log.</p>
 
 <!-- ============================================================ -->
+<h2 id="file-vs-page">A file is not a page</h2>
+
+<p>Your laptop keeps bytes in two places, and they could hardly be more different. The
+<strong>disk</strong> holds <code>students.tbl</code>: it keeps its bytes through a power cut,
+but every trip to it costs about 25&nbsp;µs on an SSD (the latency ladder from Tuesday).
+<strong>Memory (RAM)</strong> holds every Python object you have ever made: it answers in
+about 100&nbsp;ns, 250× faster, but forgets everything the moment your process exits. Your code
+can only <em>work on</em> bytes in memory, and bytes only <em>survive</em> on disk, so a database
+spends its whole life copying between the two. This layer is that ferry.</p>
+
+<p>microdb gives each side of the ferry its own word, so the code can never confuse them:</p>
+
+<table>
+  <thead><tr><th>Word</th><th>Lives</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><strong>block</strong></td><td>on disk</td><td>slice number <code>k</code> of a file: bytes <code>k×4096</code> to <code>k×4096+4095</code>. Survives restarts.</td></tr>
+    <tr><td><strong>page</strong></td><td>in memory</td><td>one block-sized <code>bytearray</code> your code reads and edits. Gone when the process exits.</td></tr>
+    <tr><td><strong><code>BlockId</code></strong></td><td>nowhere, really</td><td>a name: a filename plus a block number. Holds no bytes; it just says <em>which</em> block you mean.</td></tr>
+  </tbody>
+</table>
+
+<p>Same 4096 bytes, two homes, and one class that moves them: <code>fm.read</code> copies a
+block into a page, <code>fm.write</code> copies a page back over a block.</p>
+
+<div class="viz" id="viz-filepage">
+  <div class="viz-title">The ferry between disk and memory · a six-call story</div>
+  <p class="viz-description">Disk on the left (solid border: permanent), your process's memory
+  on the right (dashed border: gone on exit), the <code>FileManager</code> between them. On each
+  call, <span class="hexlegend len">green</span> marks the side that was just <em>read</em> and
+  <span class="hexlegend int">warm</span> the side that was just <em>written</em>, the same
+  colors as the page widget at the top.</p>
+  <div class="fp-controls">
+    <button type="button" class="btn primary" id="fp-next">Next step ▶</button>
+    <button type="button" class="btn" id="fp-back">◀ Back</button>
+    <button type="button" class="btn" id="fp-restart">↺ Restart</button>
+    <span class="fp-step-pill" id="fp-step-pill">the setup</span>
+  </div>
+  <pre class="fp-call" id="fp-call"></pre>
+  <div class="fp-note" id="fp-note"></div>
+  <div class="fp-stage"><svg id="fp-svg" viewBox="0 0 960 430" role="img"
+    aria-label="Diagram: a file of blocks on disk, the FileManager, and one page in memory"></svg></div>
+  <div class="fp-controls fp-freeplay">
+    <span class="fp-label">Or drive it yourself (click a block to aim first):</span>
+    <button type="button" class="btn" id="fp-read">fm.read(blk, page)</button>
+    <button type="button" class="btn" id="fp-write">fm.write(blk, page)</button>
+    <button type="button" class="btn" id="fp-append">fm.append(…)</button>
+    <span class="fp-label">page.set_string(4, "<input type="text" id="fp-name" value="zoe" maxlength="5">")</span>
+    <button type="button" class="btn" id="fp-edit">edit the page</button>
+  </div>
+  <p class="viz-caption">The <code>BlockId</code> card is the quiet hero: a filename and a number,
+  no bytes at all. It is how the page in memory and the block on disk get introduced to each
+  other, and in Lab 2 it becomes the key of the buffer pool's dictionary.</p>
+</div>
+
+<!-- ============================================================ -->
 <h2 id="the-api">Three classes, one contract</h2>
 
 <p>The whole layer is three classes, and two of them fit on an index card. Hover each line,
@@ -244,11 +300,60 @@ each step turns a new group green.</p>
 
 <div class="callout note">
   <span class="label">Gotchas that cost real debugging time</span>
-  <p><code>"w+b"</code> <em>truncates</em> an existing file. The starter's <code>_file()</code>
-  helper already creates-without-truncating; use it, don't reopen files yourself.
+  <p><code>"w+b"</code> <em>truncates</em> an existing file (the mode letters are pulled
+  apart in the table below). The starter's <code>_file()</code> helper already
+  creates-without-truncating; use it, don't reopen files yourself.
   <code>struct.pack</code> <em>returns</em> bytes while <code>pack_into</code> writes in place;
   you want <code>pack_into</code>. And slicing a bytearray <em>copies</em>: write with
   <code>self._data[a:b] = payload</code>, not <code>chunk = self._data[a:b]; chunk[:] = payload</code>.</p>
+</div>
+
+<h3 class="new-slide" data-kicker="Part 1 · Build">Reading the mode string</h3>
+
+<p>That gotcha is only frightening while <code>"w+b"</code> looks like magic. It is three
+independent choices concatenated, and once you can read them apart you will never truncate a
+table file by accident. Every Python mode string is one <strong>base letter</strong>, an optional
+<code>+</code>, and an optional <code>b</code>.</p>
+
+<table>
+  <thead><tr><th>Piece</th><th>Short for</th><th>What it does to the file</th></tr></thead>
+  <tbody>
+    <tr><td><code>r</code></td><td>read</td><td>Open for reading only, positioned at byte 0. <code>FileNotFoundError</code> if it isn't there. This is the default when you omit the letter.</td></tr>
+    <tr><td><code>w</code></td><td>write</td><td>Open for writing only, and <strong>truncate an existing file to zero bytes</strong>. Creates the file if it's missing.</td></tr>
+    <tr><td><code>a</code></td><td>append</td><td>Open for writing only, keeping the contents. Creates if missing. Every write lands at the end of the file no matter where you <code>seek</code>.</td></tr>
+    <tr><td><code>x</code></td><td>exclusive create</td><td>Create and open for writing, but raise <code>FileExistsError</code> rather than touch an existing file.</td></tr>
+    <tr><td><code>+</code></td><td>the other direction too</td><td>Adds the half the base letter left out, so the one handle can both read and write. It changes <em>nothing</em> about truncation: <code>w+</code> still wipes the file.</td></tr>
+    <tr><td><code>b</code></td><td>binary</td><td>Read and write raw <code>bytes</code>: no text decoding, no newline translation. Without it you get <code>str</code>, and your page bytes get corrupted on the way through.</td></tr>
+  </tbody>
+</table>
+
+<p>Combine them and the six modes you might reach for line up like this. Only one of them is
+right for a file manager, and the second row is the one that eats homework:</p>
+
+<table>
+  <thead><tr><th>Mode</th><th>Read</th><th>Write</th><th>If the file exists</th><th>If it doesn't</th><th>Fit for microdb</th></tr></thead>
+  <tbody>
+    <tr><td><code>"rb"</code></td><td>yes</td><td>no</td><td>opens at byte 0</td><td><code>FileNotFoundError</code></td><td>no; <code>append</code> must write</td></tr>
+    <tr><td><code>"w+b"</code></td><td>yes</td><td>yes</td><td><strong>truncated to 0 bytes</strong></td><td>created</td><td><strong>no, the trap</strong>: wipes the table first</td></tr>
+    <tr><td><code>"wb"</code></td><td>no</td><td>yes</td><td><strong>truncated to 0 bytes</strong></td><td>created</td><td>only to create a missing file</td></tr>
+    <tr><td><code>"r+b"</code></td><td>yes</td><td>yes</td><td>opens at byte 0, contents kept</td><td><code>FileNotFoundError</code></td><td><strong>yes; what <code>_file()</code> uses</strong></td></tr>
+    <tr><td><code>"a+b"</code></td><td>yes</td><td>yes</td><td>kept, positioned at the end</td><td>created</td><td>no; writes ignore your seek</td></tr>
+    <tr><td><code>"xb"</code></td><td>no</td><td>yes</td><td><code>FileExistsError</code></td><td>created</td><td>no; for lock files, not data</td></tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <span class="label">Why <code>_file()</code> opens the file twice</span>
+  <p>No single mode both <em>creates a missing file</em> and <em>refuses to truncate an existing
+  one</em>, so the starter spends two lines buying exactly that: <code>open(path, "wb").close()</code>
+  only when <code>os.path.exists</code> says the file is missing, then <code>open(path, "r+b")</code>
+  every time. That is the whole reason the helper exists, and why reopening files yourself is the
+  fastest way to lose a table.</p>
+  <p>The <code>b</code> is not optional either. Drop it and Python decodes your page as text and
+  rewrites line endings on the way through: the four bytes <code>0D 0A C3 A9</code> read back in
+  text mode as the two characters <code>'\né'</code>: <code>0D 0A</code> silently collapsed to one
+  newline, and two bytes fused into one <code>é</code>. A page of student records would come back
+  a different length than it went in.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="Part 1 · Build">The cursor: <code>seek</code> and <code>tell</code></h3>
@@ -500,6 +605,6 @@ semantics. Inside the methods, style is yours.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
+<script src="viz.js?v=9"></script>
 </body>
 </html>

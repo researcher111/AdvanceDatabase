@@ -143,6 +143,98 @@ body.presentation-mode .pk-cell { width: 2.6em; }
 body.presentation-mode .pk-idx { font-size: 0.45em; }
 body.presentation-mode .pk-byte { font-size: 0.75em; }
 
+/* ---------------- File-vs-page diagram (v7) ---------------- */
+.fp-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.fp-label { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 6px; }
+.fp-label input {
+  font-family: var(--mono); font-size: 12px; width: 62px;
+  border: 1px solid var(--rule); border-radius: 4px; padding: 3px 5px; background: white;
+}
+.fp-call {
+  background: #17150f; color: #ece7da; border: 1px solid #34302a; border-radius: 6px;
+  margin: 0 0 12px; padding: 9px 13px;
+  font-family: var(--mono); font-size: 13px; overflow-x: auto;
+}
+.fp-stage {
+  background: var(--bg-elev); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 6px; overflow-x: auto;
+}
+.fp-stage svg { display: block; width: 100%; height: auto; min-width: 700px; }
+.fp-note {
+  font-family: var(--sans); font-size: 13.5px; color: var(--ink-soft);
+  line-height: 1.6; margin: 12px 0 14px; min-height: 3.2em;
+}
+.fp-note code, .fp-label code { font-size: 0.92em; }
+.fp-warn { color: var(--accent); }
+.fp-step-pill {
+  font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--ink-soft);
+  background: var(--bg-elev); border: 1px solid var(--rule); border-radius: 999px;
+  padding: 4px 12px;
+}
+.fp-freeplay { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--rule); }
+
+/* --- SVG element styling (fill/stroke only; sizes live in the viewBox) --- */
+#fp-svg text { font-family: var(--sans); fill: var(--ink); }
+.fp-panel { fill: var(--bg-viz); stroke: var(--rule); stroke-width: 1.5; }
+.fp-panel-title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; fill: var(--ink-soft); }
+.fp-panel-key { font-size: 10.5px; font-style: italic; fill: var(--ink-soft); }
+.fp-panel-sub { font-size: 10.5px; fill: var(--ink-mute); }
+
+.fp-block {
+  fill: var(--bg-elev); stroke: var(--rule); stroke-width: 1.5;
+  transition: fill 0.18s, stroke 0.18s;
+}
+.fp-blockg { cursor: pointer; }
+.fp-blockg:hover .fp-block { stroke: var(--ink-mute); }
+.fp-block.sel { stroke: var(--accent); stroke-width: 2.5; }
+.fp-block.g-read  { fill: var(--neg); stroke: var(--neg-stroke); }
+.fp-block.g-write { fill: var(--pos); stroke: var(--accent); }
+.fp-block.sel.g-read, .fp-block.sel.g-write { stroke-width: 2.5; }
+.fp-blk-label { font-size: 12px; font-weight: 600; }
+.fp-blk-range { font-family: var(--mono); font-size: 10px; fill: var(--ink-mute); }
+.fp-blk-rows  { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); }
+.fp-blk-zero  { font-family: var(--mono); font-size: 11px; fill: var(--ink-mute); font-style: italic; }
+.fp-eof { stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 5 5; }
+.fp-eof-label { font-size: 10px; font-style: italic; fill: var(--ink-mute); }
+
+/* Memory is drawn with a dashed edge; disk is drawn solid. One rule, kept everywhere. */
+.fp-page {
+  fill: var(--bg-elev); stroke: var(--ink-mute); stroke-width: 2; stroke-dasharray: 7 4;
+  transition: fill 0.18s, stroke 0.18s;
+}
+.fp-page.g-read  { fill: var(--neg); stroke: var(--neg-stroke); }
+.fp-page.g-write { fill: var(--pos); stroke: var(--accent); }
+.fp-page-sub   { font-size: 10.5px; fill: var(--ink-mute); }
+.fp-page-clean { font-size: 10.5px; fill: var(--ink-mute); }
+.fp-page-dirty { font-size: 10.5px; font-weight: 600; fill: var(--accent); }
+
+.fp-fm { fill: var(--bg-elev); stroke: var(--ink-mute); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.fp-fm-title { font-size: 12px; font-weight: 600; fill: var(--ink); }
+.fp-fm-code  { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); }
+.fp-fm-sub   { font-size: 9.5px; fill: var(--ink-mute); }
+
+.fp-card { fill: var(--bg-elev); stroke: var(--rule); stroke-width: 1.5; }
+.fp-card-title { font-size: 11px; font-weight: 600; fill: var(--ink-soft); }
+.fp-card-code  { font-family: var(--mono); font-size: 12px; fill: var(--ink); }
+
+.fp-arrow { fill: none; stroke: var(--rule); stroke-width: 2; }
+.fp-arrow.live { stroke: var(--accent); stroke-width: 2.5; }
+.fp-head-idle { fill: var(--rule); }
+.fp-head-live { fill: var(--accent); }
+
+body.presentation-mode .fp-label { font-size: 0.6em; }
+body.presentation-mode .fp-step-pill { font-size: 0.55em; }
+body.presentation-mode .fp-label input { font-size: 0.9em; width: 4.5em; }
+body.presentation-mode .fp-call { font-size: 0.55em; }
+body.presentation-mode .fp-note { font-size: 0.62em; }
+body.presentation-mode .fp-stage svg { min-width: 0; }
+
 /* ---------------- seek / tell cursor diagram ---------------- */
 .st-svg { width: 100%; height: auto; display: block; font-family: var(--sans); }
 .st-title  { font-size: 11.5px; fill: var(--ink-mute); }
