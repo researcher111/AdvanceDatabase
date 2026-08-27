@@ -52,7 +52,7 @@ what a row is.
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6 (record management) &amp; ch. 7 (metadata)<sup class="src"><a href="#src-2" title="Database Design and Implementation: Second Edition (Google Books listing)">2</a></sup> ·
-  how the grown-ups do it: PostgreSQL's
+  how a production engine does it: PostgreSQL's
   <a href="https://www.postgresql.org/docs/current/storage-page-layout.html">page layout docs</a> and
   <a href="https://www.postgresql.org/docs/current/catalogs.html">system catalogs</a>.
 </div>
@@ -91,22 +91,22 @@ Nothing else.</p>
 <h3 class="new-slide" data-kicker="Bytes don't know they're rows">What tight packing costs</h3>
 
 <p>Worked out in bytes: renaming ben in a packed page shifts every later byte in the block,
-and anything that remembered where those bytes lived is now lying.</p>
+and any saved position that pointed at those bytes now points at the wrong data.</p>
 
 <table>
   <thead><tr><th>Operation</th><th>Packed (Lab 1 style)</th><th>What breaks</th></tr></thead>
   <tbody>
-    <tr><td>Update <code>ben → benjamin</code></td><td>shift cyd, dee… 5 bytes right</td><td>every saved position after byte 30; a full-block rewrite</td></tr>
-    <tr><td>Delete ada</td><td>either shift everything left, or leave a 15-byte hole no one tracks</td><td>compaction cost, or unusable fragments</td></tr>
-    <tr><td>Find row #4</td><td>walk from byte 0, parsing every record on the way</td><td>O(row number) just to <em>address</em> a row</td></tr>
+    <tr><td>Update <code>ben → benjamin</code></td><td>shift cyd, dee… 5 bytes right</td><td>every saved position after byte 30 is now wrong, and the whole rest of the block has to be rewritten to make room for 5 extra bytes</td></tr>
+    <tr><td>Delete ada</td><td>either shift everything left, or leave a 15-byte hole no one tracks</td><td>shifting means rewriting the rest of the block (compaction) and invalidating every saved position; leaving the hole means those 15 bytes are lost, because nothing records that they are free</td></tr>
+    <tr><td>Find row #4</td><td>walk from byte 0, parsing every record on the way</td><td>the cost of reaching a row grows with its row number: there is no way to know where row 4 starts without reading rows 1 to 3 first</td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Bytes don't know they're rows">The three operations a layout must survive</h3>
 
 <p class="keep-in-present">The fix every row store converges on: <strong>fixed-size slots</strong>.
-Reserve the maximum bytes each record could need, all records identical, and the three cursed
-operations become arithmetic:</p>
+Reserve the maximum bytes each record could need, all records identical, and the three operations
+from the table above become arithmetic:</p>
 
 <table>
   <thead><tr><th>Operation</th><th>Slotted answer</th><th>Cost</th></tr></thead>
@@ -172,10 +172,10 @@ what "structured" means to a storage engine.</p>
 <table>
   <thead><tr><th>Bytes</th><th>Holds</th><th>Why there</th></tr></thead>
   <tbody>
-    <tr><td><code>0–3</code></td><td>in-use flag (0 empty / 1 used)</td><td>deletion must be a bit flip, see below</td></tr>
-    <tr><td><code>4–7</code></td><td><code>id</code> (int)</td><td>first field, right after the flag</td></tr>
-    <tr><td><code>8–19</code></td><td><code>name</code> (4-byte len + 8 capacity)</td><td>reserved for the <em>longest</em> allowed name</td></tr>
-    <tr><td><code>20–23</code></td><td><code>gpa</code> (int)</td><td>8 + 12 bytes of name capacity</td></tr>
+    <tr><td><code>0–3</code></td><td>in-use flag (0 empty / 1 used)</td><td>every slot needs a marker saying whether it holds a live row, so that deleting a row can be a single write to this flag (see the flag lifecycle below)</td></tr>
+    <tr><td><code>4–7</code></td><td><code>id</code> (int)</td><td>the first field in the schema goes right after the flag, so its offset is 4</td></tr>
+    <tr><td><code>8–19</code></td><td><code>name</code> (4-byte len + 8 capacity)</td><td>4 bytes record the actual length, then 8 bytes are reserved for the <em>longest</em> allowed name; the field takes 12 bytes no matter how short the name is</td></tr>
+    <tr><td><code>20–23</code></td><td><code>gpa</code> (int)</td><td>name starts at 8 and takes 12 bytes, so the next field starts at 8 + 12 = 20</td></tr>
   </tbody>
 </table>
 
@@ -230,7 +230,7 @@ different schemas.</p>
 <h3 class="new-slide" data-kicker="Schema → Layout">What about NULL?</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">microdb</span><span>ducks the question: every field always has a value (0, ""). Honest for a teaching engine; real data isn't so tidy.</span></div>
+  <div class="lc-row"><span class="lc-k">microdb</span><span>has no NULL at all: every field always holds a value (0 for an int, "" for a string). That is acceptable for a teaching engine, but real data has missing values, and "missing" is not the same as 0 or "".</span></div>
   <div class="lc-row"><span class="lc-k">Real engines</span><span>a <strong>null bitmap</strong> per record: one bit per column, stored beside the flag. NULL costs a bit, not a field's bytes, and reading a field first checks its bit<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The DS connection</span><span>this is why <code>NULL</code> and <code>0</code> and <code>""</code> are genuinely different things in SQL: the bitmap distinguishes "absent" from any value your bytes could spell<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 9.2. Comparison Functions and Operators">5</a></sup>.</span></div>
 </div>
@@ -239,8 +239,8 @@ different schemas.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The problem</span><span>a 2&nbsp;MB essay can't reserve worst-case capacity in every slot; reservation only works when maxima are modest.</span></div>
-  <div class="lc-row"><span class="lc-k">Postgres's answer</span><span><span class="gloss" data-gloss="toast">TOAST</span>: big values move to a side table (compressed, chunked); the slot keeps an 18-byte pointer<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>. The row stays fixed-ish; the elephant lives elsewhere.</span></div>
-  <div class="lc-row"><span class="lc-k">The pattern</span><span>fixed where you can, indirection where you must, the same trick you'll see again in column stores (week 10) and vector storage (week 11).</span></div>
+  <div class="lc-row"><span class="lc-k">Postgres's answer</span><span><span class="gloss" data-gloss="toast">TOAST</span>: big values move to a side table (compressed, chunked); the slot keeps an 18-byte pointer<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>. The row itself stays small and close to fixed-size; the big value lives in the side table.</span></div>
+  <div class="lc-row"><span class="lc-k">The pattern</span><span>reserve fixed space when the maximum is modest, and store a small pointer to data kept elsewhere when it is not; the same trick appears again in column stores (week 10) and vector storage (week 11).</span></div>
 </div>
 
 <!-- ============================================================ -->
@@ -248,9 +248,9 @@ different schemas.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Job</span><span>All record operations within ONE block: read/write a field of slot k, find free slots, flip flags.</span></div>
-  <div class="lc-row"><span class="lc-k">Runs on</span><span>your Lab 2 pool: it <strong>pins its block on construction and unpins on close()</strong>. The week-2 contract, now with a customer.</span></div>
+  <div class="lc-row"><span class="lc-k">Runs on</span><span>your Lab 2 pool: it <strong>pins its block on construction and unpins on close()</strong>. This is the pin/unpin contract from week 2, now used by real code: while a RecordPage is working on a block, the pool cannot evict it.</span></div>
   <div class="lc-row"><span class="lc-k">Key methods</span><span><code>get/set_int</code>, <code>get/set_string</code> (arithmetic + Lab 1 page calls), <code>insert_after</code> / <code>next_after</code> (find EMPTY / find USED), <code>delete</code> (flip to EMPTY).</span></div>
-  <div class="lc-row"><span class="lc-k">One rule</span><span>every write ends with <code>set_modified()</code>; the pool can't write back what it was never told about.</span></div>
+  <div class="lc-row"><span class="lc-k">One rule</span><span>every write ends with <code>set_modified()</code>, which marks the buffer dirty. Skip it and the pool believes the frame is unchanged, evicts it without writing it to disk, and the write is lost.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="RecordPage">The flag lifecycle</h3>
@@ -258,10 +258,10 @@ different schemas.</p>
 <table>
   <thead><tr><th>State</th><th>Flag</th><th>Field bytes hold</th><th>Who moves it</th></tr></thead>
   <tbody>
-    <tr><td>Fresh block</td><td>0 (EMPTY)</td><td>zeros: <code>append</code> hands you a zeroed block, so it's born valid</td><td>&nbsp;</td></tr>
-    <tr><td>After <code>insert_after</code></td><td>1 (USED)</td><td>whatever was there; caller must set fields next</td><td>insert marks, then sets</td></tr>
-    <tr><td>After <code>delete</code></td><td>0 (EMPTY)</td><td><strong>the old data, untouched</strong>; only the flag changed</td><td>one bit flip</td></tr>
-    <tr><td>After re-insert</td><td>1 (USED)</td><td>old ghost until overwritten; why insert marks first, writes second</td><td>reuse</td></tr>
+    <tr><td>Fresh block</td><td>0 (EMPTY)</td><td>all zeros: <code>append</code> hands you a zeroed block, and 0 is the EMPTY flag, so a fresh block is already a valid page of empty slots with no setup</td><td>nobody; the zero-fill does it</td></tr>
+    <tr><td>After <code>insert_after</code></td><td>1 (USED)</td><td>whatever bytes were in the slot before; the caller must write every field next</td><td><code>insert_after</code> writes 1 to the flag, then the caller sets the fields</td></tr>
+    <tr><td>After <code>delete</code></td><td>0 (EMPTY)</td><td><strong>the old data, untouched</strong>; only the flag changed</td><td><code>delete</code> writes 0 to the flag and touches nothing else</td></tr>
+    <tr><td>After re-insert</td><td>1 (USED)</td><td>the previous row's bytes, until the caller overwrites them; this is why insert marks the slot first and the caller writes the fields second</td><td><code>insert_after</code> finds the EMPTY slot and reuses it</td></tr>
   </tbody>
 </table>
 
@@ -291,7 +291,7 @@ need a vacuum process: all one design decision, visible in your 24-byte slots<su
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">First choice</span><span>reuse: <code>insert_after</code> hunts forward for any EMPTY slot; tombstones get recycled before the file grows.</span></div>
-  <div class="lc-row"><span class="lc-k">Last resort</span><span>growth: every block full → <code>fm.append()</code> hands back a fresh <em>zeroed</em> block, which is five EMPTY slots by construction. Lab 1's zero-fill was load-bearing all along.</span></div>
+  <div class="lc-row"><span class="lc-k">Last resort</span><span>growth: every block full → <code>fm.append()</code> hands back a fresh <em>zeroed</em> block, which is five EMPTY slots by construction. This is why Lab 1's <code>append</code> had to zero-fill new blocks: 0 is the EMPTY flag, so a zeroed block reads as five empty slots with no extra setup.</span></div>
   <div class="lc-row"><span class="lc-k">The invariant</span><span>files grow by whole blocks, only at the end, only when truly full; Thursday's harness counts your blocks to check exactly this.</span></div>
 </div>
 
@@ -315,13 +315,13 @@ updates and deletes move nothing, so the address keeps working<sup class="src"><
 </table>
 
 <p class="keep-in-present">They all speak TableScan's exact interface: <code>before_first /
-next / get_*</code>. You are building the bottom rung of the iterator model one week before
-the model itself.</p>
+next / get_*</code>. That shared interface is the <span class="gloss" data-gloss="iterator-model">iterator model</span>, next week's topic; TableScan is its bottom layer, the only one that
+reads blocks from disk.</p>
 
 <!-- ============================================================ -->
 <h2 id="catalog">The catalog</h2>
 
-<h3 class="new-slide" data-kicker="The catalog">The catalog rows for students, for real this time</h3>
+<h3 class="new-slide" data-kicker="The catalog">The catalog rows for students, with exact offsets</h3>
 
 <p>Lecture 1 sketched this table; now it's exact, offsets and all: these are the rows
 Thursday's <code>create_table</code> writes and the harness checks:</p>
@@ -337,9 +337,9 @@ Thursday's <code>create_table</code> writes and the harness checks:</p>
 </table>
 
 <p class="keep-in-present">The offsets are the ones you computed in Layout, stored as data,
-readable by a TableScan, reconstructable into a Layout. The catalog is your record layer's
-<em>first customer</em>: in the lab it ships prewritten, and it works exactly when your code
-does.</p>
+readable by a TableScan, reconstructable into a Layout. The catalog is the
+<em>first user</em> of your record layer: in the lab <code>catalog.py</code> is provided complete, and it reads and writes
+its own tables through your RecordPage and TableScan, so it works exactly when your code does.</p>
 
 <p>There is a loop hiding here. To read any table you need its layout, and layouts live in
 <code>field_catalog</code>. But <code>field_catalog</code> is itself a table, so to read it you
@@ -353,7 +353,7 @@ enough to open the catalog, and everything else is read from it.</p>
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Postgres</span><span><code>pg_class</code> (one row per table) and <code>pg_attribute</code> (one per column); <code>\d students</code> is a catalog query, not magic<sup class="src"><a href="#src-11" title="PostgreSQL Documentation: 52.7. pg_attribute">11</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">Everything is a row</span><span>indexes, views, functions, permissions, even the catalog's own tables: all rows in catalog tables<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 52.11. pg_class">12</a></sup>. One mechanism, everywhere.</span></div>
-  <div class="lc-row"><span class="lc-k">Why it matters to DS</span><span>every schema-introspection tool you've used (<code>df.info()</code>-style table explorers, ORMs, BI dashboards) is reading these tables. Now you know what they're reading.</span></div>
+  <div class="lc-row"><span class="lc-k">Why it matters to DS</span><span>every schema-introspection tool you've used (<code>df.info()</code>-style table explorers, ORMs such as SQLAlchemy that map tables to Python classes, business-intelligence dashboards) is reading these tables. Now you know what they're reading.</span></div>
 </div>
 
 <!-- ============================================================ -->
@@ -399,10 +399,10 @@ code, and the catalog comes free once your scan works.</p>
   multiply and one add, paid for by internal fragmentation and a refusal to store
   "bartholomew" in an 8-char field.</li>
   <li><strong>Deletion is a flag, addresses are stable.</strong> Tombstones recycle, nothing
-  shifts, and every row keeps a permanent RID, the hook indexes will hang from in week 6.</li>
-  <li><strong>The schema is data.</strong> Layouts round-trip through ordinary tables, the
-  catalog's own layouts are hardcoded so the loop has somewhere to start, and your scan's first
-  customer is the database's own self-description.</li>
+  shifts, and every row keeps a permanent RID, the address that indexes will point to in week 6.</li>
+  <li><strong>The schema is data.</strong> A table's layout is written to the catalog as ordinary rows and read back into a Layout; the
+  catalog's own layouts are hardcoded so that reading the catalog does not first require reading the catalog; and the
+  first code to use your scan is the catalog itself.</li>
 </ul>
 
 <p class="keep-in-present"><strong>Thursday:</strong> build the record layer (three-layer
@@ -413,15 +413,15 @@ Join stack on your TableScan. Quiz 3 opens class: records &amp; the catalog.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3>Why 4 whole bytes for a flag that stores 0 or 1?</h3>
-<p class="keep-in-present">Alignment and honesty: microdb's Page speaks ints, so the flag is an int. Real engines pack
-flags, null bitmaps, and bookkeeping into a per-page header plus a compact slot directory<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>;
-same idea, tighter belt. (Postgres spends ~23 bytes per <em>row</em> on headers; our 4 is shy<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.)</p>
+<p class="keep-in-present">Simplicity: microdb's Page reads and writes whole 4-byte ints, so the flag is stored as an int. Real engines pack
+flags, null bitmaps, and bookkeeping into a per-page header plus a compact <span class="gloss" data-gloss="slot-directory">slot directory</span><sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>;
+the same idea with less waste. (Postgres spends ~23 bytes per <em>row</em> on headers, so our 4 bytes is modest by comparison<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.)</p>
 
 <h3>Isn't reserving max capacity for every varchar wasteful?</h3>
 <p class="keep-in-present">Yes, deliberately. It's the rent for in-place updates and stable addresses. Postgres
 actually stores varchars variably <em>within</em> the page (via a slot directory) and pays with
-extra indirection; TOAST handles the truly huge<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>. The tradeoff triangle (space, address
-stability, update cost) has no free corner.</p>
+extra indirection; TOAST handles the truly huge<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>. No layout gets all three of compact space, stable addresses, and cheap updates; every design gives
+up part of one.</p>
 
 <h3>What if a table needs more rows than one file can hold?</h3>
 <p class="keep-in-present">microdb: one file per table, and Python's file size limit is nobody's problem at our scale.
@@ -430,8 +430,8 @@ the block abstraction doesn't care how many OS files stand behind it.</p>
 
 <h3>Does the catalog slow everything down? Every query needs layouts!</h3>
 <p class="keep-in-present">It would, so real engines cache catalog entries in memory aggressively (Postgres's
-"relcache"). microdb re-scans the catalog on each <code>get_layout</code>, which is honest,
-measurable, and exactly the kind of thing the buffer pool quietly rescues<sup class="src"><a href="#src-14" title="Postgres: caches and invalidation (Amit Langote, PostgreSQL committer)">14</a></sup>.</p>
+"relcache"). microdb re-scans the catalog on each <code>get_layout</code>, which is slow but simple,
+and in practice the catalog blocks stay resident in the buffer pool, so the re-scan costs a few pins and no disk reads<sup class="src"><a href="#src-14" title="Postgres: caches and invalidation (Amit Langote, PostgreSQL committer)">14</a></sup>.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -463,6 +463,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
+<script src="viz.js?v=4"></script>
 </body>
 </html>

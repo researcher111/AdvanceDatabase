@@ -46,8 +46,8 @@
 A language model answers from <span class="gloss" data-gloss="parametric">parametric
 knowledge</span>, whatever its training run baked into the weights<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup>. Your documents aren't in
 there, and its <span class="gloss" data-gloss="context-window">context window</span> is too
-small to hold them all. Retrieval-augmented generation is the standard fix, and here is the
-secret this lecture makes explicit: the "retrieval" half is not an AI technique. It is a
+small to hold them all. Retrieval-augmented generation is the standard fix, and the central claim of
+this lecture is that the "retrieval" half is not an AI technique. It is a
 database: chunked records, an embedding column, a vector index, a top-k query, and an
 evaluation metric. You built every one of those pieces already. Thursday you wire them into a
 working RAG pipeline; your project is the same wiring at real scale.
@@ -78,12 +78,12 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <li><strong>Ask this course a question</strong>: a complete RAG retrieval stage, live in the page.</li>
   <li><strong>The pipeline</strong>: five stages, and which week of this course each one is.</li>
   <li><strong>Chunking</strong>: the schema-design decision hiding in "split the text".</li>
-  <li><strong>Measuring retrieval</strong>: hit@k and MRR: grade the retriever, not the essay.</li>
+  <li><strong>Measuring retrieval</strong>: two scores, <span class="gloss" data-gloss="hit-at-k">hit@k</span> and <span class="gloss" data-gloss="mrr">MRR</span>, that grade the retriever on its own, without anyone reading the model's answer.</li>
   <li><strong>Failure modes</strong>: the synonym wall, lost in the middle, stale indexes.</li>
 </ol>
 
 <p class="keep-in-present">Today's claim: <strong>RAG quality is mostly retrieval quality, and
-retrieval quality is measurable</strong>, with an eval set, not with vibes.</p>
+retrieval quality is measurable</strong>, with a hand-labeled <span class="gloss" data-gloss="eval-set">eval set</span>, not by reading a few answers and forming an impression.</p>
 
 <!-- ============================================================ -->
 <h2 id="why">Why the model needs a database</h2>
@@ -93,9 +93,9 @@ retrieval quality is measurable</strong>, with an eval set, not with vibes.</p>
 <table>
   <thead><tr><th>Approach</th><th>Per update</th><th>Per question</th><th>Where it breaks</th></tr></thead>
   <tbody>
-    <tr><td><strong>Fine-tune</strong> the weights</td><td>a training run</td><td>cheap</td><td>stale the moment a document changes; recalls facts unreliably<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup>; can't cite</td></tr>
-    <tr><td><strong>Stuff the context</strong> with everything</td><td>free</td><td>pay for every token, every time</td><td>50k documents don't fit; what does fit gets skimmed (lost in the middle)</td></tr>
-    <tr><td><strong>Retrieve</strong>, then generate</td><td>re-embed the changed doc</td><td>one top-k query + k chunks of tokens</td><td>only as good as retrieval, which is why you measure retrieval</td></tr>
+    <tr><td><strong>Fine-tune</strong> the weights</td><td>a full training run, repeated every time the documents change</td><td>cheap: the question alone, with no extra tokens attached</td><td>the weights are stale the moment a document changes, and the model recalls specific facts from them unreliably<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup>. It also cannot cite: the answer comes from weights, not from a document it can point to</td></tr>
+    <tr><td><strong>Stuff the context</strong> with everything</td><td>free: just send the new text next time</td><td>every document is billed as prompt tokens on every question</td><td>a 50k-document corpus does not fit in any context window, and what does fit gets skimmed: models attend poorly to evidence buried in the middle of a long prompt, the <span class="gloss" data-gloss="lost-in-the-middle">"lost in the middle"</span> effect measured later in this lecture</td></tr>
+    <tr><td><strong>Retrieve</strong>, then generate</td><td>re-embed only the changed document and update the index</td><td>one top-k query, plus the k retrieved chunks sent as prompt tokens</td><td>the answer can only be as good as the chunks retrieved: if the right chunk does not come back, the model never sees it. That is why this lecture measures retrieval</td></tr>
   </tbody>
 </table>
 
@@ -107,8 +107,8 @@ retraining a model.</p>
 <!-- ============================================================ -->
 <h2 id="try-it">Ask this course a question</h2>
 
-<p>Below is a complete RAG retrieval stage running in your browser: the same math, hashing
-and all, as Thursday's <code>micro_rag.py</code>, over a 24-document corpus that summarizes
+<p>Below is a complete RAG retrieval stage running in your browser: the same math as Thursday's
+<code>micro_rag.py</code>, including its <span class="gloss" data-gloss="hashed-bag-of-words">hashed bag-of-words</span> embedder, over a 24-document corpus that summarizes
 <em>this course</em>. Ask it something from the last eleven weeks and watch what the model
 would be handed.</p>
 
@@ -132,8 +132,8 @@ would be handed.</p>
     <pre id="ask-prompt" class="ask-prompt"></pre>
   </details>
   <p class="viz-caption">Try the two buffer-pool presets back to back: same information
-  need, different vocabulary, very different retrievals. That failure gets a name and a
-  measurement below.</p>
+  need, different vocabulary, very different retrievals. That failure is the synonym wall,
+  and the section "How RAG fails" below measures it.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -154,9 +154,10 @@ question ──embed──▶ query vector ──────retrieve (top-k)─
   <div class="viz-title">the pipeline · click a stage · green means "you already built this"</div>
   <div class="pipe-flow" id="pipe-flow"></div>
   <div class="pipe-detail" id="pipe-detail"></div>
-  <p class="viz-caption">Four of five stages are database machinery you own; the one warm
-  box is the only new thing, and it's the stage Thursday's lab mocks, because retrieval,
-  not generation, sets the quality ceiling.</p>
+  <p class="viz-caption">Four of the five stages are database machinery you have already built. The one
+  orange box, assemble and generate, is the only new stage, and it is the stage Thursday's lab
+  mocks (a stand-in prints the assembled prompt instead of calling a real model), because
+  retrieval, not generation, sets the quality ceiling.</p>
 </div>
 
 <p class="keep-in-present">This is why the project spec calls the LLM "the easy part."
@@ -171,9 +172,9 @@ isn't retrieved, no prompt engineering can quote it.</strong></p>
 <table>
   <thead><tr><th>Choice</th><th>Retrieval precision</th><th>Context delivered</th><th>Failure mode</th></tr></thead>
   <tbody>
-    <tr><td>whole document</td><td>poor: one muddy average vector<sup class="src"><a href="#src-4" title="Effective Chunking Strategies for RAG (Cohere)">4</a></sup></td><td>huge, mostly irrelevant</td><td>similar to everything, retrieved for nothing</td></tr>
-    <tr><td>paragraph / ~100–300 words</td><td>good: one topic per vector</td><td>a self-contained claim</td><td>the sweet spot most systems ship<sup class="src"><a href="#src-5" title="Evaluating Chunking Strategies for Retrieval (Chroma Research)">5</a></sup></td></tr>
-    <tr><td>sentence</td><td>sharp but brittle</td><td>too little to answer from</td><td>retrieves pronouns and orphaned "it"s</td></tr>
+    <tr><td>whole document</td><td>poor: the whole document collapses into one vector that averages every topic it covers<sup class="src"><a href="#src-4" title="Effective Chunking Strategies for RAG (Cohere)">4</a></sup></td><td>huge, and most of it has nothing to do with the question</td><td>an averaged vector is a little similar to every question and very similar to none, so the document is rarely the top hit for anything</td></tr>
+    <tr><td>paragraph / ~100–300 words</td><td>good: one topic per vector, so a question about that topic lands close to it</td><td>a self-contained claim, with enough text to answer from</td><td>few; this is the size most production systems settle on<sup class="src"><a href="#src-5" title="Evaluating Chunking Strategies for Retrieval (Chroma Research)">5</a></sup></td></tr>
+    <tr><td>sentence</td><td>sharp when the wording matches, but a single sentence has so few words that a small change in phrasing misses it</td><td>too little to answer from: a sentence usually depends on the ones around it</td><td>the retrieved sentence says "it does this" and the "it" was defined two sentences earlier, in a chunk that did not come back</td></tr>
   </tbody>
 </table>
 
@@ -195,18 +196,18 @@ decision.</p>
     <input type="range" id="ck-slider" min="0" max="5" step="1" value="4">
   </div>
   <div id="ck-readout"></div>
-  <p class="viz-caption">Read both ends honestly. Left: sentence-sized fragments dilute the
+  <p class="viz-caption">Both ends of the dial need explaining. Left: sentence-sized fragments dilute the
   signal; a 10-word chunk shares too few words with any question. Right: whole documents
   <em>win</em> here, because this corpus's documents are already paragraph-sized and
   single-topic; they arrive pre-chunked. The sweet-spot argument in the table above is
   about real corpora, where a document is 30 pages and ten topics; the dial's real lesson
-  is that "chunk = one topic" is the invariant, however many words that takes.</p>
+  is that the rule is one topic per chunk, however many words that takes.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="eval">Measuring retrieval</h2>
 
-<h3 class="new-slide" data-kicker="Measuring retrieval">Two numbers, labeled once, computed forever</h3>
+<h3 class="new-slide" data-kicker="Measuring retrieval">Two numbers from one hand-labeled set</h3>
 
 <pre class="equation"><code>eval set:  (question, {relevant doc ids})  ×  12 pairs   ← labeled by hand, once
 
@@ -217,9 +218,10 @@ MRR    =  mean over questions of  1 / rank of first relevant doc<sup class="src"
 
 <h3 class="new-slide" data-kicker="Measuring retrieval">Thursday's numbers, previewed</h3>
 
-<p class="keep-in-present">Thursday's embedder is hashed bag-of-words with a width dial.
-Shrink the width and unrelated words <em>collide</em> onto shared dimensions, and the eval
-set catches the damage without anyone reading an answer<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup>:</p>
+<p class="keep-in-present">Thursday's embedder is hashed bag-of-words: each word in the text is run through a
+hash function that picks one of DIM slots in the vector, and that slot is incremented, so the width DIM is a dial.
+Shrink it and unrelated words <em>collide</em> onto shared dimensions, so two texts that share no words start to
+look similar, and the eval set catches the damage without anyone reading an answer<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup>:</p>
 
 <table>
   <thead><tr><th>Embedding width (DIM)</th><th>hit@3</th><th>MRR</th></tr></thead>
@@ -248,7 +250,8 @@ two phrasings, DIM=2048:</p>
 "What keeps the most popular pages sitting in memory?"
       → wal (0.10) ✗            selectivity (0.09)      blocks (0.09)     [bufferpool: absent]</code></pre>
 
-<p class="keep-in-present">Bag-of-words matches <em>words</em>, not meaning: "popular pages
+<p class="keep-in-present">This is the synonym wall: two phrasings of the same question that share no words, so an
+embedder that matches words cannot tell they mean the same thing. Bag-of-words matches <em>words</em>, not meaning: "popular pages
 in memory" shares no content words with the buffer-pool document, so it retrieves noise at
 scores barely above zero. A learned embedding model maps both phrasings near the same point;
 that upgrade is exactly one function swap in Thursday's code, and it's the swap your project
@@ -258,15 +261,15 @@ makes.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Lost in the middle</span><span>models attend best to the start and end of a long context; retrieved-but-buried evidence gets skimmed (Liu et&nbsp;al. above measured the U-shape)<sup class="src"><a href="#src-10" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172)">10</a></sup>. Mitigation: retrieve less, order deliberately, put the best chunk first.<sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Right doc, wrong rank</span><span>hit@3 passes while the model gets the good chunk third of five; MRR is the metric that notices; assembly order is the fix.</span></div>
+  <div class="lc-row"><span class="lc-k">Right doc, wrong rank</span><span>the relevant chunk is retrieved but lands third in a list of five, so hit@3 counts the question as a success even though the model reads two weaker chunks first. MRR is the metric that notices, because rank 3 scores 0.33 instead of 1.0. The fix belongs to the assembly stage: order the retrieved chunks so the best-scoring one comes first.</span></div>
   <div class="lc-row"><span class="lc-k">Stale index</span><span>documents changed; vectors didn't. The index answers from the past with full confidence, the RAG version of the <span class="gloss" data-gloss="stale-cache">cache-invalidation problem</span>, solved the same way: re-embed on write, version the index.</span></div>
   <div class="lc-row"><span class="lc-k">Confident grounding failure</span><span>retrieval returns weak chunks; the model answers anyway, citing them. Defenses: score thresholds ("if the best cosine is 0.09, say so"), and prompts that permit "the sources don't answer this."</span></div>
-  <div class="lc-row"><span class="lc-k">Embedding drift</span><span>last week's lesson, operationalized: change the embedding model and every stored vector is in a foreign geometry. Version embeddings like schemas; re-embed to migrate.</span></div>
+  <div class="lc-row"><span class="lc-k">Embedding drift</span><span>change the embedding model and every stored vector becomes meaningless, because vectors from two different models do not live in the same space and distances between them say nothing (last week's lesson, now as an operations problem). Treat the embedding model's version like a schema version: record which model produced each vector, and re-embed the whole corpus to migrate.</span></div>
 </div>
 
 <div class="callout note">
   <span class="label">War story · Mata v. Avianca, 2023</span>
-  <p class="keep-in-present">The failure catalog has case law. In 2023, lawyers in a routine
+  <p class="keep-in-present">One of these failures has already reached a courtroom. In 2023, lawyers in a routine
   New York airline suit filed a brief citing several judicial opinions that did not exist<sup class="src"><a href="#src-12" title="Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions">12</a></sup>;
   ChatGPT had generated them, complete with plausible names, docket numbers, and quotes<sup class="src"><a href="#src-12" title="Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions">12</a></sup>, and
   when asked to verify, it cheerfully vouched for its own inventions<sup class="src"><a href="#src-12" title="Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions">12</a></sup>. A federal judge
@@ -288,9 +291,9 @@ retrieval stack, each one a database idea you can now name:</p>
 <table>
   <thead><tr><th>Upgrade</th><th>What it is</th><th>Database idea underneath</th></tr></thead>
   <tbody>
-    <tr><td><strong>Hybrid search</strong></td><td>run <span class="gloss" data-gloss="bm25">BM25</span> keyword search AND vector search, merge the ranked lists<sup class="src"><a href="#src-13" title="LlamaIndex: Reciprocal Rerank Fusion Retriever">13</a></sup></td><td>two indexes over one table, union of access paths: exact names beat the synonym wall, vectors beat exact names; each covers the other's miss</td></tr>
-    <tr><td><strong>Reranking</strong></td><td>retrieve a generous top-50 cheaply, then let a <span class="gloss" data-gloss="reranker">reranker</span> model re-order and keep 5<sup class="src"><a href="#src-14" title="Cohere Docs: Reranking with Cohere">14</a></sup></td><td>the two-phase plan: cheap selective scan first, expensive operator on the survivors; predicate pushdown's cost logic, applied to models</td></tr>
-    <tr><td><strong>Metadata filtering</strong></td><td>"top-k similar AND team = 'infra' AND date &gt; 2025"</td><td>a predicate combined with an index scan, and the reason vectors-inside-your-database (pgvector, DuckDB VSS) beats a detached vector service for filtered workloads<sup class="src"><a href="#src-15" title="pgvector README, Filtering">15</a></sup></td></tr>
+    <tr><td><strong>Hybrid search</strong></td><td>run <span class="gloss" data-gloss="bm25">BM25</span> keyword search AND vector search, merge the ranked lists<sup class="src"><a href="#src-13" title="LlamaIndex: Reciprocal Rerank Fusion Retriever">13</a></sup></td><td>two indexes over the same table, and the query uses both access paths and unions the results. Keyword search finds exact tokens (an error code, a function name) that the synonym wall hides from vectors; vector search finds paraphrases that share no exact words. Each covers the other's misses</td></tr>
+    <tr><td><strong>Reranking</strong></td><td>retrieve a generous top-50 cheaply, then let a <span class="gloss" data-gloss="reranker">reranker</span> model re-order and keep 5<sup class="src"><a href="#src-14" title="Cohere Docs: Reranking with Cohere">14</a></sup></td><td>a two-phase query plan: run the cheap, selective step (the vector index) first, then run the expensive operator (the reranker) only on the few rows that survive. It is the same cost logic as predicate pushdown, applied to a model instead of a predicate</td></tr>
+    <tr><td><strong>Metadata filtering</strong></td><td>restrict the similarity search to chunks whose stored metadata matches a predicate, for example "top-k most similar AND team = 'infra' AND date &gt; 2025"</td><td>a predicate combined with an index scan, and the reason vectors-inside-your-database (pgvector, DuckDB VSS) beats a detached vector service for filtered workloads<sup class="src"><a href="#src-15" title="pgvector README, Filtering">15</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -301,13 +304,13 @@ and "the retriever is misbehaving" will be a debuggable statement, not a support
 <!-- ============================================================ -->
 <h2 id="thursday">On Thursday you wire it</h2>
 
-<p>micro-rag: the full pipeline over the course-summary corpus you just queried. Chunker,
-embedder, and the LLM call ship; you write the retriever (on Lab 9's
-<code>microvector</code>) and the context assembly, then face the eval set.</p>
+<p>micro-rag: the full pipeline over the course-summary corpus you just queried. The chunker,
+the embedder, and the LLM call are provided in the starter files; you write the retriever (on top of Lab 9's
+<code>microvector</code>) and the context assembly, then run the eval set against them.</p>
 
 <ul class="checklist">
   <li>☐ Download the Lab 10 starter files; <code>python3 test_rag.py</code> prints <strong>0/7</strong>.</li>
-  <li>☐ The QUALITY group holds the bars from today's table: hit@3 ≥ 0.90, MRR ≥ 0.70 on the
+  <li>☐ The QUALITY test group checks the thresholds from today's table: hit@3 ≥ 0.90, MRR ≥ 0.70 on the
   12-question eval set.</li>
   <li>☐ <code>python3 ask.py "your question"</code> runs your pipeline end to end; echo mode
   shows the assembled prompt; set <code>LLM_BASE_URL</code> to plug in a real model.</li>
@@ -338,9 +341,9 @@ Quiz 10 opens class: RAG.</p>
 <h3 class="keep-in-present">Context windows keep growing: will long context kill RAG?</h3>
 <p class="keep-in-present">Long context raises the ceiling on <em>how much</em> you can send,
 not on whether sending everything is wise: you pay per token per question, latency grows<sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup>, and
-"lost in the middle" means capacity ≠ attention. Retrieval is the per-question cost
-optimizer; the bigger the corpus, the more it saves. The honest answer: windows grow, corpora
-grow faster.</p>
+"lost in the middle" means a model can hold a long context without attending to all of it equally. Retrieval is the per-question cost
+optimizer; the bigger the corpus, the more it saves. Windows grow, but corpora
+grow faster, so retrieval stays necessary.</p>
 
 <h3 class="keep-in-present">Why not fine-tune on our documents instead?</h3>
 <p class="keep-in-present">Fine-tuning teaches style and skills well and facts poorly<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup>: recall
@@ -360,7 +363,7 @@ keeps the pipeline.</p>
 <p class="keep-in-present">10–20 questions a real user of your corpus would ask, each labeled
 with the doc(s) that answer it, written by your team, before you tune anything. Grade hit@k
 and MRR on every change (chunk size, k, embedding model, hybrid on/off). The proposal rubric
-asks for exactly this because it's the difference between engineering and vibes.</p>
+asks for exactly this because it is the difference between measured engineering and guesswork.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -393,6 +396,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
+<script src="viz.js?v=4"></script>
 </body>
 </html>

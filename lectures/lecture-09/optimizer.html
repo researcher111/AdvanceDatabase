@@ -41,8 +41,7 @@
 </header>
 
 <p class="lede">
-Your Lab 5 planner is correct and leaves 15× on the table; you collected that 15× by hand in
-Lab 4. Today: the machine that collects it automatically. An optimizer needs three things:
+Your Lab 5 planner is correct, but the plan it builds is the naive one, the same 900 pairs you counted in Lab 4. In Lab 4 you also found, by hand, a plan that did 15× less work (60 pairs instead of 900); the Lab 5 planner has no way to find that plan. Today: the machine that finds it automatically. An optimizer needs three things:
 knowledge about the data (<span class="gloss" data-gloss="statistics">statistics</span>), a
 way to price plans without running them (a <span class="gloss" data-gloss="cost-model">cost
 model</span>), and a search over the space of equivalent shapes. None of it is magic, all of
@@ -69,7 +68,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p>Lab 7 in, midterm Thursday. Today closes Act I's story and opens the exam.</p>
+<p>Lab 7 is due today; the midterm is Thursday. Today finishes Act I of the course, the storage engine you built layer by layer in Labs 1 through 7, and then turns to the midterm review.</p>
 
 <ol class="agenda">
   <li><strong>The 15× left on the table</strong>: what your planner doesn't know.</li>
@@ -81,7 +80,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </ol>
 
 <p class="keep-in-present">Today's claim: <strong>an optimizer is a guesser with a
-budget</strong>; respect it for guessing well, and know how to catch it guessing badly.</p>
+budget</strong>. It never runs a plan to learn what it costs; it predicts the cost from a few stored numbers, and it has only a moment to search among the candidate plans. Respect it for guessing well, and know how to catch it guessing badly.</p>
 
 <!-- ============================================================ -->
 <h2 id="gap">The 15× left on the table</h2>
@@ -92,15 +91,15 @@ budget</strong>; respect it for guessing well, and know how to catch it guessing
   <thead><tr><th>Organ</th><th>Question it answers</th><th>Where it lives</th></tr></thead>
   <tbody>
     <tr><td><strong>Statistics</strong></td><td>how many rows will survive this predicate?</td><td>catalog tables, refreshed by <span class="gloss" data-gloss="analyze"><code>ANALYZE</code></span></td></tr>
-    <tr><td><strong>Cost model</strong></td><td>what would this plan cost, in blocks, without running it?</td><td>formulas over the statistics</td></tr>
-    <tr><td><strong>Plan search</strong></td><td>which of the exponentially many equivalent shapes is cheapest?</td><td>dynamic programming over join orders (System R's gift)<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: 60.1. Query Handling as a Complex Optimization Problem">1</a></sup></td></tr>
+    <tr><td><strong>Cost model</strong></td><td>what would this plan cost, in blocks, without running it?</td><td>a handful of arithmetic formulas that take the statistics as input and return a block count; the Costing section lists them</td></tr>
+    <tr><td><strong>Plan search</strong></td><td>which of the exponentially many equivalent shapes is cheapest?</td><td>a <span class="gloss" data-gloss="dynamic-programming">dynamic-programming</span> search over join orders, invented for IBM's <span class="gloss" data-gloss="system-r">System R</span> in 1979 and still the core of every optimizer built since<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: 60.1. Query Handling as a Complex Optimization Problem">1</a></sup></td></tr>
   </tbody>
 </table>
 
 <!-- ============================================================ -->
 <h2 id="try-it">Read a real plan</h2>
 
-<p>The skill to leave with: decoding <code>EXPLAIN ANALYZE</code>. Here's a real Postgres
+<p>The skill to leave with: decoding <span class="gloss" data-gloss="explain-analyze"><code>EXPLAIN ANALYZE</code></span>. <code>EXPLAIN</code> asks the engine to print the plan it chose, with its cost and row-count estimates, instead of the query's results; adding <code>ANALYZE</code> also runs the query and prints the measured row counts and times next to each estimate. Here's a real Postgres
 plan for our join, annotated; hover every line.</p>
 
 <div class="code-annotated" data-lang="sql">
@@ -115,13 +114,15 @@ plan for our join, annotated; hover every line.</p>
 </div>
 
 <p class="keep-in-present">The two habits: <strong>read inside-out</strong>, and <strong>compare
-estimated rows to actual rows</strong>; where they diverge, the optimizer was flying blind,
-and that's where your query went wrong<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</p>
+estimated rows to actual rows</strong>; where they diverge, the optimizer was working from wrong information about the data,
+and the plan it built from that information is usually where your query went wrong<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</p>
 
 <!-- ============================================================ -->
 <h2 id="stats">Statistics &amp; selectivity</h2>
 
 <h3 class="new-slide" data-kicker="Statistics &amp; selectivity">What the engine keeps, and the formulas it runs</h3>
+
+<p>Selectivity is the fraction of a table's rows that a predicate keeps: if <code>gpa &gt; 35</code> keeps 60 of 300 rows, its selectivity is 0.2. The optimizer needs this number before it runs anything, because every cost formula in the next section starts from how many rows each step will produce. It cannot know the number exactly, so it estimates it from a few facts it stores per table and per column. Those facts, and the formulas that turn them into an estimate, are what this section is about.</p>
 
 <pre class="equation"><code>per table:   N rows, B blocks          per column:  distinct values V, min/max, histogram<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner">3</a></sup>
 
@@ -132,10 +133,9 @@ selectivity guesses (System R's, still everywhere):<sup class="src"><a href="#sr
 
 survivors(σ) = N × selectivity       , chain them for ANDed terms (independence assumed!)<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 76.1. Row Estimation Examples">5</a></sup></code></pre>
 
-<p class="keep-in-present">Two famous lies power everything: <em>uniformity</em> (values
-spread evenly) and <em>independence</em> (predicates don't correlate). When plans go bad at
+<p class="keep-in-present">Two simplifying assumptions power every formula above, and both are usually false, which is why this lecture calls them the two famous lies. <em>Uniformity</em>: a column's values are spread evenly between its min and max, so a range predicate keeps a share of rows equal to the share of the range it covers. <em>Independence</em>: two predicates do not correlate, so the fraction of rows surviving both is the product of the two fractions. When plans go bad at
 3am, one of these lies is usually why: <code>city = 'Charlottesville' AND state = 'VA'</code>
-is not two independent filters<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner (Extended Statistics)">3</a></sup>.</p>
+is not two independent filters, because every Charlottesville row is already a Virginia row<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner (Extended Statistics)">3</a></sup>.</p>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · be the planner for one minute</span>
@@ -156,9 +156,9 @@ is not two independent filters<sup class="src"><a href="#src-3" title="PostgreSQ
 <!-- ============================================================ -->
 <h2 id="cost">Costing a plan</h2>
 
-<p class="keep-in-present">A price without a purchase: the cost model runs your Lab 4
-counting experiment <em>hypothetically</em>, over shapes it never executes, using statistics
-in place of reality. The currency has never changed:</p>
+<p class="keep-in-present">The cost model prices a plan without running it: it repeats your Lab 4
+counting experiment <em>hypothetically</em>, over plan shapes it never executes, using statistics
+in place of the real row counts. The unit of cost is the one this course has used since week 1, the block read:</p>
 
 <h3 class="new-slide" data-kicker="Costing a plan">Blocks, again, always blocks</h3>
 
@@ -175,8 +175,8 @@ is your Lab 4 CountingScan experiment, run <em>hypothetically</em> over every ca
 
 <h3 class="new-slide" data-kicker="Costing a plan">Watch the plan flip</h3>
 
-<p>The two formulas above disagree about who wins, and the answer depends entirely on
-selectivity. Drag the slider and watch the optimizer's choice flip:</p>
+<p>The first two formulas above, the table scan and the index lookup, disagree about which is cheaper, and the answer depends entirely on
+<span class="gloss" data-gloss="selectivity">selectivity</span>. The table scan costs B blocks no matter how many rows match; the index costs about one block read per matching row, so it gets more expensive as more rows match. Drag the slider and watch the optimizer's choice flip:</p>
 
 <div class="viz" id="viz-flip">
   <div class="viz-title">index scan vs sequential scan · 100,000 rows, 1,000 blocks, tree height 3</div>
@@ -191,8 +191,8 @@ selectivity. Drag the slider and watch the optimizer's choice flip:</p>
   <div id="flip-readout"></div>
   <p class="viz-caption">The crossover sits near 1% on this table, far lower than most
   people's instinct. "I added an index, why isn't it used?" is usually this chart: the
-  optimizer did the same arithmetic and the index lost. Below the flip, the index wins by
-  orders of magnitude; above it, it loses politely.</p>
+  optimizer did the same arithmetic and the index lost. Below the crossover, where few rows match, the index wins by
+  orders of magnitude; above it, where many rows match, every match costs its own block read, and the plain scan, which reads each block exactly once, is cheaper.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -207,26 +207,26 @@ combinatorially. Both were foreshadowed weeks ago:</p>
 <table>
   <thead><tr><th>Algorithm</th><th>Idea</th><th>Shines when</th><th>You've basically built it</th></tr></thead>
   <tbody>
-    <tr><td><strong>Nested loop</strong></td><td>for each left row, walk right</td><td>tiny right side, or an index on it<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>Lab 4's ProductScan</td></tr>
-    <tr><td><strong>Hash join</strong></td><td>hash the small side into memory; probe with the big side<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>equality joins, one side fits in RAM<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 36.15. Operator Optimization Information (HASHES)">7</a></sup></td><td>Lab 4's Going-Further CachingScan + a dict</td></tr>
-    <tr><td><strong>Merge join</strong></td><td>sort both sides, zip through in step</td><td>inputs already sorted (indexes! B+ leaves!)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>Lab 6's chained leaves are a sorted stream</td></tr>
+    <tr><td><strong>Nested loop</strong></td><td>for each row of the left table, read through the right table looking for rows that match it</td><td>the right side is tiny, or has an index on the join column, so each pass over it is cheap<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>Lab 4's ProductScan</td></tr>
+    <tr><td><strong>Hash join</strong></td><td>read the smaller table once and put every row into an in-memory hash table keyed by its join column; then read the bigger table once and, for each row, look up its join value in that hash table<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>the join condition is an equality, and the smaller side fits in memory<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 36.15. Operator Optimization Information (HASHES)">7</a></sup></td><td>Lab 4's Going-Further CachingScan plus a Python dict keyed on the join column</td></tr>
+    <tr><td><strong>Merge join</strong></td><td>sort both tables on the join column, then walk the two sorted streams together, advancing whichever side is behind, so each row is read once</td><td>both inputs are already sorted on the join column, which a B+ tree index gives for free by walking its chained leaves<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>Lab 6's chained leaves are a sorted stream</td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Join order">Order matters exponentially</h3>
 
-<p class="keep-in-present">Joining n tables admits a catalan-number explosion of orders:10
-tables ≈ 17 <em>billion</em> shapes. System R's dynamic programming prunes it to feasible<sup class="src"><a href="#src-8" title="Introduction to the Join Ordering Problem (Querify Labs)">8</a></sup>;
+<p class="keep-in-present">The number of ways to order a join grows faster than exponentially with the number of tables: 10
+tables can be joined in roughly 17 <em>billion</em> distinct shapes. System R's dynamic programming avoids trying them all: it finds the cheapest way to join each small group of tables once, then builds larger groups only from those cheapest pieces, which keeps the search feasible<sup class="src"><a href="#src-8" title="Introduction to the Join Ordering Problem (Querify Labs)">8</a></sup>;
 modern planners add heuristics and genetic search above ~12 tables<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 19.7. Query Planning (geqo_threshold)">9</a></sup> (all descendants of
-System R's <span class="gloss" data-gloss="access-path">access-path</span> selection). The reason your dashboards
-sometimes "flip plans" overnight: statistics shifted, a different order won the auction<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>. Now
+System R's <span class="gloss" data-gloss="access-path">access-path</span> selection). This is the reason your dashboards
+sometimes "flip plans" overnight: the statistics shifted, the costs were recomputed, and a different join order came out cheapest<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>. Now
 you know who to interrogate (<code>EXPLAIN</code>) and what to refresh
 (<code>ANALYZE</code>).</p>
 
 <h3 class="new-slide" data-kicker="Join order">Feel the explosion: pick an order</h3>
 
-<p>Three tables, two join predicates, three left-deep orders; every order returns the same
-3,000 rows, but the work in the middle is not the same work:</p>
+<p>Three tables, two join predicates, three <span class="gloss" data-gloss="left-deep">left-deep</span> orders (each join takes the result so far on its left and one fresh table on its right); every order returns the same
+3,000 rows, but the amount of work in the middle differs:</p>
 
 <div class="viz" id="viz-order">
   <div class="viz-title">join order · students (300 rows) ⋈ majors (3) ⋈ enrollments (3,000)</div>
@@ -252,21 +252,21 @@ you know who to interrogate (<code>EXPLAIN</code>) and what to refresh
 
 <p class="keep-in-present">Thursday, in class, 70 minutes, 39 multiple-choice questions,
 closed book. Concepts over trivia; if you can explain each lab's <em>measured number</em>,
-you can pass it walking backwards.</p>
+you can pass it.</p>
 
 <h3 class="new-slide" data-kicker="Midterm review">The map of weeks 1–8</h3>
 
 <table>
   <thead><tr><th>Week</th><th>The one idea</th><th>The number to explain</th></tr></thead>
   <tbody>
-    <tr><td>1 · files</td><td>whole blocks; trips are the currency</td><td>your fsync ratio</td></tr>
-    <tr><td>2 · buffer pool</td><td>pin/unpin; LRU; the miss term owns the average</td><td>0% at 49 of 50 frames</td></tr>
+    <tr><td>1 · files</td><td>disk moves whole blocks, never single bytes; cost is counted in trips to disk</td><td>your fsync ratio</td></tr>
+    <tr><td>2 · buffer pool</td><td>pin and unpin; LRU eviction; the miss rate times the disk cost dominates the average access time</td><td>0% at 49 of 50 frames</td></tr>
     <tr><td>3 · records</td><td>fixed slots buy O(1); deletes are flags; RIDs are stable</td><td>59 vs 527 blocks for 10k rows</td></tr>
-    <tr><td>4 · iterators</td><td>one interface; pull don't build; shape is free, work isn't</td><td>900 vs 60 pairs</td></tr>
+    <tr><td>4 · iterators</td><td>one Scan interface; pull rows one at a time instead of building whole intermediate tables; rearranging the plan tree is free, but the work each shape does is not</td><td>900 vs 60 pairs</td></tr>
     <tr><td>5 · SQL</td><td>lex → parse → describe → plan; correct first</td><td>the same 900, now automatic</td></tr>
-    <tr><td>6 · B+ trees</td><td>split up, grow at the root; fan-out beats cleverness</td><td>4,091× and height 11</td></tr>
+    <tr><td>6 · B+ trees</td><td>a full node splits and pushes one key up; the tree grows only at the root; a large fan-out keeps the height tiny</td><td>4,091× and height 11</td></tr>
     <tr><td>7 · WAL</td><td>old value to the log first; one fsync that matters</td><td>$50 vanished and returned</td></tr>
-    <tr><td>8 · concurrency</td><td>isolation is purchased; 2PL vs MVCC</td><td>110 where 120 belonged</td></tr>
+    <tr><td>8 · concurrency</td><td>isolation has a price, paid in locks or in versions; 2PL vs MVCC</td><td>110 where 120 belonged</td></tr>
   </tbody>
 </table>
 
@@ -279,7 +279,7 @@ you can pass it walking backwards.</p>
   <li>☐ Re-read the five FAQ sections you skimmed. (You know which ones.)</li>
   <li>☐ Do NOT memorize API signatures, flag names, or exact byte offsets beyond the ada row;
   the exam tests why, not what.</li>
-  <li>☐ Sleep. A rested guess beats a tired certainty; this is also queueing theory.</li>
+  <li>☐ Sleep. A rested guess beats a tired certainty.</li>
 </ul>
 
 <!-- ============================================================ -->
@@ -288,11 +288,11 @@ you can pass it walking backwards.</p>
 <ul class="recap-list">
   <li><strong>The optimizer = statistics + cost model + search.</strong> All three are
   guesses; estimated-vs-actual in EXPLAIN is where the guessing shows<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</li>
-  <li><strong>Selectivity runs the show</strong>, and its two convenient lies (uniformity,
-  independence) are where production plans go to die.</li>
-  <li><strong>Act I is complete.</strong> You built an engine and can now read any engine's
-  mind. After Thursday: the systems data scientists actually live in (columns, vectors,
-  clusters) with your x-ray vision along.</li>
+  <li><strong>Selectivity runs the show</strong>: every cost starts from a row-count estimate, and the two convenient lies behind those estimates (uniformity,
+  independence) are the usual reason a production plan is bad.</li>
+  <li><strong>Act I is complete.</strong> You built a storage engine and can now read any engine's
+  plan. After Thursday: the systems data scientists actually live in (column stores, vector
+  databases, clusters), read with the same skills.</li>
 </ul>
 
 <p class="keep-in-present"><strong>Thursday: midterm.</strong> <strong>Next Tuesday:</strong>
@@ -303,9 +303,9 @@ default for analysis all along. Quiz 7 (transactions &amp; MVCC) opens that clas
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Will microdb get an optimizer in a later lab?</h3>
-<p class="keep-in-present">No: Act II begins Thursday-after-next, and microdb rests at seven
-proud layers. The Going-Further path exists (Lab 6 wired an index into the planner; add
-statistics to the catalog and a cost comparison and you have a baby Selinger). Some students
+<p class="keep-in-present">No: Act II begins after the midterm, and microdb stays at its seven
+layers. The Going-Further path exists (Lab 6 wired an index into the planner; add
+statistics to the catalog and a cost comparison between candidate plans, and you have a small version of the System R optimizer). Some students
 make it a final-project appendix; it's a good one.</p>
 
 <h3 class="keep-in-present">Why do plans change when I add LIMIT 10?</h3>
@@ -349,6 +349,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 </body>
 </html>

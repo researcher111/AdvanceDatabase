@@ -45,10 +45,10 @@
 Every system this semester fit on your laptop: microdb, DuckDB, microvector, micro-rag. Today
 the data stops fitting, and the fix is the same move you've now seen four times: split the
 data (partitioning), push the work to the pieces (like predicate pushdown), and pay a
-structured price to regroup (the shuffle, the network's version of Lab 4's join cost). One
+structured price to regroup (the <span class="gloss" data-gloss="shuffle">shuffle</span>, the network's version of Lab 4's join cost). One
 pattern, MapReduce, organizes all of it; Spark packages the pattern behind lazy query plans
 that will look suspiciously like microdb's Scan trees; Ray strips it down to "run my Python
-function on many cores." Thursday you build the pattern raw, then run both products.
+function on many cores." Thursday you build the pattern by hand, then run both products.
 </p>
 
 <div class="cite">
@@ -93,15 +93,15 @@ as possible, and everything else is packaging.</p>
   <thead><tr><th>Resource</th><th>One machine</th><th>10 TB job needs</th><th>The distributed answer</th></tr></thead>
   <tbody>
     <tr><td>Disk read</td><td>~2 GB/s sequential</td><td>~85 min just to read once<sup class="src"><a href="#src-2" title="What is PCIe Gen 4 for SSDs, and how does it compare to Gen 3 and Gen 5? (Samsung Business Insights)">2</a></sup></td><td>100 machines read their own 100 GB in ~1 min</td></tr>
-    <tr><td>Memory</td><td>hundreds of GB</td><td>working sets past RAM</td><td>each partition's working set fits its machine</td></tr>
-    <tr><td>Failure</td><td>rare, fatal</td><td>~guaranteed across 100 machines × hours<sup class="src"><a href="#src-3" title="Designs, Lessons and Advice from Building Large Distributed Systems (Jeff Dean, LADIS 2009 keynote)">3</a></sup></td><td>re-run the failed piece, which requires pieces</td></tr>
+    <tr><td>Memory</td><td>hundreds of GB</td><td>the <span class="gloss" data-gloss="working-set">working set</span> (the data the job needs at hand at once) is larger than RAM, so the machine spends its time swapping it to disk and back</td><td>split 100 ways, each machine's share of the working set fits in its own RAM</td></tr>
+    <tr><td>Failure</td><td>a crash is rare, but when one happens the whole job dies and starts over from zero</td><td>with 100 machines running for hours, at least one failure is close to certain<sup class="src"><a href="#src-3" title="Designs, Lessons and Advice from Building Large Distributed Systems (Jeff Dean, LADIS 2009 keynote)">3</a></sup></td><td>only the piece that was on the failed machine is re-run, which is possible only because the job was already split into pieces</td></tr>
   </tbody>
 </table>
 
 <p class="keep-in-present">Note what did <em>not</em> break: the logic. Counting per URL is
 the same computation at any scale; the distributed problem is placement, movement, and
-retry. That's why the pattern separates <strong>what you compute</strong> (two functions you
-write) from <strong>where it runs</strong> (plumbing you rent).</p>
+retry. That's why MapReduce, the pattern the rest of this lecture is about, separates <strong>what you compute</strong> (two functions you
+write, map and reduce) from <strong>where it runs</strong> (the placement, movement, and retry machinery that the framework supplies and you never write).</p>
 
 <!-- ============================================================ -->
 <h2 id="partition">Partitioning</h2>
@@ -117,7 +117,7 @@ record. Two rules cover practically everything, and you have used both:</p>
     <tr><td>Rule</td><td><code>owner = hash(key) % n</code></td><td>owner holds a key interval (a–f, g–m, …)</td></tr>
     <tr><td>Strength</td><td>spreads uniformly, no planning, any machine can compute the route alone<sup class="src"><a href="#src-4" title="Hashed Sharding (MongoDB Manual)">4</a></sup></td><td>range queries touch few partitions; sorted neighbors stay together</td></tr>
     <tr><td>Weakness</td><td>range queries touch <em>every</em> partition</td><td>needs split points chosen well; hot ranges overload one machine<sup class="src"><a href="#src-5" title="Design a schema (Google Cloud Bigtable documentation)">5</a></sup></td></tr>
-    <tr><td>You've used it as</td><td>Thursday's shuffle; every hash join's build side</td><td>Lab 8's Hive folders (<code>month=12/</code>); B+ tree leaves are ranges</td></tr>
+    <tr><td>You've used it as</td><td>Thursday's shuffle, which sends each key to the machine its hash names; a hash join's build side, where rows with equal keys land in the same bucket by the same rule</td><td>Lab 8's Hive-style folders (<code>month=12/</code>), where each folder holds one interval of the key; a B+ tree, where each leaf holds one sorted interval of keys</td></tr>
   </tbody>
 </table>
 
@@ -139,7 +139,7 @@ record. Two rules cover practically everything, and you have used both:</p>
   </div>
   <p class="viz-caption">Point queries: a tie, both rules route to exactly one partition.
   The range query is where they part company: sorted neighbors live together under range
-  partitioning, and nowhere in particular under hash. Every system in this course's Act II
+  partitioning, and nowhere in particular under hash. Every system in the second half of this course
   picks its rule by which query it must make cheap.</p>
 </div>
 
@@ -148,8 +148,8 @@ record. Two rules cover practically everything, and you have used both:</p>
 <p class="keep-in-present">Hash partitioning promises balance <em>across keys</em>, not
 <em>across rows</em>: if one key carries 40% of the records
 (<span class="gloss" data-gloss="skew">skew</span>, the "celebrity problem"), its partition
-becomes the <span class="gloss" data-gloss="straggler">straggler</span> the whole job waits on. Real engines salt the hot key (append a random
-suffix, aggregate twice) or handle it separately<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup>. Diagnosis first: Spark's UI shows one task
+becomes the <span class="gloss" data-gloss="straggler">straggler</span> the whole job waits on. Real engines salt the hot key: append a random
+suffix to it so its rows spread across several partitions, aggregate each of those partitions, then strip the suffix and aggregate the partial totals once more; or they handle the famous key separately<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup>. Diagnosis first: Spark's UI shows one task
 running long after 99 finished; now you know what that means<sup class="src"><a href="#src-7" title="Skew and spill (Databricks on AWS documentation)">7</a></sup>.</p>
 
 <div class="viz" id="viz-skew">
@@ -173,9 +173,7 @@ running long after 99 finished; now you know what that means<sup class="src"><a 
   <p class="keep-in-present">Skew has a celebrity mascot. Instagram's early engineers spoke
   openly about what they called the Justin Bieber problem: any data keyed by account behaved
   beautifully for millions of users and melted for the handful whose every post drew millions
-  of likes: one key, one shard, all the load<sup class="src"><a href="#src-8" title="Scaling Instagram Infrastructure (Lisa Guo, QCon San Francisco 2016 slides)">8</a></sup>. Their fixes were this slide's menu: denormalize
-  the hot counts, special-case celebrity accounts, redesign keys so no single row is the
-  whole story. The general lesson travels everywhere partitioning does: real-world
+  of likes: one key, one shard (a partition, in database vocabulary), all the load<sup class="src"><a href="#src-8" title="Scaling Instagram Infrastructure (Lisa Guo, QCon San Francisco 2016 slides)">8</a></sup>. Their fixes were this slide's menu: store the hot like counts as a precomputed number instead of recounting them on every read, special-case celebrity accounts, and redesign keys so that one famous account's data is spread over many rows instead of piling onto one. The general lesson travels everywhere partitioning does: real-world
   popularity is power-law distributed, so "uniform hash, uniform load" is an assumption
   your most famous key will personally violate<sup class="src"><a href="#src-9" title="Zipf's law and the Internet (Adamic and Huberman, Glottometrics 3, 2002)">9</a></sup>.</p>
 </div>
@@ -236,7 +234,7 @@ see the routing arithmetic.</p>
 
 counts.collect()                                      # NOW it runs</code></pre>
 
-<p class="keep-in-present">Transformations come in two kinds, and the difference is the
+<p class="keep-in-present">Spark's unit of data is the <span class="gloss" data-gloss="rdd">RDD</span>, a resilient distributed dataset: one collection, cut into partitions that live on different machines. A transformation is a call that derives a new RDD from an old one. Transformations come in two kinds, and the difference is the
 entire cost model: <strong>narrow</strong> ones (<code>flatMap</code>, <code>map</code>,
 <code>filter</code>) stay inside each partition: free to chain, and Spark fuses them into
 one pass. <strong>Wide</strong> ones (<code>reduceByKey</code>, <code>join</code>,
@@ -259,7 +257,7 @@ wide transformations in a Spark job and you've counted its
 break is the stage boundary, and the stage boundary <em>is</em> the shuffle. Spark also keeps
 this plan around as <span class="gloss" data-gloss="lineage">lineage</span>: if a machine
 dies mid-job, its partitions are recomputed from the plan rather than restored from a backup<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup>.
-The plan is the fault tolerance.</p>
+Nothing is copied ahead of time; the recorded plan is what makes a lost partition recoverable.</p>
 
 <!-- ============================================================ -->
 <h2 id="ray">Ray</h2>
@@ -269,7 +267,7 @@ of data-science compute isn't; it's "run this Python function 10,000 times": emb
 document, train per-city models, tune hyperparameters. Ray's offer is exactly that, with
 almost no ceremony:</p>
 
-<h3 class="new-slide" data-kicker="Ray">Tasks: two decorators' worth of distributed</h3>
+<h3 class="new-slide" data-kicker="Ray">Tasks: one decorator makes a function distributed</h3>
 
 <pre><code class="language-python">@ray.remote                               # this function may run anywhere
 def embed_remote(text):
@@ -284,8 +282,8 @@ serial:      0.92 s
 parallel:    0.16 s     speedup: 5.7x
 identical results: True</code></pre>
 
-<p class="keep-in-present">The measured run, Thursday's Part C. The classic mistake is
-<code>ray.get()</code> inside the launch loop; wait-per-task is serial with extra steps, and<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup>
+<p class="keep-in-present">The measured run, Thursday's Part C. The classic mistake is calling
+<code>ray.get()</code> inside the launch loop: each task is then launched and waited on before the next is launched, so the tasks run one at a time exactly as the serial version did, with the cost of shipping each call to a worker added on top, and<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup>
 the lab's timing test catches it. For state that must live <em>on</em> a worker (a loaded
 model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors</span>:
 <code>@ray.remote</code> on a class instead of a function<sup class="src"><a href="#src-15" title="Actors (Ray Core documentation)">15</a></sup>.</p>
@@ -295,16 +293,16 @@ model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors
 <table>
   <thead><tr><th>Your job looks like…</th><th>Reach for</th><th>Because</th></tr></thead>
   <tbody>
-    <tr><td>SQL-ish dataflow over huge records (filter, join, aggregate)</td><td>Spark (or DuckDB until it doesn't fit!)</td><td>the optimizer and shuffle machinery are the product</td></tr>
-    <tr><td>the same Python function, many times, maybe stateful</td><td>Ray</td><td>tasks and actors map 1:1 onto the code you already wrote</td></tr>
-    <tr><td>fits on one machine</td><td>one machine</td><td>Lecture 10's lesson still binds: distribution is a tax you pay only when forced</td></tr>
+    <tr><td>SQL-style dataflow over huge records (filter, join, aggregate)</td><td>Spark, once the data no longer fits one machine; DuckDB until then</td><td>Spark's value is its query optimizer and its shuffle machinery, which together turn a SQL-style plan into work spread across machines</td></tr>
+    <tr><td>the same Python function, many times, maybe stateful</td><td>Ray</td><td>a Ray task is your function with a decorator on it, and an actor is your class with the same decorator, so the code you already wrote carries over almost unchanged</td></tr>
+    <tr><td>fits on one machine</td><td>one machine</td><td>Lecture 10's lesson still holds: distributing a job adds cost (coordination, the shuffle, machines to operate), so pay it only when the data or the memory genuinely does not fit</td></tr>
   </tbody>
 </table>
 
 <!-- ============================================================ -->
 <h2 id="thursday">On Thursday you run all three</h2>
 
-<p>Lab 11, in the same spirit as always: build the naked pattern first, then meet the
+<p>Lab 11, in the same spirit as always: build the bare pattern by hand first, then run the same job on the two
 products:</p>
 
 <ul class="checklist">
@@ -312,7 +310,7 @@ products:</p>
   hash partitioning, the shuffle, and reduce; the harness checks the grouping guarantee
   and that the answer is independent of partition count.</li>
   <li>☐ <strong>Part B (pyspark):</strong> the same word count in three chained calls;
-  print the DAG and point at the shuffle in it.</li>
+  print the DAG (the directed acyclic graph of steps Spark plans to run, the plan shown above) and point at the shuffle in it.</li>
   <li>☐ <strong>Part C (ray):</strong> parallelize an embedding job; measure the speedup
   and the launch-then-wait discipline.</li>
   <li>☐ Install ahead of class: <code>pip install pyspark ray</code>; pyspark needs Java
@@ -343,22 +341,21 @@ rates. Quiz 11 opens class: MapReduce, Spark &amp; Ray.</p>
 <h3 class="keep-in-present">Is MapReduce dead? I've heard "nobody writes MapReduce anymore."</h3>
 <p class="keep-in-present">The <em>API</em> retired; the <em>pattern</em> runs everything.
 Spark, DuckDB's parallel aggregation, BigQuery, Snowflake: all execute map-shuffle-reduce<sup class="src"><a href="#src-17" title="Parallel Grouped Aggregation in DuckDB (DuckDB blog)">17</a></sup>
-under nicer front ends. It's COBOL vs. the ledger: the notation aged, the accounting is
-eternal. When a Spark job stalls, the diagnosis is always in this lecture's vocabulary:
+under nicer front ends. When a Spark job stalls, the diagnosis is always in this lecture's vocabulary:
 which stage, which shuffle, which skewed key.</p>
 
 <h3 class="keep-in-present">Why did we learn DuckDB if Spark exists?</h3>
 <p class="keep-in-present">Because a 2025-era laptop crunches hundreds of GB in DuckDB with
-zero cluster tax: no JVM, no shuffle, no ops<sup class="src"><a href="#src-18" title="Memory Management in DuckDB (DuckDB blog)">18</a></sup>. The honest decision procedure: DuckDB until
+none of the cost a cluster adds: no JVM to run, no shuffle over the network, no fleet of machines to operate<sup class="src"><a href="#src-18" title="Memory Management in DuckDB (DuckDB blog)">18</a></sup>. The honest decision procedure: DuckDB until
 data or memory genuinely doesn't fit, then Spark. Teams that skip step one pay the
 distribution tax on data that fit in RAM all along.</p>
 
 <h3 class="keep-in-present">Where does the shuffle physically put the data?</h3>
 <p class="keep-in-present">Mappers write their output partitioned by destination into local
 files; reducers pull their slice from every mapper over the network; disk on both ends<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup>,
-which is why the shuffle dominates job cost and why "shuffle spill" is the first metric a
+which is why the shuffle dominates job cost and why "shuffle spill" (shuffle data that outgrew memory and had to be written to disk) is the first metric a
 Spark tuner checks. Cloud engines increasingly shuffle through object storage (S3), trading
-latency for elasticity; the storage/compute split from Lecture 10, again<sup class="src"><a href="#src-19" title="Cloud Shuffle Storage Plugin for Apache Spark (AWS Glue Developer Guide)">19</a></sup>.</p>
+some latency for elasticity (workers can be added or removed mid-job without losing shuffle data); the storage/compute split from Lecture 10, again<sup class="src"><a href="#src-19" title="Cloud Shuffle Storage Plugin for Apache Spark (AWS Glue Developer Guide)">19</a></sup>.</p>
 
 <h3 class="keep-in-present">Could our RAG project need Spark or Ray?</h3>
 <p class="keep-in-present">The retrieval path shouldn't; your corpus fits comfortably on one
@@ -401,6 +398,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
+<script src="viz.js?v=4"></script>
 </body>
 </html>

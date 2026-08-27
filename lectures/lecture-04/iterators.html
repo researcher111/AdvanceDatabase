@@ -86,28 +86,29 @@ objects</strong>, and you already built the bottom one.</p>
 <!-- ============================================================ -->
 <h2 id="pull">Queries without room to run</h2>
 
+<p>First, the problem. The obvious way to run <code>SELECT name FROM students WHERE gpa &gt; 3.5</code> is in stages: the scan produces a table of every student, the filter reads that table and produces a smaller one, and the projection reads that and produces the answer. Every intermediate table has to live somewhere while the next stage reads it, and for a join the first intermediate table is the product of the two inputs, which can be far larger than the tables themselves. An engine that builds each stage&#39;s whole output before starting the next runs out of memory on exactly the queries that matter.</p>
+
 <h3 class="new-slide" data-kicker="Queries without room to run">The fix: pull, don't build</h3>
 
 <p class="keep-in-present">Instead of each stage <em>building its whole output</em>, each stage
 answers <strong>"give me your next row"</strong> by pulling just enough from the stage below<sup class="src"><a href="#src-3" title="PostgreSQL source: src/backend/executor/README">3</a></sup>.
-One row in flight per operator; memory use is the plan's <em>depth</em>, not the data's
-<em>size</em>. Each stage just remembers its <span class="gloss" data-gloss="cursor">cursor</span>.
+Each operator holds one row at a time, so the memory a plan needs grows with the number of operators stacked in it (its <em>depth</em>), not with the number of rows in the tables (the data's <em>size</em>). Between calls, each stage remembers only its <span class="gloss" data-gloss="cursor">cursor</span>, its position in the rows it is reading.
 Your TableScan already works this way (one pinned block, remember), so the
 entire query engine can too.</p>
 
 <table>
   <thead><tr><th></th><th>Materialize each stage</th><th>Pull one row at a time</th></tr></thead>
   <tbody>
-    <tr><td>Memory</td><td>O(intermediate results), can exceed the data</td><td>O(plan depth), a few rows</td></tr>
+    <tr><td>Memory</td><td>grows with the size of the intermediate results, which can be larger than the tables themselves (a product's output is |left| × |right| rows)</td><td>grows with the number of operators in the plan: one row per operator, a few rows in total</td></tr>
     <tr><td>First result arrives</td><td>after the whole stage finishes</td><td>almost immediately</td></tr>
-    <tr><td>When it's forced anyway</td><td colspan="2">sort and group-by must see everything before emitting; they break the pipeline on purpose (week 9)<sup class="src"><a href="#src-2" title="Volcano: An Extensible and Parallel Query Evaluation System (IEEE TKDE, 1994)">2</a></sup></td></tr>
+    <tr><td>When it's forced anyway</td><td colspan="2">sort and group-by cannot emit their first row until they have read their last input row (the smallest row might be the last one), so they collect their whole input first, deliberately breaking the one-row-at-a-time flow (week 9)<sup class="src"><a href="#src-2" title="Volcano: An Extensible and Parallel Query Evaluation System (IEEE TKDE, 1994)">2</a></sup></td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Queries without room to run">You already know this pattern</h3>
 
 <table>
-  <thead><tr><th>World</th><th>The lazy one-at-a-time thing</th><th>The eager build-it-all thing</th></tr></thead>
+  <thead><tr><th>World</th><th>Lazy: produces one item when asked</th><th>Eager: builds the whole result first</th></tr></thead>
   <tbody>
     <tr><td>Python</td><td>a generator (<code>yield</code>), <code>range()</code></td><td>a list comprehension</td></tr>
     <tr><td>pandas</td><td><code>read_csv(chunksize=…)</code></td><td><code>read_csv()</code> whole</td></tr>
@@ -169,9 +170,9 @@ methods <em>is</em> a scan. TableScan qualifies already; Thursday you write thre
 <table>
   <thead><tr><th>Operator</th><th>close() does</th><th>Why it matters</th></tr></thead>
   <tbody>
-    <tr><td>TableScan</td><td>unpin its current block</td><td>the week-2 contract, honored at the bottom</td></tr>
-    <tr><td>Select / Project</td><td>close the wrapped scan</td><td>pass the duty down</td></tr>
-    <tr><td>Product</td><td>close both sides</td><td>two tables → two pinned blocks → two releases</td></tr>
+    <tr><td>TableScan</td><td>unpin its current block</td><td>Lab 2&#39;s rule was that every pin(block) must be matched by an unpin. TableScan is the only operator that pins anything, so it is the place where that rule is finally kept.</td></tr>
+    <tr><td>Select / Project</td><td>close the wrapped scan</td><td>These operators pin nothing themselves. Their only duty is to call close() on the scan they wrap, which passes the release down the tree until it reaches a TableScan.</td></tr>
+    <tr><td>Product</td><td>close both sides</td><td>A product wraps two scans, and each holds one pinned block, so its close() must call close() on both sides. Close only one and the other side&#39;s block stays pinned forever.</td></tr>
   </tbody>
 </table>
 
@@ -185,7 +186,7 @@ a pin. Thursday's harness checks the pool after every query.</p>
   <thead><tr><th>Interface method</th><th>What Lab 3's TableScan does for it</th></tr></thead>
   <tbody>
     <tr><td><code>before_first</code></td><td>back to block 0, slot −1</td></tr>
-    <tr><td><code>next</code></td><td>the tombstone-skipping, block-crossing loop you wrote</td></tr>
+    <tr><td><code>next</code></td><td>the <span class="gloss" data-gloss="tombstone">tombstone</span>-skipping, block-crossing loop you wrote</td></tr>
     <tr><td><code>get_val</code></td><td><em>new this week</em>: 3 lines, int fields via get_int, strings via get_string</td></tr>
     <tr><td><code>has_field</code></td><td><em>new this week</em>: is the field in my schema?</td></tr>
     <tr><td><code>close</code></td><td>unpin the current block</td></tr>
@@ -211,10 +212,12 @@ exact lines you'll write Thursday. Readability is the point: each class states i
   <div class="code-step" data-step="s2" data-explain="">                return True</div>
   <div class="code-step" data-step="s2" data-explain="Underlying scan exhausted: so are we.">        return False</div>
   <div class="code-step" data-step="s3" data-step-name="everything else" data-explain="get_val, has_field, before_first, close: pure delegation. Selection changes WHICH rows appear, never what a row looks like, so all row-shape questions pass straight through.">    # get_val / has_field / before_first / close: delegate downward</div>
-  <div class="code-explain-panel">Hover a line. The filter is five lines; the philosophy (skip, don't copy) is the whole model.</div>
+  <div class="code-explain-panel">Hover a line. The filter is five lines. Its one idea, skip a rejected row instead of copying accepted rows into a new table, is the idea the whole iterator model rests on.</div>
 </div>
 
 <h3 class="new-slide" data-kicker="Select &amp; Project">ProjectScan: a fence, not a copy</h3>
+
+<p>A projection could build a new, narrower row for every input row. ProjectScan does not. It leaves the row where it is, in the scan underneath, and simply refuses to answer <code>get_val</code> for any field outside its list. That refusal is the "fence": nothing is copied, and a caller who asks for a projected-away field gets a <code>ValueError</code> instead of a quietly wrong value.</p>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="p1" data-explain="Wraps any scan plus the list of fields to keep.">class ProjectScan:                      # the SELECT list</div>
@@ -227,6 +230,8 @@ exact lines you'll write Thursday. Readability is the point: each class states i
 </div>
 
 <h3 class="new-slide" data-kicker="Select &amp; Project">Predicates, and the little class that enables joins</h3>
+
+<p>A predicate is the WHERE clause as data: a list of terms, each a (field, operator, right-hand side) triple, all AND-ed together, and a row passes only if every term is true. The right-hand side is normally a literal such as 35. Wrapping it in <code>F</code> marks it as the name of another field instead, so <code>("mid", "=", F("mid2"))</code> means "compare this row&#39;s mid with its mid2", which is exactly a join condition.</p>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="f" data-step-name="F" data-explain="Four lines that unlock joins: F('mid2') marks a right-hand side as a FIELD to look up, not a literal to compare against.">class F:                                  # "this rhs is a field"</div>
@@ -298,10 +303,10 @@ watch what <code>before_first()</code> must do to the left side before anything 
   <div class="code-step" data-step="j1" data-explain="">        Predicate(("mid", "=", F("mid2")), ("gpa", ">", 35))),</div>
   <div class="code-step" data-step="j1" data-explain="">    ["name", "dept"])</div>
   <div class="code-step" data-step="j2" data-step-name="the result" data-explain="ada→cs, cyd→cs, eli→stat. No special join operator exists yet: product + select IS the join. Better join algorithms (hash, merge, week 9) are optimizations of exactly this.">#  (ada, cs)  (cyd, cs)  (eli, stat)</div>
-  <div class="code-explain-panel">Hover a line: <span class="gloss" data-gloss="cartesian-product">cartesian product</span> plus predicate equals join. Everything else is performance.<sup class="src"><a href="#src-6" title="Database System Concepts, 7th ed., Chapter 16 slides: Query Optimization (Silberschatz, Korth, Sudarshan)">6</a></sup></div>
+  <div class="code-explain-panel">Hover a line: <span class="gloss" data-gloss="cartesian-product">cartesian product</span> plus predicate equals join. Week 9's faster join algorithms produce the same pairs with less work.<sup class="src"><a href="#src-6" title="Database System Concepts, 7th ed., Chapter 16 slides: Query Optimization (Silberschatz, Korth, Sudarshan)">6</a></sup></div>
 </div>
 
-<h3 class="new-slide" data-kicker="Product">The cost, honestly</h3>
+<h3 class="new-slide" data-kicker="Product">The cost</h3>
 
 <pre class="equation"><code>rows the product builds  =  |left| × |right|
 
@@ -324,8 +329,7 @@ and merge joins); both are ways to avoid building pairs you'll throw away.</p>
 </table>
 
 <p class="keep-in-present">The nested loop <em>re-runs its right input for every left row</em>.
-Thursday's measurement puts a counter on a right-side filter that keeps 1 row, and reads 60.
-Remember this table when the number surprises you anyway.</p>
+In Thursday's measurement you put a counter on a filter that sits on the right side of a product. That filter keeps only 1 row (one major has the right dept), yet the counter reports 60 rows going through it, because the product rewinds and re-runs the filter once for each of the 60 left rows that survive their own filter. Remember this table when that number surprises you.</p>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · count the work before running it</span>
@@ -336,9 +340,10 @@ Remember this table when the number surprises you anyway.</p>
   <details><summary>Show answer</summary>
   <p>Left: 6. Right: 6&nbsp;×&nbsp;3&nbsp;=&nbsp;<strong>18</strong> (rewound per left row).
   Pairs built: 18. Pairs passed: 6. With a never-true predicate: <strong>only the last number
-  changes</strong>: 6, 18, 18, 0. The product's work is fixed by the input sizes, not by the
-  answer; that indifference is exactly what pushdown attacks, and what the optimizer will
-  learn to predict in week 9.</p>
+  changes</strong>: 6, 18, 18, 0. The product's work is fixed by the sizes of its two inputs, not by how many pairs
+  survive the filter. Predicate pushdown (next section) exploits that: shrink the inputs before
+  the product and the product's work shrinks with them. Week 9's optimizer learns to predict
+  those input sizes before running anything.</p>
   </details>
 </div>
 
@@ -347,7 +352,7 @@ Remember this table when the number surprises you anyway.</p>
 
 <h3 class="new-slide" data-kicker="Same query, different shapes">Measured: 15× from moving one filter</h3>
 
-<p>Thursday's measurement, run on the reference solution: same query, same 20 result rows:</p>
+<p>Thursday's measurement, run on the reference solution: same query, same 20 result rows. Read each shape from right to left, bottom of the plan to top; σ<sub>gpa</sub>students is shorthand for a SelectScan on the gpa condition wrapped directly around the students scan, so the product only ever sees the rows that passed:</p>
 
 <table>
   <thead><tr><th>Plan</th><th>Shape</th><th>Pairs built</th><th>Rows out</th></tr></thead>
@@ -359,17 +364,17 @@ Remember this table when the number surprises you anyway.</p>
 
 <p class="keep-in-present">Fifteen-fold less work from sliding filters below the product;
 this move is called <span class="gloss" data-gloss="predicate-pushdown">predicate
-pushdown</span>, and it's the first rewrite every optimizer learns<sup class="src"><a href="#src-6" title="Database System Concepts, 7th ed., Chapter 16 slides: Query Optimization (Silberschatz, Korth, Sudarshan)">6</a></sup>. Same answer is
-<em>guaranteed</em> by relational algebra; that guarantee is why the machine is allowed to
-choose.</p>
+pushdown</span>, and it's the first rewrite every optimizer learns<sup class="src"><a href="#src-6" title="Database System Concepts, 7th ed., Chapter 16 slides: Query Optimization (Silberschatz, Korth, Sudarshan)">6</a></sup>. <span class="gloss" data-gloss="relational-algebra">Relational algebra</span>
+<em>guarantees</em> that both shapes return the same rows, and that guarantee is what lets the
+database, rather than the user, choose the shape.</p>
 
 <h3 class="new-slide" data-kicker="Same query, different shapes">Who chooses? (Week 9 knocks)</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Not the user</span><span>SQL is declarative: the whole deal (Lecture 3) was that you name the rows, not the steps.</span></div>
-  <div class="lc-row"><span class="lc-k">The planner, naively</span><span>Thursday-you picks the shape by hand when building plans. Week 5's planner will pick a <em>correct</em> shape mechanically.</span></div>
+  <div class="lc-row"><span class="lc-k">Not the user</span><span>SQL is declarative: as Lecture 3 put it, you name the rows you want, not the steps to find them, so the user never sees a plan shape.</span></div>
+  <div class="lc-row"><span class="lc-k">The planner, naively</span><span>On Thursday you pick the shape by hand when you build plans. Week 5's planner will pick a <em>correct</em> shape mechanically.</span></div>
   <div class="lc-row"><span class="lc-k">The optimizer, eventually</span><span>Week 9's optimizer picks a <em>fast</em> shape, using statistics to predict survivor counts before running anything. The 15× above is the smallest of its wins.</span></div>
-  <div class="lc-row"><span class="lc-k">The lesson to keep</span><span>plan shape is a degree of freedom the answer doesn't depend on. Everything an optimizer does lives in that freedom.</span></div>
+  <div class="lc-row"><span class="lc-k">The lesson to keep</span><span>the answer does not depend on the plan's shape, so the shape is free to change. Every choice an optimizer makes is a choice of shape.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="Same query, different shapes">Pushdown in the wild</h3>
@@ -391,9 +396,9 @@ lecture-1 demo real. The reference TableScan gained <code>get_val</code>/<code>h
 <table>
   <thead><tr><th>You write</th><th>The whole job</th><th>Lines</th></tr></thead>
   <tbody>
-    <tr><td><code>SelectScan.next</code></td><td>the skip-until-satisfied loop</td><td>~5</td></tr>
-    <tr><td><code>ProjectScan.get_val / has_field</code></td><td>the fence</td><td>~6</td></tr>
-    <tr><td><code>ProductScan</code> (4 methods)</td><td>the odometer + field routing</td><td>~15</td></tr>
+    <tr><td><code>SelectScan.next</code></td><td>advance the wrapped scan until a row satisfies the predicate, then stop there</td><td>~5</td></tr>
+    <tr><td><code>ProjectScan.get_val / has_field</code></td><td>answer get_val only for kept fields (ValueError otherwise) and report through has_field which fields survive</td><td>~6</td></tr>
+    <tr><td><code>ProductScan</code> (4 methods)</td><td>the nested loop over both inputs, plus sending each get_val to whichever side has that field</td><td>~15</td></tr>
   </tbody>
 </table>
 
@@ -417,9 +422,9 @@ lecture-1 demo real. The reference TableScan gained <code>get_val</code>/<code>h
   scan wraps any scan, and a query plan is just the resulting tower.</li>
   <li><strong>Pull, don't build.</strong> Demand flows down, single rows flow up; memory is the
   plan's depth. Sort and group-by will be the deliberate exceptions.</li>
-  <li><strong>Shape is free, work isn't.</strong> Product + select = join; filter placement
-  changed work 15× with the answer guaranteed identical; the degree of freedom optimizers
-  live in.</li>
+  <li><strong>Shape is free, work isn't.</strong> Product + select = join. Moving one filter
+  changed the work 15× while the answer stayed identical, and choosing among such shapes is
+  the optimizer's entire job.</li>
 </ul>
 
 <p class="keep-in-present"><strong>Thursday:</strong> build the three operators, run the
@@ -437,9 +442,9 @@ kinder to CPUs, and push them up the tree rather than pulling; same operators, b
 opposite direction<sup class="src"><a href="#src-13" title="DuckDB documentation: Overview of DuckDB Internals (vectors, push-based execution)">13</a></sup>.</p>
 
 <h3>Why does the product re-read its right side instead of caching it?</h3>
-<p class="keep-in-present">Caching is memory, the thing we swore off<sup class="src"><a href="#src-11" title="PostgreSQL documentation: Planner/Optimizer">11</a></sup>. Re-reading costs I/O
-instead… except your week-2 buffer pool usually still has those blocks, which is the two
-layers quietly cooperating. When the right side is huge, real engines do materialize or hash
+<p class="keep-in-present">Caching the right side means holding all of it in memory, which is exactly what the pull model set out to avoid<sup class="src"><a href="#src-11" title="PostgreSQL documentation: Planner/Optimizer">11</a></sup>. Re-reading it costs I/O
+instead, but in practice your week-2 buffer pool usually still holds those blocks, so the re-read
+is served from memory anyway; the two layers cooperate without either knowing about the other. When the right side is huge, real engines do materialize or hash
 it; that's week 9's hash join, a considered trade, not a default<sup class="src"><a href="#src-11" title="PostgreSQL documentation: Planner/Optimizer">11</a></sup>.</p>
 
 <h3>Where are ORDER BY and GROUP BY?</h3>
@@ -481,6 +486,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 </body>
 </html>

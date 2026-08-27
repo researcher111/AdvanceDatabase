@@ -3,6 +3,22 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'steal': {
+      title: 'STEAL',
+      body: '<p>A buffer-pool policy for what happens when memory is full. Under STEAL, the pool may evict, and therefore flush to disk, a dirty page that belongs to a transaction that has not committed yet; the frame is &#39;stolen&#39; from that transaction. This is what lets the pool manage memory freely, but it means a crash can leave uncommitted changes sitting on disk. Recovery must then undo them, which is only possible if the old value was logged before the page was written: the write-ahead rule. NO-STEAL avoids the undo pass by pinning every dirty page until its transaction commits, which is simple but means a large transaction can exhaust the pool.</p>',
+    },
+    'force': {
+      title: 'FORCE',
+      body: '<p>A buffer-pool policy for what happens at COMMIT. Under FORCE, the pool writes every dirty page the committing transaction touched to disk before the COMMIT record is appended to the log. The payoff is that recovery never has to redo a committed transaction, because its data is already on disk whenever its COMMIT record is. The cost is that each commit waits for those page writes, which are random I/O, and that is why production engines choose NO-FORCE and accept a redo pass instead. microdb uses FORCE because it keeps recovery to a single undo pass.</p>',
+    },
+    'kill-9': {
+      title: 'kill -9',
+      body: '<p>A Unix command that tells the operating system to terminate a process immediately, with no warning and no chance to run cleanup code. Anything the process held only in memory, including data pages it had not yet written and log records still sitting in its buffers, is gone the instant the command lands. The operating system&#39;s own cache survives, so bytes already handed to the OS but not yet fsync&#39;d are in a grey zone: they may reach disk, or may not. That makes kill -9 a convenient stand-in for a power cut when testing a database: if the engine&#39;s recovery works after kill -9, it has kept its durability promise without help from an orderly shutdown.</p>',
+    },
+    'mvcc': {
+      title: 'MVCC',
+      body: '<p>Multi-version concurrency control. Instead of overwriting a row in place, the engine keeps several versions of it, each stamped with the transaction that wrote it, and every reader is shown the version that was current when its own transaction began. Writers therefore never block readers and readers never block writers, because they are looking at different copies. Old versions are cleaned up later, once no running transaction can still see them. It is how Postgres keeps the I in ACID; Tuesday&#39;s lecture covers it in full.</p>',
+    },
     'fsync-recall': {
       title: 'fsync — recall',
       body: '<p>Lab 1’s expensive promise: the system call that blocks until bytes are ' +

@@ -3,6 +3,26 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'hashed-bag-of-words': {
+      title: 'Hashed bag-of-words',
+      body: '<p>The embedder Thursday&#39;s lab uses: a text becomes a vector of DIM numbers by counting words. Each word is run through a hash function whose output picks one of the DIM slots, and that slot is incremented; the vector is then normalized to unit length so cosine similarity works. No training and no vocabulary table are needed, which is why it runs in a browser and in 200 lines of Python. Two texts score high only when they share exact words, and that is its known limitation (the synonym wall). Shrinking DIM forces more unrelated words to share slots, so unrelated texts start to look similar; the eval set measures that damage directly.</p>',
+    },
+    'lost-in-the-middle': {
+      title: 'Lost in the middle',
+      body: '<p>A measured weakness of language models given long prompts: they use information near the start and the end of the context well, and information buried in the middle poorly, even when it is exactly what the question needs. Liu et al. showed the effect as a U-shaped curve of accuracy against the position of the relevant passage. For RAG it means that stuffing many chunks into the prompt can hide the one good chunk rather than help. The practical response is to retrieve fewer chunks and to put the best-scoring one first, which is why assembly order is part of the pipeline design.</p>',
+    },
+    'eval-set': {
+      title: 'Eval set',
+      body: '<p>A small, hand-labeled test set for the retriever: a list of questions a real user would ask, each paired with the ids of the documents that actually answer it. It is written once, by people who know the corpus, before any tuning starts. After that, every change to the pipeline (chunk size, embedding width, k, hybrid search on or off) is graded automatically by running the questions through the retriever and computing hit@k and MRR against the labels. It turns &#39;does retrieval work&#39; from an opinion into a number that takes milliseconds to recompute. Thursday&#39;s lab ships a 12-question eval set; your project must write its own.</p>',
+    },
+    'mrr': {
+      title: 'MRR (mean reciprocal rank)',
+      body: '<p>A retrieval score that cares about position, not just presence. For each question, find the rank of the first relevant document in the returned list and take 1 divided by that rank: first place scores 1.0, second 0.5, third 0.33, and a relevant document that never appears scores 0. MRR is the average of those values over every question in the eval set. It punishes a retriever that finds the right chunk but buries it under weaker ones, a case hit@k counts as a full success. That matters because the model reads the chunks in order and attends most to the first.</p>',
+    },
+    'hit-at-k': {
+      title: 'hit@k',
+      body: '<p>A retrieval score between 0 and 1. For each question in the eval set, the retriever returns its top k chunks; the question counts as a hit if at least one of those chunks comes from a document labeled relevant for it. hit@k is the fraction of questions that are hits. It answers one narrow question, did the right document come back at all, and ignores where inside the top k it landed. Thursday&#39;s lab uses k = 3 and requires hit@3 of at least 0.90.</p>',
+    },
     'parametric': {
       title: 'Parametric knowledge',
       body: '<p>Facts stored in the model’s weights (its parameters) during training — ' +

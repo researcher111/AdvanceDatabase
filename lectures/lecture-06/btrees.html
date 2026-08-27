@@ -44,7 +44,7 @@
 <p class="lede">
 Your engine can answer any query, by reading everything. Today we fix that. The B+ tree is
 a map from values to <span class="gloss" data-gloss="rid-recall">RIDs</span> whose height
-grows logarithmically-with-a-huge-base, so a point lookup touches a handful of nodes where a
+grows only logarithmically with the number of rows, and with a huge base (about 200 children per node), so a point lookup touches a handful of nodes where a
 scan touches them all. One structural move (<em>split the full node, push the middle key
 up</em>) keeps it perfectly balanced through any insert order, forever. It is the single
 most consequential data structure in systems, and Thursday you build one.
@@ -76,7 +76,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <li><strong>Grow a B+ tree</strong>: inserts and splits, live and by hand.</li>
   <li><strong>Anatomy</strong>: leaves hold data, internal nodes hold directions.</li>
   <li><strong>The split</strong>: one move; balance falls out for free.</li>
-  <li><strong>Fan-out</strong>: why real trees are four levels tall, not forty.</li>
+  <li><strong><span class="gloss" data-gloss="fanout">Fan-out</span></strong>: why real trees are four levels tall, not forty.</li>
   <li><strong>The bill</strong>: what every index costs on every write.</li>
 </ol>
 
@@ -92,8 +92,8 @@ everything else is keeping that map balanced on disk.</p>
   <thead><tr><th>Scheme</th><th>Point lookup</th><th>Insert</th><th>Range scan</th><th>Verdict</th></tr></thead>
   <tbody>
     <tr><td>Heap file + scan (now)</td><td>O(n), everything</td><td>O(1), any free slot</td><td>O(n)</td><td>great at inserts, terrible at finding</td></tr>
-    <tr><td>Sorted file</td><td>O(log n) binary search</td><td>O(n), shift or re-sort</td><td>excellent</td><td>Lab 3 taught us why not</td></tr>
-    <tr><td>Hash table</td><td>O(1)</td><td>O(1)</td><td><strong>impossible</strong>, hashing destroys order</td><td>real, but a specialist (see FAQ)</td></tr>
+    <tr><td>Sorted file</td><td>O(log n) binary search</td><td>O(n), shift or re-sort</td><td>excellent</td><td>Lab 3 showed why not: keeping the file sorted means every insert shifts rows or re-sorts the file</td></tr>
+    <tr><td>Hash table</td><td>O(1)</td><td>O(1)</td><td><strong>impossible</strong>, hashing destroys order</td><td>real, and fastest for equality lookups, but useless for anything that needs order (see FAQ)</td></tr>
     <tr><td><strong>B+ tree</strong></td><td>O(log n), base ~200</td><td>O(log n)</td><td>excellent, leaves are chained</td><td>the general-purpose winner since 1979<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup></td></tr>
   </tbody>
 </table>
@@ -106,8 +106,8 @@ which is why <em>every</em> relational engine defaults to it<sup class="src"><a 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The heap</span><span>stays exactly as Lab 3 left it: dumb, unordered, insert-friendly. Nothing about the table changes.</span></div>
   <div class="lc-row"><span class="lc-k">The index</span><span>a separate structure holding (value, RID) pairs in sorted order: a second road into the same rows, organized by a different principle.</span></div>
-  <div class="lc-row"><span class="lc-k">The handshake</span><span>the index ends every journey with a RID; <code>move_to_rid</code> (three new lines on the reference TableScan) finishes the trip. Stable RIDs (Lab 3's quiet promise) are what make the handshake safe.</span></div>
-  <div class="lc-row"><span class="lc-k">The plural</span><span>roads are independent: index uid AND name AND gpa if you like, each a separate tree over the same heap, each billed separately on every write.</span></div>
+  <div class="lc-row"><span class="lc-k">The hand-off</span><span>the index ends every lookup with a RID; <code>move_to_rid</code> (three new lines on the reference TableScan) then jumps to that row in the heap. The hand-off is safe only because RIDs are stable: Lab 3's slotted storage never moves a record once it is written, so a RID stored in the index today still points at the right row later.</span></div>
+  <div class="lc-row"><span class="lc-k">Many indexes</span><span>roads are independent: index uid AND name AND gpa if you like, each a separate tree over the same heap, each billed separately on every write.</span></div>
 </div>
 
 <!-- ============================================================ -->
@@ -120,7 +120,7 @@ scripted insert of the pinned gpa values first, then feed it your own keys.</p>
   <div class="viz-title">A live B+ tree · ORDER = 4 (max 4 keys per node, like the lab)</div>
   <p class="viz-description"><span class="hexlegend hit">Leaves</span> hold keys (and, in the
   lab, RIDs) and are chained left-to-right; <span class="hexlegend miss">internal nodes</span>
-  hold routing keys only. A node's fifth key triggers the split.</p>
+  hold <span class="gloss" data-gloss="routing-key">routing keys</span> only. A node's fifth key triggers the split.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="bt-script">▶ Insert the six gpas</button>
     <button type="button" class="btn" id="bt-many">▶ Insert 1–20</button>
@@ -148,7 +148,7 @@ scripted insert of the pinned gpa values first, then feed it your own keys.</p>
 </table>
 
 <p class="keep-in-present">Every leaf stayed the same depth through all of it. You never saw a
-rebalancing pass because there isn't one: the split <em>is</em> the balance.</p>
+rebalancing pass because there isn't one: the split itself keeps the tree balanced, as the split section shows.</p>
 
 <!-- ============================================================ -->
 <h2 id="anatomy">Anatomy of the tree</h2>
@@ -157,7 +157,7 @@ rebalancing pass because there isn't one: the split <em>is</em> the balance.</p>
   <div class="lc-row"><span class="lc-k">Leaves</span><span>hold the actual index entries, <code>(key, RID)</code> pairs in sorted order, and a <code>next</code> pointer to the right-hand sibling. <strong>All data lives at the bottom.</strong></span></div>
   <div class="lc-row"><span class="lc-k">Internal nodes</span><span>hold routing keys only: <em>k</em> keys fence <em>k+1</em> children; "keys &lt; 10 go left, ≥ 10 go right." Pure directions, no data.</span></div>
   <div class="lc-row"><span class="lc-k">The leaf chain</span><span>siblings linked left-to-right make ranges a walk: descend once to <code>lo</code>, then follow <code>next</code> until a key passes <code>hi</code>. This chain is the "+" in B+<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">The invariant</span><span>every leaf is the same distance from the root, always. Not by luck: the split maintains it, as the next section shows.</span></div>
+  <div class="lc-row"><span class="lc-k">The <span class="gloss" data-gloss="invariant">invariant</span></span><span>every leaf is the same distance from the root, always. Not by luck: the split maintains it, as the next section shows.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="Anatomy of the tree">A search, traced on the pinned tree</h3>
@@ -193,8 +193,8 @@ can never serve them.</p>
   <thead><tr><th></th><th>Leaf split</th><th>Internal split</th></tr></thead>
   <tbody>
     <tr><td>Right sibling takes</td><td>keys[mid:] and their RIDs</td><td>keys[mid+1:] and matching children</td></tr>
-    <tr><td>The middle key</td><td><strong>COPIED</strong> up, leaves must keep all data</td><td><strong>MOVED</strong> up, internal keys are only guides</td></tr>
-    <tr><td>Also fix</td><td>the chain: node → sibling → old next</td><td>&nbsp;</td></tr>
+    <tr><td>The middle key</td><td><strong>COPIED</strong> up: the key stays in the leaf and a copy goes into the parent, because every (key, RID) entry must remain in a leaf where searches and range scans can find it</td><td><strong>MOVED</strong> up: the key leaves the node and goes into the parent, because an internal key is only a signpost and nothing needs to find it in place</td></tr>
+    <tr><td>Also fix</td><td>the leaf chain: the new sibling's <code>next</code> takes the old node's <code>next</code>, and the old node's <code>next</code> now points at the sibling, so a range scan still walks every leaf in order</td><td>&nbsp;</td></tr>
     <tr><td>No parent?</td><td colspan="2">make a new root of one key and two children: <strong>the tree grows at the top</strong>, height +1, all leaves sink together</td></tr>
   </tbody>
 </table>
@@ -212,22 +212,22 @@ keep inserting 6, 7:   [3 4 5] fills, splits at 5 → root becomes [3 5]
 insert 8, 9:           [5 6 7] fills... root [3 5 7] → root fills next split
                        → the ROOT splits → new root, height 2 → 3</code></pre>
 
-<p class="keep-in-present">Splits are rare (one per ~ORDER/2 inserts at each level) and local
-(the path, nothing else). Thursday's harness inserts 25 scattered keys and checks every
-invariant after the dust settles.</p>
+<p class="keep-in-present">Splits are rare (a node fills only once every ~ORDER/2 inserts at each level) and local
+(only the nodes on the path from the root to the inserted key can change; nothing else is touched). Thursday's harness inserts 25 scattered keys and checks every
+invariant after all the splits have finished.</p>
 
 <h3 class="new-slide" data-kicker="The split">Why the middle key?</h3>
 
 <table>
-  <thead><tr><th>Pivot choice</th><th>Result</th><th>Long-run occupancy</th></tr></thead>
+  <thead><tr><th>Pivot choice</th><th>Result</th><th>Long-run <span class="gloss" data-gloss="occupancy">occupancy</span></th></tr></thead>
   <tbody>
-    <tr><td><code>mid = len // 2</code></td><td>two half-full nodes</td><td>≥ 50% guaranteed; the height bound holds<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, 1970/1972)">1</a></sup></td></tr>
-    <tr><td><code>mid = 1</code> (skewed)</td><td>one starving node, one fat one</td><td>craters under sequential inserts; more nodes, taller tree, same data</td></tr>
+    <tr><td><code>mid = len // 2</code></td><td>two half-full nodes</td><td>every node stays at least half full, so the tree never needs more nodes, or more height, than the log-base-fan-out bound assumes<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, 1970/1972)">1</a></sup></td></tr>
+    <tr><td><code>mid = 1</code> (skewed)</td><td>one nearly empty node, one nearly full one</td><td>collapses under sequential inserts: each split leaves a nearly empty node behind, so the same data needs more nodes and a taller tree</td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">Every invariant still holds under a skewed split; only
-<em>quality</em> dies. Thursday's harness includes a 500-key height check that exists to
+<p class="keep-in-present">Every invariant still holds under a skewed split; the tree is still correct, only
+its <em>quality</em> suffers: more nodes and more height than the same keys need. Thursday's harness includes a 500-key height check that exists to
 catch exactly this: correctness tests plus a quality bound.</p>
 
 <!-- ============================================================ -->
@@ -288,14 +288,14 @@ tree is shaped by the disk it lives on<sup class="src"><a href="#src-4" title="P
 <table>
   <thead><tr><th>Tree level (fan-out 200, 100M rows)</th><th>Nodes</th><th>Where it lives</th></tr></thead>
   <tbody>
-    <tr><td>root</td><td>1</td><td>pinned-hot in the pool, always</td></tr>
-    <tr><td>level 2</td><td>~200</td><td>all in the pool on any busy system</td></tr>
-    <tr><td>level 3</td><td>~40,000</td><td>mostly cached</td></tr>
-    <tr><td>leaves</td><td>~10⁶</td><td>the one probable disk read</td></tr>
+    <tr><td>root</td><td>1</td><td>always in the buffer pool: every lookup reads it, so it is never the least recently used page and is never evicted</td></tr>
+    <tr><td>level 2</td><td>~200</td><td>all in the pool on any busy system: 200 blocks is a tiny fraction of the pool, and they are read constantly</td></tr>
+    <tr><td>level 3</td><td>~40,000</td><td>mostly cached; a few hundred MB, which a typical pool holds</td></tr>
+    <tr><td>leaves</td><td>~10⁶</td><td>too many to cache, so this is the one level that usually costs a disk read</td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">Week 2 and week 6 compound: a point lookup on 100 million rows is
+<p class="keep-in-present">Week 2's buffer pool and today's tree work together: a point lookup on 100 million rows is
 <strong>one disk read</strong>, steady-state. The scan for the same row: three hundred
 thousand.</p>
 
@@ -316,8 +316,8 @@ amplification</span>:</p>
   </tbody>
 </table>
 
-<p class="keep-in-present">The DBA's proverb, now yours: <strong>index the columns you filter
-on constantly; resent every index you can't justify.</strong> The optimizer's job (week 9) is
+<p class="keep-in-present">The rule database administrators (DBAs) work by, now yours: <strong>index the columns you filter
+on constantly, and drop every index you can't justify</strong>, because each one is paid for on every write. The optimizer's job (week 9) is
 deciding per-query whether the index you built is actually worth using.</p>
 
 <h3 class="new-slide" data-kicker="What indexes cost">When the index loses</h3>
@@ -327,7 +327,7 @@ deciding per-query whether the index you built is actually worth using.</p>
   via index:  ~99,000 tree walks + 99,000 RANDOM heap jumps      ← disaster
   via scan:   294 blocks, read once, in order                    ← boring, correct, faster</code></pre>
 
-<p class="keep-in-present">An index on an unselective predicate is a longcut. Deciding,
+<p class="keep-in-present">An index on an unselective predicate is slower than the plain scan it replaces. Deciding,
 per query, from estimated selectivity, is precisely the optimizer's job, and week 9 builds
 that judgment.</p>
 
@@ -377,12 +377,12 @@ real heap file, via the RIDs Lab 3 promised would stay stable.</p>
   same heap rows, paid for on every write.</li>
   <li><strong>One move keeps it balanced:</strong> split the full node, push the middle up,
   grow at the root. Same-depth leaves are structural, not lucky.</li>
-  <li><strong>Fan-out beats cleverness.</strong> log base 200 makes a billion rows five reads,
+  <li><strong>Fan-out is what makes the tree fast.</strong> log base 200 makes a billion rows five reads,
   and the base is 200 because nodes are disk blocks<sup class="src"><a href="#src-8" title="How does B-tree make your queries fast? (Allegro Tech Blog)">8</a></sup>. Every layer you've built shows up in this
   one structure.</li>
 </ul>
 
-<p class="keep-in-present"><strong>Thursday:</strong> build it, measure your 4,000×.
+<p class="keep-in-present"><strong>Thursday:</strong> build it, then measure how much faster an index lookup is than a scan (about 4,000×).
 <strong>Next class is Thursday Oct 8</strong> (Reading Days eat Tuesday): transactions and
 the write-ahead log: what COMMIT actually promises. Quiz 6 lands Tue Oct 13.</p>
 
@@ -398,8 +398,8 @@ world, week 14, makes the opposite bet and pays with different machinery<sup cla
 <h3 class="keep-in-present">Is the binary search tree from my algorithms class the same thing?</h3>
 <p class="keep-in-present">Same idea, wrong constants for disks: fan-out 2 means height 27
 for 100M rows, 27 disk reads<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup>. The B+ tree is a BST re-engineered for Lab 1's block economics:
-one node = one block = one trip = 200 decisions. Data structures change when I/O is the
-currency.</p>
+one node = one block = one trip = 200 decisions. When disk reads, not comparisons, are the cost that matters, the best data
+structure changes.</p>
 
 <h3 class="keep-in-present">What about deletes? Nodes can get too empty.</h3>
 <p class="keep-in-present">Textbook trees rebalance by merging underfull nodes, the split's
@@ -443,6 +443,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 </body>
 </html>

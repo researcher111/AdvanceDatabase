@@ -45,10 +45,10 @@
 
 <p class="lede">
 In 2006 Google described the store behind web search, Maps, and Gmail: Bigtable<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>. Read today,
-the paper is a reunion tour: a WAL (week 7), a sorted in-memory buffer flushed to immutable
+the paper is mostly a collection of ideas this course has already covered: a <span class="gloss" data-gloss="wal">WAL</span>, write-ahead log (week 7), a sorted in-memory buffer flushed to immutable
 sorted files (your B+ tree's ideas, rearranged), range partitioning (last week), and caching
 (week 2), all riding on <span class="gloss" data-gloss="commodity">commodity machines</span>
-that fail constantly. The one genuinely new structure is the LSM tree (the write-optimized
+that fail constantly. The one genuinely new structure is the LSM tree, the log-structured merge tree (the write-optimized
 mirror image of your read-optimized B+ tree), and it now sits inside Cassandra, HBase,
 RocksDB, LevelDB, and the storage engine of half the databases shipped since. No lab Thursday
 (Thanksgiving); today is the last new-systems lecture, and it closes the storage story.
@@ -77,11 +77,11 @@ world.</p>
 
 <ol class="agenda">
   <li><strong>Google's 2004 problem</strong>: why sharded MySQL wasn't the answer<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>.</li>
-  <li><strong>The Bigtable model</strong>: a sorted map wearing a table costume.</li>
+  <li><strong>The Bigtable model</strong>: a sorted key-value map that is presented as a table but is not a relational one.</li>
   <li><strong>Tablets</strong>: last week's range partitioning, productized.</li>
-  <li><strong>The LSM tree</strong>: never overwrite: buffer, flush, merge.</li>
-  <li><strong>Run the write path</strong>: memtable, SSTables, and compaction, live.</li>
-  <li><strong>LSM vs B+ tree</strong>: the read/write bargain, priced.</li>
+  <li><strong>The LSM tree</strong>: writes are buffered in memory, flushed to sorted files on disk, and merged in the background; nothing on disk is ever overwritten in place.</li>
+  <li><strong>Run the write path</strong>: <span class="gloss" data-gloss="memtable">memtable</span>, <span class="gloss" data-gloss="sstable">SSTables</span>, and <span class="gloss" data-gloss="compaction">compaction</span>, live.</li>
+  <li><strong>LSM vs B+ tree</strong>: what each design pays on writes and what it pays on reads, side by side.</li>
   <li><strong>Replication &amp; CAP</strong>: what partitions force you to choose.</li>
 </ol>
 
@@ -115,6 +115,8 @@ row_key    "com.cnn.www"      · URLs reversed so domains sort together (row key
 column     "anchor:cnnsi.com" · families fixed & few (schema); qualifiers open-ended (data!)
 timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, reads pick one</code></pre>
 
+<p class="keep-in-present">Read the map signature one coordinate at a time. The <strong>row key</strong> is an arbitrary string, and Bigtable keeps every row of a table sorted by it, so keys that share a prefix (all the pages of one domain, once the URL is reversed) sit next to each other on disk. A <strong>column</strong> is named in two parts: the column family, such as <code>anchor</code>, is declared up front and there are only a handful per table; the qualifier after the colon, such as <code>cnnsi.com</code>, is free-form and can be created by any write, so a row can have as many columns as it has data. The <strong>timestamp</strong> is the third coordinate: a write never replaces a cell, it adds a new version, and a read chooses which version it wants (usually the newest). The value is an uninterpreted byte string; Bigtable never looks inside it.</p>
+
 <h3 class="new-slide" data-kicker="The Bigtable data model">What each departure buys</h3>
 
 <table>
@@ -122,8 +124,8 @@ timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, rea
   <tbody>
     <tr><td>rows sorted by key, always</td><td>range scans + natural range partitioning</td><td>B+ tree leaves; Lab 8's folder partitions</td></tr>
     <tr><td><span class="gloss" data-gloss="wide-column">sparse columns</span>, no fixed row width</td><td>a million anchor columns, zero storage for absent ones</td><td>the null-bitmap discussion, taken to its limit</td></tr>
-    <tr><td>versions instead of overwrites</td><td>lock-free reads of a consistent past</td><td>MVCC, week 8, almost verbatim</td></tr>
-    <tr><td>no joins, no SQL, single-row transactions only<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></td><td>every operation's cost is knowable and local</td><td>what you give up, the price tag NoSQL hid in the fine print</td></tr>
+    <tr><td>versions instead of overwrites</td><td>a read picks one timestamp and sees a consistent snapshot as of that moment, without taking any lock, because writers add new versions instead of changing the one being read</td><td>MVCC (multi-version concurrency control), week 8, almost verbatim</td></tr>
+    <tr><td>no joins, no SQL, single-row transactions only<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></td><td>every operation touches one row on one server, so its cost is predictable and never depends on data held elsewhere</td><td>this is the cost of NoSQL: the features you give up, which early NoSQL marketing rarely said out loud</td></tr>
   </tbody>
 </table>
 
@@ -132,15 +134,15 @@ timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, rea
 
 <p class="keep-in-present">Because rows are sorted, the table splits into contiguous key
 ranges: <strong>tablets</strong>, ~100–200&nbsp;MB each. A tablet is last week's range
-partition with an ops team: a master assigns tablets to tablet servers, hot or overgrown
+partition plus the machinery that manages it automatically: a master assigns tablets to tablet servers, hot or overgrown
 tablets split, cold ones merge, and a dead server's tablets are reassigned in seconds<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>;
-recovery is routine precisely because the data (in GFS, replicated 3×) never lived on the
-server's own disk. The server is a cache and a pen; the file system is the truth<sup class="src"><a href="#src-3" title="The Google File System (SOSP 2003)">3</a></sup>.</p>
+recovery is routine precisely because the data (in GFS, the Google File System, replicated 3×) never lived on the
+server's own disk. The tablet server holds only a cache of its tablets and the writes in progress; the durable copy of every byte lives in the file system, so a dead server loses nothing that another server cannot pick up<sup class="src"><a href="#src-3" title="The Google File System (SOSP 2003)">3</a></sup>.</p>
 
 <p class="keep-in-present">Note the row-key design consequence: keys prefixed by timestamp
 make the newest tablet the <span class="gloss" data-gloss="hotspot">hotspot</span> every
 write hammers: last week's skew, in range-partition form. Bigtable schema design is mostly
-key design; "reverse the URL" was never cosmetic.</p>
+key design; reversing the URL so that all pages of one domain sit together in the sorted key space is a performance decision, not a cosmetic one.</p>
 
 <h3 class="new-slide" data-kicker="Tablets">Key design is capacity planning: prove it</h3>
 
@@ -182,7 +184,7 @@ background:    COMPACTION                  merge-sort several SSTables into one,
 <p class="keep-in-present">Every disk write is sequential: the WAL, the flushes, the
 merges. Random writes have been <em>abolished</em>, at the price of the same key now living
 in several places at once: the memtable, maybe three SSTables. That price lands on reads,
-which is the next section, but first, drive it.</p>
+which is the next section, but first, run the write path yourself in the widget below.</p>
 
 <!-- ============================================================ -->
 <h2 id="try-it">Run the write path</h2>
@@ -224,16 +226,16 @@ from being a disaster:</p>
 <h3 class="new-slide" data-kicker="The read path">Three read rescues</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Bloom filters</span><span>each SSTable carries a <span class="gloss" data-gloss="bloom">Bloom filter</span>, a tiny bitmap that answers "definitely absent" or "maybe here." Most SSTables are skipped without touching disk; the filter is wrong (a false "maybe") ~1% of the time and never wrong the dangerous way<sup class="src"><a href="#src-4" title="RocksDB Bloom Filter (RocksDB wiki)">4</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">Sparse indexes + caches</span><span>an SSTable stores every Nth key in memory: binary search the sparse index, read one block<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>. Week 2's buffer-pool logic caches the hot blocks; week 6's "index = skip most of the data" logic finds the rest.</span></div>
-  <div class="lc-row"><span class="lc-k">Compaction itself</span><span>fewer, bigger, non-overlapping files = fewer places a key can hide. Compaction is a background tax on write throughput paid to keep <span class="gloss" data-gloss="read-amp">read amplification</span> bounded, the engine's central tuning dial.</span></div>
+  <div class="lc-row"><span class="lc-k">Bloom filters</span><span>each SSTable carries a <span class="gloss" data-gloss="bloom">Bloom filter</span>, a tiny bitmap that answers "definitely absent" or "maybe here." Most SSTables are skipped without touching disk; the filter is wrong (a false "maybe") ~1% of the time, and it is never wrong in the dangerous direction: it never says "absent" for a key that is actually in the file, so no read can miss data by trusting it<sup class="src"><a href="#src-4" title="RocksDB Bloom Filter (RocksDB wiki)">4</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Sparse indexes + caches</span><span>an SSTable keeps every Nth key, with the file offset of the block it starts, in memory as a sparse index. A lookup binary-searches that small index to find the one block that could hold the key, then reads only that block from disk<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>. Week 2's buffer-pool logic caches the hot blocks so repeat reads never touch disk; week 6's "index = skip most of the data" logic finds the rest.</span></div>
+  <div class="lc-row"><span class="lc-k">Compaction itself</span><span>compaction merges many small SSTables into fewer, bigger files whose key ranges do not overlap, so there are fewer places a key can hide. It runs in the background and consumes disk bandwidth that incoming writes could have used; that is the price paid to keep <span class="gloss" data-gloss="read-amp">read amplification</span> bounded. How hard to compact, and when, is the engine's central tuning dial.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="The read path">Build a Bloom filter</h3>
 
 <p>The first rescue, small enough to build in a page: 32 bits, 3 hash functions per key.
-Insert keys, then query keys you never inserted, and keep querying until the filter tells
-you a polite lie:</p>
+Insert keys, then query keys you never inserted, and keep querying until the filter answers
+"maybe here" for a key that is not there (a false positive):</p>
 
 <div class="viz" id="viz-bloom">
   <div class="viz-title">Bloom filter · 32 bits, 3 hashes · insert, then try to catch it lying</div>
@@ -261,10 +263,10 @@ you a polite lie:</p>
 <table>
   <thead><tr><th></th><th>B+ tree (microdb, Postgres, MySQL)</th><th>LSM (Bigtable, Cassandra, RocksDB)</th></tr></thead>
   <tbody>
-    <tr><td>write path</td><td>find the page, modify in place, random I/O</td><td>append + memtable, sequential only</td></tr>
-    <tr><td>read path</td><td>one root-to-leaf descent, one home per key</td><td>memtable + K SSTables (Bloom-filtered)</td></tr>
-    <tr><td>background cost</td><td>splits, occasional vacuum</td><td>compaction, continuous, tunable, the ops burden</td></tr>
-    <tr><td>range scans</td><td>excellent, linked leaves</td><td>good, merge K sorted runs</td></tr>
+    <tr><td>write path</td><td>descend to the leaf page that owns the key and modify it in place; each write lands on a random page, so it costs a random disk I/O</td><td>append the write to the WAL and insert it into the memtable; every disk write is sequential</td></tr>
+    <tr><td>read path</td><td>one root-to-leaf descent; each key has exactly one home, so one descent always finds it</td><td>check the memtable, then up to K SSTables, newest first; Bloom filters let most SSTables be skipped without a disk read</td></tr>
+    <tr><td>background cost</td><td>page splits as leaves fill up, plus an occasional vacuum to reclaim space from dead rows</td><td>compaction runs continuously and must be tuned; keeping it healthy is the main operational burden</td></tr>
+    <tr><td>range scans</td><td>excellent: leaf pages are linked, so a scan walks sibling leaves in key order</td><td>good: a scan merges K sorted runs, one per SSTable plus the memtable, in a single pass</td></tr>
     <tr><td>wins when</td><td>read-heavy, point-lookup OLTP</td><td>write-heavy: ingest, events, time series, crawls</td></tr>
   </tbody>
 </table>
@@ -277,7 +279,9 @@ poles: you built one and just drove the other.</p>
 <!-- ============================================================ -->
 <h2 id="cap">Replication &amp; CAP</h2>
 
-<h3 class="new-slide" data-kicker="Replication &amp; CAP">CAP, stated honestly</h3>
+<h3 class="new-slide" data-kicker="Replication &amp; CAP">CAP</h3>
+
+<p class="keep-in-present">CAP stands for Consistency, Availability, and Partition tolerance. A replicated system keeps copies of the same data on several machines. A <strong>partition</strong> is a network failure that splits those machines into groups that can no longer reach each other, while each group is still up and still receiving requests. While that lasts, a replica that cannot hear from the others has only two options when a request arrives: answer from what it has, which may be stale, or refuse until it can confirm it holds the latest write. That forced choice, and only that, is what the theorem is about.</p>
 
 <pre class="equation"><code>During a network partition, a replicated system chooses ONE:
 
@@ -293,8 +297,7 @@ No partition, no choice: normal operation can have both. "P" isn't chosen; netwo
 <!-- ============================================================ -->
 <h2 id="descendants">The descendants</h2>
 
-<p class="keep-in-present">The 2006–2012 NoSQL wave is these two papers (Bigtable + Dynamo)
-refracted through open source, and the LSM engine outlived the movement's maximalism:</p>
+<p class="keep-in-present">Nearly every NoSQL system of the 2006–2012 wave is an open-source reworking of one or both of two papers, Bigtable and Dynamo. The "no SQL, no joins, no transactions" slogans of that era have faded, but the LSM engine at the core of those systems has lasted:</p>
 
 <h3 class="new-slide" data-kicker="The descendants">Where you'll meet this material again</h3>
 
@@ -319,8 +322,8 @@ you engines, not brand names.</p>
   <p class="keep-in-present">Every dial on this slide's engines shows up in Discord's
   engineering blog, which reads like this lecture's final exam. Their message store (a
   Cassandra cluster holding trillions of rows) suffered exactly the pathologies you can now
-  name: hot partitions (busy channels are skew), compaction falling behind (write
-  amplification winning the three-way budget), and JVM garbage-collection pauses turning one
+  name: hot partitions (busy channels are skew), compaction falling behind (the
+  background merging could not keep pace with incoming writes, so reads had ever more SSTables to check), and JVM garbage-collection pauses turning one
   slow node into cluster-wide latency<sup class="src"><a href="#src-12" title="How Discord Stores Trillions of Messages (Discord Engineering blog)">12</a></sup>. Their 2023 migration to ScyllaDB (same LSM design,
   no JVM) plus a Rust data layer is a case study in a truth this course keeps landing on:
   they didn't change the <em>ideas</em> (memtables, SSTables, compaction, tablets) they
@@ -359,7 +362,7 @@ the embedded-engine niche (RocksDB). The honest question is never "SQL or NoSQL"
 <h3 class="keep-in-present">Where do deletes go if SSTables are immutable?</h3>
 <p class="keep-in-present">You write a <em>tombstone</em>: a "k is deleted" record that
 shadows older versions during reads and merges, until a compaction that can see every copy
-finally drops both. Week 3's tombstone flag, escalated: in Cassandra, tombstone pile-ups
+finally drops both. This is week 3's tombstone flag at a much larger scale: in Cassandra, tombstone pile-ups
 are a famous operational pathology (delete-heavy workloads make reads wade through
 graveyards), and "why is my read slow" often means "tombstones<sup class="src"><a href="#src-13" title="Apache Cassandra data modeling documentation (queue anti-pattern) and cassandra.yaml">13</a></sup>."</p>
 
@@ -407,6 +410,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
+<script src="viz.js?v=4"></script>
 </body>
 </html>

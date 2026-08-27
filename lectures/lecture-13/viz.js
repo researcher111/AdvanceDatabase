@@ -3,6 +3,18 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'working-set': {
+      title: 'Working set',
+      body: '<p>The portion of a job&#39;s data that it needs close at hand at the same time: for a grouped aggregation, the running totals for every key seen so far; for a hash join, the whole build side. When the working set fits in RAM, the job runs at memory speed. When it does not, the machine keeps evicting part of it to disk and reading it back, and the job slows to disk speed. Partitioning helps because each machine only needs its own share of the working set, and one hundredth of a working set fits where the whole one did not.</p>',
+    },
+    'rdd': {
+      title: 'RDD (Resilient Distributed Dataset)',
+      body: '<p>Spark&#39;s core data structure: one logical collection (the lines of a file, a list of pairs) cut into partitions that live on different machines. You never touch a partition directly; you call transformations such as map, filter, and reduceByKey that describe a new RDD in terms of an old one, and Spark records that description as a plan. Nothing runs until an action such as collect() asks for a result, at which point the whole plan executes at once. &#39;Resilient&#39; refers to lineage: because each partition&#39;s recipe is recorded, a lost partition can be recomputed instead of restored from a copy.</p>',
+    },
+    'shuffle': {
+      title: 'Shuffle',
+      body: '<p>The step in a distributed job that moves every record with the same key to the same machine. Each mapper hashes the key of every pair it emits, writes the pair into a local bucket for the destination machine, and each destination machine then pulls its bucket from every mapper over the network. It is the only step where data crosses machines, so it is the step that costs the most; the map and reduce work stays local. The shuffle is what makes reduce&#39;s guarantee true: after it, a machine holds every value for the keys it owns, and no other machine holds any of them. It is the distributed cousin of the partitioning step in Lab 4&#39;s hash join.</p>',
+    },
     'skew': {
       title: 'Skew (the celebrity problem)',
       body: '<p>When one key owns a wildly disproportionate share of the records — one URL ' +

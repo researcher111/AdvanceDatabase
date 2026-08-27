@@ -3,6 +3,22 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'pushdown': {
+      title: 'Pushdown (selection pushdown)',
+      body: '<p>The optimizer move of applying a filter as early as possible in the plan, before the expensive operators run, instead of at the very end. Your naive planner puts a single SelectScan over the whole product of the FROM tables, so every pair of rows is formed and then most are thrown away. A pushed-down plan filters each table separately first, so only rows that survive their own conditions reach the product, and the join condition is checked on far fewer pairs. The rows that come out are identical; only the amount of work changes. Week 9&#39;s optimizer reads the same QueryData your parser produces and rewrites the plan this way automatically.</p>',
+    },
+    'predicate': {
+      title: 'Predicate',
+      body: '<p>The condition in a WHERE clause: the part that decides whether a row is kept. In microSQL a predicate is one or more terms joined by AND, and each term compares a field to a number, a string, or another field, such as gpa &gt; 35. The parser stores the predicate as plain data inside QueryData. The planner later wraps the scan tree in a SelectScan that evaluates the predicate against each row and passes through only the rows for which it is true. Lab 4 already built SelectScan; this week you build the code that reads a predicate out of the text.</p>',
+    },
+    'catastrophic-backtracking': {
+      title: 'Catastrophic backtracking',
+      body: '<p>Backtracking is how a typical regex engine handles a pattern that can match text in more than one way: it tries one way, and if the rest of the pattern then fails, it backs up and tries another. When a pattern contains nested or overlapping repeats, such as (a+)+, the number of ways to split the input grows exponentially with its length, and the engine tries them all before giving up. That is catastrophic backtracking: a pattern that looks harmless can take seconds, minutes, or longer on a short input. A hand-written lexer and parser do not have this failure mode, because each token is read once and the running time grows in step with the length of the input. That predictable worst case is the reason this lecture builds a lexer and a parser instead of one regex.</p>',
+    },
+    'token': {
+      title: 'Token',
+      body: '<p>The smallest meaningful unit of a statement after the lexer has split it up: a keyword, a name, a number, a quoted string, or a punctuation mark. Each token is a (kind, value) pair, so the word students becomes (ID, students) and the number 35 becomes (NUM, 35). The lexer produces the token list by scanning the characters left to right; the parser reads only that list and never looks at raw characters again. That split is what keeps a quoted string like &#39;from&#39; from ever being mistaken for the keyword FROM.</p>',
+    },
     'front-end': {
       title: 'Front end (of a language system)',
       body: '<p>The stages that understand <em>text</em>: lexing (characters to tokens) and ' +

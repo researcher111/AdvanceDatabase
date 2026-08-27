@@ -47,8 +47,9 @@ they raise is new: every index you've met accelerates <em>equality and order</em
 (<code>uid = 7</code>, <code>gpa &gt; 35</code>), but "the 10 chunks most similar to this
 question" has no equality anywhere. B+ trees are useless here; hashing is worse. The answer
 is a new index family (<span class="gloss" data-gloss="ann">approximate nearest
-neighbor</span>) that buys speed with a currency you've never spent before:
-<em>correctness, measured and dialed</em>. Thursday you build IVF and set the dial yourself;
+neighbor</span>) that buys speed by giving up a small, measured amount of correctness: the
+index may miss a few true neighbors, you measure how many it misses, and one setting lets you
+choose the trade. Thursday you build <span class="gloss" data-gloss="ivf">IVF</span> and set that dial yourself;
 your project's retrieval layer will sit on it.
 </p>
 
@@ -76,9 +77,9 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <li><strong>The similarity query</strong>: why embeddings break every index you know.</li>
   <li><strong>Search a vector space</strong>: exact vs approximate, live.</li>
   <li><strong>Exact search and its wall</strong>: O(n) per query, forever.</li>
-  <li><strong>ANN</strong>: IVF (cluster and probe) and HNSW (navigate a graph).</li>
-  <li><strong>Recall</strong>: the metric that makes "approximate" honest.</li>
-  <li><strong>The landscape</strong>: pgvector, FAISS, and the standalone crowd.</li>
+  <li><strong>ANN</strong>: IVF (cluster and probe) and <span class="gloss" data-gloss="hnsw">HNSW</span> (navigate a graph).</li>
+  <li><strong><span class="gloss" data-gloss="recall">Recall</span></strong>: the metric that makes "approximate" honest.</li>
+  <li><strong>The landscape</strong>: pgvector, FAISS, and the dedicated vector-database services.</li>
 </ol>
 
 <p class="keep-in-present">Today's claim: <strong>ANN indexes trade correctness for speed on
@@ -101,14 +102,16 @@ exact answer:  n dot products per query = n·d multiplications.
 <h2 id="try-it">Search a vector space</h2>
 
 <p>A 2-D toy space you can see (real ones are 32–3072-D; the geometry generalizes). Click
-anywhere to query; compare exact search with IVF at different probe settings.</p>
+anywhere to query; compare exact search with IVF (the cluster-then-probe index explained in
+the next section) at different probe settings, where probe is how many clusters the search
+looks inside.</p>
 
 <div class="viz" id="viz-space">
   <div class="viz-title">2-D vector space · 300 points, 8 IVF clusters</div>
   <p class="viz-description">Click to place a query (✕). <span class="hexlegend hit">Green</span>
   points are the true top-10; <span class="hexlegend miss">warm</span> shading marks the
-  clusters IVF probed. Missed neighbors (green points outside warm regions) are recall loss,
-  visible.</p>
+  clusters IVF probed. Missed neighbors (green points outside warm regions) are <span class="gloss" data-gloss="recall">recall</span> loss
+  made visible: true neighbors the index never looked at.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="vs-exact">exact search</button>
     <button type="button" class="btn primary" id="vs-p1">IVF probe 1</button>
@@ -128,17 +131,19 @@ anywhere to query; compare exact search with IVF at different probe settings.</p
 <h2 id="exact">Exact search and its wall</h2>
 
 <p class="keep-in-present">Before approximating anything, price the exact thing: score all
-n vectors, keep the top k. Correct by construction, embarrassingly parallel, and linear in
-everything: the baseline that never lies and eventually never finishes.</p>
+n vectors, keep the top k. It is always correct, because it looks at every vector. It splits
+across cores trivially, because each dot product is independent of the others. And its cost
+grows in step with the number of vectors, the dimensions, and the queries, which is why it is
+the right baseline and why, at some scale, it stops finishing in time.</p>
 
 <h3 class="new-slide" data-kicker="Exact search">What brute force costs, and when it's fine</h3>
 
 <table>
   <thead><tr><th>Scale</th><th>Exact cost per query</th><th>Verdict</th></tr></thead>
   <tbody>
-    <tr><td>4k × 32-d (Thursday's lab)</td><td>128k mults, sub-millisecond</td><td>fine; measure it anyway</td></tr>
-    <tr><td>100k × 768-d (a real project corpus)</td><td>77M mults, tens of ms</td><td>fine-ish, single user</td></tr>
-    <tr><td>10M × 1536-d, 100 qps (production RAG)</td><td>1.5 × 10¹² mults/sec</td><td>the wall</td></tr>
+    <tr><td>4k × 32-d (Thursday's lab)</td><td>128k mults, sub-millisecond</td><td>fine: brute force is the right choice at this size, but measure its cost anyway so the IVF speedup has something to be compared against</td></tr>
+    <tr><td>100k × 768-d (a real project corpus)</td><td>77M mults, tens of ms</td><td>acceptable for one user at a time; tens of milliseconds per query becomes a problem once many queries arrive at once</td></tr>
+    <tr><td>10M × 1536-d, 100 queries per second (production <span class="gloss" data-gloss="rag">RAG</span>)</td><td>1.5 × 10¹² mults/sec</td><td>the wall: 1.5 trillion multiplications every second is more than a server can sustain, so exact search stops being an option</td></tr>
   </tbody>
 </table>
 
@@ -177,14 +182,15 @@ the miss: a true neighbor in an unprobed list. P is the dial<sup class="src"><a 
   <div class="hn-svg-wrap"><svg id="hn-svg" viewBox="0 0 640 250"></svg></div>
   <p class="viz-caption">The walk reaches the true nearest neighbor in a handful of hops,
   computing distances only along the path; that near-logarithmic hop count is why HNSW
-  usually wins the recall-at-speed benchmarks<sup class="src"><a href="#src-5" title="Aumuller, Bernhardsson, Faithfull: ANN-Benchmarks: A Benchmarking Tool for Approximate Nearest Neighbor Algorithms (arXiv:1807.05614)">5</a></sup>. Its dial is <code>ef_search</code>, the width
-  of the frontier the walk keeps: same contract as IVF's probe, wider = better recall,
-  more work.</p>
+  usually wins the recall-at-speed benchmarks<sup class="src"><a href="#src-5" title="Aumuller, Bernhardsson, Faithfull: ANN-Benchmarks: A Benchmarking Tool for Approximate Nearest Neighbor Algorithms (arXiv:1807.05614)">5</a></sup>. Its dial is <code>ef_search</code>, the number
+  of candidate nodes the walk keeps track of at once instead of only the single best one: same
+  contract as IVF's probe, since a wider candidate set finds more true neighbors and costs more
+  distance computations.</p>
 </div>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The dial</span><span><code>ef_search</code>: how wide a frontier the walk keeps. Same trade as probe: bigger = better recall, more work<sup class="src"><a href="#src-3" title="pgvector README (HNSW query options)">3</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">The price</span><span>the graph lives in RAM and inserts are costlier than IVF's; the default when recall-at-speed matters most, IVF when memory or build time bind<sup class="src"><a href="#src-3" title="pgvector README (HNSW vs IVFFlat)">3</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">The dial</span><span><code>ef_search</code> sets how many candidate nodes the walk carries at once. With a larger set the walk explores more branches before settling, so it is less likely to stop at a node that is close but not closest. Same trade as probe: a bigger value gives better recall and does more work<sup class="src"><a href="#src-3" title="pgvector README (HNSW query options)">3</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">The price</span><span>the whole graph must sit in RAM, and each insert has to search for its neighbors and link to them, which costs more than IVF's append to one list. Choose HNSW when recall at a given speed matters most; choose IVF when memory is tight or the index has to build quickly<sup class="src"><a href="#src-3" title="pgvector README (HNSW vs IVFFlat)">3</a></sup>.</span></div>
 </div>
 
 <!-- ============================================================ -->
@@ -210,8 +216,9 @@ the miss: a true neighbor in an unprobed list. P is the dial<sup class="src"><a 
 
 <p class="keep-in-present">Read it like an engineer: at probe 1 you're <em>wrong about 1 in 4
 neighbors</em> and 17× faster; at probe 4 you're wrong about 1 in 20 and still 4.5× faster.
-Neither is "right": a recommender shrugs at 0.76; retrieved <em>evidence</em> for a RAG
-answer should not. The dial is yours, and "what recall does this application need?" is now a
+Neither is "right". A recommender can tolerate 0.76, because a user never notices that one
+suggestion in four was not the mathematically closest. Retrieved <em>evidence</em> for a RAG
+answer cannot, because the missed neighbor may be the one passage that held the answer. The dial is yours, and "what recall does this application need?" is now a
 question you ask out loud.</p>
 
 <div class="exercise">
@@ -241,9 +248,9 @@ relative to the rest of your data:</p>
 <table>
   <thead><tr><th>Shape</th><th>Examples</th><th>When</th></tr></thead>
   <tbody>
-    <tr><td><strong>Inside your database</strong></td><td><span class="gloss" data-gloss="pgvector">pgvector</span> (Postgres), DuckDB's VSS</td><td>vectors next to their rows: joins, filters, transactions included; the boring, usually-right default<sup class="src"><a href="#src-7" title="DuckDB documentation: Vector Similarity Search Extension">7</a></sup></td></tr>
-    <tr><td><strong>A library</strong></td><td><span class="gloss" data-gloss="faiss">FAISS</span>, hnswlib</td><td>you own the serving code; maximal control and speed, batteries not included<sup class="src"><a href="#src-8" title="hnswlib README">8</a></sup></td></tr>
-    <tr><td><strong>A dedicated service</strong></td><td>Pinecone, Weaviate, Milvus, Qdrant</td><td>managed scale and ops, plus a second copy of your data to keep in sync (see FAQ)<sup class="src"><a href="#src-9" title="Pinecone documentation overview">9</a></sup></td></tr>
+    <tr><td><strong>Inside your database</strong></td><td><span class="gloss" data-gloss="pgvector">pgvector</span> (Postgres), DuckDB's VSS</td><td>the vectors sit in a column beside the rows they describe, so joins, WHERE filters, and transactions work on them with no extra machinery. This is the unexciting default, and it is usually the right one<sup class="src"><a href="#src-7" title="DuckDB documentation: Vector Similarity Search Extension">7</a></sup></td></tr>
+    <tr><td><strong>A library</strong></td><td><span class="gloss" data-gloss="faiss">FAISS</span>, hnswlib</td><td>the library gives you the index data structure and nothing else: you write the process that loads it, answers queries, and keeps it in step with your data. Maximal control and speed, at the cost of building that plumbing yourself<sup class="src"><a href="#src-8" title="hnswlib README">8</a></sup></td></tr>
+    <tr><td><strong>A dedicated service</strong></td><td>Pinecone, Weaviate, Milvus, Qdrant</td><td>a vendor runs the index for you and handles scaling and operations. The price is a second copy of your data living outside your database, which you must keep in sync with the first (see FAQ)<sup class="src"><a href="#src-9" title="Pinecone documentation overview">9</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -255,8 +262,9 @@ dial setting with your own measurements</em>.</p>
 <h2 id="thursday">On Thursday you build one</h2>
 
 <p>microvector: brute force (the honest baseline) and IVF (the index), pure Python over a
-seeded 4,000-vector dataset with realistic topic overlap. The k-means ships; you write the
-scoring, bucketing, and probing.</p>
+seeded 4,000-vector dataset with realistic topic overlap. The <span class="gloss" data-gloss="k-means">k-means</span> clustering code is provided; you write the
+scoring (the dot products), the bucketing (putting each vector in the list of its nearest
+centroid), and the probing (searching only the P closest lists).</p>
 
 <ul class="checklist">
   <li>☐ Download the four Lab 9 starter files; <code>python3 gen_embeddings.py</code> once.</li>
@@ -290,7 +298,9 @@ the whole pipeline your project is building. Quiz 9 opens class: vector search.<
 <h3 class="keep-in-present">Why cosine instead of Euclidean distance?</h3>
 <p class="keep-in-present">On unit vectors they induce the same ranking (‖q−v‖² = 2−2q·v),
 so the argument is moot once you normalize, which embedding models mostly assume<sup class="src"><a href="#src-2" title="OpenAI Platform: Vector embeddings guide">2</a></sup>. Cosine's
-virtue is invariance to length, which for embeddings encodes "topic, not intensity."</p>
+virtue is that it ignores a vector's length and compares direction only. For embeddings,
+direction carries what a text is about, while length tends to reflect how much or how
+emphatically it says it, which is not what a similarity query is asking.</p>
 
 <h3 class="keep-in-present">Is recall the only quality metric that matters?</h3>
 <p class="keep-in-present">It's the index's metric: did the structure find the true
@@ -306,10 +316,11 @@ The boring answer (vectors in the database you already run) wins more often than
 marketing implies.</p>
 
 <h3 class="keep-in-present">Could microdb have a vector index?</h3>
-<p class="keep-in-present">Structurally yes: IVF lists are just tables (centroid_id, RID),
-and Lab 6's IndexSelectScan pattern applies verbatim. That is, in fact, roughly what pgvector
-is to Postgres: new index type, same RID handshake<sup class="src"><a href="#src-3" title="pgvector README">3</a></sup>. Nice final-project appendix for the
-microdb-attached.</p>
+<p class="keep-in-present">Structurally yes: IVF lists are just tables (centroid_id, <span class="gloss" data-gloss="rid">RID</span>),
+and Lab 6's IndexSelectScan pattern applies verbatim: the index scan hands back RIDs and the
+table fetches those rows. That is, in fact, roughly what pgvector
+is to Postgres: a new index type that returns RIDs the same way every other index does<sup class="src"><a href="#src-3" title="pgvector README">3</a></sup>. A good final-project appendix for teams
+that keep building on microdb.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -337,6 +348,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 </body>
 </html>

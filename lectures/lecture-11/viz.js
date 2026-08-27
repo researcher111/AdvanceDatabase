@@ -3,6 +3,30 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'rid': {
+      title: 'RID (record id)',
+      body: '<p>The physical address of a row: which block of the table&#39;s file it lives in and which slot within that block. Every index in this course stores RIDs rather than row copies, so an index lookup returns a list of RIDs and the table then fetches those rows by address. An IVF list would store, for each vector, the centroid it belongs to and the RID of the row that owns the vector, which is why it fits the same IndexSelectScan pattern as a B+ tree index in Lab 6.</p>',
+    },
+    'k-means': {
+      title: 'k-means',
+      body: '<p>The clustering algorithm IVF uses to split the vector set into C groups. It starts with C guessed centroids, assigns every vector to its nearest centroid, moves each centroid to the average of the vectors assigned to it, and repeats until the assignments stop changing. The result is C centroids and, for each vector, the id of the cluster it belongs to. IVF runs this once at build time and files each vector in its cluster&#39;s list; at query time only the centroids are scored to decide which lists to search. Thursday&#39;s lab provides this step so you can concentrate on the scoring, bucketing, and probing around it.</p>',
+    },
+    'rag': {
+      title: 'RAG (retrieval-augmented generation)',
+      body: '<p>A pipeline that answers a question by first retrieving relevant text and then handing that text to a language model to write the answer. The documents are cut into chunks, each chunk is embedded as a vector, and a question is embedded the same way; the k chunks whose vectors are most similar to the question&#39;s are retrieved and pasted into the model&#39;s prompt as evidence. That retrieval step is a nearest-neighbor query, which is why RAG systems sit on the indexes in this lecture. A missed neighbor here can mean the one passage that held the answer never reaches the model, which is why RAG cares about recall more than a recommender does. Next lecture treats the whole pipeline as a systems problem.</p>',
+    },
+    'recall': {
+      title: 'Recall@k',
+      body: '<p>The fraction of the true k nearest neighbors that an approximate index actually returned. You compute it by running exact brute-force search to get the true top-k, running the index to get its top-k, and dividing the size of the overlap by k. Recall 1.0 means the index found everything; 0.75 means it missed a quarter of the real neighbors. It is the number that makes &ldquo;approximate&rdquo; honest: the index is allowed to miss, but you measure how much, and you set the index&#39;s dial (probe or ef_search) to reach the recall your application needs.</p>',
+    },
+    'hnsw': {
+      title: 'HNSW (Hierarchical Navigable Small World graph)',
+      body: '<p>A graph index for similarity search. Every vector is a node linked to a handful of its nearest neighbors, and a few nodes also appear on upper layers with long-range links, like highways above streets. A query starts at an entry node on the top layer and greedily hops to whichever neighbor is closest to the query; when no neighbor is closer it drops one layer and keeps walking, until it settles on the bottom layer. Because each hop roughly halves the remaining distance, the walk reaches the answer in a near-logarithmic number of hops while computing distances only along its path. Its dial is <code>ef_search</code>, the number of candidate nodes the walk keeps alive at once. The graph must live in RAM and inserts cost more than IVF&#39;s, but it usually wins the recall-at-speed benchmarks.</p>',
+    },
+    'ivf': {
+      title: 'IVF (inverted file index)',
+      body: '<p>An index that splits the vector set into clusters ahead of time and searches only a few of them per query. At build time, k-means groups the n vectors into C clusters, each with a centroid (its average vector), and every vector is filed in the list of its nearest centroid. At query time the search scores the C centroids, picks the P closest (P is the &ldquo;probe&rdquo; setting), and runs brute force inside only those P lists. The cost falls from n comparisons to about C plus P times n/C. The risk is a true neighbor that sits in a list the query did not probe; raising P finds more of them and does more work.</p>',
+    },
     'ann': {
       title: 'ANN (approximate nearest neighbor)',
       body: '<p>The index family for similarity search that accepts occasionally missing a ' +

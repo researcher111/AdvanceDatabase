@@ -3,6 +3,22 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'compaction': {
+      title: 'Compaction',
+      body: '<p>The background job that merges several SSTables into one. Because each input file is sorted, the merge is a single sequential pass, like the merge step of merge sort. When the same key appears in more than one input, only the newest version is kept, and a key whose newest record is a tombstone (a delete marker) is dropped entirely. The result is fewer, larger files with less duplicated data, so a read has fewer places to look. The cost is that the same data gets rewritten several times over its life, consuming disk bandwidth that incoming writes could have used; how aggressively to compact is the main tuning decision in an LSM engine.</p>',
+    },
+    'sstable': {
+      title: 'SSTable (Sorted String Table)',
+      body: '<p>An immutable file on disk holding key-value pairs in sorted key order, produced when a memtable is flushed or when several older SSTables are compacted together. It is written once, sequentially, and never edited in place; later writes to the same key go into a newer file, and the older copy is dropped only when a compaction merges the two. Each SSTable carries a sparse index (every Nth key and its offset) so a lookup can binary-search to the one block that could hold a key, and usually a Bloom filter so most lookups can skip the file entirely. Because SSTables are immutable, they can be read by many threads and cached freely with no locking.</p>',
+    },
+    'memtable': {
+      title: 'Memtable',
+      body: '<p>The in-memory half of an LSM engine: a sorted structure in RAM (a balanced tree or skip list) that receives every write after it has been appended to the WAL. Inserting into it is fast because RAM has no seek cost, and keeping it sorted means it can be written out to disk in key order with no extra work. It has a fixed size budget; when it fills, its contents are written to disk as a new SSTable and a fresh, empty memtable takes its place. Because it holds the newest writes, every read checks it first.</p>',
+    },
+    'wal': {
+      title: 'WAL (write-ahead log)',
+      body: '<p>An append-only file on disk that records every write before the write is applied anywhere else. Appending is a sequential disk operation, so it is cheap; the database can acknowledge a write as soon as the log record is safely on disk. If the machine crashes, the log is replayed on restart and every acknowledged write comes back. In an LSM engine the WAL protects the memtable, which lives only in RAM: without the log, a crash would lose everything written since the last flush. This is the same log you met in week 7; Bigtable uses it unchanged.</p>',
+    },
     'commodity': {
       title: 'Commodity hardware',
       body: '<p>Ordinary cheap servers instead of premium fault-tolerant machines. Google’s ' +

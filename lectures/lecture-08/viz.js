@@ -3,6 +3,14 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'snapshot-isolation': {
+      title: 'Snapshot isolation',
+      body: '<p>An isolation level where each transaction works from a snapshot: the set of transactions that had committed at the moment it began. Every read returns the row versions those transactions produced and nothing committed later, so a transaction sees one consistent state for its whole run, and readers take no locks at all. Two transactions that try to write the same row still conflict, and the second one to commit is aborted. What it does not catch is two transactions that read overlapping rows and then write <em>different</em> rows, which is write skew. Postgres&#39;s REPEATABLE READ level is snapshot isolation; its SERIALIZABLE level adds the extra checks needed to catch write skew.</p>',
+    },
+    'strict-2pl': {
+      title: 'Strict 2PL (strict two-phase locking)',
+      body: '<p>Two-phase locking (2PL) is the rule that a transaction takes a lock before it touches data: a shared (S) lock to read a row, which many transactions may hold at once, and an exclusive (X) lock to write it, which only one may hold and which shuts out readers too. The two phases are growing and shrinking: a transaction may keep acquiring locks until the moment it releases its first one, and after that it may only release. That single rule is enough to guarantee the interleaving is equivalent to running the transactions one at a time in some order. The <em>strict</em> variant holds every lock until the transaction commits or rolls back, so nothing a transaction wrote can be read by anyone else until that write is final, which also rules out dirty reads. It is what Lab 7&#39;s lock table implements and what most engines run.</p>',
+    },
     'mvcc-intro': {
       title: 'MVCC (multi-version concurrency control)',
       body: '<p>Instead of overwriting a row, UPDATE creates a new <em>version</em> and the old ' +

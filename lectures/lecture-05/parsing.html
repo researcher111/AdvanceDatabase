@@ -42,9 +42,9 @@
 </header>
 
 <p class="lede">
-Everything below the SQL line now exists: storage, cache, records, operators. What's missing
-is the line itself. Today we build the <span class="gloss" data-gloss="front-end">front
-end</span>: text becomes tokens, tokens become a description of intent, and the description
+Every layer that runs beneath SQL now exists: storage, cache, records, operators. What is missing
+is SQL itself: nothing yet turns a typed statement into calls on those layers. Today we build the <span class="gloss" data-gloss="front-end">front
+end</span>: text becomes <span class="gloss" data-gloss="token">tokens</span>, tokens become a description of intent, and the description
 becomes a Lab 4 plan, mechanically, by code you can read in one sitting. Thursday microdb
 answers <code>SELECT name FROM students WHERE gpa &gt; 35</code> typed at a prompt, and your
 whole seven-week stack fires at once.
@@ -91,23 +91,29 @@ and the discipline fits in four helper methods.</p>
 <table>
   <thead><tr><th>Stage</th><th>In → out</th><th>Knows about</th><th>In the lab</th></tr></thead>
   <tbody>
-    <tr><td><strong>Lexer</strong></td><td>characters → tokens</td><td>spelling: numbers, 'strings', words, punctuation</td><td>provided (read it)</td></tr>
-    <tr><td><strong>Parser</strong></td><td>tokens → description</td><td>grammar: what may follow what</td><td><strong>you</strong></td></tr>
-    <tr><td><strong>Planner</strong></td><td>description → scan tree</td><td>the catalog + Lab 4's operators</td><td><strong>you</strong></td></tr>
+    <tr><td><strong>Lexer</strong></td><td>characters → tokens</td><td>spelling only: it recognizes numbers, quoted 'strings', words, and punctuation, and labels each one, without caring what order they come in</td><td>provided; read it before Thursday</td></tr>
+    <tr><td><strong>Parser</strong></td><td>tokens → description</td><td>grammar only: which token may follow which, so it can check that the tokens form a legal statement and record what the statement asks for</td><td><strong>you</strong> write it</td></tr>
+    <tr><td><strong>Planner</strong></td><td>description → scan tree</td><td>the catalog, to look up each table's layout, and Lab 4's scan operators, to build a tree that produces the rows</td><td><strong>you</strong> write it</td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">The lexer solves the <code>'from'</code>-in-quotes problem once:
-a string token is a string token forever after. The parser then reads <em>tokens</em>, never
-characters. Two simple machines beat one clever regex.</p>
+<p class="keep-in-present">Here is the problem a regex cannot solve cleanly. In
+<code>SELECT name FROM students WHERE nick = 'from'</code>, the word <code>from</code> appears
+twice: once as the keyword and once inside a string literal. A regex that searches the raw text
+for <code>from</code> finds both and cannot tell them apart. The lexer settles this once: when it
+sees an opening quote it reads to the closing quote and emits a single STR token, so the
+<code>'from'</code> inside the quotes is a string token forever after and can never be mistaken
+for a keyword. The parser then reads <em>tokens</em>, never characters, so it never has to think
+about quotes at all. Two simple machines beat one clever regex.</p>
 
 <div class="callout note">
   <span class="label">War story · the regex that stopped the internet, 2019</span>
   <p class="keep-in-present">On July 2, 2019, Cloudflare (which fronts a large slice of the
-  web) deployed one new firewall rule containing a regex that could backtrack<sup class="src"><a href="#src-3" title="Details of the Cloudflare outage on July 2, 2019 (Cloudflare Blog)">3</a></sup>
+  web) deployed one new firewall rule containing a regex that could <span class="gloss" data-gloss="catastrophic-backtracking">backtrack</span><sup class="src"><a href="#src-3" title="Details of the Cloudflare outage on July 2, 2019 (Cloudflare Blog)">3</a></sup>
   catastrophically. On real traffic it pinned every CPU in every datacenter to 100%, and for
   about 27 minutes a good fraction of the internet returned errors<sup class="src"><a href="#src-3" title="Details of the Cloudflare outage on July 2, 2019 (Cloudflare Blog)">3</a></sup>. Their postmortem is
-  admirably blunt: a regex was doing structural work a regex cannot bound. That is this
+  admirably blunt: a regex was being asked to do structural work, recognizing nested and
+  repeating patterns, and a regex engine cannot promise an upper limit on how long that takes. That is this
 slide's lesson at planetary scale: when text has structure, you want a lexer and a parser
   whose worst case you can state, not one clever pattern whose worst case you discover in
   production.</p>
@@ -123,7 +129,8 @@ slide's lesson at planetary scale: when text has structure, you want a lexer and
 (KEYWORD where)  (ID gpa)  (PUNCT >)      (NUM 35)</code></pre>
 
 <p class="keep-in-present">Five token kinds cover all of microSQL: <code>KEYWORD · ID · NUM ·
-STR · PUNCT</code>. Keywords are just words that appear in one privileged set, which is why
+STR · PUNCT</code>. Keywords are ordinary words that happen to be on the lexer's fixed list of reserved
+words; any word on that list is labeled KEYWORD wherever it appears, which is why
 you can't name a table <code>select</code>, in microdb or in Postgres<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</p>
 
 <!-- ============================================================ -->
@@ -145,7 +152,7 @@ the same three stages your Thursday code implements.</p>
   <div class="qj-msg" id="sq-msg">Pick a statement to push through the pipeline.</div>
   <div class="sq-stages" id="sq-stages"></div>
   <p class="viz-caption">Try "broken SQL" last: the error names what it expected and what it
-  found instead, which is the parser's whole bedside manner.</p>
+  found instead. Those two facts are all a parser can offer the person who typed the query.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="Watch SQL become a plan">The four artifacts</h3>
@@ -153,10 +160,10 @@ the same three stages your Thursday code implements.</p>
 <table>
   <thead><tr><th>Stage</th><th>Artifact</th><th>Shaped like</th><th>Owned by</th></tr></thead>
   <tbody>
-    <tr><td>text</td><td>a string</td><td>characters, quotes, whitespace</td><td>the user</td></tr>
-    <tr><td>lexer</td><td>token list</td><td>(kind, value) pairs</td><td>provided</td></tr>
-    <tr><td>parser</td><td>QueryData</td><td>plain fields/tables/predicate</td><td><strong>you</strong></td></tr>
-    <tr><td>planner</td><td>scan tree</td><td>Lab 4 objects, ready to pull</td><td><strong>you</strong></td></tr>
+    <tr><td>text</td><td>a string</td><td>raw characters, including quotes and whitespace</td><td>the user, who typed it</td></tr>
+    <tr><td>lexer</td><td>token list</td><td>a list of (kind, value) pairs, one per token</td><td>provided</td></tr>
+    <tr><td>parser</td><td>QueryData</td><td>a plain object holding the field list, the table list, and the <span class="gloss" data-gloss="predicate">predicate</span></td><td><strong>you</strong></td></tr>
+    <tr><td>planner</td><td>scan tree</td><td>a tree of Lab 4 scan objects; calling next() on the root pulls rows through the whole tree</td><td><strong>you</strong></td></tr>
   </tbody>
 </table>
 
@@ -186,21 +193,21 @@ each line becomes <strong>one Python method</strong>.</p>
 <table>
   <thead><tr><th>microSQL has</th><th>microSQL lacks (and who adds it)</th></tr></thead>
   <tbody>
-    <tr><td>SELECT · multi-table FROM · WHERE with AND · INSERT · CREATE TABLE</td><td>ORDER BY, GROUP BY (wk 9 operators) · OR, parentheses (Going Further) · JOIN … ON syntax (sugar for what you have) · UPDATE/DELETE (Sciore ch. 9, straightforward)</td></tr>
+    <tr><td>SELECT · multi-table FROM · WHERE with AND · INSERT · CREATE TABLE</td><td>ORDER BY and GROUP BY: the week 9 lecture adds the sort and group operators they need. OR and parentheses in WHERE: an optional extension in the lab's Going Further section. JOIN … ON syntax: a different spelling of the multi-table FROM plus WHERE you already have; it adds no new operator. UPDATE and DELETE: Sciore ch. 9 shows them, and they follow the same pattern as INSERT.</td></tr>
   </tbody>
 </table>
 
 <p class="keep-in-present">Everything missing is <em>more of the same moves</em>, not new
 machinery. A grammar that fits on a slide is a grammar you can hold in your head while
-debugging: the readability rule, applied to languages.</p>
+debugging, for the same reason microdb prefers readable code over clever code everywhere else.</p>
 
 <h3 class="new-slide" data-kicker="Text is not a program">Why you can't name a table <code>select</code></h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The rule</span><span>the lexer promotes any word in its keyword set to KEYWORD, before context exists, so <code>select</code> can never reach the parser as a table name.</span></div>
-  <div class="lc-row"><span class="lc-k">What we bought</span><span>a one-regex lexer and a parser that never second-guesses a token's kind.</span></div>
-  <div class="lc-row"><span class="lc-k">What Postgres bought</span><span>flexible naming, via reserved/non-reserved keyword tiers and thousands of grammar lines to referee them<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">The lesson</span><span>language design is budget allocation: every naming freedom is paid for in parser complexity, forever.</span></div>
+  <div class="lc-row"><span class="lc-k">The rule</span><span>the lexer labels any word in its keyword set as KEYWORD the moment it reads the word, before the parser has seen what comes before or after it, so <code>select</code> can never reach the parser as a table name.</span></div>
+  <div class="lc-row"><span class="lc-k">What we bought</span><span>a lexer that is one regular expression, and a parser that can trust every token's kind and never has to reconsider whether a KEYWORD might really be a name.</span></div>
+  <div class="lc-row"><span class="lc-k">What Postgres bought</span><span>flexible naming: many keywords can also be used as table or column names. The price is a system of reserved and non-reserved keyword tiers and thousands of grammar lines that decide which reading applies<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">The lesson</span><span>every naming freedom a language grants its users is paid for with extra parser complexity, and that cost is paid for the life of the language.</span></div>
 </div>
 
 <!-- ============================================================ -->
@@ -271,9 +278,9 @@ return; step through and watch the stack breathe:</p>
 <table>
   <thead><tr><th>Statement</th><th>Parses into</th><th>Holding</th></tr></thead>
   <tbody>
-    <tr><td>SELECT…</td><td><code>QueryData</code></td><td>fields, tables, predicate: <em>intent</em>, no scans yet</td></tr>
-    <tr><td>INSERT…</td><td><code>InsertData</code></td><td>table, values</td></tr>
-    <tr><td>CREATE TABLE…</td><td><code>CreateData</code></td><td>table, a Lab-3 Schema</td></tr>
+    <tr><td>SELECT…</td><td><code>QueryData</code></td><td>the field list, the table list, and the predicate: a record of what the user asked for, with no scan objects built yet</td></tr>
+    <tr><td>INSERT…</td><td><code>InsertData</code></td><td>the table name and the list of values to store</td></tr>
+    <tr><td>CREATE TABLE…</td><td><code>CreateData</code></td><td>the table name and a Lab 3 Schema object describing its columns</td></tr>
   </tbody>
 </table>
 
@@ -289,7 +296,7 @@ QueryData and build a better plan; the parser won't change by one line.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">1 · scans</span><span>a TableScan per table in the FROM list; layouts fetched from your Lab 3 catalog.</span></div>
-  <div class="lc-row"><span class="lc-k">2 · products</span><span>fold them into ProductScans left to right: <code>((t1 × t2) × t3)</code>.</span></div>
+  <div class="lc-row"><span class="lc-k">2 · products</span><span>combine them into ProductScans left to right: the first two TableScans become one ProductScan, that product is paired with the third table's scan, and so on: <code>((t1 × t2) × t3)</code>. With a single table there is no product at all.</span></div>
   <div class="lc-row"><span class="lc-k">3 · select</span><span>one SelectScan with the whole WHERE predicate, if there is one.</span></div>
   <div class="lc-row"><span class="lc-k">4 · project</span><span>one ProjectScan with the field list, unless it was <code>*</code>. No useless wrappers: <code>SELECT * FROM t</code> plans as a bare TableScan.</span></div>
 </div>
@@ -302,8 +309,11 @@ work, next to Lab 4's hand-optimized shape:</p>
 <pre class="equation"><code>your planner:      SelectScan[everything] ← Product        900 pairs examined
 Lab 4, by hand:    Select[join] ← Product(σ(s) × σ(m))      60 pairs examined</code></pre>
 
-<p class="keep-in-present">Correct first, fast later, and "later" has a date: week 9's
-optimizer reads the same QueryData and does the pushdown mechanically, using statistics your
+<p class="keep-in-present">The two plans differ in where the filter runs. Your planner builds
+the full product of the two tables and filters afterward, so every pair of rows is formed and
+examined. Lab 4's hand-built plan filters each table first, so far fewer pairs are ever formed.
+Correct first, fast later, and "later" has a date: week 9's
+optimizer reads the same QueryData and does that <span class="gloss" data-gloss="pushdown">pushdown</span> mechanically, using statistics your
 catalog will learn to keep. The parser you write this week never changes again.</p>
 
 <h3 class="new-slide" data-kicker="The planner">The whole trip, once</h3>
@@ -311,11 +321,11 @@ catalog will learn to keep. The parser you write this week never changes again.<
 <table>
   <thead><tr><th>Layer</th><th>Week</th><th>What it does for this one query</th></tr></thead>
   <tbody>
-    <tr><td>REPL → Parser</td><td>5</td><td>text → QueryData</td></tr>
-    <tr><td>Planner → operators</td><td>5, 4</td><td>QueryData → Project ← Select ← Scan, pulled row by row</td></tr>
-    <tr><td>TableScan → catalog</td><td>3</td><td>slots decoded via the layout the catalog stored</td></tr>
-    <tr><td>Buffer pool</td><td>2</td><td>each block read once, hits after that</td></tr>
-    <tr><td>File manager</td><td>1</td><td>seek k × 4096; read the bytes you once wrote by hand</td></tr>
+    <tr><td>REPL → Parser</td><td>5</td><td>the REPL reads the typed line and the parser turns it into a QueryData object</td></tr>
+    <tr><td>Planner → operators</td><td>5, 4</td><td>the planner turns the QueryData into a scan tree, a ProjectScan over a SelectScan over a TableScan, and the REPL pulls rows through it one at a time</td></tr>
+    <tr><td>TableScan → catalog</td><td>3</td><td>the TableScan looks up the table's layout in the catalog and uses it to decode each slot into field values</td></tr>
+    <tr><td>Buffer pool</td><td>2</td><td>each block of the table file is read from disk once; every later request for that block is served from memory</td></tr>
+    <tr><td>File manager</td><td>1</td><td>seeks to offset k × 4096 and reads block k, the same bytes you once wrote by hand in Lab 1</td></tr>
   </tbody>
 </table>
 
@@ -342,19 +352,19 @@ August. Thursday you get to feel it.</p>
 <table>
   <thead><tr><th>Engine</th><th>For <code>SELECT name FORM students</code></th><th>Grade</th></tr></thead>
   <tbody>
-    <tr><td>microdb (yours)</td><td><code>expected 'from', found 'FORM'</code></td><td>says both facts</td></tr>
-    <tr><td>Postgres</td><td><code>syntax error at or near "FORM"</code></td><td>says where, not what it wanted<sup class="src"><a href="#src-6" title="PostgreSQL Documentation, 36.5. Query Language (SQL) Functions">6</a></sup></td></tr>
-    <tr><td>a certain era of MySQL</td><td><code>You have an error in your SQL syntax; check the manual<sup class="src"><a href="#src-7" title="mysql-server/share/messages_to_clients.txt (MySQL source, GitHub)">7</a></sup>…</code></td><td>says to go away</td></tr>
+    <tr><td>microdb (yours)</td><td><code>expected 'from', found 'FORM'</code></td><td>names both what it expected and what it found</td></tr>
+    <tr><td>Postgres</td><td><code>syntax error at or near "FORM"</code></td><td>names the offending token, but not what it expected in its place<sup class="src"><a href="#src-6" title="PostgreSQL Documentation, 36.5. Query Language (SQL) Functions">6</a></sup></td></tr>
+    <tr><td>older versions of MySQL</td><td><code>You have an error in your SQL syntax; check the manual<sup class="src"><a href="#src-7" title="mysql-server/share/messages_to_clients.txt (MySQL source, GitHub)">7</a></sup>…</code></td><td>names neither, and sends the user to the manual</td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">Your teaching engine out-errors Postgres with a four-line helper.
-Funnel every failure through one door and kindness scales for free.</p>
+<p class="keep-in-present">Your teaching engine gives a more helpful message than Postgres, and it took a four-line helper.
+Because every rule reports failure through <code>expect()</code>, every error automatically names what was expected and what was found; no rule needs its own error-handling code.</p>
 
 <!-- ============================================================ -->
 <h2 id="thursday">On Thursday you build it</h2>
 
-<p class="keep-in-present">Five methods total, and two of them are the same <code>{ , }</code> idiom three times.
+<p class="keep-in-present">Five methods total, and much of the work is the <code>{ , }</code> idiom from <code>parse_insert</code>, which you will type three times: for the field list and the table list in <code>parse_query</code>, and for the AND chain in <code>_parse_predicate</code>.
 The <span class="gloss" data-gloss="repl">REPL</span> and both worked-example parsers ship complete.</p>
 
 <table>
@@ -362,7 +372,7 @@ The <span class="gloss" data-gloss="repl">REPL</span> and both worked-example pa
   <tbody>
     <tr><td><code>parse_query</code></td><td><code>parse_insert</code>, with a star case and an optional WHERE</td><td>~18</td></tr>
     <tr><td><code>_parse_predicate</code></td><td>the <code>{ AND term }</code> idiom</td><td>~6</td></tr>
-    <tr><td><code>_parse_term</code></td><td><code>_parse_literal</code>, plus the F fork for join terms</td><td>~10</td></tr>
+    <tr><td><code>_parse_term</code></td><td><code>_parse_literal</code>, plus one extra branch for join terms: when the value to the right of the operator is an ID rather than a number or string, it is another field, and the term records a field reference (the <code>F(…)</code> in the demo) instead of a constant</td><td>~10</td></tr>
     <tr><td><code>Database.plan_query</code></td><td>the four-step recipe, verbatim</td><td>~12</td></tr>
   </tbody>
 </table>
@@ -376,8 +386,8 @@ The <span class="gloss" data-gloss="repl">REPL</span> and both worked-example pa
   <li>☐ Read <code>parse_insert</code> until you can close your eyes and say what each line
   consumes. Thursday is imitation with understanding.</li>
   <li>☐ Optional but glorious: after the tests pass, run <code>python3 microdb.py</code> and
-  type SQL at your own engine. <code>hexdump</code> the table file afterward, for the full
-  seven-week flex.</li>
+  type SQL at your own engine. <code>hexdump</code> the table file afterward to see the rows
+  your SQL created sitting on disk as bytes, written by every layer you have built since week 1.</li>
 </ul>
 
 <!-- ============================================================ -->
@@ -457,6 +467,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 </body>
 </html>

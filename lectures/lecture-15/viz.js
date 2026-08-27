@@ -3,6 +3,18 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'self-join-chain': {
+      title: 'Self-join chain',
+      body: '<p>A join of a table with itself, repeated once per hop. To find who ada follows, join <code>follows</code> to the students; to find who those people follow, join <code>follows</code> to that result again, and so on, one extra join per hop. Each join matches keys across every row of the previous result, and it produces one row per path rather than one per node, so a person reachable by several routes appears several times until a final <code>DISTINCT</code>. That is the relational way to answer ‘within k hops’, and it is what the counter in the widget compares the traversal against.</p>',
+    },
+    'recursive-cte': {
+      title: 'Recursive CTE',
+      body: '<p>A common table expression (the <code>WITH name AS (...)</code> form) that refers to itself. It has two parts joined by <code>UNION ALL</code>: a base query that produces the starting rows, and a step query that reads the rows produced so far and produces the next batch. The engine runs the step again and again, feeding each batch back in, until a step returns no new rows or a condition such as <code>depth &lt; 3</code> stops it. That is a loop expressed in relational algebra, and it is how plain SQL walks a graph one hop per iteration. It works well for a few hops; row counts grow with every level, and there is no built-in notion of a path or a visited set.</p>',
+    },
+    'bfs': {
+      title: 'Breadth-first search (BFS)',
+      body: '<p>Breadth-first search, the standard way to find a shortest path in a graph where every edge counts the same. Starting from one node it visits every neighbor one hop away, then everything two hops away, and so on, keeping a queue of nodes to expand next and a set of nodes already seen so a cycle is never walked twice. Because it works outward in rings, the first time it reaches the target it has found a shortest path. Kuzu&#39;s <code>SHORTEST</code> runs a search of this shape for you; in SQL you would have to build the queue, the visited set, and the stopping rule yourself inside a recursive CTE. Dijkstra&#39;s algorithm is the cousin for graphs whose edges carry different costs.</p>',
+    },
     'adjacency-list': {
       title: 'Adjacency list',
       body: '<p>A node’s own list of its neighbors — "ada follows: [ben, cyd]" stored with ' +

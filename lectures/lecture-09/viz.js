@@ -1,6 +1,26 @@
 /* Lecture 9 — The Query Optimizer · glossary + annotated code only. */
 (function () {
   const GLOSSARY = {
+    'left-deep': {
+      title: 'Left-deep join order',
+      body: '<p>A join plan shaped like a ladder: the first join takes two base tables, and every later join takes the result so far on its left and one fresh base table on its right. Nothing ever joins two intermediate results together. System R considered only left-deep plans, because the shape works naturally with pipelined execution (the running result streams into the next join without being written out) and because it cuts the number of candidate plans from all tree shapes down to the orderings of the tables. Most planners still favor it; the three orders in the widget are the three left-deep orders of three tables.</p>',
+    },
+    'dynamic-programming': {
+      title: 'Dynamic programming (for join order)',
+      body: '<p>A search strategy that avoids repeating work: solve every small subproblem once, remember the answer, and build bigger answers from the remembered small ones. For join ordering, the optimizer first finds the cheapest way to read each single table, then the cheapest way to join each pair, then each triple, and so on, reusing the cheapest plan for each subset rather than re-deriving it. Any join order that is not the cheapest for its subset of tables is discarded early, because no plan that contains it can beat the plan that uses the cheaper piece. The number of subsets still grows exponentially with the number of tables, which is why planners switch to heuristics beyond roughly a dozen tables, but it is vastly fewer than the number of full orderings.</p>',
+    },
+    'system-r': {
+      title: 'System R',
+      body: '<p>IBM&#39;s research prototype of a relational database, built in the 1970s, and the first system to run SQL. Its 1979 paper by Selinger and colleagues, <em>Access Path Selection in a Relational Database Management System</em>, described the first cost-based query optimizer: keep statistics about each table, price every candidate plan with a formula, and pick the cheapest. It also introduced the dynamic-programming search over join orders. Every optimizer since, including Postgres&#39;s, follows the same skeleton, which is why this lecture keeps naming it.</p>',
+    },
+    'explain-analyze': {
+      title: 'EXPLAIN ANALYZE',
+      body: '<p>Two SQL commands stacked together. <code>EXPLAIN</code> asks the engine to print the plan the optimizer chose for a query, as a tree of operators with the optimizer&#39;s cost and row-count estimates, instead of running it. Adding <code>ANALYZE</code> makes the engine actually run the query as well and print, next to each estimate, the measured row count and elapsed time for that operator. Reading the tree from the innermost operator outward shows the order things ran; comparing estimated rows to actual rows shows where the optimizer&#39;s statistics were wrong. It is the standard first tool for a slow query.</p>',
+    },
+    'selectivity': {
+      title: 'Selectivity',
+      body: '<p>The fraction of a table&#39;s rows that a predicate keeps, between 0 and 1: a predicate that keeps 3 of 300 rows has selectivity 0.01. The optimizer never knows it exactly before running the query, so it estimates it from stored statistics: an equality on a column with V distinct values gets 1/V, a range predicate gets the share of the min-to-max span it covers, and ANDed predicates multiply. The estimated row count of every step in a plan is N times these fractions, and every cost formula starts from that row count. That is why a wrong selectivity estimate, usually from stale statistics or correlated predicates, produces a wrong plan.</p>',
+    },
     'statistics': {
       title: 'Statistics (of a table)',
       body: '<p>Facts the engine keeps about its own data: row counts, block counts, and ' +

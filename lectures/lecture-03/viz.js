@@ -5,6 +5,14 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'iterator-model': {
+      title: 'Iterator model',
+      body: '<p>The standard way a query engine is organized: every operator (scan, filter, project, join) exposes the same three calls, <code>before_first</code> to rewind, <code>next</code> to advance to the next row, and <code>get_*</code> to read a field of the current row. A query becomes a tree of these operators, each one pulling rows from the operator below it one at a time. Only the bottom operator, the TableScan, touches disk; everything above it just calls <code>next</code> on its child and decides what to do with the row. Because every operator speaks the same interface, any operator can sit on top of any other, which is what lets a WHERE, a column list, and a JOIN stack in any order. You build the bottom operator this week and the rest next week.</p>',
+    },
+    'slot-directory': {
+      title: 'Slot directory',
+      body: '<p>A small array at the front of a page that holds, for each record, the byte offset where that record starts and its length. The records themselves are packed at the far end of the page and can be any size. A row is addressed by its slot number, which looks up the directory entry, which points at the bytes; if a row grows and has to move within the page, only the directory entry changes and the slot number stays the same. This is how Postgres keeps variable-length rows and stable row numbers at once, at the price of one extra hop on every access. microdb skips the directory by making every slot the same size, so the offset is arithmetic instead of a lookup.</p>',
+    },
     'heap-file': {
       title: 'Heap file',
       body: '<p>The default storage shape for a table: a file of blocks holding records in no ' +

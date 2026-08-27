@@ -3,6 +3,18 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'occupancy': {
+      title: 'Occupancy',
+      body: '<p>How full a node is: the number of keys it holds divided by the maximum it could hold. Splitting at the middle leaves two nodes at about 50%, and inserts then fill them back up, so on average nodes run around two thirds full. Occupancy matters because it decides how many nodes the same keys need, and therefore how tall the tree is and how many blocks a lookup reads. A skewed split that leaves one node nearly empty drives occupancy down: the tree is still correct, but it is bigger and taller than it has to be.</p>',
+    },
+    'routing-key': {
+      title: 'Routing key',
+      body: '<p>A key stored in an internal node purely to steer a search. An internal node with keys [k1, k2, ..., kn] has n+1 children, and the rule is: everything less than k1 is in the first child, everything from k1 up to (but not including) k2 is in the second, and so on. A routing key carries no RID and points at no row; it is a signpost, not data. That is why an internal split can move its middle key up and out of the node, while a leaf split must leave a copy behind: the leaf key is the real entry, the routing key is only a guide to it.</p>',
+    },
+    'invariant': {
+      title: 'Invariant',
+      body: '<p>A property that must be true of the structure after every operation, no matter what order the operations came in. For the B+ tree the key invariants are: every leaf is the same distance from the root, keys inside a node are sorted, every node except the root is at least half full, and every (key, RID) entry lives in a leaf. An operation is correct if the invariants held before it and still hold after it; that is what Thursday&#39;s harness checks after each batch of inserts. The split is designed so that it never breaks any of them, which is why the tree needs no separate rebalancing step.</p>',
+    },
     'rid-recall': {
       title: 'RID (record id) — recall',
       body: '<p>A row’s stable physical address from Lab 3: (block number, slot number). ' +

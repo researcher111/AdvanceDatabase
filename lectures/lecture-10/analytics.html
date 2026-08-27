@@ -70,12 +70,12 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <h2 id="plan">Today's plan</h2>
 
 <p>Quiz 7 first (transactions &amp; MVCC: yes, after the midterm; spaced repetition is on
-your side). Then the new world.</p>
+your side). Then the analytics side of the course: a new workload, and the storage layout that fits it.</p>
 
 <ol class="agenda">
-  <li><strong>The workload flip</strong>: OLTP built microdb; OLAP wants the opposite.</li>
+  <li><strong>The workload flip</strong>: OLTP (online transaction processing: many small reads and writes of single rows) is the workload microdb was built for; OLAP (online analytical processing: scanning and aggregating whole columns) wants the opposite layout.</li>
   <li><strong>Row vs column, felt</strong>: the same query against both layouts.</li>
-  <li><strong>Inside a column store</strong>: compression, late materialization, vectors.</li>
+  <li><strong>Inside a column store</strong>: compression, <span class="gloss" data-gloss="late-materialization">late materialization</span>, vectorized execution.</li>
   <li><strong>DuckDB &amp; Parquet</strong>: the analyst's stack, one pip install.</li>
   <li><strong>Warehouses &amp; the lakehouse</strong>: the same ideas at cloud scale.</li>
   <li><strong>Thursday</strong>: real SQL, real measurements, project proposals due.</li>
@@ -87,7 +87,7 @@ analytics is a different workload.</p>
 <!-- ============================================================ -->
 <h2 id="flip">The workload flip</h2>
 
-<h3 class="new-slide" data-kicker="The workload flip">OLTP vs OLAP, finally formal</h3>
+<h3 class="new-slide" data-kicker="The workload flip">OLTP vs OLAP</h3>
 
 <table>
   <thead><tr><th></th><th>OLTP (microdb's world)</th><th>OLAP (this week's)</th></tr></thead>
@@ -95,7 +95,7 @@ analytics is a different workload.</p>
     <tr><td>Typical query</td><td>fetch/update one ride by id</td><td>aggregate two columns of all rides</td></tr>
     <tr><td>Touches</td><td>a few rows, all columns</td><td>all rows, a few columns</td></tr>
     <tr><td>Right layout</td><td><strong>rows together</strong> (one block has your whole record)</td><td><strong>columns together</strong> (one read has only what you need)</td></tr>
-    <tr><td>Writes</td><td>constant small ones: WAL, locks, the works</td><td>bulk appends; datasets are mostly immutable</td></tr>
+    <tr><td>Writes</td><td>a constant stream of small ones, each needing the WAL and locks from Act I</td><td>large batch loads, such as a day's rides appended at once; once written, the data is rarely changed</td></tr>
     <tr><td>Engines</td><td>Postgres, MySQL, your microdb</td><td>DuckDB, Snowflake, BigQuery, Spark</td></tr>
   </tbody>
 </table>
@@ -124,21 +124,20 @@ and their data flows into columnar systems that analyze it.</p>
   <div class="ly-grid" id="ly-grid"></div>
   <div class="bs-stats" id="ly-stats"></div>
   <p class="viz-caption">Then press the third button (the point lookup) and watch the
-  advantage reverse. Layout follows workload; there is no free arrangement.</p>
+  advantage reverse. Layout follows workload: no single arrangement is fast for both an aggregate over one column and a lookup of one whole row.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="columnar">Inside a column store</h2>
 
-<p class="keep-in-present">Turning the layout ninety degrees isn't the speedup by itself;
-it's the license for three compounding tricks, each impossible while types interleave:</p>
+<p class="keep-in-present">Storing columns together is not the speedup by itself. It makes three further tricks possible, and they compound. Each one fails in row storage, where a row's mixed types (an integer, then a string, then a float) sit next to each other every few bytes:</p>
 
 <table>
   <thead><tr><th>Trick</th><th>Needs</th><th>Buys</th></tr></thead>
   <tbody>
-    <tr><td>compression</td><td>runs of same-typed, similar values</td><td>fewer blocks (week 1's currency)</td></tr>
-    <tr><td>vectorized execution</td><td>contiguous arrays of one type</td><td>CPU throughput</td></tr>
-    <tr><td>stats-based skipping</td><td>per-chunk min/max</td><td>blocks never read at all</td></tr>
+    <tr><td>compression</td><td>runs of same-typed, similar values</td><td>fewer blocks to read, which is the cost measure from week 1</td></tr>
+    <tr><td>vectorized execution</td><td>contiguous arrays of one type</td><td>more values processed per CPU second, because the engine runs a tight loop over an array instead of interpreting one row at a time</td></tr>
+    <tr><td>stats-based skipping</td><td>per-chunk min/max</td><td>whole chunks never read: if a chunk's stored min and max show that no row in it can match the filter, its blocks are skipped</td></tr>
   </tbody>
 </table>
 
@@ -167,19 +166,19 @@ smaller files = fewer blocks = faster scans: compression IS performance here.</c
   </div>
   <div id="enc-stage"></div>
   <p class="viz-caption">These three cover most real columns, and they compound: Parquet
-  dictionary-encodes then run-length-encodes the dictionary codes<sup class="src"><a href="#src-2" title="Parquet Encodings">2</a></sup>. A 20-column fact table
+  dictionary-encodes then run-length-encodes the dictionary codes<sup class="src"><a href="#src-2" title="Parquet Encodings">2</a></sup>. A 20-column <span class="gloss" data-gloss="fact-table">fact table</span>
   routinely shrinks 10–20×, and every saved byte is a block the scan never reads<sup class="src"><a href="#src-3" title="Querying Parquet with Precision Using DuckDB">3</a></sup>.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="Inside a column store">Vectorized execution: amortize everything</h3>
 
 <table>
-  <thead><tr><th></th><th>microdb (Volcano)</th><th>DuckDB (vectorized)</th></tr></thead>
+  <thead><tr><th></th><th>microdb (<span class="gloss" data-gloss="volcano">Volcano</span>)</th><th>DuckDB (vectorized)</th></tr></thead>
   <tbody>
     <tr><td>Unit of work</td><td>one row per next()</td><td>a <em>vector</em> of ~2048 values per call</td></tr>
-    <tr><td>Interpreter overhead</td><td>paid per row</td><td>paid per 2048 rows, amortized to dust<sup class="src"><a href="#src-4" title="DuckDB Internals: Vectors">4</a></sup></td></tr>
-    <tr><td>CPU behavior</td><td>branchy, cache-hostile</td><td>tight loops over arrays, SIMD-friendly, the thing CPUs love<sup class="src"><a href="#src-1" title="The Design and Implementation of Modern Column-Oriented Database Systems">1</a></sup></td></tr>
-    <tr><td>The model</td><td colspan="2">identical! before_first/next/get, just bigger sips. Your mental model survives intact.</td></tr>
+    <tr><td>Interpreter overhead</td><td>paid per row</td><td>paid once per 2048 rows, so the cost per row is close to nothing<sup class="src"><a href="#src-4" title="DuckDB Internals: Vectors">4</a></sup></td></tr>
+    <tr><td>CPU behavior</td><td>one branch per row and scattered memory accesses, so the CPU's caches and branch predictor help little</td><td>tight loops over arrays, which CPUs run fastest and which SIMD instructions (one instruction applied to several values at once) speed up further<sup class="src"><a href="#src-1" title="The Design and Implementation of Modern Column-Oriented Database Systems">1</a></sup></td></tr>
+    <tr><td>The model</td><td colspan="2">the same: before_first/next/get, except that each next() returns a batch of values instead of one row. The iterator model you built in microdb still applies.</td></tr>
   </tbody>
 </table>
 
@@ -190,7 +189,7 @@ shows Parquet beating CSV <strong>89×</strong> on the same rows on the same lap
   <span class="ex-label">Check yourself · predict Thursday's number</span>
   <p>rides: 60,000 rows, 8 columns, ~8 bytes per value. Compute the bytes that must move for
   <code>SELECT avg(fare) FROM rides</code> under (a) row layout, (b) column layout, and
-  (c) column layout with a <code>month = 12</code> filter over 12 equal hive partitions.
+  (c) column layout with a <code>month = 12</code> filter over 12 equal <span class="gloss" data-gloss="partitioning-files">hive partitions</span> (one folder per month).
   What's the (a)-to-(c) ratio?</p>
   <details><summary>Show answer</summary>
   <p>(a) all of it: 60,000&nbsp;×&nbsp;8&nbsp;×&nbsp;8 ≈ <strong>3.8&nbsp;MB</strong>.
@@ -209,9 +208,9 @@ shows Parquet beating CSV <strong>89×</strong> on the same rows on the same lap
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">DuckDB</span><span>a full columnar OLAP engine in a Python library, "SQLite for analytics." No server, queries CSV/Parquet/pandas frames in place<sup class="src"><a href="#src-5" title="Why DuckDB">5</a></sup>. Thursday's lab engine.</span></div>
-  <div class="lc-row"><span class="lc-k">Parquet</span><span>the columnar <em>file format</em> everyone reads and writes: column chunks + per-chunk stats + dictionary/RLE compression, self-describing schema<sup class="src"><a href="#src-6" title="Apache Parquet File Format">6</a></sup>. The CSV of the 2020s, minus the regrets.</span></div>
-  <div class="lc-row"><span class="lc-k"><span class="gloss" data-gloss="partitioning-files">Partitioning</span></span><span>folder-per-value layout (<code>month=12/…</code>) that turns WHERE clauses into skipped directories<sup class="src"><a href="#src-7" title="DuckDB Hive Partitioning">7</a></sup>; you'll watch <code>EXPLAIN</code> say <code>Scanning Files: 1/12</code>.</span></div>
-  <div class="lc-row"><span class="lc-k">The pandas peace treaty</span><span>DuckDB queries dataframes directly and returns them<sup class="src"><a href="#src-8" title="DuckDB Guide: Import from Pandas">8</a></sup>; SQL and pandas stop being rivals and become stages of one pipeline.</span></div>
+  <div class="lc-row"><span class="lc-k">Parquet</span><span>the columnar <em>file format</em> everyone reads and writes: column chunks + per-chunk stats + dictionary/RLE compression, self-describing schema<sup class="src"><a href="#src-6" title="Apache Parquet File Format">6</a></sup>. It plays the role CSV once played as the universal exchange format, but with types, compression, and per-chunk statistics built in.</span></div>
+  <div class="lc-row"><span class="lc-k"><span class="gloss" data-gloss="partitioning-files">Partitioning</span></span><span>the rows for each value of a column stored in their own folder (<code>month=12/…</code>), so a <code>WHERE month = 12</code> clause means the engine opens one folder and never touches the other eleven<sup class="src"><a href="#src-7" title="DuckDB Hive Partitioning">7</a></sup>; you'll watch <code>EXPLAIN</code> say <code>Scanning Files: 1/12</code>.</span></div>
+  <div class="lc-row"><span class="lc-k">DuckDB and pandas</span><span>DuckDB can run SQL directly against a pandas dataframe and hand the result back as a dataframe<sup class="src"><a href="#src-8" title="DuckDB Guide: Import from Pandas">8</a></sup>. A pipeline can therefore use SQL for one step and pandas for the next, passing the same data between them.</span></div>
 </div>
 
 <!-- ============================================================ -->
@@ -226,16 +225,13 @@ doesn't need: <strong>separating where data rests from where queries run.</stron
 <table>
   <thead><tr><th>System</th><th>What it is</th><th>The defining trick</th></tr></thead>
   <tbody>
-    <tr><td>Snowflake / BigQuery / Redshift</td><td>cloud <span class="gloss" data-gloss="warehouse">data warehouses</span>: columnar engines, elastic compute<sup class="src"><a href="#src-9" title="BigQuery Storage Overview">9</a></sup></td><td><strong>separation of storage and compute</strong>: data lives in <span class="gloss" data-gloss="object-storage">object storage</span>; query clusters spin up, bill by the scan, vanish<sup class="src"><a href="#src-10" title="Snowflake Key Concepts and Architecture">10</a></sup></td></tr>
-    <tr><td>The data lake</td><td>Parquet files in S3-style object storage, no engine attached</td><td>cheapest possible storage; any engine may read it</td></tr>
-    <tr><td>The <span class="gloss" data-gloss="lakehouse">lakehouse</span> (Delta, Iceberg)</td><td>lake files + a transactional metadata layer</td><td>ACID commits, schema evolution, and time travel, over plain Parquet<sup class="src"><a href="#src-11" title="Delta Lake Introduction">11</a></sup>, via a manifest that says which files ARE the table<sup class="src"><a href="#src-12" title="Apache Iceberg Table Spec">12</a></sup></td></tr>
+    <tr><td>Snowflake / BigQuery / Redshift</td><td>cloud <span class="gloss" data-gloss="warehouse">data warehouses</span>: columnar engines, elastic compute<sup class="src"><a href="#src-9" title="BigQuery Storage Overview">9</a></sup></td><td><strong>separation of storage and compute</strong>: the data rests permanently in <span class="gloss" data-gloss="object-storage">object storage</span>, and a separate cluster of machines is started when queries arrive, billed for the work it does, and shut down when it is idle<sup class="src"><a href="#src-10" title="Snowflake Key Concepts and Architecture">10</a></sup></td></tr>
+    <tr><td>The data lake</td><td>a collection of Parquet files sitting in S3-style object storage, with no database engine attached to them</td><td>the storage is as cheap as storage gets, and because the files are in an open format, any engine (DuckDB, Spark, a warehouse) can read them</td></tr>
+    <tr><td>The <span class="gloss" data-gloss="lakehouse">lakehouse</span> (Delta, Iceberg)</td><td>the same lake files plus a transactional metadata layer on top</td><td>ACID commits, schema evolution, and time travel over plain Parquet files<sup class="src"><a href="#src-11" title="Delta Lake Introduction">11</a></sup>. All three rest on a manifest: a small metadata file that lists exactly which Parquet files make up the table right now, so a commit is just a new manifest and readers never see a half-written table<sup class="src"><a href="#src-12" title="Apache Iceberg Table Spec">12</a></sup></td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">Look closely at the lakehouse's manifest-plus-files trick: a small
-transactional layer conferring table-hood on dumb storage. You built that exact shape;
-it's the catalog (Lab 3) plus the WAL (Lab 7), wearing a warehouse badge. Act I keeps paying
-rent.</p>
+<p class="keep-in-present">The lakehouse's manifest-plus-files design is a small transactional layer that turns a folder of plain files into a table. You built the same shape in Act I: the catalog from Lab 3 recorded which file and which columns make up a table, and the WAL from Lab 7 made changes to that record atomic and durable. The lakehouse manifest does both jobs, at cloud scale.</p>
 
 <h3 class="new-slide" data-kicker="Warehouses">Pricing by the scan: layout becomes money</h3>
 
@@ -251,9 +247,7 @@ a budgeting skill; Thursday's measurement is your first invoice audit.</code></p
 <!-- ============================================================ -->
 <h2 id="thursday">On Thursday you drive it</h2>
 
-<p>No layers to build; Act II labs drive real engines. Seven SQL queries against the 60k-row
-rides dataset (finally: GROUP BY, windows, LIMIT, real SQL, your microSQL's grown-up
-cousins), then three measurements: format, projection, pruning.</p>
+<p>No layers to build; Act II labs drive real engines. Seven SQL queries against the 60k-row rides dataset (GROUP BY, window functions, LIMIT: the full-SQL versions of what microSQL supported), then three measurements: file format (CSV against Parquet), projection (reading one column instead of all of them), and pruning (skipping the partitions a filter rules out).</p>
 
 <ul class="checklist">
   <li>☐ <code>pip install duckdb</code>: that's the entire setup. Verify:
@@ -273,7 +267,7 @@ cousins), then three measurements: format, projection, pruning.</p>
   <li><strong>Layout follows workload.</strong> Rows for fetch-and-update, columns for
   scan-and-aggregate; the industry runs both, connected by pipelines.</li>
   <li><strong>Columns unlock a cascade</strong> (compression, vectorized execution,
-  chunk-level pushdown) that compounds to the 89× you'll measure.</li>
+  chunk-level skipping using per-chunk min/max stats) that compounds to the 89× you'll measure.</li>
   <li><strong>The cloud stack is your stack resized:</strong> Parquet ≈ column-store files,
   the lakehouse ≈ catalog + WAL over a lake, and pricing-by-scan turns every lesson since
   week 1 into money.</li>
@@ -297,13 +291,12 @@ one line.</p>
 <p class="keep-in-present">Two separate sins: CSV must be <em>parsed</em> (every byte
 inspected, every number decoded from text), and it has no column structure, so the whole
 file moves even for one column. Parquet stores typed binary columns with stats; most bytes<sup class="src"><a href="#src-3" title="Querying Parquet with Precision Using DuckDB">3</a></sup>
-never move, and none need parsing. Thursday's question 1, spoiled.</p>
+never move, and none need parsing.</p>
 
 <h3 class="keep-in-present">Is DuckDB replacing Postgres?</h3>
 <p class="keep-in-present">Different workload, different tool: DuckDB has no concurrent
 writers, no WAL-grade durability story for hot OLTP, on purpose<sup class="src"><a href="#src-15" title="DuckDB Concurrency">15</a></sup>. The modern pattern is
-Postgres running the app, Parquet snapshots in a lake, DuckDB/warehouse reading them. Each
-piece you can now name from the inside.</p>
+Postgres running the app, Parquet snapshots in a lake, and DuckDB or a warehouse reading them.</p>
 
 <h3 class="keep-in-present">What's "time travel" in the lakehouse pitch?</h3>
 <p class="keep-in-present">Old manifests are kept: query the table <em>as of</em> last
@@ -342,6 +335,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 </body>
 </html>

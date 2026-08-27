@@ -3,6 +3,14 @@
 /* ---------------- Glossary ---------------- */
 (function () {
   const GLOSSARY = {
+    'relational-algebra': {
+      title: 'Relational algebra',
+      body: '<p>The small set of operations on tables that SQL is defined in terms of: select (keep the rows that pass a test), project (keep some columns), product (pair every row with every row), plus union, difference, and rename. Each takes tables in and gives a table out, so operations compose into a tree, which is exactly what a query plan is. The operations obey algebraic laws, for example filtering each input before a product yields the same rows as filtering the pairs after it, and those laws are what let an optimizer rearrange a plan without changing its answer. When this lecture says the same answer is guaranteed, that guarantee is a theorem of relational algebra, not a property of the code.</p>',
+    },
+    'tombstone': {
+      title: 'Tombstone',
+      body: '<p>A deleted record that still physically occupies its slot in the page; only its in-use flag has changed. The bytes stay put until a later insert reuses the slot, so a scan that walked every slot blindly would hand back ghosts. That is why Lab 3&#39;s TableScan.next() checks the flag and skips over tombstones on its way to the next live row. Marking instead of moving makes deletion O(1), and it is also why databases need vacuum or compaction processes to reclaim the space for real.</p>',
+    },
     'materialization': {
       title: 'Materialization',
       body: '<p>Computing and storing a stage’s <em>entire</em> result (in memory or on disk) ' +

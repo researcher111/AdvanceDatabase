@@ -76,7 +76,7 @@ the stack.</p>
   <li><strong>Crash a bank</strong>: watch $50 vanish mid-transfer, live.</li>
   <li><strong>The write-ahead rule</strong>: old value to the log, before the page changes.</li>
   <li><strong>Recovery</strong>: one backward pass undoes every unfinished transaction.</li>
-  <li><strong>Force &amp; steal</strong>: the 2×2 from week 2, finally paid off.</li>
+  <li><strong>Force &amp; steal</strong>: the 2×2 grid of buffer-pool policies from week 2, and what each corner costs at recovery time.</li>
   <li><strong>Next Thursday</strong>: you build all of it, then kill it.</li>
 </ol>
 
@@ -91,10 +91,10 @@ place</strong>; everything else is bookkeeping that makes that one fsync suffici
 <table>
   <thead><tr><th></th><th>The promise</th><th>Kept by</th><th>When</th></tr></thead>
   <tbody>
-    <tr><td><strong>A</strong>tomic</td><td>all of the transaction, or none of it</td><td>the log + rollback/recovery</td><td><strong>today</strong></td></tr>
-    <tr><td><strong>C</strong>onsistent</td><td>integrity rules still hold afterward</td><td>constraints + A and I doing their jobs</td><td>implied</td></tr>
-    <tr><td><strong>I</strong>solated</td><td>concurrent users can't see half-done work</td><td>locks / MVCC</td><td>Tuesday</td></tr>
-    <tr><td><strong>D</strong>urable</td><td>committed means survives-anything<sup class="src"><a href="#src-3" title="Principles of Transaction-Oriented Database Recovery (Haerder and Reuter, ACM Computing Surveys 15(4), 1983)">3</a></sup></td><td>the log + one fsync</td><td><strong>today</strong></td></tr>
+    <tr><td><strong>A</strong>tomic</td><td>all of the transaction, or none of it</td><td>the log, plus rollback while the engine runs and recovery after a crash</td><td><strong>today</strong></td></tr>
+    <tr><td><strong>C</strong>onsistent</td><td>integrity rules still hold afterward</td><td>declared constraints, plus atomicity and isolation holding up their ends</td><td>follows from A and I</td></tr>
+    <tr><td><strong>I</strong>solated</td><td>concurrent users can't see half-done work</td><td>locks, or <span class="gloss" data-gloss="mvcc">MVCC</span> (multi-version concurrency control)</td><td>Tuesday</td></tr>
+    <tr><td><strong>D</strong>urable</td><td>once COMMIT returns, the work survives any crash, power cut included<sup class="src"><a href="#src-3" title="Principles of Transaction-Oriented Database Recovery (Haerder and Reuter, ACM Computing Surveys 15(4), 1983)">3</a></sup></td><td>the log, plus one fsync of the COMMIT record</td><td><strong>today</strong></td></tr>
   </tbody>
 </table>
 
@@ -105,14 +105,14 @@ both.</p>
 <!-- ============================================================ -->
 <h2 id="try-it">Crash a bank</h2>
 
-<p>The lab's kill&nbsp;-9 demo, as a step-through. Watch the exact interleaving of page
-writes, log writes, and one murder, then run recovery and count the money.</p>
+<p>The lab's <span class="gloss" data-gloss="kill-9">kill&nbsp;-9</span> demo, as a step-through. Watch the exact interleaving of page
+writes, log writes, and one forced kill of the engine, then run recovery and count the money.</p>
 
 <div class="viz" id="viz-crash">
   <div class="viz-title">The $40 transfer, the $50 disaster, the one-pass repair</div>
   <p class="viz-description">Disk state on the left, the write-ahead log on the right;
   <span class="hexlegend hit">green</span> entries are fsync'd (safe),
-  <span class="hexlegend miss">warm</span> are in the OS's hands. Step through the timeline.</p>
+  <span class="hexlegend miss">warm</span> entries have been written but not fsync'd, so they sit in the operating system's cache and are lost if the power goes. Step through the timeline.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="cr-play">▶ Play</button>
     <button type="button" class="btn" id="cr-step">Step</button>
@@ -125,7 +125,7 @@ writes, log writes, and one murder, then run recovery and count the money.</p>
   </div>
   <div class="bs-stats" id="cr-stats"></div>
   <p class="viz-caption">The moment worth replaying: recovery reads the log <em>backwards</em>,
-  learns each transaction's fate before seeing its writes, and undoes only the unfinished.</p>
+  learns each transaction's fate (its COMMIT or ROLLBACK record) before seeing its writes, and undoes only the unfinished.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -143,21 +143,21 @@ the log itself:  an APPEND-ONLY file, no seeks, no slots, no structure.
                  which is why logging every change costs less than it sounds.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 28.1 Reliability (WAL introduction)">4</a></sup></code></pre>
 
 <p class="keep-in-present">The log stores <em>old</em> values because our recovery only ever
-undoes. (ARIES logs new values too, so it can also redo; same rule, more insurance.)<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup></p>
+undoes. (ARIES logs new values too, so it can also redo a committed change whose page never reached disk; the write-ahead rule is the same, the record just carries more information.)<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup></p>
 
 <h3 class="new-slide" data-kicker="The write-ahead rule">Where the fsyncs go, and don't</h3>
 
 <table>
   <thead><tr><th>Event</th><th>fsync?</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>each SET record</td><td>no, buffered append</td><td>the record must merely be <em>ahead of</em> its page; pages flush rarely</td></tr>
-    <tr><td>data pages at commit</td><td>yes (our FORCE policy)</td><td>data on disk before the commit record exists</td></tr>
-    <tr><td><strong>the COMMIT record</strong></td><td><strong>yes, THE fsync</strong></td><td>when it returns, the promise is binding; before it, the tx never happened<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 3.4 Transactions">5</a></sup></td></tr>
-    <tr><td>ROLLBACK records</td><td>at leisure</td><td>a lost rollback record just means recovery re-undoes, harmless (idempotence)</td></tr>
+    <tr><td>each SET record</td><td>no, buffered append</td><td>the rule only requires that the record reach the log file <em>before</em> its data page reaches disk. Pages are flushed rarely (at commit, or when evicted), so the log manager can collect records in a buffer and write them out just before any page flush; no fsync per record</td></tr>
+    <tr><td>data pages at commit</td><td>yes (our <span class="gloss" data-gloss="force">FORCE</span> policy)</td><td>every dirty page the transaction touched is written to disk before the COMMIT record is appended. So if a COMMIT record exists at all, the data it vouches for is already on disk, and recovery never has to redo anything</td></tr>
+    <tr><td><strong>the COMMIT record</strong></td><td><strong>yes, THE fsync</strong></td><td>this is the fsync that makes durability real. Once it returns, the COMMIT record is on disk and the transaction counts as done whatever happens next. If the crash comes before it returns, no COMMIT record exists, so recovery treats the transaction as unfinished and undoes it<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 3.4 Transactions">5</a></sup></td></tr>
+    <tr><td>ROLLBACK records</td><td>no; whenever the log buffer next flushes</td><td>if a crash loses a ROLLBACK record, recovery sees an unfinished transaction and undoes it again. Restoring an old value twice leaves the same result as restoring it once, so the repeat is harmless (the pass is <span class="gloss" data-gloss="idempotent">idempotent</span>)</td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">Lab 1's ratio, resolved: a transaction touching fifty pages pays
+<p class="keep-in-present">Lab 1 measured an fsync costing 10 to 1000 times a buffered write. Here is why that does not sink the design: a transaction touching fifty pages pays
 <strong>one</strong> mandatory fsync, on a sequential file. That arithmetic is why databases
 can promise durability and still be fast.</p>
 
@@ -177,17 +177,16 @@ can promise durability and still be fast.</p>
 <!-- ============================================================ -->
 <h2 id="recovery">Recovery: undo the unfinished</h2>
 
-<p class="keep-in-present">A crash leaves the disk mid-sentence: committed work possibly
-complete, unfinished work possibly half-flushed (stolen pages!). Recovery's contract is
-modest and absolute: <strong>make the disk look as if every unfinished transaction never
+<p class="keep-in-present">A crash leaves the disk in a mixed state: committed work possibly
+complete, unfinished work possibly half-flushed, because the buffer pool may have <span class="gloss" data-gloss="steal">stolen</span> a dirty page from a live transaction and written it out. Recovery's job is simple to state: <strong>make the disk look as if every unfinished transaction never
 began.</strong> One backward pass over the log does it.</p>
 
 <table>
   <thead><tr><th>Found on disk after the crash</th><th>Why it's there</th><th>Recovery's move</th></tr></thead>
   <tbody>
-    <tr><td>committed data</td><td>FORCE flushed it before its COMMIT record</td><td>keep; its fate says so</td></tr>
-    <tr><td>uncommitted data</td><td>a stolen dirty page</td><td>undo; the log holds the old value</td></tr>
-    <tr><td>missing uncommitted data</td><td>never flushed; the crash ate the buffer</td><td>nothing to do; already gone</td></tr>
+    <tr><td>committed data</td><td>FORCE flushed it before its COMMIT record</td><td>keep it: the COMMIT record in the log says the transaction finished</td></tr>
+    <tr><td>uncommitted data</td><td>the buffer pool evicted (stole) a dirty page belonging to a transaction that had not committed</td><td>undo it: the log's SET record holds the old value, so write that value back</td></tr>
+    <tr><td>missing uncommitted data</td><td>the page was still in the buffer pool, and RAM does not survive a power cut</td><td>nothing: the change never reached disk, so the disk already looks as if it never happened</td></tr>
   </tbody>
 </table>
 
@@ -206,9 +205,9 @@ began.</strong> One backward pass over the log does it.</p>
 
 <p class="keep-in-present">Then recovery runs again at the next startup, and must do no new
 damage. Undo-only recovery is naturally <span class="gloss" data-gloss="idempotent">idempotent</span>:
-restoring an old value twice restores it once. The receipt records make the second pass
+restoring an old value twice restores it once. The ROLLBACK records written at the end of the pass (the receipts in the code above) make the second pass
 skip cleanly; the lab tests literally run <code>recover()</code> twice and check nothing
-moves. Systems design rule worth framing: <strong>any repair process must survive being
+moves. A general rule of systems design: <strong>any repair process must survive being
 interrupted by the disaster it repairs.</strong></p>
 
 <!-- ============================================================ -->
@@ -235,10 +234,7 @@ moment of the crash; that single fact decides everything recovery must do.</p>
     </div>
     <div class="quad-detail" id="quad-detail"></div>
   </div>
-  <p class="viz-caption">The diagonal is the story: microdb takes the simplest correct
-  corner; every production engine takes the corner needing <em>both</em> passes, because
-  both freedoms (commit without data I/O, evict whenever memory needs it) are worth their<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup>
-  recovery complexity.</p>
+  <p class="viz-caption">microdb takes FORCE + STEAL, which needs only an undo pass. Every production engine takes NO-FORCE + STEAL, the corner that needs <em>both</em> a redo pass and an undo pass, because the two freedoms it buys (commit without writing data pages, evict a dirty page whenever memory is needed) are worth the extra recovery work.<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup></p>
 </div>
 
 <h3 class="new-slide" data-kicker="Force, steal, and ARIES">microdb's choice vs the world's</h3>
@@ -248,13 +244,13 @@ moment of the crash; that single fact decides everything recovery must do.</p>
   <tbody>
     <tr><td>Policy</td><td>FORCE + STEAL</td><td>NO-FORCE + STEAL</td></tr>
     <tr><td>Commit cost</td><td>flush every dirty page, then the log fsync</td><td><strong>the log fsync only</strong>; data pages flush whenever</td></tr>
-    <tr><td>Recovery</td><td>one undo pass</td><td>analysis + <span class="gloss" data-gloss="redo">redo</span> + undo, bounded by <span class="gloss" data-gloss="checkpoint-recall">checkpoints</span></td></tr>
-    <tr><td>Why</td><td>simplest correct thing, a teaching engine's duty</td><td>commits must not wait on data I/O, a bank's duty</td></tr>
+    <tr><td>Recovery</td><td>one undo pass</td><td>three passes: analysis (which transactions were still running at the crash), then <span class="gloss" data-gloss="redo">redo</span>, then undo; bounded by <span class="gloss" data-gloss="checkpoint-recall">checkpoints</span></td></tr>
+    <tr><td>Why</td><td>the simplest policy that is still correct; a teaching engine should be easy to read and easy to test</td><td>a commit must not wait for data pages to be written to disk; under load, one sequential log fsync per commit is affordable and fifty random page writes are not</td></tr>
   </tbody>
 </table>
 
 <p class="keep-in-present">ARIES is this lecture plus bookkeeping: log new values too (redo),
-number every record (LSNs), checkpoint so recovery reads days less log.<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup> The <em>rule</em>,
+number every record with a log sequence number (LSN) so a page can record which log entry last changed it, and checkpoint so recovery starts from a recent point instead of reading days of log.<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup> The <em>rule</em>,
 log before page, never changes.</p>
 
 <!-- ============================================================ -->
@@ -266,17 +262,17 @@ pieces that keep the promises.</p>
 <table>
   <thead><tr><th>You write</th><th>The whole job</th></tr></thead>
   <tbody>
-    <tr><td><code>set_int / set_string</code></td><td>the WAL rule: xlock · log old · write · set_modified; order is everything</td></tr>
-    <tr><td><code>commit</code></td><td>flush pages, fsync the COMMIT record, release</td></tr>
-    <tr><td><code>rollback</code></td><td>walk the log backwards, restore your own old values</td></tr>
-    <tr><td><code>recover</code></td><td>today's one-pass undo, verbatim</td></tr>
+    <tr><td><code>set_int / set_string</code></td><td>the WAL rule as four steps, in this order: take an exclusive lock (xlock) on the block, append the old value to the log, write the new value into the page, then mark the page modified (set_modified). Swap any two steps and recovery can no longer be trusted</td></tr>
+    <tr><td><code>commit</code></td><td>flush every dirty page this transaction touched, append and fsync the COMMIT record, then release the transaction's locks</td></tr>
+    <tr><td><code>rollback</code></td><td>walk the log backwards and, for each SET record that belongs to this transaction, write the old value back</td></tr>
+    <tr><td><code>recover</code></td><td>the one backward pass from this lecture, exactly as written above</td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Next Thursday">Before class checklist</h3>
 
 <ul class="checklist">
-  <li>☐ Lab 6 due at class start Thursday: the tower is six layers; Lab 7 caps it.</li>
+  <li>☐ Lab 6 due at class start Thursday. microdb so far is six layers stacked on each other; Lab 7 adds the last one.</li>
   <li>☐ Download the eight starter files from the Lab 7 page.</li>
   <li>☐ Harness runs: <code>python3 test_tx.py</code> prints <strong>0/9 passed</strong>
   (two tests spawn a subprocess and kill it; that's supposed to happen).</li>
@@ -313,20 +309,18 @@ only live at the tail.</p>
 <h3 class="keep-in-present">Doesn't logging every change double the write traffic?</h3>
 <p class="keep-in-present">Roughly, but the log's writes are sequential appends (the fast
 kind, Lab 1) while the pages they protect are random writes that can now be deferred and
-batched. Net effect on real hardware: WAL made databases<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 28.1 Reliability (WAL introduction)">4</a></sup> <em>faster</em>, which is the
-punchline nobody expects.</p>
+batched. Net effect on real hardware: WAL made databases <em>faster</em>, not slower.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 28.1 Reliability (WAL introduction)">4</a></sup></p>
 
 <h3 class="keep-in-present">What's a checkpoint actually for, then?</h3>
 <p class="keep-in-present">Bounding recovery time. Without one, a year-old database replays a
 year of log; a checkpoint records "everything before here is on disk," so recovery starts<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 28.5 WAL Configuration">12</a></sup>
-there. Week 2's table said "flush at checkpoints"; this is the debt that line was
-foreshadowing.</p>
+there. Week 2's table said "flush at checkpoints"; this lecture is where that line is
+explained.</p>
 
 <h3 class="keep-in-present">Does SQLite have a WAL? My phone doesn't feel like a bank.<sup class="src"><a href="#src-13" title="SQLite: Write-Ahead Logging">13</a></sup></h3>
 <p class="keep-in-present">It does (<code>PRAGMA journal_mode=WAL</code>), and your phone
 uses it constantly; every messaging app is a little bank of messages that must not vanish.<sup class="src"><a href="#src-14" title="Android Open Source Project: Compatibility write-ahead logging for apps">14</a></sup>
-The other SQLite mode (rollback journal) is the same insurance with the copies made before<sup class="src"><a href="#src-15" title="SQLite: Atomic Commit In SQLite">15</a></sup>
-changes instead of beside them.</p>
+The other SQLite mode, the rollback journal, gives the same protection a different way: before it changes a page in the database file it copies the old page into a separate journal file, so a crash can be undone from that copy.<sup class="src"><a href="#src-15" title="SQLite: Atomic Commit In SQLite">15</a></sup></p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -359,6 +353,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 </body>
 </html>
