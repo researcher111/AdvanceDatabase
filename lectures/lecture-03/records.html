@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
-<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 
@@ -73,15 +73,17 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <ol class="agenda">
   <li><strong>Quiz 2</strong>: the buffer pool (10 min, first thing).</li>
-  <li><strong>Bytes don't know they're rows</strong>: why Lab 1's hand-packing can't survive.</li>
+  <li><strong>Bytes don't know they're rows</strong>: packing rows end to end, the way Lab 1 did, breaks the moment a row is updated, deleted, or looked up by number.</li>
   <li><strong>Drive a record page</strong>: slots, flags, and deletion as a bit flip.</li>
   <li><strong>Schema → Layout</strong>: computing every offset from the schema.</li>
   <li><strong>RecordPage &amp; TableScan</strong>: one block of rows, then the whole table.</li>
-  <li><strong>The catalog</strong>: the database describes itself, chicken-and-egg included.</li>
+  <li><strong>The catalog</strong>: table layouts are stored as rows in a table, which raises the question of how the catalog table reads its own layout.</li>
 </ol>
 
-<p class="keep-in-present">Today's claim: <strong>a table is just a file of slots plus an
-entry in another table.</strong> Both halves are Thursday's lab.</p>
+<p class="keep-in-present">Today's claim: <strong>a table is two things. A file on disk, cut into
+fixed-size slots that each hold one row. And a few rows in a special table, the catalog, that
+record the table's name, its columns, and where each column's bytes sit inside a slot.</strong>
+Nothing else.</p>
 
 <!-- ============================================================ -->
 <h2 id="gap">Bytes don't know they're rows</h2>
@@ -339,6 +341,13 @@ readable by a TableScan, reconstructable into a Layout. The catalog is your reco
 <em>first customer</em>: in the lab it ships prewritten, and it works exactly when your code
 does.</p>
 
+<p>There is a loop hiding here. To read any table you need its layout, and layouts live in
+<code>field_catalog</code>. But <code>field_catalog</code> is itself a table, so to read it you
+would need its layout, which is stored in <code>field_catalog</code>. The way out is a small
+<span class="gloss" data-gloss="bootstrap">bootstrap</span>: the layouts of the catalog tables
+themselves are computed in code, never read from disk. That handful of hardcoded offsets is
+enough to open the catalog, and everything else is read from it.</p>
+
 <h3 class="new-slide" data-kicker="The catalog">The same idea, grown up</h3>
 
 <div class="layer-card">
@@ -391,9 +400,9 @@ code, and the catalog comes free once your scan works.</p>
   "bartholomew" in an 8-char field.</li>
   <li><strong>Deletion is a flag, addresses are stable.</strong> Tombstones recycle, nothing
   shifts, and every row keeps a permanent RID, the hook indexes will hang from in week 6.</li>
-  <li><strong>The schema is data.</strong> Layouts round-trip through ordinary tables, one
-  hardcoded bootstrap breaks the chicken-and-egg, and your scan's first customer is the
-  database's own self-description.</li>
+  <li><strong>The schema is data.</strong> Layouts round-trip through ordinary tables, the
+  catalog's own layouts are hardcoded so the loop has somewhere to start, and your scan's first
+  customer is the database's own self-description.</li>
 </ul>
 
 <p class="keep-in-present"><strong>Thursday:</strong> build the record layer (three-layer
@@ -454,6 +463,6 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-/* Lecture 3 — Record Layout & the Catalog · widgets.
+/* Lecture 3: Record Layout & the Catalog · widgets.
    Presentation toggle, TOC tracking, glossary + annotated-code engines
    are owned by ../../labs/_shared/lab-base.js. */
 
@@ -8,7 +8,7 @@
     'heap-file': {
       title: 'Heap file',
       body: '<p>The default storage shape for a table: a file of blocks holding records in no ' +
-        'particular order — rows land wherever a free slot exists. Fast to insert into, fair to ' +
+        'particular order; rows land wherever a free slot exists. Fast to insert into, fair to ' +
         'scan, and completely unordered (sorting is the query layer’s problem). Nearly every ' +
         'engine’s base tables are heap files; ordered access is what indexes add later.</p>',
     },
@@ -16,12 +16,12 @@
       title: 'Internal fragmentation',
       body: '<p>Wasted space <em>inside</em> an allocation: ada’s 3-char name in an 8-char ' +
         'reservation leaves 5 bytes of air that nothing else can use. The price of fixed-size ' +
-        'slots — paid deliberately, in exchange for one-multiply addressing and updates that ' +
+        'slots, paid deliberately, in exchange for one-multiply addressing and updates that ' +
         'never move data. Its sibling, external fragmentation, is waste <em>between</em> allocations.</p>',
     },
     'tombstone': {
       title: 'Tombstone',
-      body: '<p>A deleted record that still physically occupies its slot — only its in-use flag ' +
+      body: '<p>A deleted record that still physically occupies its slot; only its in-use flag ' +
         'changed. The bytes remain until some future insert reuses the slot. Tombstones make ' +
         'deletion O(1), make “deleted” data forensically recoverable, and are why databases need ' +
         'vacuum/compaction processes to reclaim space for real.</p>',
@@ -31,19 +31,19 @@
       body: '<p>Postgres’s scheme for oversized values (“The Oversized-Attribute Storage ' +
         'Technique”): a big text or JSON value is compressed, chopped into chunks, and stored in ' +
         'a side table; the main row keeps only a small pointer. Rows stay small and slot-friendly ' +
-        'while values can reach a gigabyte — fixed where possible, indirection where necessary.</p>',
+        'while values can reach a gigabyte: fixed where possible, indirection where necessary.</p>',
     },
     'bootstrap': {
       title: 'Bootstrapping',
-      body: '<p>Breaking a self-referential startup cycle by hardcoding just enough to get going ' +
-        '— here, the catalog tables’ own layouts are computed in code rather than read from the ' +
+      body: '<p>Breaking a self-referential startup cycle by hardcoding just enough to get going; ' +
+        'here, the catalog tables’ own layouts are computed in code rather than read from the ' +
         'catalog (which would require reading the catalog). Compilers, operating systems, and ' +
         'databases all have a bootstrap moment; the trick is keeping it tiny.</p>',
     },
     'rid': {
       title: 'RID (record id)',
       body: '<p>A row’s physical address: (block number, slot number). Stable because slotted ' +
-        'storage never moves records — which is exactly what makes RIDs safe to store in other ' +
+        'storage never moves records, which is exactly what makes RIDs safe to store in other ' +
         'structures. An index is a map from field values to RIDs; you’ll build one in week 6.</p>',
     },
   };
@@ -70,7 +70,7 @@
   function reset() {
     slots = Array.from({ length: N_SLOTS }, () => ({ used: false, row: null }));
     nextStudent = 0; sel = 0;
-    msg.textContent = 'A fresh block is all zeros — five EMPTY slots. Insert the first student.';
+    msg.textContent = 'A fresh block is all zeros: five EMPTY slots. Insert the first student.';
     render();
   }
 
@@ -106,7 +106,7 @@
     const stu = STUDENTS[nextStudent % STUDENTS.length];
     nextStudent += 1;
     slots[k] = { used: true, row: { ...stu } };
-    msg.innerHTML = `insert_after(-1) → slot <strong>${k}</strong>${reused ? ' (reusing a tombstone — the ghost is overwritten)' : ''}: ` +
+    msg.innerHTML = `insert_after(-1) → slot <strong>${k}</strong>${reused ? ' (reusing a tombstone; the ghost is overwritten)' : ''}: ` +
       `flag@${k * 24} := 1, then fields written at ${k}×24+4, +8, +20.`;
     render(k);
   }
@@ -116,7 +116,7 @@
     if (!s.used) { msg.innerHTML = `delete(slot ${sel}) → it's already EMPTY.`; return; }
     s.used = false;
     msg.innerHTML = `delete(slot ${sel}) → one bit flip: flag@${sel * 24} := 0. ` +
-      `<strong>${s.row.name}'s bytes are still there</strong> — a tombstone, italic below, waiting for reuse.`;
+      `<strong>${s.row.name}'s bytes are still there</strong>: a tombstone, italic below, waiting for reuse.`;
     render(sel);
   }
 
@@ -125,7 +125,7 @@
     if (!s.used) { msg.innerHTML = `rename(slot ${sel}) → slot is EMPTY; nothing to rename.`; return; }
     if (name.length > 8) {
       msg.innerHTML = `set_string(${sel}, "name", "${name}") → <strong>refused</strong>: ${name.length} chars ` +
-        `in an 8-char reservation. Fixed capacity is the deal — varchar(8) meant it.`;
+        `in an 8-char reservation. Fixed capacity is the deal; varchar(8) meant it.`;
       render(sel);
       return;
     }
@@ -177,7 +177,7 @@
       `</div>` +
       `<div class="sc-legend">` +
       `<span><span class="sc-chip data"></span>data + flags</span>` +
-      `<span><span class="sc-chip air"></span>air (unfilled varchar): ${airTotal.toLocaleString()} bytes — <strong>${pct.toFixed(0)}%</strong> of the block</span>` +
+      `<span><span class="sc-chip air"></span>air (unfilled varchar): ${airTotal.toLocaleString()} bytes, <strong>${pct.toFixed(0)}%</strong> of the block</span>` +
       `<span><span class="sc-chip left"></span>leftover: ${leftover}</span>` +
       `</div>`;
   }
