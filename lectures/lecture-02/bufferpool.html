@@ -5,7 +5,8 @@
 <title>Lecture 2 · Memory &amp; the Buffer Pool · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -176,7 +177,7 @@ the lecture:</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The pool</span><span>N fixed <strong>frames</strong>, allocated once at startup; Postgres calls the setting<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup> <code>shared_buffers</code>. Each frame holds exactly one block's page.</span></div>
-  <div class="lc-row"><span class="lc-k">The lookup</span><span>"is block <em>b</em> already here?": microdb scans its handful of frames; real engines keep a <span class="gloss" data-gloss="hash-table">hash table</span> from BlockId → frame so the answer costs O(1).</span></div>
+  <div class="lc-row"><span class="lc-k">The lookup</span><span>"is block <em>b</em> already here?": microdb scans its handful of frames; real engines keep a <span class="gloss" data-gloss="hash-table">hash table</span> from BlockId → frame so the answer costs \(O(1)\).</span></div>
   <div class="lc-row"><span class="lc-k">The bookkeeping</span><span>per frame: which block · a <strong><span class="gloss" data-gloss="pin-count">pin count</span></strong> · a <strong><span class="gloss" data-gloss="dirty">dirty</span></strong> flag · a <strong>last-used tick</strong>. Twelve bytes of metadata that decide everything.</span></div>
   <div class="lc-row"><span class="lc-k">The interface</span><span>two verbs only: <code>pin(block)</code> and <code>unpin(buffer)</code>. Every read and write in the rest of microdb goes through them, forever.</span></div>
 </div>
@@ -189,8 +190,8 @@ and how fast you can answer it decides whether the pool itself becomes the bottl
 <table>
   <thead><tr><th>Approach</th><th>Cost per pin</th><th>Who uses it</th></tr></thead>
   <tbody>
-    <tr><td>Scan every frame</td><td>O(frames)</td><td>microdb: fine at 3 frames, honest at 50</td></tr>
-    <tr><td><span class="gloss" data-gloss="hash-table">Hash table</span>: BlockId → frame</td><td>O(1)</td><td>every real engine (Postgres: the "buffer mapping table")<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup></td></tr>
+    <tr><td>Scan every frame</td><td>\(O(\text{frames})\)</td><td>microdb: fine at 3 frames, honest at 50</td></tr>
+    <tr><td><span class="gloss" data-gloss="hash-table">Hash table</span>: BlockId → frame</td><td>\(O(1)\)</td><td>every real engine (Postgres: the "buffer mapping table")<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -346,13 +347,18 @@ doesn't have yet, and must never lose track of that fact.</p>
 
 <h3 class="new-slide" data-kicker="The arithmetic of a cache">Effective access time</h3>
 
-<pre class="equation"><code>T_avg  =  h · t_mem  +  (1 − h) · t_disk        (h = hit rate)
-
-with t_mem = 100 ns, t_disk = 25 µs:
-
-  h = 90%   →  T_avg = 2,590 ns    ≈ 26× slower than RAM
-  h = 99%   →  T_avg =   349 ns    ≈ 3.5× slower than RAM
-  h = 99.6% →  T_avg =   200 ns    =  2× RAM  ← the target</code></pre>
+<div class="math">
+\[ T_{\text{avg}} \;=\; h \cdot t_{\text{mem}} \;+\; (1 - h) \cdot t_{\text{disk}} \qquad (h = \text{hit rate}) \]
+<p>with <em>t</em><sub>mem</sub> = 100 ns and <em>t</em><sub>disk</sub> = 25 µs:</p>
+<table>
+  <thead><tr><th><em>h</em></th><th><em>T</em><sub>avg</sub></th><th>relative to RAM</th></tr></thead>
+  <tbody>
+    <tr><td>90%</td><td>2,590 ns</td><td>about 26× slower</td></tr>
+    <tr><td>99%</td><td>349 ns</td><td>about 3.5× slower</td></tr>
+    <tr><td>99.6%</td><td>200 ns</td><td>2× RAM: the target</td></tr>
+  </tbody>
+</table>
+</div>
 
 <p class="keep-in-present">The miss term owns the average: at 90% hits, the 10% of misses<sup class="src"><a href="#src-12" title="Patterson and Hennessy, Computer Organization and Design (3rd ed.), In More Depth: Average Memory Access Time">12</a></sup>
 contribute <strong>96%</strong> of the total time. Caches aren't good until they're
@@ -363,7 +369,7 @@ contribute <strong>96%</strong> of the total time. Caches aren't good until they
 <div class="viz" id="viz-eat">
   <div class="viz-title">Effective access time, live</div>
   <p class="viz-description">Drag the hit rate; the bar is average access time on a log scale
-  (t_mem = 100 ns, t_disk = 25 µs). Watch how little happens until the very end of the dial.</p>
+  (\(t_{\text{mem}} = 100\ \text{ns}\), \(t_{\text{disk}} = 25\ \mu\text{s}\)). Watch how little happens until the very end of the dial.</p>
   <div class="eat-controls">
     <label for="eat-h">hit rate <span id="eat-h-val">90.0%</span></label>
     <input type="range" id="eat-h" min="500" max="1000" value="900">
@@ -495,5 +501,8 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=6"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
 </body>
 </html>

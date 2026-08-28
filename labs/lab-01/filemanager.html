@@ -5,7 +5,8 @@
 <title>Lab 1 · Disk &amp; File Manager · microdb part 1</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=19">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
 <link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
@@ -121,10 +122,11 @@ that the next request is already in memory. Fixed size (rather than "exactly wha
 for") is what makes the bookkeeping sane: block <code>k</code> of a file always lives at one
 computable place, and memory can be managed as identical-sized frames:</p>
 
-<pre class="equation"><code>byte range of block k   =   [ k × block_size ,  (k+1) × block_size )
-
-so with block_size = 4096:   block 0 → bytes 0…4095
-                             block 1 → bytes 4096…8191   ← seek here, read 4096</code></pre>
+<div class="math">
+\[ \text{bytes of block } k \;=\; [\,k \cdot B,\; (k+1) \cdot B\,) \qquad B = \text{block\_size} \]
+<p>With <em>B</em> = 4096: block 0 is bytes 0 to 4095 and block 1 is bytes 4096 to 8191, so to
+read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
+</div>
 
 <p>One caution that will save you a debugging hour: when your Python "writes" a block, the OS
 usually just copies it into its own <span class="gloss" data-gloss="os-cache">page cache</span>
@@ -229,12 +231,13 @@ round-trips, and every later lab assumes it:</p>
   </tbody>
 </table>
 
-<pre class="equation"><code>bytes_needed("ada")  =  4 + 3  =  7      → the ada row: 4 (id) + 7 (name) + 4 (gpa) = 15 bytes
-bytes_needed(s)      =  4 + len(s.encode('utf-8'))
+<div class="math">
+\[ \text{bytes\_needed}(s) \;=\; 4 + \bigl|\, s.\text{encode}(\text{"utf-8"}) \,\bigr| \]
+\[ \text{bytes\_needed}(\text{"ada"}) = 4 + 3 = 7 \qquad \text{the ada row: } 4_{\text{id}} + 7_{\text{name}} + 4_{\text{gpa}} = 15 \text{ bytes} \]
+<p>Encode first, then count. Characters are not bytes:</p>
+</div>
 
-Encode first, then count. Characters are not bytes:
-
-    'héllo'      h     é       l     l     o
+<pre class="equation"><code>    'héllo'      h     é       l     l     o
     as bytes     68    C3 A9   6C    6C    6F   ← 'é' takes TWO bytes
 
     len('héllo')                  = 5 characters
@@ -628,5 +631,8 @@ semantics. Inside the methods, style is yours.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=9"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
 </body>
 </html>

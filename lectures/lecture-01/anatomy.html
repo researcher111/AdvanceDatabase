@@ -5,7 +5,8 @@
 <title>Lecture 1 · Anatomy of a Database · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
 <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
@@ -418,19 +419,15 @@ some earlier read left it there. The first costs hundreds to hundreds of thousan
 than the second, so a query's time is decided almost entirely by <em>how many blocks it has to
 fetch from disk</em>. That is the course's first cost model, crude and genuinely useful:</p>
 
-<pre class="equation"><code>T(query)  ≈  blocks_from_disk × t_disk  +  blocks_from_memory × t_mem
-
-     t_disk  ≈   25 µs    one NVMe trip<sup class="src"><a href="#src-8" title="Latency Numbers Every Programmer Should Know (interactive)">8</a></sup>
-     t_mem   ≈  100 ns    one buffer-pool hit<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>
-     one disk trip therefore costs what 250 memory reads cost
-     (100,000 of them, if the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>
-
-students lives in 2 blocks, so the demo's two runs of the same query cost:
-
-     cold run   2 × 25 µs  +  0 × 100 ns  =  50 µs    both blocks from disk
-     warm run   0 × 25 µs  +  2 × 100 ns  =  0.2 µs   both already in memory
-
-The warm run is 250× faster. The query did not change; only the first term did.</code></pre>
+<div class="math">
+\[ T(\text{query}) \;\approx\; n_{\text{disk}} \cdot t_{\text{disk}} \;+\; n_{\text{mem}} \cdot t_{\text{mem}} \]
+<p>with <em>t</em><sub>disk</sub> ≈ 25 µs, one NVMe trip<sup class="src"><a href="#src-8" title="Latency Numbers Every Programmer Should Know (interactive)">8</a></sup>, and <em>t</em><sub>mem</sub> ≈ 100 ns, one
+buffer-pool hit<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>. One disk trip therefore costs what 250 memory reads cost (100,000 of them, if
+the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>.</p>
+<p><code>students</code> lives in 2 blocks, so the demo's two runs of the same query cost:</p>
+\[ \text{cold run: } 2 \cdot 25\,\mu\text{s} + 0 \cdot 100\,\text{ns} = 50\,\mu\text{s} \qquad\quad \text{warm run: } 0 \cdot 25\,\mu\text{s} + 2 \cdot 100\,\text{ns} = 0.2\,\mu\text{s} \]
+<p>The warm run is 250× faster. The query did not change; only the first term did.</p>
+</div>
 
 <p class="keep-in-present">So the first term is the only one worth attacking, and every speed
 technique in this course (the buffer pool, B+ trees, column stores, even the vector indexes in
@@ -443,7 +440,7 @@ Act II) is one strategy for shrinking it: <strong>touch fewer blocks.</strong></
   at ~25&nbsp;µs and a memory read effectively free: how much faster is B, and what happens
   to that ratio when the table grows to 500,000 blocks?</p>
   <details><summary>Show answer</summary>
-  <p>A costs 500 trips ≈ 12.5&nbsp;ms; B costs 7 trips ≈ 0.18&nbsp;ms, about <strong>70×
+  <p>A costs \(500 \times 25\,\mu\text{s} \approx 12.5\ \text{ms}\); B costs \(7 \times 25\,\mu\text{s} \approx 0.18\ \text{ms}\), about <strong>70×
   faster</strong>. Grow the table 1000× and A pays 1000× more while B pays almost the same
   (the index gets one level deeper at most); the ratio balloons toward 70,000×. That
   scaling behavior, not any single number, is why indexes exist; you'll measure a real
@@ -639,5 +636,8 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=8"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
 </body>
 </html>

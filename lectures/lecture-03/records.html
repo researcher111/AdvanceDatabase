@@ -5,7 +5,8 @@
 <title>Lecture 3 · Record Layout &amp; the Catalog · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -111,9 +112,9 @@ from the table above become arithmetic:</p>
 <table>
   <thead><tr><th>Operation</th><th>Slotted answer</th><th>Cost</th></tr></thead>
   <tbody>
-    <tr><td>Find slot <em>k</em></td><td>seek to <code>k × slot_size</code></td><td>O(1), no parsing</td></tr>
-    <tr><td>Update a field</td><td>overwrite in place; capacity was pre-reserved</td><td>O(1), nothing moves</td></tr>
-    <tr><td>Delete a row</td><td>flip the slot's in-use flag</td><td>O(1), nothing moves</td></tr>
+    <tr><td>Find slot <em>k</em></td><td>seek to <code>k × slot_size</code></td><td>\(O(1)\), no parsing</td></tr>
+    <tr><td>Update a field</td><td>overwrite in place; capacity was pre-reserved</td><td>\(O(1)\), nothing moves</td></tr>
+    <tr><td>Delete a row</td><td>flip the slot's in-use flag</td><td>\(O(1)\), nothing moves</td></tr>
   </tbody>
 </table>
 
@@ -140,23 +141,70 @@ and watch that nothing ever moves.</p>
   <div class="rp-slots" id="rp-slots"></div>
   <p class="viz-caption">Delete ada, then insert again: the new row lands in her old slot.
   Rename ben to <code>benjamin</code>: exactly 8 chars, fits his reserved capacity. Try
-  <code>bartholomew</code> and the layout says no. That refusal is the price of O(1).</p>
+  <code>bartholomew</code> and the layout says no. That refusal is the price of \(O(1)\).</p>
 </div>
 
 <h3 class="new-slide" data-kicker="Drive a record page">The arithmetic underneath</h3>
 
-<pre class="equation"><code>slot k starts at            k × slot_size
-field f of slot k lives at  k × slot_size + offset(f)
-
-students: slot_size = 24,  offset(id) = 4,  offset(name) = 8,  offset(gpa) = 20
-
-  → gpa of slot 3  =  3 × 24 + 20  =  byte 92.   No parsing. No searching.</code></pre>
+<div class="math">
+\[ \text{start}(k) \;=\; k \cdot \text{slot\_size} \]
+\[ \text{addr}(k, f) \;=\; k \cdot \text{slot\_size} + \text{offset}(f) \]
+<p>For <code>students</code>: slot_size = 24, offset(id) = 4, offset(name) = 8, offset(gpa) = 20, so</p>
+\[ \text{addr}(3, \text{gpa}) \;=\; 3 \cdot 24 + 20 \;=\; 92 \]
+<p>The gpa of slot 3 is at byte 92. No parsing. No searching.</p>
+</div>
 
 <p class="keep-in-present">Every address in this layer is one multiply and one add. That's
 what "structured" means to a storage engine.</p>
 
 <!-- ============================================================ -->
 <h2 id="layout">Schema → Layout</h2>
+
+<h3 class="new-slide" data-kicker="Schema → Layout">The question SQL has been asking you all along</h3>
+
+<pre><code class="language-sql">CREATE TABLE students (
+    id    INT,
+    name  VARCHAR(8),
+    gpa   INT
+);</code></pre>
+
+<p>You have typed a statement like this many times, and the <code>8</code> was probably a
+number you picked so the database would stop complaining. Notice what SQL does <em>not</em> ask
+for: <code>INT</code> comes with no size, and neither does <code>gpa</code>. Only the string
+demands a number. Why would a database need to know, before a single row exists, the longest
+name it will ever store?</p>
+
+<p>The answer is the arithmetic on the previous slide. To find <code>gpa</code> in slot 3 the
+engine computes <code>3 × slot_size + offset(gpa)</code>, and it can only do that if
+<code>offset(gpa)</code> is one fixed number for every row. An <code>INT</code> is always 4 bytes,
+so the engine already knows how far to step over it. A name could be any length, so the engine
+makes you promise one: reserve 8 bytes for every name, and now <code>gpa</code> starts at byte 20
+in every slot, whether the name is <code>ada</code> or <code>benjamin</code>. The <code>8</code>
+is not a rule about names. It is a promise to the layout.</p>
+
+<div class="exercise">
+  <span class="ex-label">Check yourself · drop the 8</span>
+  <p>Suppose SQL let you write <code>name VARCHAR</code> with no length, and the engine stored
+  each name using exactly as many bytes as it needed. Which number in today's layout could no
+  longer be computed once for the whole table? What would every <code>gpa</code> lookup have to
+  do instead, and what would happen to the row when <code>ada</code> was renamed to
+  <code>adelaide</code>?</p>
+  <details><summary>Show answer</summary>
+  <p><code>offset(gpa)</code> stops being a constant: it becomes 8 plus the length of whatever
+  name is in <em>that</em> slot. So every <code>gpa</code> read would first have to read the
+  name's length and add it, per row, which is the parsing this lecture set out to eliminate.
+  And renaming <code>ada</code> to <code>adelaide</code> would need five more bytes in the
+  middle of the slot, pushing <code>gpa</code> and every later field to the right: the
+  shift-everything update from the opening table. The length in <code>VARCHAR(8)</code> is
+  what lets the engine refuse that rename cheaply instead of rewriting the block.</p>
+  <p>You have met this trade before. NumPy's fixed-width string dtype, <code>dtype='U8'</code>,
+  reserves 8 characters per element for exactly the same reason, and pandas' <code>object</code>
+  columns are the variable-length alternative: flexible, and slower to scan. Postgres offers
+  both: <code>VARCHAR(n)</code> and a plain <code>TEXT</code> type with no limit, which it can
+  afford because its pages do not use fixed slots; the <em>TOAST</em> slide at the end of this
+  section shows what it pays instead.</p>
+  </details>
+</div>
 
 <h3 class="new-slide" data-kicker="Schema → Layout">Two small classes carry it all</h3>
 
@@ -205,7 +253,7 @@ different schemas.</p>
   <p class="keep-in-present">ada's name is 3 chars in a 8-char reservation: 5 bytes of air.
   Every varchar carries its worst case everywhere. That waste inside allocated space is
   <span class="gloss" data-gloss="internal-fragmentation">internal fragmentation</span>: the
-  deliberate rent paid for O(1) addressing<sup class="src"><a href="#src-3" title="Operating Systems: Three Easy Pieces, chapter 17, Free-Space Management">3</a></sup>. A <code>bio varchar(200)</code> schema fits only 19
+  deliberate rent paid for \(O(1)\) addressing<sup class="src"><a href="#src-3" title="Operating Systems: Three Easy Pieces, chapter 17, Free-Space Management">3</a></sup>. A <code>bio varchar(200)</code> schema fits only 19
   rows per block; whether that rent is fair depends entirely on how full a typical value runs.</p>
 </div>
 
@@ -395,7 +443,7 @@ code, and the catalog comes free once your scan works.</p>
 <p>Three ideas from today, all of which the rest of the engine will lean on.</p>
 
 <ul class="recap-list">
-  <li><strong>Fixed slots buy O(1) with wasted air.</strong> Find/update/delete became one
+  <li><strong>Fixed slots buy \(O(1)\) with wasted air.</strong> Find/update/delete became one
   multiply and one add, paid for by internal fragmentation and a refusal to store
   "bartholomew" in an 8-char field.</li>
   <li><strong>Deletion is a flag, addresses are stable.</strong> Tombstones recycle, nothing
@@ -462,7 +510,11 @@ document that supports the claim it is attached to.</p>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=4"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
 </body>
 </html>

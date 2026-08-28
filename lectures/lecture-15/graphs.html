@@ -5,7 +5,8 @@
 <title>Lecture 15 · Graph Databases &amp; Course Synthesis · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -94,16 +95,16 @@ an index pre-sorts your rows.</p>
 
 <h3 class="new-slide" data-kicker="When tables fight you">The two cost models</h3>
 
-<pre class="equation"><code>relational:  each hop = a JOIN     · find neighbors by MATCHING KEYS (hash/index probe per row)
-graph:       each hop = a WALK     · find neighbors by FOLLOWING POINTERS stored on the node
+<div class="math">
+<p>Relational: each hop is a JOIN, and neighbors are found by matching keys (a hash or index probe
+per row). Graph: each hop is a WALK, and neighbors are found by following pointers stored on the
+node. For <em>k</em> hops from one start node with average degree <em>d</em>:</p>
+\[ \text{join chain: } k \text{ joins, about } d^{k} \text{ intermediate rows before dedup} \]
+\[ \text{traversal: about } d^{k} \text{ nodes visited, each one pointer-follow away, nothing to match} \]
+<p>Same asymptotics, wildly different constants, and the constant is the product.</p>
+</div>
 
-k hops from one start node, average degree d:
-    join chain:  k joins; intermediates ~ d^k rows before dedup; planner sweats at every step
-    traversal:   visit ~ d^k nodes, each neighbor list one pointer-follow away, no matching
-
-same asymptotics, wildly different constants, and the constant is the product.</code></pre>
-
-<p>In words: to find everyone within k hops of a start node, both approaches touch on the order of d^k neighbors, where d is the average number of edges leaving a node. What differs is the cost of each touch. A join finds a row's neighbors by matching keys, so every hop is a hash or index probe for every row in the current set, and the planner must also choose a join order and estimate sizes at each step. A traversal finds a node's neighbors by reading the list of pointers stored on the node itself, so each hop is a memory read with no matching at all. The join chain also produces one row per path, so a node reachable by several routes is counted several times until a final DISTINCT removes the duplicates, while a traversal marks each node visited once. Same growth rate, much smaller cost per step; that smaller constant is what a graph database sells.</p>
+<p>In words: to find everyone within k hops of a start node, both approaches touch on the order of \(d^{k}\) neighbors, where \(d\) is the average number of edges leaving a node. What differs is the cost of each touch. A join finds a row's neighbors by matching keys, so every hop is a hash or index probe for every row in the current set, and the planner must also choose a join order and estimate sizes at each step. A traversal finds a node's neighbors by reading the list of pointers stored on the node itself, so each hop is a memory read with no matching at all. The join chain also produces one row per path, so a node reachable by several routes is counted several times until a final DISTINCT removes the duplicates, while a traversal marks each node visited once. Same growth rate, much smaller cost per step; that smaller constant is what a graph database sells.</p>
 
 <!-- ============================================================ -->
 <h2 id="try-it">Walk the graph</h2>
@@ -373,5 +374,8 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=2"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
 </body>
 </html>

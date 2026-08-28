@@ -5,7 +5,8 @@
 <title>Lecture 6 · B+ Trees from First Principles · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -91,10 +92,10 @@ everything else is keeping that map balanced on disk.</p>
 <table>
   <thead><tr><th>Scheme</th><th>Point lookup</th><th>Insert</th><th>Range scan</th><th>Verdict</th></tr></thead>
   <tbody>
-    <tr><td>Heap file + scan (now)</td><td>O(n), everything</td><td>O(1), any free slot</td><td>O(n)</td><td>great at inserts, terrible at finding</td></tr>
-    <tr><td>Sorted file</td><td>O(log n) binary search</td><td>O(n), shift or re-sort</td><td>excellent</td><td>Lab 3 showed why not: keeping the file sorted means every insert shifts rows or re-sorts the file</td></tr>
-    <tr><td>Hash table</td><td>O(1)</td><td>O(1)</td><td><strong>impossible</strong>, hashing destroys order</td><td>real, and fastest for equality lookups, but useless for anything that needs order (see FAQ)</td></tr>
-    <tr><td><strong>B+ tree</strong></td><td>O(log n), base ~200</td><td>O(log n)</td><td>excellent, leaves are chained</td><td>the general-purpose winner since 1979<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup></td></tr>
+    <tr><td>Heap file + scan (now)</td><td>\(O(n)\), everything</td><td>\(O(1)\), any free slot</td><td>\(O(n)\)</td><td>great at inserts, terrible at finding</td></tr>
+    <tr><td>Sorted file</td><td>\(O(\log n)\) binary search</td><td>\(O(n)\), shift or re-sort</td><td>excellent</td><td>Lab 3 showed why not: keeping the file sorted means every insert shifts rows or re-sorts the file</td></tr>
+    <tr><td>Hash table</td><td>\(O(1)\)</td><td>\(O(1)\)</td><td><strong>impossible</strong>, hashing destroys order</td><td>real, and fastest for equality lookups, but useless for anything that needs order (see FAQ)</td></tr>
+    <tr><td><strong>B+ tree</strong></td><td>\(O(\log n)\), base ~200</td><td>\(O(\log n)\)</td><td>excellent, leaves are chained</td><td>the general-purpose winner since 1979<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -235,13 +236,18 @@ catch exactly this: correctness tests plus a quality bound.</p>
 
 <h3 class="new-slide" data-kicker="Fan-out is the superpower">The height table to remember</h3>
 
-<pre class="equation"><code>height ≈ log_fanout(n)
-
-  rows        fan-out 4 (lab)     fan-out 200 (real page)
-  100                4                    2
-  100,000           11 (you'll measure)   3
-  100,000,000       ~14                   4        ← a billion-row table is FIVE reads
-                                                     and the top levels live in the pool</code></pre>
+<div class="math">
+\[ \text{height} \;\approx\; \log_{\text{fan-out}} n \]
+<table>
+  <thead><tr><th>rows</th><th>fan-out 4 (the lab)</th><th>fan-out 200 (a real page)</th></tr></thead>
+  <tbody>
+    <tr><td>100</td><td>4</td><td>2</td></tr>
+    <tr><td>100,000</td><td>11 (you will measure it)</td><td>3</td></tr>
+    <tr><td>100,000,000</td><td>about 14</td><td>4</td></tr>
+  </tbody>
+</table>
+<p>A billion-row table is five reads, and the top levels live in the buffer pool.</p>
+</div>
 
 <p class="keep-in-present">This is why databases feel instant: not magic, just a logarithm
 with base 200. And the base is 200 <em>because</em> nodes are sized to Lab 1's blocks: the
@@ -309,7 +315,7 @@ amplification</span>:</p>
 <table>
   <thead><tr><th>You pay</th><th>When</th><th>How much</th></tr></thead>
   <tbody>
-    <tr><td>Maintenance</td><td>every INSERT/UPDATE/DELETE</td><td>one O(log n) tree update <em>per index on the table</em>: five indexes, six writes per insert<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 11.1. Indexes Introduction">5</a></sup></td></tr>
+    <tr><td>Maintenance</td><td>every INSERT/UPDATE/DELETE</td><td>one \(O(\log n)\) tree update <em>per index on the table</em>: five indexes, six writes per insert<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 11.1. Indexes Introduction">5</a></sup></td></tr>
     <tr><td>Space</td><td>always</td><td>roughly another copy of the indexed column + RIDs, often 10–30% of the table, each</td></tr>
     <tr><td>Build time</td><td>CREATE INDEX</td><td>one full scan + n inserts (you'll measure ~0.5s per 100k rows)</td></tr>
     <tr><td>Planner risk</td><td>query time</td><td>an index used on a low-<span class="gloss" data-gloss="selectivity">selectivity</span> predicate is <em>slower</em> than the scan it replaced (random hops vs one smooth read)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">6</a></sup></td></tr>
@@ -444,5 +450,8 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=3"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
 </body>
 </html>

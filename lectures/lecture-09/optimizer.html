@@ -5,7 +5,8 @@
 <title>Lecture 9 · The Query Optimizer · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=19">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -124,14 +125,14 @@ and the plan it built from that information is usually where your query went wro
 
 <p>Selectivity is the fraction of a table's rows that a predicate keeps: if <code>gpa &gt; 35</code> keeps 60 of 300 rows, its selectivity is 0.2. The optimizer needs this number before it runs anything, because every cost formula in the next section starts from how many rows each step will produce. It cannot know the number exactly, so it estimates it from a few facts it stores per table and per column. Those facts, and the formulas that turn them into an estimate, are what this section is about.</p>
 
-<pre class="equation"><code>per table:   N rows, B blocks          per column:  distinct values V, min/max, histogram<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner">3</a></sup>
-
-selectivity guesses (System R's, still everywhere):<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>
-  field = literal      1 / V(field)
-  field = field (join) 1 / max(V(left), V(right))
-  field > literal      (max − literal) / (max − min)     ← uniformity assumed
-
-survivors(σ) = N × selectivity       , chain them for ANDed terms (independence assumed!)<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 76.1. Row Estimation Examples">5</a></sup></code></pre>
+<div class="math">
+<p>Per table: <em>N</em> rows and <em>B</em> blocks. Per column: the number of distinct values
+<em>V</em>, the min and max, and a histogram<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner">3</a></sup>. The selectivity guesses are System R's, and still everywhere<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>:</p>
+\[ \text{sel}(f = c) = \frac{1}{V(f)} \qquad \text{sel}(f_1 = f_2) = \frac{1}{\max\bigl(V(f_1), V(f_2)\bigr)} \qquad \text{sel}(f > c) = \frac{\max(f) - c}{\max(f) - \min(f)} \]
+<p>The last one assumes values are spread uniformly between the min and the max. Then</p>
+\[ \text{survivors}(\sigma) \;=\; N \cdot \text{sel} \]
+<p>and for ANDed terms the selectivities are multiplied together, which assumes they are independent<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 76.1. Row Estimation Examples">5</a></sup>.</p>
+</div>
 
 <p class="keep-in-present">Two simplifying assumptions power every formula above, and both are usually false, which is why this lecture calls them the two famous lies. <em>Uniformity</em>: a column's values are spread evenly between its min and max, so a range predicate keeps a share of rows equal to the share of the range it covers. <em>Independence</em>: two predicates do not correlate, so the fraction of rows surviving both is the product of the two fractions. When plans go bad at
 3am, one of these lies is usually why: <code>city = 'Charlottesville' AND state = 'VA'</code>
@@ -144,9 +145,9 @@ is not two independent filters, because every Charlottesville row is already a V
   <code>gpa &gt; 30 AND mid = 2</code>, and then say which of the two famous lies each
   step of your estimate leaned on.</p>
   <details><summary>Show answer</summary>
-  <p><code>gpa &gt; 30</code>: (39&nbsp;−&nbsp;30)/(39&nbsp;−&nbsp;20) ≈ 0.47 → ~142 rows
+  <p><code>gpa &gt; 30</code>: \(\frac{39 - 30}{39 - 20} \approx 0.47\), about 142 rows
   (leaning on <em>uniformity</em>; gpas might really cluster near 30).
-  <code>mid = 2</code>: 1/V = 1/3. Chained: 300 × 0.47 × 0.33 ≈ <strong>47 rows</strong>
+  <code>mid = 2</code>: \(1/V = 1/3\). Chained: \(300 \times 0.47 \times 0.33 \approx\) <strong>47 rows</strong>
   (leaning on <em>independence</em>; but what if the mid-2 department grades harder?).
   Every EXPLAIN's <code>rows=</code> guess is exactly this arithmetic; when it's far from
   <code>actual rows</code>, you now know which lie to suspect.</p>
@@ -162,13 +163,19 @@ in place of the real row counts. The unit of cost is the one this course has use
 
 <h3 class="new-slide" data-kicker="Costing a plan">Blocks, again, always blocks</h3>
 
-<pre class="equation"><code>cost(TableScan)          = B(table)                      ← week 1's lesson, formalized
-cost(IndexSelect, eq)    = height + matching RIDs        ← week 6
-cost(NestedLoopJoin)     = B(left) + N(left) × B(right)  ← the multiplier that hurts<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>
-cost(HashJoin)           = B(left) + B(right)            ← read each side once (+ memory)
-cost(MergeJoin)          = sort costs + B(left) + B(right)
-
-pick the plan with the smallest TOTAL, computed from statistics, before running anything.</code></pre>
+<div class="math">
+\[ \begin{aligned}
+\text{cost}(\text{TableScan}) &= B(\text{table}) \\
+\text{cost}(\text{IndexSelect}_{=}) &= \text{height} + \text{matching RIDs} \\
+\text{cost}(\text{NestedLoopJoin}) &= B(L) + N(L) \cdot B(R) \\
+\text{cost}(\text{HashJoin}) &= B(L) + B(R) \\
+\text{cost}(\text{MergeJoin}) &= \text{sort costs} + B(L) + B(R)
+\end{aligned} \]
+<p>The table scan is week 1's lesson formalized and the index select is week 6's. The nested
+loop's <em>N</em>(<em>L</em>) · <em>B</em>(<em>R</em>) is the multiplier that hurts<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>; the hash join reads
+each side once, plus memory for the hash table. Pick the plan with the smallest total, computed
+from statistics, before running anything.</p>
+</div>
 
 <p class="keep-in-present">Same currency since Lecture 1: count block touches<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>. The optimizer
 is your Lab 4 CountingScan experiment, run <em>hypothetically</em> over every candidate shape.</p>
@@ -350,5 +357,8 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=3"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
 </body>
 </html>
