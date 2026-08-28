@@ -46,7 +46,7 @@ if not os.path.exists("data/embeddings.txt"):
     print("data/ missing — generating it first (gen_embeddings.py)...")
     gen_embeddings.main()
 VECTORS = gen_embeddings.load()
-QUERIES = gen_embeddings.queries(VECTORS, n=10)   # perturbed, realistic
+QUERIES = gen_embeddings.queries(VECTORS, n=10)   # 10 real questions, embedded like the docs
 
 
 def slow_truth(query, k):

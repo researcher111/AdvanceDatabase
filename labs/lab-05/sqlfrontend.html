@@ -215,10 +215,33 @@ microdb> SELECT name, dept FROM students, majors WHERE mid = mid2 AND gpa > 35 A
 the join plan, measured: 900 pairs examined -> 20 rows returned
 Lab 4's hand-pushed-down plan did the same query in 60 pairs.</code></pre>
 
+<p><strong>Now change something.</strong> Add a fourth string to <code>QUERIES</code> in
+<code>measure_sql.py</code> with one deliberate mistake, for example
+<code>SELECT name FROM students WHERE gpa 35</code>. The three reference trees still print, then
+your parser stops the script with a <code>ParseError</code>. Report the message verbatim, which
+token it blamed, and whether that is the token you would have blamed; then run the same string in
+any database you have installed (DuckDB or Postgres) and report where its message points.</p>
+
 <p class="keep-in-present">Your engine now takes SQL and gives correct answers, and its plans
 leave a 15× on the table that <em>you</em> knew how to collect by hand last week. The machine
 that collects it automatically needs one thing your engine doesn't have yet: knowledge about
 the data. That's statistics, and it's week 9.</p>
+
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+
+<p>Every SQL string you send from a notebook, through <code>pd.read_sql</code>,
+<code>duckdb.sql</code>, or <code>psycopg</code>, goes through a lexer, a parser, and a planner
+shaped like the three you just wrote before a single row is read. When Postgres answers a typo
+with <code>syntax error at or near "35"</code>, that is its parser doing what yours does in
+<code>expect</code>: the token it names is the one that failed to match the grammar, which is
+where the parser first noticed and may be one token past the real mistake. The dataframe APIs you
+use daily are a parser you cannot see: <code>df.filter(pl.col("gpa") &gt; 35).select("name")</code>
+in Polars, and the same chain in PySpark, build the same tree of project over select over scan
+that <code>render_plan</code> printed, with method calls as the grammar. SQL written by a language
+model is no exception: it is text until a parser accepts it, and the parse error is the first and
+cheapest check you can run on it before it touches data. The plan tree is also what
+<code>EXPLAIN</code> prints, so reading your own <code>render_plan</code> output is practice for
+reading a production plan.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>

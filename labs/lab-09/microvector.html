@@ -41,7 +41,8 @@
 </header>
 
 <p class="lede">
-Three methods and the ANN trade is in your hands: an exact
+Four thousand real arXiv abstracts, embedded by a real sentence model, and the ANN trade is in
+your hands: an exact
 <span class="gloss" data-gloss="brute-baseline">brute-force baseline</span>, an IVF index
 (k-means ships complete; you bucket and probe), and a measurement whose table (<span class="gloss" data-gloss="recall-at-k">recall@10</span>
 against comparisons-per-query) is the exact dial every production vector store exposes as
@@ -103,6 +104,15 @@ space</em>, and then a query only searches the few partitions its neighborhood c
 plausibly live in. The cost of the analogy's imperfection (space has no clean fences; near
 things straddle borders) is exactly what recall@k measures.</p>
 
+<p>The vectors are real. <code>data/arxiv_4000.f16</code> holds sentence embeddings of 4,000 arXiv
+abstracts, 800 each from databases, information retrieval, machine learning, statistics, and
+distributed computing, produced by the all-MiniLM-L6-v2 model. The 40 queries are real questions,
+embedded the same way, so a search returns actual papers and you can judge the result by reading
+the titles. The model's vectors have 384 dimensions; the shipped copies are reduced to 64 by
+principal component analysis and re-normalized so that pure-Python k-means and brute force stay
+fast enough to run in a loop. The full 384-dimensional vectors ship too
+(<code>python3 measure_recall.py 384</code>), and Part 3 asks what the reduction cost.</p>
+
 <!-- ============================================================ -->
 <h2 id="the-api">The contract</h2>
 
@@ -134,7 +144,7 @@ things straddle borders) is exactly what recall@k measures.</p>
   <p>Sort by <code>(-similarity, id)</code>; plain similarity sort breaks ties
   nondeterministically and the reference comparison notices. Count centroid dots AND
   candidate dots. And don't re-normalize the stored vectors inside search; they arrive
-  unit-length from the generator; double normalization is a no-op that hides real bugs
+  unit-length from the loader; double normalization is a no-op that hides real bugs
   elsewhere.</p>
 </div>
 
@@ -175,25 +185,44 @@ things straddle borders) is exactly what recall@k measures.</p>
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
-<p>The dial, in numbers (deterministic, so yours must match):</p>
+<p>The dial, in numbers (deterministic, so yours must match), after a look at what a query
+actually returns:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_recall.py</span>
-4000 vectors, 40 queries, top-10, 20 clusters
+4000 vectors x 64 dims, 40 queries; first title: Fine-Grained Table Retrieval Through the Lens of Complex Queries
+4000 real arXiv abstracts as 64-d MiniLM vectors, 40 real questions, top-10, 20 clusters
+
+0. What a query returns (brute force, top-3 by cosine):
+   Q: write-ahead logging and crash recovery in transactional databases
+      0.744  RCC: Speculative Write Versioning with Redo Logs
+      0.680  PROTECT-DB: Protecting Data using Replicated State Machines: Efficient Corrupt
+      0.660  BtrLog: Low-Latency Logging for Cloud Database Systems
+   Q: retrieval-augmented generation for large language models
+      0.730  Evaluating Chunking Strategies for Retrieval-Augmented Generation on Academic 
+      0.661  Bridging the Question-Answer Gap in Retrieval-Augmented Generation: Hypothetic
+      0.639  Scientific Knowledge Discovery in the Age of Large Language Models
 
        index | probe | avg recall@10 | comparisons/query | vs exact
 ----------------------------------------------------------------------
  brute force |     - |         1.000 |             4,000 |     1.0x
-         IVF |     1 |         0.758 |               236 |    16.9x
-         IVF |     2 |         0.885 |               471 |     8.5x
-         IVF |     4 |         0.948 |               882 |     4.5x
-         IVF |     8 |         0.985 |             1,702 |     2.4x
-         IVF |    16 |         1.000 |             3,284 |     1.2x
+         IVF |     1 |         0.643 |               244 |    16.4x
+         IVF |     2 |         0.810 |               471 |     8.5x
+         IVF |     4 |         0.917 |               924 |     4.3x
+         IVF |     8 |         0.965 |             1,756 |     2.3x
+         IVF |    16 |         0.997 |             3,229 |     1.2x
          IVF |    20 |         1.000 |             4,020 |     1.0x</code></pre>
 
-<p class="keep-in-present">Read the bend: the first four probes buy 19 points of recall for
-650 comparisons; the last twelve buy 1.5 points for 2,400. Production ANN tuning is choosing
-your point on this curve <em>for your application's stakes</em>, which is question 3, and
-your project's writeup requirement.</p>
+<p class="keep-in-present">Read the bend: going from probe 1 to probe 4 buys 27 points of recall
+for 680 extra comparisons; going from probe 8 to probe 20 buys 3.5 points for 2,260. Production
+ANN tuning is choosing your point on this curve <em>for your application's stakes</em>, which is
+question 3, and your project's writeup requirement.</p>
+
+<p><strong>Now change something.</strong> Run <code>python3 measure_recall.py 384</code> to use
+the model's full 384-dimensional vectors instead of the 64-dimensional copies. Report the run time
+of both (about five times longer at 384) and the recall at probe 4 (0.905 at 384 against 0.917
+at 64 on the reference solution). Then answer: the 64-d vectors keep two thirds of the model's
+variance and only about 60% of its exact top-10 neighbors, yet the IVF curve barely moves. What
+does that tell you about what the recall table is measuring, and what it is not?</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
@@ -251,7 +280,8 @@ handling (sort by <code>(-sim, id)</code> exactly) or k-means drift from calling
 assignment.</p>
 
 <h3 class="keep-in-present">Why is Python fine here when it was "too slow" for real engines?</h3>
-<p class="keep-in-present">4,000 × 32 dims is ~1M float ops per brute query; Python shrugs.
+<p class="keep-in-present">4,000 × 64 dims is about 250,000 multiply-adds per brute query; Python shrugs. At
+the model's own 384 dims the same script takes five times longer, which is the first hint.
 The real thing does 1536 dims × millions with SIMD (FAISS) precisely because the constant
 factor matters at scale. The <em>structure</em> and the <em>dial</em> (what this lab
 teaches) are identical at both scales.</p>

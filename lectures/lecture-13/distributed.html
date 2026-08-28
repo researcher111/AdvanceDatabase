@@ -244,7 +244,7 @@ wide transformations in a Spark job and you've counted its
 
 <h3 class="new-slide" data-kicker="Spark">The plan, printed: Thursday's Part B</h3>
 
-<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span><span class="t-mute">        # Part B, on the course corpus</span>
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span><span class="t-mute">        # Part B, on the 4,000 arXiv abstracts</span>
 === the DAG (read bottom-up; the stage break is the shuffle) ===
 (4) PythonRDD[5] at RDD at PythonRDD.scala:59 []
  |  MapPartitionsRDD[4] at mapPartitions at PythonRDD.scala:197 []
@@ -270,17 +270,22 @@ almost no ceremony:</p>
 <h3 class="new-slide" data-kicker="Ray">Tasks: one decorator makes a function distributed</h3>
 
 <pre><code class="language-python">@ray.remote                               # this function may run anywhere
-def embed_remote(text):
-    return embed(text)
+def knn_remote(doc):
+    return neighbors(doc)                 # 10 nearest abstracts, brute force over 4,000 vectors
 
-futures = [embed_remote.remote(t) for t in texts]   # all launched, returns instantly
-vectors = ray.get(futures)                          # wait; order preserved<sup class="src"><a href="#src-13" title="ray.get (Ray Core API reference)">13</a></sup></code></pre>
+futures = [knn_remote.remote(d) for d in docs]      # all launched, returns instantly
+graph = ray.get(futures)                            # wait; order preserved<sup class="src"><a href="#src-13" title="ray.get (Ray Core API reference)">13</a></sup></code></pre>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span><span class="t-mute">             # Part C, measured on a 10-core laptop</span>
-24 documents, 30 ms simulated model latency each
-serial:      0.92 s
-parallel:    0.16 s     speedup: 5.7x
-identical results: True</code></pre>
+200 documents, 10 nearest neighbors each, brute force over 4,000 vectors
+serial:      2.27 s
+parallel:    0.66 s     speedup: 3.5x
+identical results: True
+
+neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
+   Decomposition-Driven Multi-Table Retrieval and Reasoning for Numerical
+   Novel Table Search [Technical Report]
+   Toward Multi-Database Query Reasoning for Text2Cypher</code></pre>
 
 <p class="keep-in-present">The measured run, Thursday's Part C. The classic mistake is calling
 <code>ray.get()</code> inside the launch loop: each task is then launched and waited on before the next is launched, so the tasks run one at a time exactly as the serial version did, with the cost of shipping each call to a worker added on top, and<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup>

@@ -212,9 +212,33 @@ after recover():        A=$60  B=$90   <- tx[2] undone; the committed transfer s
 
 CONSISTENT. Your database survives kill -9.</code></pre>
 
+<p><strong>Now change something.</strong> Delete the <code>bm.flush_all()</code> line inside
+the <code>CRASH</code> string in <code>crash_demo.py</code>, the one that steals tx2's dirty page
+to disk, and rerun. Report the "reopening the wreckage" line and the "after recover()" line, then
+explain why <code>recover()</code> still lists tx2 as undone even though the disk already held the
+right balances; say what your undo wrote and why it was harmless.</p>
+
 <p class="keep-in-present">Fifty dollars ceased to exist, and your code minted it back from a
 JSON line that said <code>"old": 60</code>. Every database you will ever trust is doing
 exactly this, at scale, right now. microdb is complete: seven layers, every line yours.</p>
+
+<h3 class="new-slide" data-kicker="Part 3 · The kill">Where you'll meet this layer at work</h3>
+
+<p>A training-data pipeline that dies halfway through writing its output leaves a torn
+file if the output was a CSV or a Parquet file rewritten in place, and a consistent table if the
+output was a Postgres table written inside one transaction: on restart Postgres runs the recovery
+you just wrote, undoes the half-done writes from its WAL, and the table reads as if the job never
+started. What <code>commit</code> costs is the log fsync you priced in Lab 1, once per commit, so
+a loop that inserts one row per transaction runs at your durable-writes rate while
+<code>COPY</code>, or one transaction around ten thousand inserts, runs near the buffered rate;
+that is the whole reason bulk loaders batch commits. An Airflow task can be retried after a crash
+only because the database guarantees the failed attempt left nothing behind. Two notebooks
+writing the same table need a database rather than a shared CSV because the lock table is the
+only thing that orders their writes: with a file, the second writer's bytes land on top of the
+first's and nobody is told; with your <code>LockTable</code>, the second <code>xlock</code> raises
+<code>LockAbortError</code>, and every byte on disk belongs to a transaction whose outcome is in
+the log. Postgres's <code>pg_wal</code> directory, MySQL's redo log, and SQLite's journal are this
+file under different names.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>

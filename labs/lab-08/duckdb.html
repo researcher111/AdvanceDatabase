@@ -41,9 +41,10 @@
 </header>
 
 <p class="lede">
-No layers to build this week; you <em>drive</em>. A deterministic 60,000-ride dataset, a
-real columnar engine one <code>pip install</code> away, and the SQL your microSQL grew up
-wanting: <code>GROUP BY</code>, <span class="gloss" data-gloss="window-fn">window
+No layers to build this week; you <em>drive</em>. The data is real: 60,000 New York City
+yellow-taxi trips from 2024, sampled from the city's public trip records. A real columnar
+engine is one <code>pip install</code> away, and the SQL your microSQL grew up wanting is
+finally on the menu: <code>GROUP BY</code>, <span class="gloss" data-gloss="window-fn">window
 functions</span>, <code>LIMIT</code>. Then Part 3 measures the lecture's three claims:
 format, <span class="gloss" data-gloss="projection-pushdown">projection</span>, and partition
 pruning. The numbers are not subtle.
@@ -67,11 +68,11 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="try-it">Query like an analyst</h2>
 
-<p>The rides dataset, live in your browser (a faithful 600-row sample of the real 60k).
+<p>The rides table, live in your browser: 600 real rides drawn from the lab's 60,000.
 Run the presets, then edit them; this is the SQL dialect Thursday's queries use.</p>
 
 <div class="viz" id="viz-duck">
-  <div class="viz-title">rides · ride_id, month, day, passengers, distance, fare, tip, payment</div>
+  <div class="viz-title">rides · ride_id, month, day, passengers, distance, fare, tip, payment, pickup_zone, dropoff_zone, hour, duration_min</div>
   <p class="viz-description">An in-browser mini-engine speaking the lab's SQL subset
   (GROUP BY, ORDER BY, LIMIT, aggregates, CASE). The real lab runs DuckDB: same queries,
   100× the rows.</p>
@@ -93,12 +94,17 @@ Run the presets, then edit them; this is the SQL dialect Thursday's queries use.
     <a class="chat-dl-btn" href="starter/assignment.sql" download>assignment.sql</a>
     <a class="chat-dl-btn" href="starter/test_duckdb.py" download>test_duckdb.py</a>
     <a class="chat-dl-btn" href="starter/measure_parquet.py" download>measure_parquet.py</a>
+    <a class="chat-dl-btn" href="starter/slow_queries.py" download>slow_queries.py</a>
+    <a class="chat-dl-btn" href="starter/rides_2024_sample.csv.gz" download>rides_2024_sample.csv.gz</a>
+    <a class="chat-dl-btn" href="starter/taxi_zone_lookup.csv" download>taxi_zone_lookup.csv</a>
+    <a class="chat-dl-btn" href="starter/lab08_explore.ipynb" download>lab08_explore.ipynb</a>
   </div>
   <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
 <pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
 <span class="cl-line">cd AdvanceDatabase/labs/lab-08/starter</span></pre>
-  <p class="viz-caption">The browser sample is seeded from the same generator: trends match
-  the real data, totals don't. The harness grades against the real thing.</p>
+  <p class="viz-caption">The 600 rows are real rides taken from the lab's file, so the shapes
+  match; the totals differ because the lab has a hundred times the rows. The harness grades
+  against the full file.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -117,7 +123,52 @@ which your Act I knowledge decodes:</p>
 </table>
 
 <!-- ============================================================ -->
-<h2 id="the-api">The seven questions</h2>
+<h2 id="the-data">The data is real, and it was cleaned</h2>
+
+<p>Every earlier lab ran on the six students of the <code>students</code> table. This one runs on
+60,000 trips taken by real New York City yellow cabs in 2024. The city's Taxi and Limousine
+Commission publishes every trip as a monthly Parquet file of about three million rows; the lab's
+<code>gen_data.py</code> unpacks a sample of 5,000 trips from each month, drawn once with a fixed
+seed so that everyone's file is identical and the harness can compare answers. The rows were
+cleaned before sampling, and the cleaning rules matter because they shape every number you will
+compute. Real data does not arrive clean; deciding what to drop is part of the job.</p>
+
+<table>
+  <thead><tr><th>Rule</th><th>What it drops</th><th>Share of a raw month</th></tr></thead>
+  <tbody>
+    <tr><td>passengers between 1 and 6</td><td>null and zero passenger counts, and the odd 9-passenger van</td><td>about 6%</td></tr>
+    <tr><td>distance between 0.1 and 100 miles</td><td>zero-length trips and GPS glitches that report 10,000 miles</td><td>under 2%</td></tr>
+    <tr><td>fare between $1 and $500</td><td>refunds (negative fares), voided trips, and a handful of $10,000 typos</td><td>about 1%</td></tr>
+    <tr><td>payment is card or cash</td><td>disputes, no-charge trips, and unknown payment types</td><td>about 7%</td></tr>
+    <tr><td>duration between 1 and 180 minutes</td><td>meter errors: trips that ended before they started or ran for a day</td><td>under 1%</td></tr>
+  </tbody>
+</table>
+
+<p>One quirk survives on purpose. Every cash ride has <code>tip = 0</code>, not because cash riders
+never tip but because the meter only records tips paid by card. Group <code>tip</code> by <code>payment</code> and you
+will see it, and it is the first lesson of the lab: a column that is always zero for one group is usually a fact
+about how the data was collected, not about the world.</p>
+
+<p>There are two tables, which makes this the smallest possible <span class="gloss" data-gloss="star-schema">star schema</span>:
+<code>rides</code> is the fact table, one row per trip, and <code>zones</code> is a dimension table,
+one row per taxi zone with its borough, joined on <code>rides.pickup_zone = zones.LocationID</code>.</p>
+
+<table>
+  <thead><tr><th>Column</th><th>Type</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>ride_id</code></td><td>INT</td><td>0 to 59,999, in pickup-time order</td></tr>
+    <tr><td><code>month</code>, <code>day</code>, <code>hour</code></td><td>INT</td><td>pickup time; <code>month</code> is also the partition key of the Parquet folders</td></tr>
+    <tr><td><code>passengers</code></td><td>INT</td><td>1 to 6</td></tr>
+    <tr><td><code>distance</code></td><td>DOUBLE</td><td>miles</td></tr>
+    <tr><td><code>fare</code>, <code>tip</code></td><td>DOUBLE</td><td>dollars; revenue in every question means <code>fare + tip</code></td></tr>
+    <tr><td><code>payment</code></td><td>TEXT</td><td><code>'card'</code> or <code>'cash'</code></td></tr>
+    <tr><td><code>pickup_zone</code>, <code>dropoff_zone</code></td><td>INT</td><td>TLC zone ids; join to <code>zones.LocationID</code> for the borough and zone name</td></tr>
+    <tr><td><code>duration_min</code></td><td>DOUBLE</td><td>trip length in minutes</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="the-api">The eight questions</h2>
 
 <p>Each is a marker comment in <code>assignment.sql</code>; write one statement under each.
 The harness compares your results against reference answers computed live: ordered
@@ -133,6 +184,7 @@ questions exactly, unordered ones as sets.</p>
     <tr><td>5</td><td>card share per month</td><td>CASE inside AVG, the indicator trick</td></tr>
     <tr><td>6</td><td>running revenue</td><td>a window over grouped rows</td></tr>
     <tr><td>7</td><td>Q4-of-year totals from the partitioned files</td><td><code>read_parquet(..., hive_partitioning = true)</code> + pruning</td></tr>
+    <tr><td>8</td><td>revenue by pickup borough</td><td>a JOIN to the <code>zones</code> dimension table: the star schema in miniature</td></tr>
   </tbody>
 </table>
 
@@ -140,8 +192,10 @@ questions exactly, unordered ones as sets.</p>
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
 <ol>
-  <li><strong><code>pip install duckdb</code></strong>, download the four starter files, run
-  <code>python3 gen_data.py</code> once (60k rows, seeded; your data equals everyone's).</li>
+  <li><strong><code>pip install duckdb</code></strong>, get the starter folder, run
+  <code>python3 gen_data.py</code> once. It unpacks the shipped sample into <code>data/</code>:
+  the CSV, the same rows as Parquet, twelve partition folders, the zones table, and a nested
+  JSON file for Part 4. Everyone gets the identical 60,000 rows.</li>
   <li><strong>Work the queries in order</strong>: they escalate. Test constantly:
   <code>python3 test_duckdb.py</code> after every query; or explore interactively first with
   <code>python3 -c "import duckdb; duckdb.sql(open('scratch.sql').read()).show()"</code>.</li>
@@ -151,6 +205,9 @@ questions exactly, unordered ones as sets.</p>
   <li><strong>Q6 stacks a window on a group</strong>: <code>SUM(SUM(fare + tip)) OVER
   (ORDER BY month)</code> reads strangely once, then forever makes sense: inner SUM per
   group, outer SUM across groups.</li>
+  <li><strong>Q8 is your first join since Lab 4</strong>, and DuckDB plans it the way Lecture 9
+  described: it hashes the small table (265 zones) and probes it with the big one. Read the
+  plan with <code>EXPLAIN</code> and find the build and probe sides.</li>
 </ol>
 
 <div class="callout note">
@@ -170,13 +227,14 @@ questions exactly, unordered ones as sets.</p>
   <span class="t-pass">[PASS]</span> SQL: Q2 revenue by month
 <span class="t-mute">  ...</span>
   <span class="t-pass">[PASS]</span> SQL: Q7 partitioned Q4 totals
+  <span class="t-pass">[PASS]</span> SQL: Q8 revenue by pickup borough (join)
 
-<span class="t-pass">7/7 tests passed</span></code></pre>
+<span class="t-pass">8/8 tests passed</span></code></pre>
 
 <div class="exercise">
   <span class="ex-label">Exercise · read the failure</span>
-  <p>A classmate's Q2 fails with "result differs: yours starts [(1, 118000.0)], expected
-  starts [(1, 117987.66)]". Their query looks right. What did they round, and where?</p>
+  <p>A classmate's Q2 fails with "result differs: yours starts [(1, 111,003.0)], expected
+  starts [(1, 111,003.22)]". Their query looks right. What did they round, and where?</p>
   <details><summary>Show answer</summary>
   <p>They rounded to whole dollars (or rounded each fare before summing). Floating-point
   aggregation order can also bite at higher precision, which is why the reference rounds the
@@ -191,19 +249,88 @@ questions exactly, unordered ones as sets.</p>
 <p>Reference run (times representative of an Apple-silicon laptop; counts exact):</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_parquet.py</span>
-1. FORMAT     sum over 60k rows:   CSV    42.1 ms   Parquet    0.5 ms   (89.0x)
-2. PROJECTION 2 columns of 8 (Parquet):    0.8 ms · columnar layout reads only the columns named
+1. FORMAT     sum over 60k rows:   CSV    59.5 ms   Parquet    0.5 ms   (130.4x)
+2. PROJECTION 2 columns of 12 (Parquet):    0.8 ms · columnar layout reads only the columns named
 3. PRUNING    month = 12 over 12 partition files:    0.6 ms
               EXPLAIN confirms the filter reached the file level: yes
 
    the plan's scan node:
+   │        READ_PARQUET       │
+   │        READ_PARQUET       │
    │       File Filters:       │
    │        (month = 12)       │
-   │    Scanning Files: 1/12   │</code></pre>
+   │    Scanning Files: 1/12   │
 
-<p class="keep-in-present"><strong>89× from the file format alone</strong>, and a WHERE clause
-that skipped eleven files without opening them. Every mechanism has an Act I name: fewer
-blocks, pushdown, layout-follows-workload, now measured on the real stack.</p>
+4. PANDAS     revenue by month, three ways (pandas load took 94 ms first):
+              pandas groupby on the loaded frame:      1.0 ms
+              DuckDB over the Parquet file:            0.8 ms
+              DuckDB over the pandas frame, in place:   2.7 ms  (no copy: DuckDB scans df's memory)</code></pre>
+
+<p class="keep-in-present"><strong>More than 100× from the file format alone</strong>, and a WHERE
+clause that skipped eleven files without opening them. Every mechanism has an Act I name: fewer
+blocks, pushdown, layout-follows-workload, now measured on the real stack. Step 4 is the one to
+carry into your notebooks: once a dataframe is loaded, DuckDB can run SQL over it in place, with
+no copy, at about the speed of pandas itself. You do not have to choose between the two; you can
+write the GROUP BY in whichever is clearer and hand the frame back and forth.</p>
+
+<p><strong>Now change something.</strong> In <code>measure_parquet.py</code>, change the pruning
+query's predicate from <code>month = 12</code> to <code>day = 25</code> and run it again. Report the
+plan's "Scanning Files" line and the time. Then explain, in one sentence, what the partition key
+would have to be for that query to prune, and what Q2 would cost under that partitioning.</p>
+
+<!-- ============================================================ -->
+<h2 id="slow">Part 4 · Fix the slow query <span class="part-time">~20 min · homework</span></h2>
+
+<p>Every query in Parts 1 to 3 was written the way the engine wants it. Most queries in real
+notebooks are not, and they are slow in ways that <code>EXPLAIN</code> makes visible.
+<code>slow_queries.py</code> computes three answers twice each: once the way a notebook usually
+does it, once the way the engine wants. The ratios are your machine's; the shapes are universal.</p>
+
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 slow_queries.py</span>
+A. PUSHDOWN   WHERE month = (SELECT max(month) ...):      1.8 ms   (no file filter in the plan: every file is opened)
+              WHERE month = 12 (looked up first):        0.7 ms   File Filters:
+              2.8x here, and the gap grows with the data: a value hidden inside a
+              subquery is unknown when the planner decides which files to open, so it opens all of them
+
+B. FETCH-FILTER  SELECT * then filter in Python:     40.3 ms   (60,000 rows x 12 columns cross into Python)
+                 WHERE month = 12 in SQL:             0.4 ms   (about 5,000 rows x 2 columns are touched)
+                 102x: move the filter to the data, not the data to the filter
+
+C. LOOP       twelve queries, one per month:          4.4 ms   (twelve scans of the file)
+              one GROUP BY month:                     1.0 ms   (one scan)
+              4.3x: a for-loop over groups is a join the engine never got to plan</code></pre>
+
+<p>Read each pair against the machinery you built. In <strong>A</strong>, the planner chooses
+which Parquet files to open before it runs anything, so a value that only exists after a subquery
+runs is invisible at that moment: it opens all twelve. Look up the value first and it is a literal
+the planner can see. In <strong>B</strong>, <code>SELECT *</code> moves 60,000 rows by 12 columns
+across the DuckDB-to-Python boundary, one Python tuple at a time, and then Python does the
+filtering; the SQL version touches about 5,000 rows of two columns inside the engine and returns
+one number. In <strong>C</strong>, the loop is twelve scans of the same file with twelve planning
+passes, when one <code>GROUP BY</code> does the work in a single scan. Every one of these is a
+pattern you will recognize in your own past notebooks.</p>
+
+<div class="exercise">
+  <span class="ex-label">Exercise · the nested file</span>
+  <p><code>gen_data.py</code> also wrote <code>data/rides.jsonl</code>, one JSON object per ride
+  with nested fields: <code>pickup.zone</code>, <code>pickup.hour</code>,
+  <code>dropoff.minutes</code>, <code>payment.type</code>, <code>payment.fare</code>,
+  <code>payment.tip</code>. Logs, API responses, and event streams arrive in this shape, not as
+  flat tables. Using <code>read_json_auto('data/rides.jsonl')</code>, reproduce Q8 (revenue by
+  pickup borough, top 5) straight from the nested file. Check <code>DESCRIBE</code> first to see
+  how DuckDB typed the nested fields.</p>
+  <details><summary>Show answer</summary>
+  <pre><code class="language-sql">SELECT z.Borough AS borough, count(*) AS n_rides,
+       round(sum(r.payment.fare + r.payment.tip), 2) AS revenue
+FROM read_json_auto('data/rides.jsonl') r
+JOIN zones z ON r.pickup.zone = z.LocationID
+GROUP BY z.Borough ORDER BY revenue DESC LIMIT 5;</code></pre>
+  <p><code>DESCRIBE</code> shows each nested object typed as a <code>STRUCT</code>, and dot
+  notation reaches inside it. The result must match Q8 exactly: same rides, different container.
+  The JSON file is four times the size of the CSV and fourteen times the size of the Parquet for
+  the same 60,000 rides, which is the price of carrying the field names in every row.</p>
+  </details>
+</div>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
@@ -213,7 +340,7 @@ isn't in, tonight.)</p>
 
 <h3>Deliverables</h3>
 <ul>
-  <li>☐ <code>assignment.sql</code>: all seven queries pass (<code>7/7</code>).</li>
+  <li>☐ <code>assignment.sql</code>: all eight queries pass (<code>8/8</code>).</li>
 </ul>
 <p>That is the whole upload. The grade is the test harness: the score you see locally is the score
 Gradescope reports.</p>
@@ -222,9 +349,10 @@ Gradescope reports.</p>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
 are just not turned in. Bring your numbers and your answers to class, where we compare them.</p>
 <ul>
-  <li>The three measurement blocks plus answers to the
-  script's three questions (the two reasons Parquet wins; where row storage was right; how
-  far pruning pushes the predicate).</li>
+  <li>The four measurement blocks plus answers to the script's four questions (the two reasons
+  Parquet wins; where row storage was right; how far pruning pushes the predicate; which of the
+  three GROUP BYs you would use in a notebook), and the three questions
+  <code>slow_queries.py</code> asks about its pairs.</li>
   <li>Reflection (3–5 sentences): (1)&nbsp;Q6's window ran over grouped rows: which of
   Lecture 4's properties (streaming vs materializing) does each stage of that query have?
   (2)&nbsp;Your microdb could, in principle, add a column layout. Which of its seven layers
@@ -243,13 +371,15 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <!-- ============================================================ -->
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
-<p class="keep-in-present">Fast finishers: re-declare the money columns as
+<p class="keep-in-present">Fast finishers: download one full month from the TLC's
+<a href="https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page">trip record page</a>
+(<code>yellow_tripdata_2024-01.parquet</code>, about 50 MB and three million rows) and point
+<code>measure_parquet.py</code> and <code>slow_queries.py</code> at it: which ratios grew with
+the data and which stayed put? Re-declare the money columns as
 <span class="gloss" data-gloss="decimal-type"><code>DECIMAL(10,2)</code></span> and re-run everything (what changed, what didn't, and why do
-banks insist?); point DuckDB at a <strong>pandas dataframe</strong> of the same data
-(<code>duckdb.sql("SELECT ... FROM df")</code>) and benchmark against your pandas groupby;
-or partition by <code>payment</code> instead of month and explain (with numbers) why that
-partitioning is nearly useless (hint: 2 huge folders, and which queries filter on payment?).
-Partition keys are a design decision, and now you can price one.</p>
+banks insist?). Or partition by <code>payment</code> instead of month and explain (with numbers)
+why that partitioning is nearly useless (hint: 2 huge folders, and which queries filter on
+payment?). Partition keys are a design decision, and now you can price one.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
@@ -264,8 +394,14 @@ the <em>direction and magnitude class</em> is the lesson.</p>
 principle as the course's quiz generators. Yes, you can read the reference SQL; the
 Gradescope set uses variants, and understanding beats copying on those.</p>
 
-<h3 class="keep-in-present">DuckDB read my 60k-row CSV in 42ms. Why did the lecture make CSV sound so bad?</h3>
-<p class="keep-in-present">Scale: 42ms at 60k rows is 42 <em>seconds</em>-ish at 60M, minutes
+<h3 class="keep-in-present">Is this really the city's taxi data? Can I use it elsewhere?</h3>
+<p class="keep-in-present">Yes. The TLC publishes every yellow-cab trip as open data, and the lab's
+file is a seeded sample of the 2024 files after the cleaning rules listed above. Use it in your
+own projects freely; just cite the TLC. The one thing the sample cannot tell you is anything
+about cash tips, because the source never recorded them.</p>
+
+<h3 class="keep-in-present">DuckDB read my 60k-row CSV in 60ms. Why did the lecture make CSV sound so bad?</h3>
+<p class="keep-in-present">Scale: 60ms at 60k rows is 60 <em>seconds</em>-ish at 60M, minutes
 beyond, while Parquet's advantage compounds (compression improves with size, and stats let whole
 <span class="gloss" data-gloss="row-group">row groups</span> be skipped). Laptop-scale data forgives everything; the formats exist for the data that doesn't.</p>
 
@@ -283,6 +419,6 @@ Week 13 tells that lineage's story properly (MapReduce → Hive → Spark).</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=1"></script>
+<script src="viz.js?v=2"></script>
 </body>
 </html>

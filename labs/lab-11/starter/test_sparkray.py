@@ -129,7 +129,7 @@ def spark_tests():
     try:
         from pyspark import SparkContext
     except ImportError:
-        skip("SPARK", "pyspark not installed — Part B tested by running "
+        skip("SPARK", "pyspark not installed; Part B tested by running "
                       "spark_wordcount.py yourself")
         return
     from spark_wordcount import word_counts
@@ -155,33 +155,33 @@ def ray_tests():
     try:
         import ray
     except ImportError:
-        skip("RAY", "ray not installed — Part C tested by running "
+        skip("RAY", "ray not installed; Part C tested by running "
                     "ray_speedup.py yourself")
         return
     import time
     import logging
-    from ray_speedup import embed_all_parallel, embed_all_serial
+    from ray_speedup import knn_all_parallel, knn_all_serial
     ray.init(num_cpus=4, include_dashboard=False,
              logging_level=logging.ERROR, log_to_driver=False)
     try:
-        texts = [t + " " + x for _, t, x in DOCS[:12]]
+        docs = list(range(48))            # 48 documents: ~1 s serial, enough to time
 
         def test_ray_identical():
-            expect(embed_all_parallel(texts) == embed_all_serial(texts),
+            expect(knn_all_parallel(docs) == knn_all_serial(docs),
                    "parallel results must equal serial exactly "
-                   "(same order — ray.get preserves it)")
+                   "(same order; ray.get preserves it)")
         check("RAY", "parallel results identical to serial", test_ray_identical)
 
         def test_ray_actually_parallel():
             t0 = time.perf_counter()
-            embed_all_serial(texts)
+            knn_all_serial(docs)
             t_serial = time.perf_counter() - t0
             t0 = time.perf_counter()
-            embed_all_parallel(texts)
+            knn_all_parallel(docs)
             t_parallel = time.perf_counter() - t0
             expect(t_parallel < t_serial / 1.5,
                    f"parallel should beat serial by 1.5x+ on 4 CPUs "
-                   f"({t_serial:.2f}s vs {t_parallel:.2f}s) — is ray.get "
+                   f"({t_serial:.2f}s vs {t_parallel:.2f}s); is ray.get "
                    f"inside your launch loop?")
         check("RAY", "launch-all-then-wait beats serial", test_ray_actually_parallel)
     finally:

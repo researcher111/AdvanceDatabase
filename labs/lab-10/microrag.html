@@ -99,6 +99,7 @@ Your job today is to make <code>python3 ask.py</code> produce exactly this.</p>
     <a class="chat-dl-btn" href="starter/ask.py" download>ask.py</a>
     <a class="chat-dl-btn" href="starter/test_rag.py" download>test_rag.py</a>
     <a class="chat-dl-btn" href="starter/measure_rag.py" download>measure_rag.py</a>
+    <a class="chat-dl-btn" href="starter/measure_real.py" download>measure_real.py</a>
   </div>
   <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
 <pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
@@ -266,6 +267,84 @@ question 3's subject, exists for exactly this.)</p>
 </div>
 
 <!-- ============================================================ -->
+<h2 id="real">Part 4 · The same pipeline on real papers <span class="part-time">~20 min · homework</span></h2>
+
+<p>The 24-document corpus is small enough to judge by eye, which is why the tests use it. Real
+corpora are not. <code>measure_real.py</code> points <em>your</em> <code>Retriever</code> at the
+4,000 arXiv abstracts Lab 9 indexed and compares two embedders on them: your hashed bag of words,
+and a real sentence-embedding model (all-MiniLM-L6-v2). The model's vectors for every abstract and
+every question ship precomputed in <code>data/</code>, so nothing downloads and no GPU is involved.
+Ten of the questions were written to paraphrase one specific paper without reusing its title words;
+that is the synonym wall from Part 3, but on real text and scored.</p>
+
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_real.py</span>
+Embedding 4000 abstracts with your hashed embedder (DIM=2048)...
+
+1. Same question, two embedders (top-3 titles)
+
+   Q: write-ahead logging and crash recovery in transactional databases
+   hashed:
+      0.187  BtrLog: Low-Latency Logging for Cloud Database Systems
+      0.130  Open Biomedical Knowledge Graphs at Scale: Construction, Federation, and
+      0.117  Orcaella: Hybrid Fault Tolerance with Client-Selectable Finality Latency
+   MiniLM:
+      0.623  RCC: Speculative Write Versioning with Redo Logs
+      0.610  BtrLog: Low-Latency Logging for Cloud Database Systems
+      0.569  PROTECT-DB: Protecting Data using Replicated State Machines: Efficient C
+
+   Q: retrieval-augmented generation for large language models
+   hashed:
+      0.296  Interpretable Uncertainty for Adaptive Retrieval and Reasoning in Questi
+      0.287  Beyond Similarity Search: A Unified Data Layer for Production RAG System
+      0.258  Graph-Enhanced Large Language Models for Spatial Search
+   MiniLM:
+      0.683  Evaluating Chunking Strategies for Retrieval-Augmented Generation on Aca
+      0.650  Fairness-Aware Retrieval Optimization for Retrieval-Augmented Generation
+      0.633  AB-RAG: Adaptive Budgeted Retrieval-Augmented Generation for Reliable Qu
+
+   Q: distributed join processing and data shuffling in Spark
+   hashed:
+      0.234  Achieving Cloud-Grade SLOs for Local Mixture-of-Experts Inference throug
+      0.219  From Textual Columns to Query Plans: A Unified Relational-Semantic Execu
+      0.215  How Accurately Can the Energy Use of Spark Applications Be Estimated Bas
+   MiniLM:
+      0.605  Partial Partial Aggregates
+      0.577  Elastic Scheduling of Intermittent Query Processing in a Cluster Environ
+      0.562  MFTune: An Efficient Multi-fidelity Framework for Spark SQL Configuratio
+
+2. Labeled mini-eval: 10 questions, each paraphrasing one paper without its title words
+   embedder   hit@3     MRR
+     hashed    0.30    0.25
+     MiniLM    0.90    0.68
+
+   question by question (rank of the right paper, - if not in the top 10):
+   hashed  2  MiniLM  1   Why can a database running in the cloud not keep its transaction log o
+   hashed  1  MiniLM  2   How can a scan read from a committed snapshot without being slowed dow
+   hashed  -  MiniLM  1   Does splitting a long thesis into pieces by meaning give better answer
+   hashed  -  MiniLM  1   How should you predict the number of disk reads a machine-learned inde
+   hashed  -  MiniLM  4   How do you estimate how many rows will pass a SQL filter whose conditi
+   hashed  -  MiniLM  3   Find every point for which a given query is among that point's own clo
+   hashed  -  MiniLM  1   How can you index records that each have a start time and an end time 
+   hashed  1  MiniLM  1   How can an optimizer search over every possible join tree of an acycli
+   hashed  -  MiniLM  3   Users phrase questions differently from the passages that answer them;
+   hashed  -  MiniLM  3   Can a similarity search index adapt how it partitions the space to the</code></pre>
+
+<p class="keep-in-present">Read the mini-eval before the top-3 lists. The hashed embedder finds
+three of the ten papers, and in each of those the question happened to share an exact word with
+the abstract (<em>join tree</em>, <em>snapshot</em>, <em>transaction log</em>). Where the
+paraphrase used different words for the same idea, hashing has nothing to match and the paper does
+not appear in the top ten at all. The model finds nine of ten, three at rank one, having never seen
+these papers or questions: it learned that "pieces by meaning" and "semantic chunking" are near each
+other. That difference is the entire case for a learned embedder, and it is measured, not asserted.
+It is also why your project's evaluation questions must be written by people who read the corpus,
+not generated from the titles.</p>
+
+<p><strong>Now change something.</strong> Set <code>DIM = 256</code> in <code>micro_rag.py</code>
+and re-run <code>measure_real.py</code>. The course corpus lost nine points of hit@3 at 256 in
+Part 3; report what the real corpus loses and explain why a vocabulary of 700,000 words is more
+sensitive to hash collisions than one of 3,000.</p>
+
+<!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
 <p>Due <strong>Thursday Nov 19 at class start</strong>. Submit <code>micro_rag.py</code> to
@@ -288,6 +367,9 @@ are just not turned in. Bring your numbers and your answers to class, where we c
   <em>threshold rule</em> for <code>answer()</code> and defend the cutoff you'd pick.
   (3)&nbsp;The MISS in exhibit 2 is "deleted" vs "Deleting"; one sentence on what a stemmer
   would change, and one on what it still couldn't fix.</li>
+  <li>The <code>measure_real.py</code> output and its three questions: which shared words let the
+  hashed embedder find a paper; what the model learned that hashing cannot; and which failure mode
+  your own project corpus will show more.</li>
   <li>Reflection (3–5 sentences): map each of your two functions to its microdb ancestor:
   which week was <code>Retriever</code>, which week was <code>build_prompt</code>'s "exact
   format or the parser breaks" discipline? Be specific.</li>

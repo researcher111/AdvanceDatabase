@@ -201,9 +201,34 @@ index:  found 1 row · touched 11 tree nodes (height 11) + 1 heap block · 0.03 
 
 lookup speedup: 4,091x</code></pre>
 
+<p><strong>Now change something.</strong> <code>N_ROWS</code> in
+<code>measure_index.py</code> is <code>100_000</code>. Set it to <code>1_000_000</code> (the load
+takes longer) and report scan ms, index ms, tree height, and the speedup. Before you look, compute
+the height <code>ORDER = 4</code> predicts for a million keys, then say whether the speedup grew
+with the row count and why the height barely moved.</p>
+
 <p class="keep-in-present">Four thousand times, from a structure you wrote in an afternoon,
 and at real-page <span class="gloss" data-gloss="fanout">fan-out</span> the height drops from 11 to 3. This is the second of the course's two
 great speed tricks: week 2 cached the blocks; this week we stopped needing most of them.</p>
+
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+
+<p>The line you will type most often at work that touches this lab is
+<code>CREATE INDEX ON features (user_id)</code>: a feature lookup that took 30 seconds because
+Postgres scanned the table takes 3 milliseconds because it descends a tree like yours, and nothing
+about your query changed. The index only helps when the <code>WHERE</code> clause is an equality
+or a range on the indexed column, because that is the only question a sorted tree can answer by
+descending; <code>WHERE lower(email) = ...</code>, <code>WHERE score * 2 &gt; 100</code>, or a
+<code>LIKE</code> with a leading wildcard all get a full scan even with an index on the column,
+and <code>EXPLAIN</code> will show you which happened. A composite index on
+<code>(user_id, event_time)</code> is one tree sorted by <code>user_id</code> first and
+<code>event_time</code> second, so it serves "this user's events in a time range" in one descent
+and is useless for "all users' events last Tuesday": column order in <code>CREATE INDEX</code> is
+the sort order of the tree. Every index you add costs a tree insert on every <code>INSERT</code>,
+which is the build price you paid once here paid again per row, and why bulk loads drop indexes
+first and rebuild them after. The vector indexes in Lab 9 (HNSW, IVF) are different answers to
+the question your tree answers: how to find a few rows out of millions without touching most of
+them, when the key is a vector of hundreds of floats and "equal" becomes "nearest".</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>

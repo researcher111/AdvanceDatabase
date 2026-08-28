@@ -21,7 +21,7 @@ This file runs the phases sequentially in one process. Nothing about the
 functions you write would change on a 1,000-machine cluster - only the
 plumbing around them (which is what Spark sells, in Part B).
 
-The corpus is Lab 10's: 24 documents summarizing this course.
+The corpus is 4,000 real arXiv abstracts (corpus.py), the papers Lab 9 embedded.
 
 Run the tests any time:   python3 test_sparkray.py
 See the result:           python3 mapreduce.py       (top 15 words)

@@ -239,12 +239,36 @@ seeded):</p>
         50 |         50.0% |           97.5%
         55 |         50.0% |           97.5%</code></pre>
 
+<p><strong>Now change something.</strong> <code>hotset_workload</code> in
+<code>measure_hits.py</code> builds its hot set with <code>hot = list(range(5))</code>. Change it to
+<code>list(range(10))</code>, then add pool sizes to <code>POOL_SIZES</code> until you find the
+smallest pool where the hot-set rate first crosses 95%. Report that pool size, the 5-block rate at
+the same size from the reference table, and whether the scan column changed at all.</p>
+
 <p class="keep-in-present">Read the scan column slowly: <strong>0.0% at 49 frames, 50% at
 50</strong>. Caching 98% of the file bought exactly nothing, because LRU evicts each block one
 step before the scan returns to it. Meanwhile the hot set, whose
 <span class="gloss" data-gloss="working-set">working set</span> is 5 blocks, cruises at 90%+
 with a pool a tenth the size. Which column your workload resembles matters more than any
 tuning parameter you will ever set.</p>
+
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+
+<p>The scan column explains why <code>pd.read_parquet</code> on a file larger than RAM dies
+with <code>MemoryError</code> while DuckDB reading the same file finishes: pandas asks for every
+block at once and keeps all of them, DuckDB pulls blocks through a pool a fraction of that size and
+releases each one as soon as the operator above it is done. Spark's <code>.cache()</code> and
+<code>.persist()</code> are pins: a request that a dataset stay in memory across the next several
+actions, and when more is pinned than fits, Spark drops partitions and recomputes them where your
+pool raises <code>BufferAbortError</code>. The second run of a notebook cell that reads a large file
+is fast for the same reason your hot set hit 97%: the operating system keeps its own buffer pool,
+the page cache, and the file's blocks are still in it from the first run. A feature store serving
+online predictions is a hot-set workload by design: a few thousand active users get almost every
+read, and the pool needed to serve them is a small fraction of the table. The nightly backfill that
+scans the whole table through the same pool is the scan cliff hitting production: it evicts the
+hot rows, and the next hour of online lookups misses until they are read back in. Postgres reads a
+large sequential scan through a small ring of frames instead of the main pool for exactly this
+reason.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>

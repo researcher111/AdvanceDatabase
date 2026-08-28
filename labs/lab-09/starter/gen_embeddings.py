@@ -1,48 +1,83 @@
-"""Lab 9 — generate the embedding dataset. Run once:  python3 gen_embeddings.py
+"""Lab 9: the embedding dataset. Provided complete; nothing to generate.
 
-Writes data/embeddings.txt: 4,000 unit vectors, 32 dimensions, drawn from
-25 gaussian clusters (like real sentence embeddings, which clump by topic).
-Seeded — everyone's vectors are identical, so measured recalls match.
+The vectors are real. They are sentence embeddings (all-MiniLM-L6-v2) of 4,000
+arXiv abstracts, 800 each from cs.DB, cs.IR, cs.LG, stat.ML, and cs.DC, pulled
+from the arXiv API in August 2026. The model produces 384 dimensions; the
+shipped vectors are reduced to DIM dimensions by PCA and unit-normalized, so
+that pure-Python k-means and brute-force search stay fast enough to run in a
+loop. The 40 queries are real questions (data/queries.txt) embedded the same way.
 
-Format: one vector per line, comma-separated floats.
+    data/arxiv_4000.f16        4,000 x DIM little-endian float16, row-major
+    data/arxiv_4000_384.f16    the same vectors at the model's full 384 dims
+    data/arxiv_4000.jsonl.gz   one line per vector: id, title, cat, date, abstract
+    data/queries.f16           40 x DIM query vectors;  data/queries.txt  their text
+    data/queries_384.f16       the 40 queries at 384 dims
+
+load()          -> list of 4,000 unit vectors (lists of floats)
+queries(v, n)   -> the first n query vectors
+titles()        -> list of 4,000 titles, aligned with load()
+question(i)     -> the text of query i
 """
 
+import gzip
+import json
 import math
 import os
-import random
+import struct
 
-N, DIM, CLUSTERS, SEED = 4000, 32, 25, 6042
-SIGMA = 0.85          # cluster spread: big enough that topics overlap (real embeddings do)
-
-
-def main():
-    rng = random.Random(SEED)
-    centers = [[rng.gauss(0, 1) for _ in range(DIM)] for _ in range(CLUSTERS)]
-    os.makedirs("data", exist_ok=True)
-    with open("data/embeddings.txt", "w") as f:
-        for i in range(N):
-            c = centers[i % CLUSTERS]
-            v = [c[d] + rng.gauss(0, SIGMA) for d in range(DIM)]
-            norm = math.sqrt(sum(x * x for x in v)) or 1.0
-            f.write(",".join(f"{x / norm:.6f}" for x in v) + "\n")
-    print(f"wrote data/embeddings.txt — {N} vectors, {DIM} dims, {CLUSTERS} latent topics")
+DIM = 64
+N = 4000
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = os.path.join(HERE, "data")
 
 
-def queries(vectors, n=40, seed=SEED + 1):
-    """Realistic queries: perturbed dataset vectors (near a stored vector,
-    never identical to one) — seeded, shared by tests and measurement."""
-    rng = random.Random(seed)
+def _read_f16(path: str, dim: int) -> list[list[float]]:
+    """Unpack float16 rows and re-normalize each to unit length (float16
+    rounding leaves norms at 0.999x; exact unit vectors make dot = cosine)."""
+    raw = open(path, "rb").read()
+    n = len(raw) // (2 * dim)
+    flat = struct.unpack(f"<{n * dim}e", raw)
     out = []
-    for j in range(n):
-        v = vectors[(j * 97) % len(vectors)]
-        q = [x + rng.gauss(0, 0.25) for x in v]
-        norm = math.sqrt(sum(x * x for x in q)) or 1.0
-        out.append([x / norm for x in q])
+    for i in range(n):
+        v = flat[i * dim:(i + 1) * dim]
+        norm = math.sqrt(sum(x * x for x in v)) or 1.0
+        out.append([x / norm for x in v])
     return out
 
 
-def load(path="data/embeddings.txt"):
-    return [[float(x) for x in line.split(",")] for line in open(path)]
+FILES = {64: ("arxiv_4000.f16", "queries.f16"),          # shipped default: PCA-reduced, fast
+         384: ("arxiv_4000_384.f16", "queries_384.f16")}  # the model's own width, 6x the work
+
+
+def load(dim: int = DIM) -> list[list[float]]:
+    """dim=64 (default, shipped for speed) or dim=384 (the model's own width)."""
+    return _read_f16(os.path.join(DATA, FILES[dim][0]), dim)
+
+
+def queries(vectors=None, n: int = 10, dim: int = DIM) -> list[list[float]]:
+    return _read_f16(os.path.join(DATA, FILES[dim][1]), dim)[:n]
+
+
+def meta() -> list[dict]:
+    with gzip.open(os.path.join(DATA, "arxiv_4000.jsonl.gz"), "rt") as f:
+        return [json.loads(line) for line in f]
+
+
+def titles() -> list[str]:
+    return [m["title"] for m in meta()]
+
+
+def question(i: int) -> str:
+    return [l.strip() for l in open(os.path.join(DATA, "queries.txt")) if l.strip()][i]
+
+
+def main():
+    missing = [f for f in ("arxiv_4000.f16", "arxiv_4000.jsonl.gz", "queries.f16", "queries.txt")
+               if not os.path.exists(os.path.join(DATA, f))]
+    if missing:
+        raise SystemExit(f"data/ is missing {missing}; re-clone the lab folder")
+    v = load()
+    print(f"{len(v)} vectors x {len(v[0])} dims, {len(queries(n=40))} queries; first title: {titles()[0][:70]}")
 
 
 if __name__ == "__main__":

@@ -216,10 +216,33 @@ same query, same answer, two shapes (300 students x 3 majors):
 
   pair-building work ratio, A / B: 15x</code></pre>
 
+<p><strong>Now change something.</strong> Both plans in <code>measure_pipeline.py</code>
+filter on <code>("gpa", ">", 35)</code>. Change the 35 to 25 in both places and run, then to 20
+and run again. Report pairs built for A and B and the A / B ratio at each threshold, and explain in
+one sentence why Plan A's count never moves while the ratio does.</p>
+
 <p class="keep-in-present">Two lessons for the price of one: filter placement bought
 <strong>15×</strong> with an identical answer, and the right input of a nested loop is
 re-executed once per left row, which is why "small table on the right" is ancient DBA wisdom
 and why week 9 invents the hash join.</p>
+
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+
+<p>pandas runs Plan A every time: <code>df.merge</code> builds the whole joined frame in
+memory, <code>df[df.gpa &gt; 35]</code> builds a second frame from it, <code>df[['name']]</code> a
+third, and each intermediate is complete before the next line starts. That is why a join of two
+frames that each fit in RAM can still raise <code>MemoryError</code>: the joined frame in the
+middle is your 900-pair product, and nothing streams it. Your <code>ProductScan</code> built the
+same 900 pairs one at a time through <code>next()</code> and held one at a time, which is why a
+database finishes a join on a laptop where pandas does not. A Python generator is the iterator
+model in different spelling: <code>yield</code> is <code>next()</code>, and a chain of generators
+is a plan tree that pulls one row at a time from the bottom. Polars' lazy API and Spark's
+DataFrame make the tree visible: <code>df.filter(...).select(...)</code> builds a plan, nothing
+runs until <code>.collect()</code>, and the optimizer moves the filter below the join for you,
+which is the Plan B you assembled by hand. A Spark stage is one of these pipelines with a shuffle
+at each end: rows still flow from one operator to the next, but between stages they cross the
+network, so every pair you avoided building by filtering early is a pair that never left the
+machine.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>

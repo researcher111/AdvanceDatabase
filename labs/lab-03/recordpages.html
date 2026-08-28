@@ -211,10 +211,35 @@ skinny (id int, x int)                 |    12 |      341 |       4 B |         
 actual file after inserting 10,000 students rows: 59 blocks (236 KB)
 full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember the cliff?)</code></pre>
 
+<p><strong>Now change something.</strong> In <code>SCHEMAS</code> in
+<code>measure_layout.py</code>, change the students schema from <code>add_string_field("name", 8)</code>
+to a width of 32. Before running, predict the new slot size, rows per block, and blocks for 10,000
+rows from <code>BLOCK_SIZE</code> = 4096 and the layout rule. Then run it and report your prediction
+next to the printed row, the actual file size, and whether the scan hit rate moved.</p>
+
 <p class="keep-in-present">Three lessons in one table: schema width sets I/O cost
 (<strong>59 vs 527 blocks</strong> for the same 10,000 rows); the arithmetic predicts the real
 file exactly (that's what a contract is); and the scan's ~0% hit rate is last week's cliff
 making a cameo: a full pass through an 8-frame pool re-uses nothing.</p>
+
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+
+<p><code>df.info()</code>, <code>\d students</code> in psql, and <code>DESCRIBE</code> in
+DuckDB all read a catalog: rows in a table that record each column's name, type, and width, which
+is what your <code>Catalog.create_table</code> wrote and <code>get_layout</code> read back. When
+Arrow or Parquet calls a column fixed-width (<code>int64</code>, <code>float64</code>, a timestamp)
+or variable-width (<code>string</code>, <code>binary</code>), it is the distinction behind your
+<code>Layout</code>: a fixed-width column can be located by arithmetic and copied straight into a
+NumPy array, a variable-width one needs an offsets array first, which is why string columns are
+the slow ones in pandas. The <code>VARCHAR(8)</code> you sized reserves 8 characters whether a name
+uses them or not; Postgres stores strings at their actual length instead, and pays for it by
+walking every earlier column's length to find a later column's bytes, which is why a wide table
+with many text columns is slow to read the last column of. The RID your
+<code>TableScan.rid()</code> returns, a block number and a slot, is what every index in Lab 6
+stores next to a key, and what a vector store hands back from a nearest-neighbor query is the same
+thing: an id that points at a row, not the row. When a Postgres table bloats after many updates
+and deletes, the cause is slots marked <code>EMPTY</code> that no scan reclaims until
+<code>VACUUM</code> runs; you wrote the flag it checks.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>

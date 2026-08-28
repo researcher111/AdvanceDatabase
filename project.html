@@ -115,6 +115,40 @@
     <div class="stage"><div class="s-no">6 · EVALUATE</div><div class="s-name">Evaluate</div><div class="s-desc">retrieval metrics + answer quality on a question set you author</div></div>
   </div>
 
+  <h2 id="schema">Design your tables before you write code</h2>
+  <p>The most common way a data scientist's RAG project fails is not a bad embedding model or a slow index. It is that documents, chunks, embeddings, and evaluation questions live in four ad-hoc Python lists and dicts that drift apart. The chunk list gets rebuilt with a new chunk size, the embedding array does not, and the evaluation questions still point at list positions that no longer mean anything. Every number in the report is then a number about a system that no longer exists.</p>
+  <p>So design the tables first, before any pipeline code, the way Lab 3 made you write the catalog before a table scan could read a row. Four tables are enough:</p>
+
+  <table class="facts">
+    <thead><tr><th>Table</th><th>Columns</th><th>Keys</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>documents</code></td>
+        <td><code>doc_id, source, title, ingested_at</code>, plus any metadata your corpus carries (author, date, URL)</td>
+        <td>Primary key <code>doc_id</code>. One row per source document, written once at ingestion and never rewritten.</td>
+      </tr>
+      <tr>
+        <td><code>chunks</code></td>
+        <td><code>chunk_id, doc_id, ordinal, text, n_tokens</code></td>
+        <td>Primary key <code>chunk_id</code>. <code>doc_id</code> is a foreign key to <code>documents</code>; <code>ordinal</code> is the chunk's position within its document.</td>
+      </tr>
+      <tr>
+        <td><code>embeddings</code></td>
+        <td><code>chunk_id, model, dim, vector</code></td>
+        <td>Primary key <code>(chunk_id, model)</code>; <code>chunk_id</code> references <code>chunks</code>. If your index stores its own vectors (FAISS, your Lab 9 microvector), drop the <code>vector</code> column and keep the row as a record that the vector exists in the index keyed by <code>chunk_id</code>.</td>
+      </tr>
+      <tr>
+        <td><code>eval_questions</code></td>
+        <td><code>q_id, question, relevant_doc_ids, author</code></td>
+        <td>Primary key <code>q_id</code>. Every id in <code>relevant_doc_ids</code> is a <code>doc_id</code> in <code>documents</code>; <code>author</code> is the team member who read the source and wrote the question.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>One foreign key matters more than the rest: <code>chunks.doc_id</code> to <code>documents.doc_id</code>. It is what lets a retrieved chunk always name its source, so every answer your system generates can cite a document, not just a chunk number. The demo requirement below (an answer with cited chunks) depends on this join working.</p>
+  <p>The other choices exist for the evaluation. Chunk ids must be stable across runs: assign <code>chunk_id</code> from <code>(doc_id, ordinal)</code> or from a hash of the chunk text, never from a list position, so the retrieval numbers you report on Nov 12 can be reproduced on Dec 3. The <code>model</code> column on <code>embeddings</code> is what lets you compare two embedders on the same chunks, which is the cheapest of the two-configuration comparisons the Requirements ask for. And <code>relevant_doc_ids</code> is labeled at the document level, not the chunk level, so that re-chunking the corpus (which you will do, because chunk size is the first thing worth tuning) does not invalidate a single label.</p>
+  <p>This is the same discipline Lab 10 applied to micro-rag: its five-stage pipeline table names what each stage takes in and hands off before any stage is written. Your four tables do that for the data instead of the code. Your proposal must include them, with keys, and the retrieval milestone will be checked against them.</p>
+
   <h2 id="requirements">Requirements</h2>
   <ul class="plain">
     <li><strong>Real corpus, your choice.</strong> At least ~500 documents or ~2,000 chunks after splitting. Ideas: UVA course catalogs and policy pages, a Wikipedia category dump, arXiv abstracts in your field, cooking recipes, court opinions, game rulebooks, your favorite podcast's transcripts. Must be legally shareable with the teaching staff.</li>
@@ -138,12 +172,17 @@
       <tr>
         <td class="dt">Thu Oct 29</td>
         <td><strong>Proposal</strong></td>
-        <td>1 page: team, corpus (with sample documents in hand), the questions your system will answer, planned index and embedding model, evaluation sketch.</td>
+        <td>1 page: team, corpus (with sample documents in hand), the questions your system will answer, planned index and embedding model, evaluation sketch, and your table schema (the four tables above, with keys).</td>
       </tr>
       <tr>
         <td class="dt">Thu Nov 12</td>
         <td><strong>Retrieval milestone</strong></td>
         <td>Corpus ingested, index built, top-k retrieval working from the command line. Show 5 example queries with retrieved chunks. (Lab 10 hands you most of this scaffolding.)</td>
+      </tr>
+      <tr>
+        <td class="dt">Thu Nov 19</td>
+        <td><strong>Question swap</strong></td>
+        <td>Send 10 of your evaluation questions (with relevant doc ids and a copy of your corpus, or read access to it) to your partner team; receive theirs. Run their questions against your system at the workshop and report the numbers alongside your own. Partner teams are assigned at the proposal.</td>
       </tr>
       <tr>
         <td class="dt">Thu Dec 3</td>
@@ -163,15 +202,17 @@
     </tbody>
   </table>
 
+  <p>The question swap exists because questions written by people who did not build the system are the only ones that cannot be tuned to. Your own 25 questions shape every choice you make about chunk size, k, and reranking, so by the workshop your system is fitted to them whether you intended that or not. The partner team's 10 questions are this course's version of a held-out test set: the gap between your numbers on their questions and on your own is the most honest measurement in your report.</p>
+
   <h2 id="rubric">Rubric</h2>
   <table class="facts">
     <thead><tr><th>Criterion</th><th>What earns it</th><th>Weight</th></tr></thead>
     <tbody>
       <tr><td><strong>System works end to end</strong></td><td>Ingestion through cited answers, reproducible from the repo README.</td><td class="w">25%</td></tr>
       <tr><td><strong>Retrieval layer</strong></td><td>A real index, correctly used; the brute-force baseline comparison; the recall-vs-speed tradeoff measured and explained.</td><td class="w">25%</td></tr>
-      <tr><td><strong>Evaluation</strong></td><td>Honest, quantitative, comparative. Failure analysis counts as much as the wins.</td><td class="w">25%</td></tr>
+      <tr><td><strong>Evaluation</strong></td><td>Honest, quantitative, comparative. Your partner team's questions count as part of "comparative": report your numbers on them next to your numbers on your own. Failure analysis counts as much as the wins.</td><td class="w">25%</td></tr>
       <tr><td><strong>Report &amp; presentation</strong></td><td>Clear architecture, defended decisions, a demo that survives a live question.</td><td class="w">15%</td></tr>
-      <tr><td><strong>Milestones</strong></td><td>Proposal and retrieval milestone delivered on time and taken seriously.</td><td class="w">10%</td></tr>
+      <tr><td><strong>Milestones</strong></td><td>Three milestones (proposal, retrieval milestone, question swap) delivered on time and taken seriously.</td><td class="w">10%</td></tr>
     </tbody>
   </table>
 

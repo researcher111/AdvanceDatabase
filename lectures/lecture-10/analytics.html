@@ -183,19 +183,19 @@ smaller files = fewer blocks = faster scans: compression IS performance here.</c
 </table>
 
 <p class="keep-in-present">Columnar layout + vectorized execution is why Thursday's measurement
-shows Parquet beating CSV <strong>89×</strong> on the same rows on the same laptop.</p>
+shows Parquet beating CSV by more than <strong>100×</strong> on the same rows on the same laptop.</p>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · predict Thursday's number</span>
-  <p>rides: 60,000 rows, 8 columns, ~8 bytes per value. Compute the bytes that must move for
+  <p>rides: 60,000 rows, 12 columns, ~8 bytes per value. Compute the bytes that must move for
   <code>SELECT avg(fare) FROM rides</code> under (a) row layout, (b) column layout, and
   (c) column layout with a <code>month = 12</code> filter over 12 equal <span class="gloss" data-gloss="partitioning-files">hive partitions</span> (one folder per month).
   What's the (a)-to-(c) ratio?</p>
   <details><summary>Show answer</summary>
-  <p>(a) all of it: 60,000&nbsp;×&nbsp;8&nbsp;×&nbsp;8 ≈ <strong>3.8&nbsp;MB</strong>.
-  (b) one column: 60,000&nbsp;×&nbsp;8 ≈ <strong>0.48&nbsp;MB</strong>, 8× less.
+  <p>(a) all of it: 60,000&nbsp;×&nbsp;12&nbsp;×&nbsp;8 ≈ <strong>5.8&nbsp;MB</strong>.
+  (b) one column: 60,000&nbsp;×&nbsp;8 ≈ <strong>0.48&nbsp;MB</strong>, 12× less.
   (c) one column of one partition: ≈ <strong>40&nbsp;KB</strong>, roughly <strong>96×</strong>
-  less than (a), before compression shrinks it further. Thursday's measured 89× is this
+  less than (a), before compression shrinks it further. Thursday's measured 100×+ is this
   arithmetic with real files and real codecs; you can now predict a benchmark before
   running it, which is the whole point of a cost model.</p>
   </details>
@@ -267,7 +267,7 @@ a budgeting skill; Thursday's measurement is your first invoice audit.</code></p
   <li><strong>Layout follows workload.</strong> Rows for fetch-and-update, columns for
   scan-and-aggregate; the industry runs both, connected by pipelines.</li>
   <li><strong>Columns unlock a cascade</strong> (compression, vectorized execution,
-  chunk-level skipping using per-chunk min/max stats) that compounds to the 89× you'll measure.</li>
+  chunk-level skipping using per-chunk min/max stats) that compounds to the 100×+ you'll measure.</li>
   <li><strong>The cloud stack is your stack resized:</strong> Parquet ≈ column-store files,
   the lakehouse ≈ catalog + WAL over a lake, and pricing-by-scan turns every lesson since
   week 1 into money.</li>
@@ -287,7 +287,7 @@ slowly and memory-hungrily, and keep pandas for what it's brilliant at (transfor
 modeling glue). <code>duckdb.sql("...").df()</code> hands you a dataframe; the two compose in<sup class="src"><a href="#src-14" title="DuckDB Guide: Export to Pandas">14</a></sup>
 one line.</p>
 
-<h3 class="keep-in-present">Why did CSV lose by 89×, when it's also just a file?</h3>
+<h3 class="keep-in-present">Why did CSV lose by more than 100×, when it's also just a file?</h3>
 <p class="keep-in-present">Two separate sins: CSV must be <em>parsed</em> (every byte
 inspected, every number decoded from text), and it has no column structure, so the whole
 file moves even for one column. Parquet stores typed binary columns with stats; most bytes<sup class="src"><a href="#src-3" title="Querying Parquet with Precision Using DuckDB">3</a></sup>

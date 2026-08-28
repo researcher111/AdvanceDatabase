@@ -2,7 +2,7 @@
 
 Parses your assignment.sql (one query under each "-- Qn:" marker), runs
 each against DuckDB, and diffs the result against the reference answer
-computed live from the same data. Ordered questions (2, 4, 5, 6) compare
+computed live from the same data. Ordered questions (2, 4, 5, 6, 8) compare
 exactly; unordered ones compare as sets.
 
 Run gen_data.py once first. Requires: pip install duckdb
@@ -31,6 +31,9 @@ REFERENCE = {
     7: ("SELECT count(*) AS n_rides, round(sum(fare + tip), 2) AS revenue "
         "FROM read_parquet('data/rides_by_month/*/*.parquet', hive_partitioning = true) "
         "WHERE month IN (10, 11, 12)", False),
+    8: ("SELECT z.Borough AS borough, count(*) AS n_rides, round(sum(r.fare + r.tip), 2) AS revenue "
+        "FROM rides r JOIN zones z ON r.pickup_zone = z.LocationID "
+        "GROUP BY z.Borough ORDER BY revenue DESC LIMIT 5", True),
 }
 
 RESULTS = []
@@ -73,6 +76,7 @@ def main():
         gen_data.main()
     con = duckdb.connect()
     con.execute("CREATE TABLE rides AS SELECT * FROM 'data/rides.csv'")
+    con.execute("CREATE TABLE zones AS SELECT * FROM 'data/zones.csv'")
 
     student = parse_assignment()
     for n in sorted(REFERENCE):
@@ -94,7 +98,8 @@ def main():
 
         check(f"Q{n} " + {1: "totals", 2: "revenue by month", 3: "distance by payment",
                           4: "top-5 fares", 5: "card share", 6: "running revenue",
-                          7: "partitioned Q4 totals"}[n], one)
+                          7: "partitioned Q4 totals",
+                          8: "revenue by pickup borough (join)"}[n], one)
 
     n_pass = sum(RESULTS)
     print(f"\n{n_pass}/{len(RESULTS)} tests passed")

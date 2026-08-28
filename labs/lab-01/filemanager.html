@@ -493,6 +493,11 @@ buffered writes (sync=False):      465,849 blocks/sec
 durable  writes (sync=True):        30,788 blocks/sec
 ratio (buffered / durable):           15.1x</code></pre>
 
+<p><strong>Now change something.</strong> <code>BLOCK_SIZE</code> in <code>measure_io.py</code>
+is 4096. Set it to 512, run, then set it to 65536 and run again. Report both rates and the ratio
+at each size, and say which of the two rates moved more and why: the answer tells you whether
+your SSD charges per byte or per fsync.</p>
+
 <div class="viz" id="viz-fsync">
   <div class="viz-title">What one machine measured</div>
   <p class="viz-description">Instructor's Apple-silicon laptop: representative shape, not a
@@ -508,6 +513,23 @@ ratio (buffered / durable):           15.1x</code></pre>
 A database cannot fsync every page it touches and stay usable, yet it promises durability on
 every commit. The escape from that trap is called a write-ahead log, and the number you just
 measured is why it exists.</p>
+
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+
+<p>You will not write another file manager, but every write-heavy job you run pays this
+layer's prices. A training job that dies partway through writing a CSV leaves whatever the OS page
+cache had flushed, cut off at an arbitrary byte, so the rerun has to start from a clean file:
+nothing on disk records where the good bytes end. A model checkpoint is no different: after
+<code>torch.save</code> returns, your guarantee is the <code>sync=False</code> one unless something
+called <code>fsync</code>, which is why careful checkpoint code writes a temporary file, fsyncs it,
+and renames it over the old one. The ratio you just measured is what a pipeline gives up when it
+insists on durability per record instead of per batch, and it is the reason every bulk loader
+(Postgres <code>COPY</code>, or one transaction wrapped around many <code>INSERT</code>s) groups
+thousands of writes under a single fsync. Parquet's row groups are this lab's blocks at a larger
+size: a fixed chunk at a known offset that a reader can seek to directly, which is how
+<code>pyarrow</code> skips a row group whose min and max statistics rule it out, where a CSV reader
+has to read the whole file. When DuckDB or Postgres reports that a query read some number of
+pages, each page is a <code>BlockId</code>.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>

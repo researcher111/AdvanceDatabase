@@ -8,6 +8,8 @@ database you will ever configure exposes this dial under some name
 Deterministic (seeded data + queries) — record the table.
 """
 
+import sys
+
 import gen_embeddings
 from microvector import BruteForceIndex, IVFIndex, recall_at_k, dot
 
@@ -15,8 +17,9 @@ import os
 
 if not os.path.exists("data/embeddings.txt"):
     gen_embeddings.main()
-VECTORS = gen_embeddings.load()
-QUERIES = gen_embeddings.queries(VECTORS, n=40)   # perturbed, realistic
+DIM = int(sys.argv[1]) if len(sys.argv) > 1 else gen_embeddings.DIM   # python3 measure_recall.py 384
+VECTORS = gen_embeddings.load(dim=DIM)
+QUERIES = gen_embeddings.queries(VECTORS, n=40, dim=DIM)   # 40 real questions, embedded like the docs
 K = 10
 
 
@@ -26,11 +29,24 @@ def truth_for(q):
     return scored[:K]
 
 
+def show_titles(index, q_index: int, k: int = 3) -> None:
+    """Print what a query actually retrieves: the payoff of real vectors."""
+    q = gen_embeddings.queries(n=40, dim=DIM)[q_index]
+    titles = gen_embeddings.titles()
+    print(f"   Q: {gen_embeddings.question(q_index)}")
+    for score, i in index.search(q, k):
+        print(f"      {score:.3f}  {titles[i][:78]}")
+
+
 def main():
     n = len(VECTORS)
     truths = [truth_for(q) for q in QUERIES]
 
-    print(f"{len(VECTORS)} vectors, {len(QUERIES)} queries, top-{K}, 20 clusters\n")
+    print(f"{len(VECTORS)} real arXiv abstracts as {len(VECTORS[0])}-d MiniLM vectors, {len(QUERIES)} real questions, top-{K}, 20 clusters\n")
+    print("0. What a query returns (brute force, top-3 by cosine):")
+    show_titles(BruteForceIndex(VECTORS), 2)
+    show_titles(BruteForceIndex(VECTORS), 9)
+    print()
     print(f"{'index':>12} | {'probe':>5} | {'avg recall@10':>13} | {'comparisons/query':>17} | {'vs exact':>8}")
     print("-" * 70)
 

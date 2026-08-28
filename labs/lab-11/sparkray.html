@@ -46,8 +46,9 @@ Tuesday ended with a claim: the shuffle is the whole story. Today you test it by
 story yourself. Part 1 is pure stdlib: you write map, hash partitioning, the shuffle, and
 reduce, and a harness checks the one guarantee everything depends on (every value for a key
 in exactly one partition). Parts 2 and 3 are the products: the same word count in three
-chained Spark calls (find the shuffle in the printed plan), and an embedding job fanned
-across your cores with two lines of Ray. The corpus is Lab 10's (this course, as documents),
+chained Spark calls (find the shuffle in the printed plan), and a real job, the nearest-neighbor graph of
+Lab 9's vectors, fanned across your cores with two lines of Ray. The corpus is the 4,000 arXiv
+abstracts Lab 9 embedded (about 700,000 words),
 so every answer is checkable against last week's code.
 </p>
 
@@ -76,7 +77,7 @@ partitions, every chip colored by the arithmetic your <code>partition_for</code>
 <div class="viz" id="viz-mr">
   <div class="viz-title">map → shuffle → reduce · word count, 4 documents, 2 partitions</div>
   <p class="viz-description">Step through the phases; hover any pair for its routing
-  arithmetic. Part 1 is this widget, as Python, over 24 real documents.</p>
+  arithmetic. Part 1 is this widget, as Python, over 4,000 real abstracts.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="mr-step">Step ▸</button>
     <button type="button" class="btn" id="mr-back">◂ Back</button>
@@ -90,6 +91,7 @@ partitions, every chip colored by the arithmetic your <code>partition_for</code>
     <a class="chat-dl-btn" href="starter/spark_wordcount.py" download>spark_wordcount.py</a>
     <a class="chat-dl-btn" href="starter/ray_speedup.py" download>ray_speedup.py</a>
     <a class="chat-dl-btn" href="starter/corpus.py" download>corpus.py</a>
+    <a class="chat-dl-btn" href="starter/embeddings.py" download>embeddings.py</a>
     <a class="chat-dl-btn" href="starter/test_sparkray.py" download>test_sparkray.py</a>
   </div>
   <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
@@ -100,14 +102,15 @@ partitions, every chip colored by the arithmetic your <code>partition_for</code>
 <!-- ============================================================ -->
 <h2 id="big-idea">One pattern, three costumes</h2>
 
-<p class="keep-in-present">All three parts run map → shuffle → reduce on the same 24
-documents. What changes is who owns the plumbing:</p>
+<p class="keep-in-present">Parts 1 and 2 run map → shuffle → reduce on the same 4,000 abstracts; Part 3
+runs a different job, one task per abstract, on the same machine. What changes is who owns the
+plumbing:</p>
 
 <pre class="equation"><code>Part 1  mapreduce.py        you own everything    map_words · partition_for · shuffle · reduce_counts
 Part 2  spark_wordcount.py  Spark owns placement  .flatMap → .map → .reduceByKey   (shuffle inside)
 Part 3  ray_speedup.py      Ray owns scheduling   @ray.remote + launch-all-then-ray.get
 
-same phases, same corpus, same answers, different plumbing landlords</code></pre>
+same corpus, same answers, different plumbing landlords</code></pre>
 
 <p class="keep-in-present">Part 1 runs sequentially in one process, on purpose: the functions
 you write are <em>exactly</em> what would run on 1,000 machines; placement and retry are the
@@ -122,7 +125,7 @@ contract yourself is how you'll know what you're renting.</p>
   <tbody>
     <tr><td><code>mapreduce.py</code></td><td><strong>you edit, the graded file</strong></td><td><code>run_mapreduce</code> runner provided; <code>map_words</code>, <code>partition_for</code>, <code>shuffle</code>, <code>reduce_counts</code> are YOUR JOB</td></tr>
     <tr><td><code>spark_wordcount.py</code></td><td>you edit, run locally</td><td>session setup + DAG printing provided; the three-transformation chain is YOUR JOB</td></tr>
-    <tr><td><code>ray_speedup.py</code></td><td>you edit, run locally</td><td>slow embedder + timing harness provided; <code>embed_remote</code> + <code>embed_all_parallel</code> are YOUR JOB</td></tr>
+    <tr><td><code>ray_speedup.py</code></td><td>you edit, run locally</td><td>brute-force <code>neighbors()</code>, the vectors, and the timing harness provided; <code>knn_remote</code> + <code>knn_all_parallel</code> are YOUR JOB</td></tr>
     <tr><td><code>corpus.py</code></td><td>provided, read-only</td><td>Lab 10's 24 course-summary documents</td></tr>
     <tr><td><code>test_sparkray.py</code></td><td>provided</td><td>OFFLINE group always runs; SPARK/RAY groups auto-skip if not installed</td></tr>
   </tbody>
@@ -155,11 +158,11 @@ contract yourself is how you'll know what you're renting.</p>
 </ol>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 mapreduce.py</span>
-  50  the
-  46  a
-  41  and
-  18  is
-  15  of
+31210  the
+26815  and
+21780  a
+15090  of
+14747  to
 <span class="t-mute">   ...</span></code></pre>
 
 <p class="keep-in-present">The top of a raw word count is always stop words: Lab 10's
@@ -193,21 +196,38 @@ The top-15 it prints must match Part 1's exactly; the harness checks the full di
 <!-- ============================================================ -->
 <h2 id="ray">Part 3 · Ray <span class="part-time">~15 min in class</span></h2>
 
-<p>Two edits in <code>ray_speedup.py</code>: decorate <code>embed_remote</code> with
-<code>@ray.remote</code>, and write <code>embed_all_parallel</code> as launch-all-then-gather.
-The <span class="gloss" data-gloss="gil">GIL</span> never gets a vote; every task is its own
-process. Measured on a 10-core laptop:</p>
+<p>The job is real work this time: for each abstract, find the ten abstracts nearest to it in
+Lab 9's embedding space by brute force over all 4,000 vectors, which is the bottom layer of an
+HNSW graph and the same shape as embedding a corpus or scoring one model per fold. One document
+costs about 4,000 × 64 multiply-adds in pure Python; 200 documents cost a couple of seconds
+serially, and every document's search is independent of every other's. Two edits in
+<code>ray_speedup.py</code>: decorate <code>knn_remote</code> with <code>@ray.remote</code>, and
+write <code>knn_all_parallel</code> as launch-all-then-gather. The
+<span class="gloss" data-gloss="gil">GIL</span> never gets a vote; every task is its own process.
+Measured on a 10-core laptop:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span>
-24 documents, 30 ms simulated model latency each
-serial:      0.92 s
-parallel:    0.16 s     speedup: 5.7x
-identical results: True</code></pre>
+200 documents, 10 nearest neighbors each, brute force over 4,000 vectors
+serial:      2.27 s
+parallel:    0.66 s     speedup: 3.5x
+identical results: True
 
-<p class="keep-in-present">Not 10× on 10 cores: Ray pays startup and inter-process transfer,
-and 24 × 30 ms is a small job. The overhead is fixed, the win scales with the work; re-run
-the mental math for 100k chunks × 50 ms (your project's re-embed) and the fixed cost
-disappears into an 83-minute → 9-minute difference.</p>
+neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
+   Decomposition-Driven Multi-Table Retrieval and Reasoning for Numerical
+   Novel Table Search [Technical Report]
+   Toward Multi-Database Query Reasoning for Text2Cypher</code></pre>
+
+<p class="keep-in-present">Not 10× on 10 cores: Ray pays startup, ships the 4,000 vectors to each
+worker once, and a two-second job is small. The overhead is fixed, the win scales with the work;
+the full graph over all 4,000 abstracts costs 45 seconds serially and the fixed cost disappears.
+The neighbors it prints are the payoff: a paper about table retrieval sits next to papers about
+multi-table retrieval and table search, found by arithmetic over vectors you built an index for
+last week.</p>
+
+<p><strong>Now change something.</strong> Set <code>N_DOCS = 1000</code> and run again; then leave
+it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the three speedups
+(200 docs on all cores, 1000 docs on all cores, 1000 docs on 2 cores) and say which of the two
+numbers, cores or documents, moved the speedup more and why the answer is not "cores".</p>
 
 <!-- ============================================================ -->
 <h2 id="verify">Verify</h2>
@@ -272,8 +292,8 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <ul>
   <li>Three blocks of output with one-paragraph answers:
   (1)&nbsp;your Spark DAG, with the shuffle line marked and one sentence on why the stage
-  boundary sits exactly there; (2)&nbsp;your Ray timing, plus the speedup you'd predict for
-  100k documents at 50 ms each on your core count, show the arithmetic; (3)&nbsp;the top-15
+  boundary sits exactly there; (2)&nbsp;your Ray timings from the three runs, plus the time you'd predict for the
+  full 4,000-document graph on your core count, show the arithmetic; (3)&nbsp;the top-15
   word list, and one sentence connecting it to Lab 10's stop-word list.</li>
   <li>Reflection (3–5 sentences): Tuesday claimed the shuffle is Lab 4's join cost wearing
   a network costume. Defend or attack, citing one concrete thing from your
@@ -298,9 +318,9 @@ and count how many pairs cross the phase boundary (it drops ~6×; that ratio is 
 engine combines). Implement <strong>skew salting</strong>: make one word 50% of a synthetic
 corpus, watch one partition bloat, then split the hot key across
 <code>the#0…the#3</code> and aggregate twice. Or convert Part 3 to an
-<strong>actor</strong>: <code>@ray.remote class Embedder</code> that "loads a model" (a
-2-second sleep in <code>__init__</code>, once per worker) and re-measure: tasks pay the
-load per call, actors pay it per worker.</p>
+<strong>actor</strong>: <code>@ray.remote class Searcher</code> that loads the 4,000 vectors in
+<code>__init__</code> (once per worker) and answers <code>neighbors(doc)</code> calls; re-measure
+and explain what a task pays per call that an actor pays once.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
@@ -319,7 +339,7 @@ runtime noise; the startup warnings are cosmetic. If the run <em>hangs</em>, the
 culprit is Java missing or a JDK too old (need 17+): check <code>java -version</code>.</p>
 
 <h3 class="keep-in-present">My Ray speedup is only ~3× on 8 cores. Did I do it wrong?</h3>
-<p class="keep-in-present">Probably not: 24 tasks × 30 ms is a small job, and Ray's fixed
+<p class="keep-in-present">Probably not: 200 tasks of about 10 ms is a small job, and Ray's fixed
 costs (starting workers, moving arguments) are visible at this scale. The harness only
 requires beating serial by 1.5×; the point is the launch-then-gather <em>shape</em>, whose
 payoff grows with the work. If you see ~1.0×, that IS the bug: <code>ray.get</code> inside
