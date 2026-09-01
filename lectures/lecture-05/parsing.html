@@ -224,7 +224,7 @@ you write SELECT by imitation:</p>
 <p class="key-fact keep-in-present"><strong>4 verbs</strong> peek, next, match, expect: every parsing method you write is built from only these</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="h" data-step-name="the four verbs" data-explain="peek looks without consuming; next consumes; match asks 'is the current token this?'; expect consumes-or-dies with a message naming what it wanted. Every rule below is built from only these.">peek() · next() · match(kind, val) · expect(kind, val)</div>
+  <div class="code-step" data-step="h" data-step-name="the four verbs" data-explain="peek looks without consuming; next consumes; match asks 'is the current token this?'; expect either consumes the token it expects or raises an error naming what it wanted. Every rule below is built from only these.">peek() · next() · match(kind, val) · expect(kind, val)</div>
   <div class="code-step" data-step="i1" data-explain="The rule: INSERT INTO table VALUES ( value {, value} ). The method consumes exactly the tokens the rule owns, no more, no fewer.">def parse_insert(self):</div>
   <div class="code-step" data-step="i1" data-explain="Keywords are checked and discarded; they carry no information beyond their presence.">    self.lex.expect("KEYWORD", "insert")</div>
   <div class="code-step" data-step="i1" data-explain="">    self.lex.expect("KEYWORD", "into")</div>
@@ -347,7 +347,7 @@ August. Thursday you get to feel it.</p>
   <div class="code-step" data-step="e1" data-explain="">    if not self.match(kind, value):</div>
   <div class="code-step" data-step="e1" data-explain="The two facts every parse error owes its user: expected WHAT, found WHAT. Position is a nice third (Going Further).">        raise ParseError(f"expected {want!r}, found {v!r}")</div>
   <div class="code-step" data-step="e1" data-explain="">    return self.next()[1]</div>
-  <div class="code-step" data-step="e2" data-step-name="the payoff" data-explain="Because every rule funnels through expect, good errors happen by construction: 'SELECT name FORM students' dies with: expected 'from', found 'FORM'. No error-handling code was written; the grammar's own shape produced it.">Parser("SELECT name FORM students").parse()
+  <div class="code-step" data-step="e2" data-step-name="the payoff" data-explain="Because every rule funnels through expect, good errors happen by construction: 'SELECT name FORM students' fails with the message: expected 'from', found 'FORM'. No error-handling code was written; the grammar's own shape produced it.">Parser("SELECT name FORM students").parse()
 # ParseError: expected 'from', found 'FORM'</div>
   <div class="code-explain-panel">Hover a line: the REPL prints these messages verbatim; your classmates are the users.</div>
 </div>

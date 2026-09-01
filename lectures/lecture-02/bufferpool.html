@@ -399,14 +399,14 @@ bottom layer matches. Hover each line:</p>
 <table>
   <thead><tr><th>Group</th><th>Invariant it guards</th><th>The bug it catches</th></tr></thead>
   <tbody>
-    <tr><td><strong>PIN</strong> (4 tests)</td><td>pins nest; hits reuse the same frame; double-unpin is loud</td><td>reloading a block that's already resident; silent pin-count drift</td></tr>
-    <tr><td><strong>LRU</strong> (4 tests)</td><td>victim = oldest unpinned; recency = every pin, hits included</td><td>stamping <code>last_used</code> only on misses, the classic</td></tr>
-    <tr><td><strong>DIRTY</strong> (2 tests)</td><td>no modified page dies with its frame</td><td>bypassing <code>assign_to_block</code> and skipping the flush</td></tr>
+    <tr><td><strong>PIN</strong> (4 tests)</td><td>pin counts nest (two pins need two unpins); re-pinning a resident block reuses its frame; unpinning at pin count 0 raises <code>ValueError</code></td><td>reloading a block that is already in a frame; a pin count that silently drifts away from the true number of users</td></tr>
+    <tr><td><strong>LRU</strong> (4 tests)</td><td>the victim is the unpinned frame pinned longest ago; every pin refreshes recency, hits included</td><td>stamping <code>last_used</code> only on misses, the most common mistake in this lab</td></tr>
+    <tr><td><strong>DIRTY</strong> (2 tests)</td><td>a modified page is flushed to disk before its frame is reused</td><td>bypassing <code>assign_to_block</code> and skipping the flush</td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">Ten tests, three invariants. If you can say each invariant aloud,
-the code is forty-five minutes of dictation.</p>
+<p class="keep-in-present">Ten tests, three invariants. If you can state each invariant in your
+own words, the code is about forty-five minutes of translating them into Python.</p>
 
 <h3 class="new-slide" data-kicker="Thursday's lab">Four things to do before class</h3>
 
