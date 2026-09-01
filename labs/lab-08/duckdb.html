@@ -5,7 +5,7 @@
 <title>Lab 8 · DuckDB + Partitioned Parquet · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -13,12 +13,14 @@
 <aside class="toc">
   <div class="toc-title">Lab 8 · analytics</div>
   <ul>
-    <li><a href="#try-it">Query like an analyst</a></li>
-    <li><a href="#big-idea">Real SQL at last</a></li>
-    <li><a href="#the-api">The seven questions</a></li>
+    <li><a href="#try-it">Same SQL, 600 to 60,000</a></li>
+    <li><a href="#big-idea">Act I operators in disguise</a></li>
+    <li><a href="#the-data">Real, cleaned data</a></li>
+    <li><a href="#the-api">Eight questions</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#slow">Part 4 · Fix the slow query</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -36,12 +38,14 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 8 · Thursday October 29, 2026 · Act II, lab 1 of 4 · project proposals due today</div>
   <h1>DuckDB + Partitioned Parquet</h1>
-  <div class="subtitle">Seven analyst's queries, three measurements, and your microdb meets its columnar cousin.</div>
+  <div class="subtitle">Your microSQL cannot answer the questions analysts actually ask, and the CSV they usually ask them over is 130× slower than it needs to be.</div>
   <div class="byline">Follows Lecture 10 (The Analytics Stack) · in class: 75 min · aim to finish Build + Verify · due Thu Nov 5 at class start</div>
 </header>
 
 <p class="lede">
-No layers to build this week; you <em>drive</em>. The data is real: 60,000 New York City
+Ask your microSQL for revenue by month or the five most expensive rides and it has nothing to
+say: it stops at SELECT-FROM-WHERE, so the grouping ends up in a Python loop over a CSV that a
+columnar engine reads 130× faster. No layers to build this week; you <em>drive</em>. The data is real: 60,000 New York City
 yellow-taxi trips from 2024, sampled from the city's public trip records. A real columnar
 engine is one <code>pip install</code> away, and the SQL your microSQL grew up wanting is
 finally on the menu: <code>GROUP BY</code>, <span class="gloss" data-gloss="window-fn">window
@@ -66,7 +70,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Query like an analyst</h2>
+<h2 id="try-it">The same SQL runs on 600 rows and on 60,000</h2>
 
 <p>The rides table, live in your browser: 600 real rides drawn from the lab's 60,000.
 Run the presets, then edit them; this is the SQL dialect Thursday's queries use.</p>
@@ -108,7 +112,7 @@ Run the presets, then edit them; this is the SQL dialect Thursday's queries use.
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">Real SQL at last</h2>
+<h2 id="big-idea">GROUP BY, windows, and LIMIT are Act I operators in disguise</h2>
 
 <p>You built microSQL's SELECT-FROM-WHERE; this lab uses its three grown-up cousins, each of
 which your Act I knowledge decodes:</p>
@@ -144,12 +148,14 @@ compute. Real data does not arrive clean; deciding what to drop is part of the j
   </tbody>
 </table>
 
-<p>One quirk survives on purpose. Every cash ride has <code>tip = 0</code>, not because cash riders
+<p class="keep-in-present">One quirk survives on purpose. Every cash ride has <code>tip = 0</code>, not because cash riders
 never tip but because the meter only records tips paid by card. Group <code>tip</code> by <code>payment</code> and you
 will see it, and it is the first lesson of the lab: a column that is always zero for one group is usually a fact
 about how the data was collected, not about the world.</p>
 
-<p>There are two tables, which makes this the smallest possible <span class="gloss" data-gloss="star-schema">star schema</span>:
+<h3 class="new-slide" data-kicker="The data">Two tables make the smallest possible star schema</h3>
+
+<p class="keep-in-present">There are two tables, which makes this the smallest possible <span class="gloss" data-gloss="star-schema">star schema</span>:
 <code>rides</code> is the fact table, one row per trip, and <code>zones</code> is a dimension table,
 one row per taxi zone with its borough, joined on <code>rides.pickup_zone = zones.LocationID</code>.</p>
 
@@ -168,7 +174,7 @@ one row per taxi zone with its borough, joined on <code>rides.pickup_zone = zone
 </table>
 
 <!-- ============================================================ -->
-<h2 id="the-api">The eight questions</h2>
+<h2 id="the-api">Eight questions, one statement each, graded against live answers</h2>
 
 <p>Each is a marker comment in <code>assignment.sql</code>; write one statement under each.
 The harness compares your results against reference answers computed live: ordered
@@ -266,6 +272,8 @@ questions exactly, unordered ones as sets.</p>
               DuckDB over the Parquet file:            0.8 ms
               DuckDB over the pandas frame, in place:   2.7 ms  (no copy: DuckDB scans df's memory)</code></pre>
 
+<p class="key-fact keep-in-present"><strong>130×</strong> Parquet over CSV on the same 60,000 rows, same laptop</p>
+
 <p class="keep-in-present"><strong>More than 100× from the file format alone</strong>, and a WHERE
 clause that skipped eleven files without opening them. Every mechanism has an Act I name: fewer
 blocks, pushdown, layout-follows-workload, now measured on the real stack. Step 4 is the one to
@@ -273,7 +281,7 @@ carry into your notebooks: once a dataframe is loaded, DuckDB can run SQL over i
 no copy, at about the speed of pandas itself. You do not have to choose between the two; you can
 write the GROUP BY in whichever is clearer and hand the frame back and forth.</p>
 
-<p><strong>Now change something.</strong> In <code>measure_parquet.py</code>, change the pruning
+<p class="keep-in-present"><strong>Now change something.</strong> In <code>measure_parquet.py</code>, change the pruning
 query's predicate from <code>month = 12</code> to <code>day = 25</code> and run it again. Report the
 plan's "Scanning Files" line and the time. Then explain, in one sentence, what the partition key
 would have to be for that query to prune, and what Q2 would cost under that partitioning.</p>
@@ -335,8 +343,11 @@ GROUP BY z.Borough ORDER BY revenue DESC LIMIT 5;</code></pre>
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p>Due <strong>Thursday Nov 5 at class start</strong>. (Proposals were due today; if yours
-isn't in, tonight.)</p>
+<p class="keep-in-present"><strong>Submit <code>assignment.sql</code> to Gradescope, per the course
+submission instructions, by Thursday Nov 5 at class start.</strong> One file; the harness score you
+see locally is the grade.</p>
+
+<p>(Project proposals were due today; if yours isn't in, tonight.)</p>
 
 <h3>Deliverables</h3>
 <ul>
@@ -386,7 +397,7 @@ payment?). Partition keys are a design decision, and now you can price one.</p>
 
 <h3 class="keep-in-present">My times differ from the reference. Failed?</h3>
 <p class="keep-in-present">Times are your machine's; only counts (rows, 1/12 files) are
-graded exact. If your CSV/Parquet ratio is 20× instead of 89×, your SSD and CPU differ;
+graded exact. If your CSV/Parquet ratio is 20× instead of 130×, your SSD and CPU differ;
 the <em>direction and magnitude class</em> is the lesson.</p>
 
 <h3 class="keep-in-present">Why does the harness compute reference answers live instead of hardcoding?</h3>

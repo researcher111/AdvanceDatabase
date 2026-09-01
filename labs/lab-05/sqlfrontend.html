@@ -5,7 +5,7 @@
 <title>Lab 5 · The SQL Front End · microdb part 5</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -36,12 +36,13 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 5 · Thursday September 24, 2026 · microdb part 5 of 7</div>
   <h1>The SQL Front End</h1>
-  <div class="subtitle">Five methods, and then you type SQL at an engine you built from bytes up.</div>
+  <div class="subtitle">Your engine answers only the queries you hand-build as Python plan trees; after five methods it takes SQL.</div>
   <div class="byline">Follows Lecture 5 (From SQL Text to Plan) · in class: 75 min · aim to finish Build + Verify · due Thu Oct 1 at class start</div>
 </header>
 
 <p class="lede">
-This is the payoff lab. You write the parser's three query methods (by imitating two
+Right now the only way to ask your database a question is to assemble the plan tree yourself,
+one Python operator at a time, the way Lab 4 did. This is the lab that fixes it. You write the parser's three query methods (by imitating two
 provided worked examples), the planner's four-step recipe, and then run the provided
 <span class="gloss" data-gloss="repl">REPL</span> and talk to your own database in SQL.
 CREATE a table, INSERT the pinned students, run the honors query and the join; then
@@ -64,9 +65,10 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Talk to your database</h2>
+<h2 id="try-it">Done looks like this: SQL in, your rows out</h2>
 
-<p>A working replica of Thursday's finish line: microdb's REPL, in your browser, speaking the
+<p class="keep-in-present">Until today, asking your engine a question meant building the plan tree by hand
+in Python. Below is a working replica of Thursday's finish line: microdb's REPL, in your browser, speaking the
 exact microSQL your code will parse. Type or click: the session below runs the same grammar,
 the same planner, the same error messages.</p>
 
@@ -107,17 +109,17 @@ the same planner, the same error messages.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">Imitation with understanding</h2>
+<h2 id="big-idea">One grammar rule is one method; imitate the worked examples</h2>
 
-<p>The starter hands you two complete parsers (<code>parse_insert</code> and
+<p class="keep-in-present">The starter hands you two complete parsers (<code>parse_insert</code> and
 <code>parse_create</code>) as worked examples, because <span class="gloss" data-gloss="recursive-descent">recursive descent</span> is a pattern you
-absorb by reading. Each grammar rule is one method; each method consumes exactly the tokens
+absorb by reading. Each grammar rule is one method; each method consumes exactly the <span class="gloss" data-gloss="token">tokens</span>
 its rule owns, using four verbs on the token stream
 (<code>peek · next · match · expect</code>). Your <code>parse_query</code> is the same song
 with two new verses: the <code>*</code> alternative and the optional WHERE.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">The contract</h2>
+<h2 id="the-api">Five methods touch every layer you have built since August</h2>
 
 <p>Your five methods, with the moves each one borrows:</p>
 
@@ -215,39 +217,52 @@ microdb> SELECT name, dept FROM students, majors WHERE mid = mid2 AND gpa > 35 A
 the join plan, measured: 900 pairs examined -> 20 rows returned
 Lab 4's hand-pushed-down plan did the same query in 60 pairs.</code></pre>
 
-<p><strong>Now change something.</strong> Add a fourth string to <code>QUERIES</code> in
-<code>measure_sql.py</code> with one deliberate mistake, for example
-<code>SELECT name FROM students WHERE gpa 35</code>. The three reference trees still print, then
-your parser stops the script with a <code>ParseError</code>. Report the message verbatim, which
-token it blamed, and whether that is the token you would have blamed; then run the same string in
-any database you have installed (DuckDB or Postgres) and report where its message points.</p>
+<p class="key-fact keep-in-present"><strong>900 vs 60</strong> pairs examined for the same join: your correct planner does 15× the work of last week's hand-pushed plan</p>
 
 <p class="keep-in-present">Your engine now takes SQL and gives correct answers, and its plans
 leave a 15× on the table that <em>you</em> knew how to collect by hand last week. The machine
 that collects it automatically needs one thing your engine doesn't have yet: knowledge about
 the data. That's statistics, and it's week 9.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Break one query and read where your parser points</h3>
 
-<p>Every SQL string you send from a notebook, through <code>pd.read_sql</code>,
+<p class="keep-in-present"><strong>Now change something.</strong> Add a fourth string to <code>QUERIES</code> in
+<code>measure_sql.py</code> with one deliberate mistake, for example
+<code>SELECT name FROM students WHERE gpa 35</code>. The three reference trees still print, then
+your parser stops the script with a <code>ParseError</code>. Report the message verbatim, which
+token it blamed, and whether that is the token you would have blamed; then run the same string in
+any database you have installed (DuckDB or Postgres) and report where its message points.</p>
+
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Every query you send passes through a parser like yours</h3>
+
+<p class="keep-in-present">Every SQL string you send from a notebook, through <code>pd.read_sql</code>,
 <code>duckdb.sql</code>, or <code>psycopg</code>, goes through a lexer, a parser, and a planner
-shaped like the three you just wrote before a single row is read. When Postgres answers a typo
-with <code>syntax error at or near "35"</code>, that is its parser doing what yours does in
-<code>expect</code>: the token it names is the one that failed to match the grammar, which is
-where the parser first noticed and may be one token past the real mistake. The dataframe APIs you
-use daily are a parser you cannot see: <code>df.filter(pl.col("gpa") &gt; 35).select("name")</code>
-in Polars, and the same chain in PySpark, build the same tree of project over select over scan
-that <code>render_plan</code> printed, with method calls as the grammar. SQL written by a language
-model is no exception: it is text until a parser accepts it, and the parse error is the first and
-cheapest check you can run on it before it touches data. The plan tree is also what
-<code>EXPLAIN</code> prints, so reading your own <code>render_plan</code> output is practice for
-reading a production plan.</p>
+shaped like the three you just wrote before a single row is read.</p>
+
+<table>
+  <thead><tr><th>Where you meet it</th><th>What the parser is doing there</th></tr></thead>
+  <tbody>
+    <tr><td>Postgres answers a typo with <code>syntax error at or near "35"</code></td>
+        <td>That is its parser doing what yours does in <code>expect</code>: the token it names is the one
+        that failed to match the grammar, which is where the parser first noticed and may be one token
+        past the real mistake.</td></tr>
+    <tr><td><code>df.filter(pl.col("gpa") &gt; 35).select("name")</code> in Polars, and the same chain in PySpark</td>
+        <td>The dataframe APIs you use daily are a parser you cannot see: the chain builds the same tree of
+        project over select over scan that <code>render_plan</code> printed, with method calls as the grammar.</td></tr>
+    <tr><td>SQL written by a language model</td>
+        <td>It is text until a parser accepts it, and the parse error is the first and cheapest check you can
+        run on it before it touches data.</td></tr>
+    <tr><td><code>EXPLAIN</code> in a production engine</td>
+        <td>The plan tree is what <code>EXPLAIN</code> prints, so reading your own <code>render_plan</code>
+        output is practice for reading a production plan.</td></tr>
+  </tbody>
+</table>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p>Due <strong>Thursday Oct 1 at class start</strong>, submitted per the course submission
-instructions.</p>
+<p class="keep-in-present"><strong>Submit <code>sql_frontend.py</code> to Gradescope, per the course submission
+instructions, by Thursday Oct 1 at class start.</strong> One file; the harness score you see locally is the grade.</p>
 
 <h3>Deliverables</h3>
 <ul>

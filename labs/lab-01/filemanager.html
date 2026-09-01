@@ -6,18 +6,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 
 <aside class="toc">
   <div class="toc-title">Lab 1 · microdb 1</div>
   <ul>
-    <li><a href="#try-it">Poke a page</a></li>
-    <li><a href="#big-idea">Why whole blocks</a></li>
-    <li><a href="#file-vs-page">A file is not a page</a></li>
-    <li><a href="#the-api">Three classes, one contract</a></li>
+    <li><a href="#try-it">A row on disk is 15 bytes you can point at</a></li>
+    <li><a href="#big-idea">Fixed-size blocks give block k one computable address</a></li>
+    <li><a href="#file-vs-page">Disk is 250× slower than RAM and never forgets</a></li>
+    <li><a href="#the-api">The whole layer is three classes and one byte layout</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
@@ -38,12 +38,15 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 1 · Thursday August 27, 2026 · microdb part 1 of 7</div>
   <h1>Disk &amp; File Manager</h1>
-  <div class="subtitle">microdb begins: blocks, pages, and the actual bytes on disk.</div>
+  <div class="subtitle">Your code can only work on bytes in memory, and bytes only survive on disk: who moves them, and how do you know they arrived?</div>
   <div class="byline">Follows Lecture 1 (Anatomy of a Database) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 3 at class start</div>
 </header>
 
 <p class="lede">
-Postgres's storage manager (<code>storage/smgr</code>) and SQLite's file format both bottom out
+When <code>df.to_csv(...)</code> returns, your bytes are usually sitting in the operating system's
+memory, not on the SSD, and a power cut takes them with it. A database cannot live with that
+uncertainty, so its bottom layer moves bytes in fixed-size blocks and knows exactly when each one
+has landed. Postgres's storage manager (<code>storage/smgr</code>) and SQLite's file format both bottom out
 in code like the code you write today: open a file, seek to <code>block × block_size</code>, move
 exactly one <span class="gloss" data-gloss="block">block</span> of bytes. No SQL, no tables, no cleverness,
 just the disk's contract, honored precisely. It is the least glamorous layer of microdb and the
@@ -66,7 +69,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Poke a page</h2>
+<h2 id="try-it">A row on disk is 15 bytes you can point at</h2>
 
 <p>This is a live <span class="gloss" data-gloss="page-mem">page</span>, 64 bytes of it, so you
 can see every byte (the real thing is 4096). The three preset buttons store the pinned row from
@@ -112,7 +115,7 @@ Then try your own values and read them back.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">Why whole blocks</h2>
+<h2 id="big-idea">Fixed-size blocks give block k one computable address</h2>
 
 <p>Before writing the code, settle the design question the whole layer is built on: what unit
 should <code>read()</code> move? A row? An arbitrary byte range? Every serious engine lands on
@@ -136,15 +139,86 @@ with <span class="gloss" data-gloss="fsync">fsync</span>. The gap between those 
 write-ahead log.</p>
 
 <!-- ============================================================ -->
-<h2 id="file-vs-page">A file is not a page</h2>
+<h2 id="file-vs-page">Disk is 250× slower than RAM and never forgets</h2>
 
-<p>Your laptop keeps bytes in two places, and they could hardly be more different. The
+<p class="keep-in-present">Your laptop keeps bytes in two places, and they could hardly be more different. The
 <strong>disk</strong> holds <code>students.tbl</code>: it keeps its bytes through a power cut,
 but every trip to it costs about 25&nbsp;µs on an SSD (the latency ladder from Tuesday).
 <strong>Memory (RAM)</strong> holds every Python object you have ever made: it answers in
 about 100&nbsp;ns, 250× faster, but forgets everything the moment your process exits. Your code
 can only <em>work on</em> bytes in memory, and bytes only <em>survive</em> on disk, so a database
 spends its whole life copying between the two. This layer is that ferry.</p>
+
+<h3 class="new-slide" data-kicker="Disk vs RAM">The two homes, side by side</h3>
+
+<div class="viz" id="viz-ramdisk">
+  <div class="viz-title">RAM vs disk · the two places a byte can live</div>
+  <svg class="rd-svg" viewBox="0 0 960 300" role="img"
+    aria-label="RAM: about 100 nanoseconds per access, tens of gigabytes, contents lost on power-off. Disk: about 25 microseconds per trip, terabytes, contents survive. The FileManager copies 4096-byte blocks between them.">
+    <rect class="rd-box rd-ram" x="30" y="40" width="360" height="220" rx="10"/>
+    <text class="rd-head" x="210" y="78">MEMORY (RAM)</text>
+    <text class="rd-big" x="210" y="128">~100 ns</text>
+    <text class="rd-line" x="210" y="158">per access</text>
+    <text class="rd-line" x="210" y="196">tens of gigabytes</text>
+    <text class="rd-line rd-warn" x="210" y="226">forgets everything at power-off</text>
+    <rect class="rd-box rd-disk" x="570" y="40" width="360" height="220" rx="10"/>
+    <text class="rd-head" x="750" y="78">DISK (SSD)</text>
+    <text class="rd-big" x="750" y="128">~25 µs</text>
+    <text class="rd-line" x="750" y="158">per trip: 250× slower</text>
+    <text class="rd-line" x="750" y="196">terabytes</text>
+    <text class="rd-line rd-keep" x="750" y="226">survives power-off</text>
+    <path class="rd-arrow" d="M400 130 L560 130" marker-end="url(#rd-head-r)"/>
+    <path class="rd-arrow" d="M560 180 L400 180" marker-end="url(#rd-head-l)"/>
+    <text class="rd-mid" x="480" y="118">fm.write(block, page)</text>
+    <text class="rd-mid" x="480" y="205">fm.read(block, page)</text>
+    <text class="rd-mid rd-sub" x="480" y="245">4096 bytes per trip, either way</text>
+    <defs>
+      <marker id="rd-head-r" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" class="rd-headfill"/></marker>
+      <marker id="rd-head-l" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" class="rd-headfill"/></marker>
+    </defs>
+  </svg>
+  <p class="viz-caption">Fast, small, and forgetful on the left; slow, huge, and permanent on the
+  right. Every database design decision in this course is some way of living with this picture.</p>
+</div>
+
+<div class="viz" id="viz-realhw">
+  <div class="viz-title">The same two homes, in real hardware</div>
+  <div class="rd-grid">
+    <figure class="rd-photo">
+      <div class="rd-wrap">
+        <img src="img/inside-a-machine.jpg" alt="An open computer case: four red RAM modules stand next to the CPU cooler on the motherboard" loading="lazy">
+        <span class="rd-pill" style="left: 39%; top: 25%;">▼ these four red sticks are the RAM</span>
+      </div>
+      <figcaption>Inside one machine: the RAM sticks stand right next to the CPU, on the shortest,
+      fastest wires in the box. Everything your Python process holds lives here, and it empties
+      the instant the power does.</figcaption>
+    </figure>
+    <figure class="rd-photo">
+      <div class="rd-wrap">
+        <img src="img/server-drive-sleds.jpg" alt="A rack of Wikipedia's servers: rows of hot-swappable drive sleds fill the front of each machine" loading="lazy">
+        <span class="rd-pill" style="left: 8%; top: 12%;">▼ each sled is one disk</span>
+      </div>
+      <figcaption>The front of Wikipedia's own servers: every sled in the grid is a disk. This is
+      where <code>students.tbl</code> would live: terabytes of it, kept through any power cut, a
+      25&nbsp;µs trip away.</figcaption>
+    </figure>
+  </div>
+  <p class="viz-caption rd-credit">Photos: <a href="https://commons.wikimedia.org/wiki/File:Dllu_skylake_computer.jpg">Dllu</a>
+  (CC&nbsp;BY-SA&nbsp;4.0) and <a href="https://commons.wikimedia.org/wiki/File:Wikimedia_Foundation_Servers-8055_13.jpg">Victor
+  Grigas, Wikimedia Foundation Servers</a> (CC&nbsp;BY-SA&nbsp;3.0).</p>
+</div>
+
+<div class="callout insight">
+  <span class="label">The same wall runs through LLMs</span>
+  <p class="keep-in-present">This hierarchy is not a database quirk; it is why your LLM runs fast
+  or slow. Generating one token means streaming essentially all of the model's weights out of
+  memory, so generation speed is set by memory, not by arithmetic. A 7-billion-parameter model at
+  16 bits is about 14&nbsp;GB of weights: fits in RAM (or a GPU's memory), and tokens flow; make
+  it spill to disk and every token starts paying 250×-slower trips, which is the difference
+  between tokens per second and seconds per token. Quantization (the same model at 4 bits is
+  about 3.5&nbsp;GB) exists largely to keep weights inside fast memory. Same picture as above:
+  the fast home is small, the big home is slow, and performance is deciding what lives where.</p>
+</div>
 
 <p>microdb gives each side of the ferry its own word, so the code can never confuse them:</p>
 
@@ -191,7 +265,7 @@ block into a page, <code>fm.write</code> copies a page back over a block.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="the-api">Three classes, one contract</h2>
+<h2 id="the-api">The whole layer is three classes and one byte layout</h2>
 
 <p>The whole layer is three classes, and two of them fit on an index card. Hover each line,
 then keep the byte-layout table close while you code, because the tests enforce it literally.</p>
@@ -242,6 +316,8 @@ round-trips, and every later lab assumes it:</p>
 
     len('héllo')                  = 5 characters
     len('héllo'.encode('utf-8'))  = 6 bytes      ← reserve this many, or you truncate</code></pre>
+
+<h3 class="new-slide" data-kicker="Three classes, one layout"><code>pack_into</code> returns nothing; it writes into your buffer in place</h3>
 
 <p>The <em>Tool</em> column above names a function most people have never used:
 <code>struct.pack_into</code>. It is worth a minute, because it does not behave the way ordinary
@@ -311,7 +387,7 @@ each step turns a new group green.</p>
   <code>self._data[a:b] = payload</code>, not <code>chunk = self._data[a:b]; chunk[:] = payload</code>.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Part 1 · Build">Reading the mode string</h3>
+<h3 class="new-slide" data-kicker="Part 1 · Build"><code>"w+b"</code> wipes the table; <code>"r+b"</code> keeps it</h3>
 
 <p>That gotcha is only frightening while <code>"w+b"</code> looks like magic. It is three
 independent choices concatenated, and once you can read them apart you will never truncate a
@@ -359,7 +435,7 @@ right for a file manager, and the second row is the one that eats homework:</p>
   a different length than it went in.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Part 1 · Build">The cursor: <code>seek</code> and <code>tell</code></h3>
+<h3 class="new-slide" data-kicker="Part 1 · Build"><code>seek</code> before every <code>read</code> and <code>write</code>, every time</h3>
 
 <p>Every open file object carries one number. The docs call it the <em>stream position</em>;
 everyone else calls it the cursor. It is the byte offset where the next <code>read</code> or
@@ -496,6 +572,8 @@ buffered writes (sync=False):      465,849 blocks/sec
 durable  writes (sync=True):        30,788 blocks/sec
 ratio (buffered / durable):           15.1x</code></pre>
 
+<p class="key-fact keep-in-present"><strong>15×</strong> buffered writes over fsync'd writes on one laptop: the price of durability, and the number Lab 7 is built around</p>
+
 <p><strong>Now change something.</strong> <code>BLOCK_SIZE</code> in <code>measure_io.py</code>
 is 4096. Set it to 512, run, then set it to 65536 and run again. Report both rates and the ratio
 at each size, and say which of the two rates moved more and why: the answer tells you whether
@@ -517,28 +595,37 @@ A database cannot fsync every page it touches and stay usable, yet it promises d
 every commit. The escape from that trap is called a write-ahead log, and the number you just
 measured is why it exists.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Every write-heavy job you run pays this layer's prices</h3>
 
-<p>You will not write another file manager, but every write-heavy job you run pays this
-layer's prices. A training job that dies partway through writing a CSV leaves whatever the OS page
-cache had flushed, cut off at an arbitrary byte, so the rerun has to start from a clean file:
-nothing on disk records where the good bytes end. A model checkpoint is no different: after
-<code>torch.save</code> returns, your guarantee is the <code>sync=False</code> one unless something
-called <code>fsync</code>, which is why careful checkpoint code writes a temporary file, fsyncs it,
-and renames it over the old one. The ratio you just measured is what a pipeline gives up when it
-insists on durability per record instead of per batch, and it is the reason every bulk loader
-(Postgres <code>COPY</code>, or one transaction wrapped around many <code>INSERT</code>s) groups
-thousands of writes under a single fsync. Parquet's row groups are this lab's blocks at a larger
-size: a fixed chunk at a known offset that a reader can seek to directly, which is how
-<code>pyarrow</code> skips a row group whose min and max statistics rule it out, where a CSV reader
-has to read the whole file. When DuckDB or Postgres reports that a query read some number of
-pages, each page is a <code>BlockId</code>.</p>
+<p class="keep-in-present">You will not write another file manager, but every write-heavy job you run pays this
+layer's prices.</p>
+
+<table>
+  <thead><tr><th>Where you meet it</th><th>What this layer's price looks like there</th></tr></thead>
+  <tbody>
+    <tr><td>A training job writing a CSV</td><td>If it dies partway through, the file holds whatever the OS page
+    cache had flushed, cut off at an arbitrary byte, so the rerun has to start from a clean file:
+    nothing on disk records where the good bytes end.</td></tr>
+    <tr><td>A model checkpoint</td><td>After <code>torch.save</code> returns, your guarantee is the
+    <code>sync=False</code> one unless something called <code>fsync</code>, which is why careful checkpoint
+    code writes a temporary file, fsyncs it, and renames it over the old one.</td></tr>
+    <tr><td>A bulk loader (Postgres <code>COPY</code>, or one transaction wrapped around many
+    <code>INSERT</code>s)</td><td>The ratio you just measured is what a pipeline gives up when it insists on
+    durability per record instead of per batch, so every bulk loader groups thousands of writes under a
+    single fsync.</td></tr>
+    <tr><td>Parquet row groups</td><td>This lab's blocks at a larger size: a fixed chunk at a known offset
+    that a reader can seek to directly, which is how <code>pyarrow</code> skips a row group whose min and
+    max statistics rule it out, where a CSV reader has to read the whole file.</td></tr>
+    <tr><td>DuckDB or Postgres reporting pages read</td><td>Each page a query reads is a
+    <code>BlockId</code>.</td></tr>
+  </tbody>
+</table>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p>Due <strong>Thursday Sep 3 at class start</strong>, submitted per the course submission
-instructions (Canvas/Gradescope link on the course home).</p>
+<p class="keep-in-present"><strong>Submit</strong> <code>file_manager.py</code> <strong>on Gradescope</strong> (link on the
+course home) <strong>by Thursday Sep 3 at class start</strong>.</p>
 
 <h3>Deliverables</h3>
 <ul>

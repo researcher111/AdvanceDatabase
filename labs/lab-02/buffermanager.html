@@ -5,7 +5,7 @@
 <title>Lab 2 · Buffer Manager · microdb part 2</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -36,12 +36,14 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 2 · Thursday September 3, 2026 · microdb part 2 of 7</div>
   <h1>Buffer Manager</h1>
-  <div class="subtitle">A fixed pool of frames, two verbs, and the hit rate that decides everything.</div>
+  <div class="subtitle">Your microdb reads the disk for every page it touches; a cache fixes that only when its hit rate wins, and today you will watch a 49-frame pool win 0.0% of the time.</div>
   <div class="byline">Follows Lecture 2 (Memory &amp; the Buffer Pool) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 10 at class start</div>
 </header>
 
 <p class="lede">
-Today microdb stops touching the disk directly. Every page access from this lab forward goes
+Every page your Lab 1 microdb reads is a disk read, even the block it read a moment ago, and
+the obvious fix, keeping recent pages in memory, introduces a bug that returns wrong answers
+without ever raising. Today microdb stops touching the disk directly. Every page access from this lab forward goes
 through the buffer manager you build: a fixed set of memory frames, a pin/unpin protocol, LRU
 eviction, and <span class="gloss" data-gloss="write-back">write-back</span> of dirty pages.
 Four methods, ten tests, and at the end, a measurement with a cliff in it that most
@@ -65,7 +67,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Pin, poke, evict</h2>
+<h2 id="try-it">Every rule you'll code fits in three frames</h2>
 
 <p>This is the exact machine you're about to build: 3 frames, 6 disk blocks, every rule
 live. Select a block, then drive the protocol by hand: pin it, modify it, unpin it, and watch
@@ -107,12 +109,12 @@ another word.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">Why pin/unpin exists</h2>
+<h2 id="big-idea">One hazard explains every rule: never evict a pinned frame</h2>
 
 <p>Before the code, the protocol. It exists because of one hazard, and once you can name
 it, every rule in this lab follows.</p>
 
-<p>The hazard: between your <code>get_page</code> and your read, <em>someone else's miss</em>
+<p class="keep-in-present">The hazard: between your <code>get_page</code> and your read, <em>someone else's miss</em>
 evicts your frame and loads a different block into the same memory. Your reference still
 points at the frame; the frame no longer holds your data. No exception, no warning, just
 wrong answers. The fix is a lease: <strong>pin</strong> marks the frame in-use (eviction must
@@ -122,7 +124,7 @@ frame</em>) is what the tests enforce most fiercely, because it's the one whose 
 corrupts data silently.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">The contract</h2>
+<h2 id="the-api">You write four methods; the tests check five rules literally</h2>
 
 <p>You implement four methods; the frame class (<code>Buffer</code>) and its flush/load
 machinery ship complete. Hover each line, then keep the LRU spec table beside you while
@@ -239,11 +241,15 @@ seeded):</p>
         50 |         50.0% |           97.5%
         55 |         50.0% |           97.5%</code></pre>
 
-<p><strong>Now change something.</strong> <code>hotset_workload</code> in
+<p class="key-fact keep-in-present"><strong>0.0%</strong> scan hit rate with 49 of the file's 50 blocks cached; one more frame and it jumps to 50%</p>
+
+<p class="keep-in-present"><strong>Now change something.</strong> <code>hotset_workload</code> in
 <code>measure_hits.py</code> builds its hot set with <code>hot = list(range(5))</code>. Change it to
 <code>list(range(10))</code>, then add pool sizes to <code>POOL_SIZES</code> until you find the
 smallest pool where the hot-set rate first crosses 95%. Report that pool size, the 5-block rate at
 the same size from the reference table, and whether the scan column changed at all.</p>
+
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Caching 98% of the file bought exactly nothing</h3>
 
 <p class="keep-in-present">Read the scan column slowly: <strong>0.0% at 49 frames, 50% at
 50</strong>. Caching 98% of the file bought exactly nothing, because LRU evicts each block one
@@ -252,7 +258,18 @@ step before the scan returns to it. Meanwhile the hot set, whose
 with a pool a tenth the size. Which column your workload resembles matters more than any
 tuning parameter you will ever set.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Every tool in your pipeline has this pool, cliff included</h3>
+
+<table>
+  <thead><tr><th>Where you meet it</th><th>In buffer-pool terms</th></tr></thead>
+  <tbody>
+    <tr><td><code>pd.read_parquet</code> on a file larger than RAM</td><td>pandas asks for every block and keeps all of them (<code>MemoryError</code>); DuckDB pulls blocks through a small pool and releases each one, so it finishes</td></tr>
+    <tr><td>Spark <code>.cache()</code> / <code>.persist()</code></td><td>pins; when more is pinned than fits, Spark drops partitions and recomputes them where your pool raises <code>BufferAbortError</code></td></tr>
+    <tr><td>Second run of a notebook cell that reads a large file</td><td>the OS page cache is a buffer pool, and the blocks are still in it from the first run</td></tr>
+    <tr><td>Feature store serving online predictions</td><td>a hot-set workload by design: a few thousand active users get almost every read from a pool that is a small fraction of the table</td></tr>
+    <tr><td>Nightly backfill scanning the whole table through the same pool</td><td>the scan cliff in production: it evicts the hot rows, and online lookups miss until they are read back in; Postgres routes large scans through a small ring of frames for exactly this reason</td></tr>
+  </tbody>
+</table>
 
 <p>The scan column explains why <code>pd.read_parquet</code> on a file larger than RAM dies
 with <code>MemoryError</code> while DuckDB reading the same file finishes: pandas asks for every
@@ -273,8 +290,8 @@ reason.</p>
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p>Due <strong>Thursday Sep 10 at class start</strong>, submitted per the course submission
-instructions.</p>
+<p class="keep-in-present"><strong>Submit <code>buffer_manager.py</code> to Gradescope, per the course submission
+instructions, by Thursday Sep 10 at class start.</strong> One file; the harness score you see locally is the grade.</p>
 
 <h3>Deliverables</h3>
 <ul>

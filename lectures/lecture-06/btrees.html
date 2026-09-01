@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -15,15 +15,16 @@
   <div class="toc-title">Lecture 6</div>
   <ul>
     <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#problem">Finding one row in a million</a></li>
-    <li><a href="#try-it">Grow a B+ tree</a></li>
-    <li><a href="#anatomy">Anatomy of the tree</a></li>
-    <li><a href="#split">The split: one move, repeated</a></li>
-    <li><a href="#fanout">Fan-out is the superpower</a></li>
-    <li><a href="#costs">What indexes cost</a></li>
-    <li><a href="#thursday">On Thursday you build it</a></li>
+    <li><a href="#problem">A scan reads every row</a></li>
+    <li><a href="#try-it">Grow a tree live</a></li>
+    <li><a href="#anatomy">Leaves hold the data</a></li>
+    <li><a href="#split">One move keeps balance</a></li>
+    <li><a href="#fanout">Fan-out makes it shallow</a></li>
+    <li><a href="#costs">Every index costs writes</a></li>
+    <li><a href="#thursday">Thursday you build it</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
+    <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -38,12 +39,13 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 6 · Tuesday September 29, 2026</div>
   <h1>B+ Trees from First Principles</h1>
-  <div class="subtitle">The forty-year-old data structure that finds one row in a billion by reading four nodes<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, Boeing Scientific Research Laboratories Report No. 20, 1970)">1</a></sup>.</div>
+  <div class="subtitle">Your engine finds one row by reading every row. How does a real database find one in a billion by reading four nodes?<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, Boeing Scientific Research Laboratories Report No. 20, 1970)">1</a></sup></div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-Your engine can answer any query, by reading everything. Today we fix that. The B+ tree is
+Your engine can find one row only one way: read every row, then read them all again for
+the next lookup. Today we fix that. The B+ tree is
 a map from values to <span class="gloss" data-gloss="rid-recall">RIDs</span> whose height
 grows only logarithmically with the number of rows, and with a huge base (about 200 children per node), so a point lookup touches a handful of nodes where a
 scan touches them all. One structural move (<em>split the full node, push the middle key
@@ -71,23 +73,30 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p>Quiz first, then the structure that makes databases feel instant.</p>
 
+<p class="keep-in-present">To find one student's row, your Lab 3 engine reads all 100,000 rows across 294 blocks,
+and reads all 294 again for the next lookup. Postgres finds one row in a billion by reading
+four nodes. Today: how, and what it costs.</p>
+
 <ol class="agenda">
   <li><strong>Quiz 5</strong>: parsing &amp; planning (10 min, first thing).</li>
-  <li><strong>Finding one row in a million</strong>: what a scan wastes, exactly.</li>
-  <li><strong>Grow a B+ tree</strong>: inserts and splits, live and by hand.</li>
-  <li><strong>Anatomy</strong>: leaves hold data, internal nodes hold directions.</li>
-  <li><strong>The split</strong>: one move; balance falls out for free.</li>
-  <li><strong><span class="gloss" data-gloss="fanout">Fan-out</span></strong>: why real trees are four levels tall, not forty.</li>
-  <li><strong>The bill</strong>: what every index costs on every write.</li>
+  <li><strong>Why scans lose</strong>: a scan pays for every row to find one.</li>
+  <li><strong>Grow a tree live</strong>: watch it split and stay level.</li>
+  <li><strong>The shape</strong>: leaves hold data, internal nodes hold only directions.</li>
+  <li><strong>The split</strong>: one move, push the middle key up, and the tree stays balanced.</li>
+  <li><strong>Why it stays shallow</strong>: <span class="gloss" data-gloss="fanout">fan-out</span> 200 makes a billion rows a four-level tree.</li>
+  <li><strong>The bill</strong>: every index is paid for on every write.</li>
+  <li><strong>Thursday</strong>: you build it in four methods.</li>
 </ol>
 
 <p class="keep-in-present">Today's claim: <strong>an index is a map from values to RIDs</strong>;
 everything else is keeping that map balanced on disk.</p>
 
 <!-- ============================================================ -->
-<h2 id="problem">Finding one row in a million</h2>
+<h2 id="problem">A scan pays for every row to find one</h2>
 
-<h3 class="new-slide" data-kicker="Finding one row in a million">The contenders</h3>
+<p class="key-fact keep-in-present"><strong>294 blocks</strong> is what your Lab 3 scan reads to find one row in 100,000, and it reads all 294 again for the next lookup</p>
+
+<h3 class="new-slide" data-kicker="The problem">Only the B+ tree is good at all three jobs</h3>
 
 <table>
   <thead><tr><th>Scheme</th><th>Point lookup</th><th>Insert</th><th>Range scan</th><th>Verdict</th></tr></thead>
@@ -102,7 +111,7 @@ everything else is keeping that map balanced on disk.</p>
 <p class="keep-in-present">The B+ tree is the structure that refuses to be bad at anything,
 which is why <em>every</em> relational engine defaults to it<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 11.2. Index Types">3</a></sup>.</p>
 
-<h3 class="new-slide" data-kicker="Finding one row in a million">An index is a second road</h3>
+<h3 class="new-slide" data-kicker="The problem">An index is a second road</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The heap</span><span>stays exactly as Lab 3 left it: dumb, unordered, insert-friendly. Nothing about the table changes.</span></div>
@@ -112,7 +121,7 @@ which is why <em>every</em> relational engine defaults to it<sup class="src"><a 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Grow a B+ tree</h2>
+<h2 id="try-it">The tree grows by splitting, and every leaf stays level</h2>
 
 <p>Insert keys and watch the tree respond, especially the moment a node fills. Run the
 scripted insert of the pinned gpa values first, then feed it your own keys.</p>
@@ -138,7 +147,7 @@ scripted insert of the pinned gpa values first, then feed it your own keys.</p>
   height. That count is the entire performance story.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Grow a B+ tree">What just happened</h3>
+<h3 class="new-slide" data-kicker="The live tree">You saw splits; you never saw a rebalancing pass</h3>
 
 <table>
   <thead><tr><th>Script</th><th>Splits</th><th>Height</th><th>The moment to replay</th></tr></thead>
@@ -152,7 +161,7 @@ scripted insert of the pinned gpa values first, then feed it your own keys.</p>
 rebalancing pass because there isn't one: the split itself keeps the tree balanced, as the split section shows.</p>
 
 <!-- ============================================================ -->
-<h2 id="anatomy">Anatomy of the tree</h2>
+<h2 id="anatomy">Leaves hold the data, internal nodes hold only directions</h2>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Leaves</span><span>hold the actual index entries, <code>(key, RID)</code> pairs in sorted order, and a <code>next</code> pointer to the right-hand sibling. <strong>All data lives at the bottom.</strong></span></div>
@@ -161,7 +170,7 @@ rebalancing pass because there isn't one: the split itself keeps the tree balanc
   <div class="lc-row"><span class="lc-k">The <span class="gloss" data-gloss="invariant">invariant</span></span><span>every leaf is the same distance from the root, always. Not by luck: the split maintains it, as the next section shows.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="Anatomy of the tree">A search, traced on the pinned tree</h3>
+<h3 class="new-slide" data-kicker="Leaves and directions">A search touches one node per level, nothing else</h3>
 
 <pre class="equation"><code>after inserting gpas 39, 31, 37, 28, 36, 34:        [ 36 ]            ← root (internal)
                                                    /      \
@@ -172,7 +181,7 @@ search(37):                            [28 31 34] → [36 37 39]        ← leav
 <p class="keep-in-present">Two comparisons at the root's routing key, one leaf, done. The same
 two-step dance at every scale; only the height changes, and the height barely changes.</p>
 
-<h3 class="new-slide" data-kicker="Anatomy of the tree">Ranges: the chain pays off</h3>
+<h3 class="new-slide" data-kicker="Leaves and directions">Ranges: descend once, then walk the chain</h3>
 
 <pre class="equation"><code>range(31, 37) on the pinned tree:
 
@@ -186,9 +195,12 @@ indexed column, and "the last 30 days" queries are cheap, and why hash indexes, 
 can never serve them.</p>
 
 <!-- ============================================================ -->
-<h2 id="split">The split: one move, repeated</h2>
+<h2 id="split">One move keeps every leaf at the same depth</h2>
 
-<h3 class="new-slide" data-kicker="The split">The move, precisely</h3>
+<p class="keep-in-present">The whole algorithm: split the full node, push the middle key up, and make a new root
+when there is no parent. Balance is not a separate step; it falls out of that one move.</p>
+
+<h3 class="new-slide" data-kicker="The split">Leaves copy the middle key up; internal nodes move it</h3>
 
 <table>
   <thead><tr><th></th><th>Leaf split</th><th>Internal split</th></tr></thead>
@@ -204,7 +216,7 @@ can never serve them.</p>
 level deeper at the same instant, so the same-depth invariant can't break. Trees that grow at
 the leaves (like binary search trees) can go lopsided; this one structurally cannot<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, 1970/1972)">1</a></sup>.</p>
 
-<h3 class="new-slide" data-kicker="The split">The cascade, hand-traced</h3>
+<h3 class="new-slide" data-kicker="The split">Splits cascade upward, and a root split adds a level</h3>
 
 <pre class="equation"><code>insert 5 into a full tree of 1..4:                 root [3] appears
 [1 2 3 4] + 5  →  split at mid=2  →   [1 2]  →  [3 4 5]      height 1 → 2
@@ -217,7 +229,23 @@ insert 8, 9:           [5 6 7] fills... root [3 5 7] → root fills next split
 (only the nodes on the path from the root to the inserted key can change; nothing else is touched). Thursday's harness inserts 25 scattered keys and checks every
 invariant after all the splits have finished.</p>
 
-<h3 class="new-slide" data-kicker="The split">Why the middle key?</h3>
+<h3 class="new-slide" data-kicker="The split">Check yourself: does 6 split? Does 7?</h3>
+
+<div class="exercise">
+  <span class="ex-label">Check yourself · run the cascade</span>
+  <p>The hand-traced tree stands at root <code>[3]</code> over leaves <code>[1 2]</code> and
+  <code>[3 4 5]</code> (capacity 4 per node). Insert <strong>6</strong>, then <strong>7</strong>.
+  For each: does a split happen, what moves up, and what does the root hold afterward?</p>
+  <details><summary>Show answer</summary>
+  <p>Insert 6: the right leaf becomes <code>[3 4 5 6]</code>, full but legal, <strong>no
+  split</strong>. Insert 7: now it overflows; split at the middle key 5 into <code>[3 4]</code>
+  and <code>[5 6 7]</code>, and a <em>copy</em> of 5 goes up: root <code>[3 5]</code>, three
+  leaves, height unchanged. If you moved 5 up without leaving it in a leaf, key 5 just became
+  unfindable by a range scan; the copy-vs-move distinction is Thursday's subtlest test.</p>
+  </details>
+</div>
+
+<h3 class="new-slide" data-kicker="The split">Splitting at the middle keeps every node half full</h3>
 
 <table>
   <thead><tr><th>Pivot choice</th><th>Result</th><th>Long-run <span class="gloss" data-gloss="occupancy">occupancy</span></th></tr></thead>
@@ -232,9 +260,11 @@ its <em>quality</em> suffers: more nodes and more height than the same keys need
 catch exactly this: correctness tests plus a quality bound.</p>
 
 <!-- ============================================================ -->
-<h2 id="fanout">Fan-out is the superpower</h2>
+<h2 id="fanout">Fan-out 200 makes a billion rows a four-level tree</h2>
 
-<h3 class="new-slide" data-kicker="Fan-out is the superpower">The height table to remember</h3>
+<p class="key-fact keep-in-present"><strong>4 levels</strong> hold a billion rows when every node has 200 children, so a lookup reads four nodes</p>
+
+<h3 class="new-slide" data-kicker="Fan-out and height">Height is a logarithm with base 200</h3>
 
 <div class="math">
 \[ \text{height} \;\approx\; \log_{\text{fan-out}} n \]
@@ -253,21 +283,7 @@ catch exactly this: correctness tests plus a quality bound.</p>
 with base 200. And the base is 200 <em>because</em> nodes are sized to Lab 1's blocks: the
 tree is shaped by the disk it lives on<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.</p>
 
-<div class="exercise">
-  <span class="ex-label">Check yourself · run the cascade</span>
-  <p>The hand-traced tree stands at root <code>[3]</code> over leaves <code>[1 2]</code> and
-  <code>[3 4 5]</code> (capacity 4 per node). Insert <strong>6</strong>, then <strong>7</strong>.
-  For each: does a split happen, what moves up, and what does the root hold afterward?</p>
-  <details><summary>Show answer</summary>
-  <p>Insert 6: the right leaf becomes <code>[3 4 5 6]</code>, full but legal, <strong>no
-  split</strong>. Insert 7: now it overflows; split at the middle key 5 into <code>[3 4]</code>
-  and <code>[5 6 7]</code>, and a <em>copy</em> of 5 goes up: root <code>[3 5]</code>, three
-  leaves, height unchanged. If you moved 5 up without leaving it in a leaf, key 5 just became
-  unfindable by a range scan; the copy-vs-move distinction is Thursday's subtlest test.</p>
-  </details>
-</div>
-
-<h3 class="new-slide" data-kicker="Fan-out is the superpower">Drag the base of the logarithm</h3>
+<h3 class="new-slide" data-kicker="Fan-out and height">Fan-out 2 costs 27 levels; fan-out 200 costs four</h3>
 
 <div class="viz" id="viz-fanout">
   <div class="viz-title">fan-out vs height · the whole argument in one slider</div>
@@ -289,7 +305,7 @@ tree is shaped by the disk it lives on<sup class="src"><a href="#src-4" title="P
   crush the height. Nodes are page-sized precisely to make the base huge.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Fan-out is the superpower">The buffer pool eats the top</h3>
+<h3 class="new-slide" data-kicker="Fan-out and height">A point lookup is one disk read, steady-state</h3>
 
 <table>
   <thead><tr><th>Tree level (fan-out 200, 100M rows)</th><th>Nodes</th><th>Where it lives</th></tr></thead>
@@ -306,7 +322,7 @@ tree is shaped by the disk it lives on<sup class="src"><a href="#src-4" title="P
 thousand.</p>
 
 <!-- ============================================================ -->
-<h2 id="costs">What indexes cost</h2>
+<h2 id="costs">Every index is paid for on every write</h2>
 
 <p class="keep-in-present">Nothing in an engine is free, and the index bill arrives on every write; the
 polite name is <span class="gloss" data-gloss="write-amplification">write
@@ -326,7 +342,7 @@ amplification</span>:</p>
 on constantly, and drop every index you can't justify</strong>, because each one is paid for on every write. The optimizer's job (week 9) is
 deciding per-query whether the index you built is actually worth using.</p>
 
-<h3 class="new-slide" data-kicker="What indexes cost">When the index loses</h3>
+<h3 class="new-slide" data-kicker="The index bill">An index on an unselective predicate loses to the scan</h3>
 
 <pre class="equation"><code>WHERE score > 10        keeps ~99% of rows (low selectivity)
 
@@ -337,7 +353,7 @@ deciding per-query whether the index you built is actually worth using.</p>
 per query, from estimated selectivity, is precisely the optimizer's job, and week 9 builds
 that judgment.</p>
 
-<h3 class="new-slide" data-kicker="What indexes cost">The flip side: the covering index</h3>
+<h3 class="new-slide" data-kicker="The index bill">A covering index answers from the index alone</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The trick</span><span>store the columns a hot query needs <em>inside</em> the index entries, then answer from the index alone, zero heap visits.</span></div>
@@ -347,7 +363,7 @@ that judgment.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="thursday">On Thursday you build it</h2>
+<h2 id="thursday">Thursday you build it in four methods</h2>
 
 <p>Four methods over a provided Node class, and then your index answers queries against the
 real heap file, via the RIDs Lab 3 promised would stay stable.</p>
@@ -362,7 +378,7 @@ real heap file, via the RIDs Lab 3 promised would stay stable.</p>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="On Thursday you build it">Before class checklist</h3>
+<h3 class="new-slide" data-kicker="Thursday's lab">Four boxes to tick before Thursday</h3>
 
 <ul class="checklist">
   <li>☐ Lab 5 submitted: the starter ships reference Labs 1–5, including a TableScan that
@@ -388,9 +404,18 @@ real heap file, via the RIDs Lab 3 promised would stay stable.</p>
   one structure.</li>
 </ul>
 
+<p class="key-fact keep-in-present"><strong>294 blocks</strong> per scan lookup today · <strong>4 levels</strong> for a billion rows with fan-out 200</p>
+
 <p class="keep-in-present"><strong>Thursday:</strong> build it, then measure how much faster an index lookup is than a scan (about 4,000×).
 <strong>Next class is Thursday Oct 8</strong> (Reading Days eat Tuesday): transactions and
 the write-ahead log: what COMMIT actually promises. Quiz 6 lands Tue Oct 13.</p>
+
+<p class="keep-in-present"><strong>Before Thursday (Lab 6, October 1):</strong></p>
+<ul>
+  <li><strong>Read</strong> the three lines of <code>move_to_rid()</code> in the starter TableScan (Sciore ch. 12 if you want the full split ritual).</li>
+  <li><strong>Run</strong> <code>python3 test_btree.py</code> on the eight Lab 6 starter files until it prints <strong>0/9 passed</strong>.</li>
+  <li><strong>Bring</strong> your paper drawing of 1, 2, 3, 4, 5 inserted into an empty ORDER-4 tree; the harness's second test checks it.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

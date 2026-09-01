@@ -5,7 +5,7 @@
 <title>Lecture 14 · Bigtable, LSM Trees &amp; NoSQL · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -14,17 +14,18 @@
   <div class="toc-title">Lecture 14</div>
   <ul>
     <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#problem">Google's 2004 problem</a></li>
-    <li><a href="#model">The Bigtable data model</a></li>
+    <li><a href="#problem">The 2004 problem</a></li>
+    <li><a href="#model">A sorted map, not a table</a></li>
     <li><a href="#tablets">Tablets</a></li>
-    <li><a href="#lsm">The LSM tree</a></li>
+    <li><a href="#lsm">Every write is an append</a></li>
     <li><a href="#try-it">Run the write path</a></li>
-    <li><a href="#reads">The read path</a></li>
-    <li><a href="#lsm-vs-btree">LSM vs B+ tree</a></li>
-    <li><a href="#cap">Replication &amp; CAP</a></li>
-    <li><a href="#descendants">The descendants</a></li>
+    <li><a href="#reads">Reads pay, then get rescued</a></li>
+    <li><a href="#lsm-vs-btree">One trade, two poles</a></li>
+    <li><a href="#cap">Refuse, or serve stale</a></li>
+    <li><a href="#descendants">Bigtable rearranged</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
+    <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -39,12 +40,13 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 14 · Tuesday November 24, 2026</div>
   <h1>Google's Playbook: Bigtable, LSM Trees &amp; NoSQL</h1>
-  <div class="subtitle">How to accept a million writes a second on machines that keep dying, and why every piece of the answer is a course topic you already own.</div>
+  <div class="subtitle">Google needed a store that took a million writes a second on machines that kept dying, and no relational database on one box could: what did they give up, and why did everyone copy it?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-In 2006 Google described the store behind web search, Maps, and Gmail: Bigtable<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>. Read today,
+By 2004 Google's crawler was writing faster than any single database server could absorb, on
+hardware that failed somewhere every day, and the answer was not a bigger server. In 2006 Google described the store behind web search, Maps, and Gmail: Bigtable<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>. Read today,
 the paper is mostly a collection of ideas this course has already covered: a <span class="gloss" data-gloss="wal">WAL</span>, write-ahead log (week 7), a sorted in-memory buffer flushed to immutable
 sorted files (your B+ tree's ideas, rearranged), range partitioning (last week), and caching
 (week 2), all riding on <span class="gloss" data-gloss="commodity">commodity machines</span>
@@ -75,6 +77,10 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <p>Quiz 11 first (MapReduce, Spark &amp; Ray), then the write-optimized half of the storage
 world.</p>
 
+<p class="keep-in-present">The problem in one line: a crawler that writes a million rows a second
+onto machines that die daily. A B+ tree pays a random disk write per insert, so it cannot keep
+up; a single server cannot survive the failures. Something has to be organized around the write.</p>
+
 <ol class="agenda">
   <li><strong>Google's 2004 problem</strong>: why sharded MySQL wasn't the answer<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>.</li>
   <li><strong>The Bigtable model</strong>: a sorted key-value map that is presented as a table but is not a relational one.</li>
@@ -90,9 +96,11 @@ poles of one trade</strong> (organize on write (pay before reads) or organize la
 during reads)), and every storage engine you'll ever meet sits somewhere on that line.</p>
 
 <!-- ============================================================ -->
-<h2 id="problem">Google's 2004 problem</h2>
+<h2 id="problem">A B+ tree cannot absorb a million writes a second</h2>
 
-<h3 class="new-slide" data-kicker="Google's 2004 problem">The insight: writes love sequential, reads love sorted</h3>
+<p class="key-fact keep-in-present"><strong>1 random write per insert</strong> is what a B+ tree costs; at a million inserts a second that is the disk's entire budget spent before any read</p>
+
+<h3 class="new-slide" data-kicker="The 2004 problem">The insight: writes love sequential, reads love sorted</h3>
 
 <pre class="equation"><code>the tension:   fast writes  want  append-only, sequential I/O     (never seek, never overwrite)
                fast reads   want  sorted, indexed structures      (binary search, range scans)
@@ -104,7 +112,7 @@ Bigtable's bet: for crawl/serving workloads, take the LSM side, and make reads
 tolerable with memory, sorted files, and filters.</code></pre>
 
 <!-- ============================================================ -->
-<h2 id="model">The Bigtable data model</h2>
+<h2 id="model">Bigtable is a sorted map wearing a table's clothes</h2>
 
 <p class="keep-in-present">The paper's own sentence, unpacked: "a sparse, distributed,
 persistent, multidimensional sorted map." Not a relational table, a map<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>:</p>
@@ -117,7 +125,7 @@ timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, rea
 
 <p class="keep-in-present">Read the map signature one coordinate at a time. The <strong>row key</strong> is an arbitrary string, and Bigtable keeps every row of a table sorted by it, so keys that share a prefix (all the pages of one domain, once the URL is reversed) sit next to each other on disk. A <strong>column</strong> is named in two parts: the column family, such as <code>anchor</code>, is declared up front and there are only a handful per table; the qualifier after the colon, such as <code>cnnsi.com</code>, is free-form and can be created by any write, so a row can have as many columns as it has data. The <strong>timestamp</strong> is the third coordinate: a write never replaces a cell, it adds a new version, and a read chooses which version it wants (usually the newest). The value is an uninterpreted byte string; Bigtable never looks inside it.</p>
 
-<h3 class="new-slide" data-kicker="The Bigtable data model">What each departure buys</h3>
+<h3 class="new-slide" data-kicker="The data model">What each departure buys</h3>
 
 <table>
   <thead><tr><th>Departure from SQL</th><th>What it buys</th><th>Course echo</th></tr></thead>
@@ -130,7 +138,7 @@ timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, rea
 </table>
 
 <!-- ============================================================ -->
-<h2 id="tablets">Tablets</h2>
+<h2 id="tablets">Tablets are last week's range partitions, productized</h2>
 
 <p class="keep-in-present">Because rows are sorted, the table splits into contiguous key
 ranges: <strong>tablets</strong>, ~100–200&nbsp;MB each. A tablet is last week's range
@@ -167,7 +175,7 @@ key design; reversing the URL so that all pages of one domain sit together in th
 </div>
 
 <!-- ============================================================ -->
-<h2 id="lsm">The LSM tree</h2>
+<h2 id="lsm">The LSM tree turns every write into an append</h2>
 
 <p class="keep-in-present">Inside one tablet server, the write path, the part the whole
 NoSQL generation inherited:</p>
@@ -217,7 +225,7 @@ SSTables, compact, and then look keys up to see where reads must search.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="reads">The read path</h2>
+<h2 id="reads">Reads pay for the writes' cheapness, then get rescued</h2>
 
 <p class="keep-in-present">A key can live anywhere from RAM to the oldest SSTable, so
 <code>get(k)</code> checks newest-to-oldest and returns the first hit. Three tools keep that
@@ -258,7 +266,9 @@ Insert keys, then query keys you never inserted, and keep querying until the fil
 </div>
 
 <!-- ============================================================ -->
-<h2 id="lsm-vs-btree">LSM vs B+ tree</h2>
+<h2 id="lsm-vs-btree">Organize on write or organize later: one trade, two poles</h2>
+
+<p class="key-fact keep-in-present"><strong>2 poles, 1 trade</strong>: the B+ tree sorts before reads and pays on every write; the LSM tree appends now and sorts later, and pays on every read</p>
 
 <table>
   <thead><tr><th></th><th>B+ tree (microdb, Postgres, MySQL)</th><th>LSM (Bigtable, Cassandra, RocksDB)</th></tr></thead>
@@ -277,9 +287,11 @@ are one append. Neither wins in general; the <em>workload</em> picks. You now ow
 poles: you built one and just drove the other.</p>
 
 <!-- ============================================================ -->
-<h2 id="cap">Replication &amp; CAP</h2>
+<h2 id="cap">A partition forces a choice: refuse, or serve stale</h2>
 
-<h3 class="new-slide" data-kicker="Replication &amp; CAP">CAP</h3>
+<p class="keep-in-present">Replicas that cannot talk to each other can either stop answering until they agree again or keep answering with data that may be out of date. There is no third option during the partition, and the choice is made per application, not per slogan.</p>
+
+<h3 class="new-slide" data-kicker="Replication and CAP">CAP</h3>
 
 <p class="keep-in-present">CAP stands for Consistency, Availability, and Partition tolerance. A replicated system keeps copies of the same data on several machines. A <strong>partition</strong> is a network failure that splits those machines into groups that can no longer reach each other, while each group is still up and still receiving requests. While that lasts, a replica that cannot hear from the others has only two options when a request arrives: answer from what it has, which may be stale, or refuse until it can confirm it holds the latest write. That forced choice, and only that, is what the theorem is about.</p>
 
@@ -295,7 +307,7 @@ No partition, no choice: normal operation can have both. "P" isn't chosen; netwo
   AP lineage:  Dynamo, Cassandra, Riak<sup class="src"><a href="#src-6" title="Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)">6</a></sup>     (answer, then reconcile: <span class="gloss" data-gloss="eventual">eventual consistency</span>)</code></pre>
 
 <!-- ============================================================ -->
-<h2 id="descendants">The descendants</h2>
+<h2 id="descendants">Every wide-column store since is Bigtable rearranged</h2>
 
 <p class="keep-in-present">Nearly every NoSQL system of the 2006–2012 wave is an open-source reworking of one or both of two papers, Bigtable and Dynamo. The "no SQL, no joins, no transactions" slogans of that era have faded, but the LSM engine at the core of those systems has lasted:</p>
 
@@ -348,6 +360,16 @@ you engines, not brand names.</p>
 Tuesday (Dec 1):</strong> the last lecture: graph databases with a live Kuzu demo, and the
 course synthesis. Quiz 12 opens class: Bigtable, LSM &amp; NoSQL. Project workshop Thu
 Dec 3; reports Mon Dec 7; presentations Dec 8.</p>
+
+<p class="keep-in-present"><strong>1 random write per insert · 2 poles, 1 trade</strong>: the B+ tree pays
+on every write, the LSM tree on every read, and Bigtable chose the write side for a crawler.</p>
+
+<p class="keep-in-present"><strong>Before next Tuesday (Dec 1):</strong></p>
+<ul class="keep-in-present">
+  <li><strong>Read</strong> sections 1 to 6 of the Bigtable paper<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>; every mechanism in it now has a week number.</li>
+  <li><strong>Run</strong> the write-path widget above through one flush and one compaction, and note how many files a read has to check before and after.</li>
+  <li><strong>Bring</strong> your project's evaluation numbers for the Dec 3 workshop, and one question you want Quiz 12 to ask.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

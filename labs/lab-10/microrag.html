@@ -5,7 +5,7 @@
 <title>Lab 10 · micro-rag · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -13,12 +13,13 @@
 <aside class="toc">
   <div class="toc-title">Lab 10</div>
   <ul>
-    <li><a href="#try-it">Ask it anything</a></li>
-    <li><a href="#big-idea">The whole pipeline, one file</a></li>
-    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#try-it">Retrieval decides first</a></li>
+    <li><a href="#big-idea">Five stages, two yours</a></li>
+    <li><a href="#the-api">Format is the contract</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#real">Part 4 · Real papers</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -36,12 +37,14 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 10 · Thursday November 12, 2026</div>
   <h1>micro-rag · wire the pipeline</h1>
-  <div class="subtitle">Chunk, embed, index, retrieve, assemble: 200 lines of Python, one function per stage, graded by an eval set.</div>
+  <div class="subtitle">An LLM answers fluently from whatever chunks it is handed, right or wrong: the two stages that choose those chunks are yours to write today, and only an eval set can tell you whether they work.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-Tuesday's claim was that RAG is a database wearing an AI costume. Today you take the costume
+Hand a language model the wrong three chunks and it answers from them anyway, fluently and
+wrong, and nothing in the answer tells you the retrieval failed. Tuesday's claim was that RAG
+is a database wearing an AI costume. Today you take the costume
 off: a complete retrieval-augmented pipeline over a corpus that summarizes <em>this course</em>,
 importing Lab 9's <code>microvector</code> unchanged as its index. The chunker and embedder
 ship; the LLM call ships (mocked offline in <span class="gloss" data-gloss="echo-mode">echo
@@ -67,7 +70,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Ask it anything</h2>
+<h2 id="try-it">The retriever decides the answer before the model speaks</h2>
 
 <p>This widget runs the finished pipeline's retrieval stage in your browser: the same
 hashing, the same stop-word list, scores identical to the Python you're about to write.
@@ -107,7 +110,7 @@ Your job today is to make <code>python3 ask.py</code> produce exactly this.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">The whole pipeline, one file</h2>
+<h2 id="big-idea">Five stages fit in one file; two of them are yours</h2>
 
 <p class="keep-in-present"><code>micro_rag.py</code> is Tuesday's five-stage diagram as five
 callables, in reading order:</p>
@@ -141,7 +144,7 @@ instead of hiding it, and your project replaces this one function with a learned
 while keeping every other line.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">The contract</h2>
+<h2 id="the-api">The formats are the contract; close is not a format</h2>
 
 <table>
   <thead><tr><th>File</th><th>Ships as</th><th>What's inside</th></tr></thead>
@@ -329,6 +332,8 @@ Embedding 4000 abstracts with your hashed embedder (DIM=2048)...
    hashed  -  MiniLM  3   Users phrase questions differently from the passages that answer them;
    hashed  -  MiniLM  3   Can a similarity search index adapt how it partitions the space to the</code></pre>
 
+<p class="key-fact keep-in-present"><strong>0.30 vs 0.90</strong> hit@3 on 4,000 real abstracts: the same <code>Retriever</code> with hashed words versus MiniLM, on ten questions that paraphrase a paper without its title words</p>
+
 <p class="keep-in-present">Read the mini-eval before the top-3 lists. The hashed embedder finds
 three of the ten papers, and in each of those the question happened to share an exact word with
 the abstract (<em>join tree</em>, <em>snapshot</em>, <em>transaction log</em>). Where the
@@ -339,7 +344,9 @@ other. That difference is the entire case for a learned embedder, and it is meas
 It is also why your project's evaluation questions must be written by people who read the corpus,
 not generated from the titles.</p>
 
-<p><strong>Now change something.</strong> Set <code>DIM = 256</code> in <code>micro_rag.py</code>
+<h3 class="new-slide" data-kicker="Part 4 · Real papers">Now shrink DIM and measure what 700,000 words lose</h3>
+
+<p class="keep-in-present"><strong>Now change something.</strong> Set <code>DIM = 256</code> in <code>micro_rag.py</code>
 and re-run <code>measure_real.py</code>. The course corpus lost nine points of hit@3 at 256 in
 Part 3; report what the real corpus loses and explain why a vocabulary of 700,000 words is more
 sensitive to hash collisions than one of 3,000.</p>
@@ -347,8 +354,8 @@ sensitive to hash collisions than one of 3,000.</p>
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p>Due <strong>Thursday Nov 19 at class start</strong>. Submit <code>micro_rag.py</code> to
-Gradescope; the autograder runs the test harness, and that is the whole grade.</p>
+<p class="keep-in-present">Submit <code>micro_rag.py</code> to Gradescope, per the course submission instructions, by
+<strong>Thursday Nov 19 at class start</strong>. One file; the harness score you see locally is the grade.</p>
 
 <h3>Deliverables</h3>
 <ul>
@@ -360,6 +367,7 @@ Gradescope reports.</p>
 <h3>Discussion prompts (not graded)</h3>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
 are just not turned in. Bring your numbers and your answers to class, where we compare them.</p>
+<p class="key-fact keep-in-present"><strong>0.30 vs 0.90</strong> hit@3, hashed versus MiniLM on the real corpus: the number to bring</p>
 <ul>
   <li>The full <code>measure_rag.py</code> output plus
   written answers: (1)&nbsp;Which eval questions fail at DIM=256 but pass at 2048, and what

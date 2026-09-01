@@ -5,7 +5,7 @@
 <title>Lab 6 · The B+ Tree Index · microdb part 6</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -36,12 +36,13 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 6 · Thursday October 1, 2026 · microdb part 6 of 7</div>
   <h1>The B+ Tree Index</h1>
-  <div class="subtitle">Four methods, one split, and a 4,000× speedup you measure yourself.</div>
+  <div class="subtitle">Finding one row still means reading all 100,000: four methods and one split cut that to eleven nodes, a 4,000× speedup you measure yourself.</div>
   <div class="byline">Follows Lecture 6 (B+ Trees from First Principles) · in class: 75 min · aim to finish Build + Verify · due Thu Oct 8 at class start</div>
 </header>
 
 <p class="lede">
-Today microdb learns to find things. You build the B+ tree (search, insert, the split, and
+Until today, answering <code>uid = 77777</code> in microdb means reading all 100,000 rows to
+find the one that matches. Today microdb learns to find things. You build the B+ tree (search, insert, the split, and
 the chained range scan) keyed by field values and holding
 <span class="gloss" data-gloss="rid-stability">RIDs</span> into your real heap file. The
 provided <code>IndexSelectScan</code> then answers <code>uid = 77777</code> by jumping
@@ -65,7 +66,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Split by hand</h2>
+<h2 id="try-it">Leaves copy the middle key up; internal nodes move it</h2>
 
 <p>Before writing <code>_split</code>, perform it. This widget deals you overfull nodes; you
 choose what goes where. Get three in a row right and the code is transcription.</p>
@@ -102,15 +103,17 @@ choose what goes where. Get three in a row right and the code is transcription.<
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">Values → RIDs</h2>
+<h2 id="big-idea">The tree stores no rows, only RIDs into your heap</h2>
 
 <p>The tree stores no rows. Its leaves map field values to the
 <span class="gloss" data-gloss="rid-stability">stable addresses</span> Lab 3 gave every row,
 and the reference TableScan gained a three-line <code>move_to_rid()</code> so a scan can jump
-wherever the tree points. An index is a second, sorted road into the same heap.</p>
+wherever the tree points.</p>
+
+<p class="keep-in-present">An index is a second, sorted road into the same heap.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">The contract</h2>
+<h2 id="the-api">Four methods make the structure a structure</h2>
 
 <p>The Node class, the descend helper, the index builder, and <code>IndexSelectScan</code>
 ship complete. You write the four methods that make the structure a structure:</p>
@@ -201,6 +204,8 @@ index:  found 1 row · touched 11 tree nodes (height 11) + 1 heap block · 0.03 
 
 lookup speedup: 4,091x</code></pre>
 
+<p class="key-fact keep-in-present"><strong>4,091×</strong> one lookup by index over a full scan: 11 tree nodes instead of 100,000 rows</p>
+
 <p><strong>Now change something.</strong> <code>N_ROWS</code> in
 <code>measure_index.py</code> is <code>100_000</code>. Set it to <code>1_000_000</code> (the load
 takes longer) and report scan ms, index ms, tree height, and the speedup. Before you look, compute
@@ -211,20 +216,28 @@ with the row count and why the height barely moved.</p>
 and at real-page <span class="gloss" data-gloss="fanout">fan-out</span> the height drops from 11 to 3. This is the second of the course's two
 great speed tricks: week 2 cached the blocks; this week we stopped needing most of them.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · Measure">Where you'll meet this layer at work</h3>
+<h3 class="new-slide" data-kicker="Part 3 · Measure">CREATE INDEX is your tree; only equality and ranges descend it</h3>
 
-<p>The line you will type most often at work that touches this lab is
+<p class="keep-in-present">The line you will type most often at work that touches this lab is
 <code>CREATE INDEX ON features (user_id)</code>: a feature lookup that took 30 seconds because
 Postgres scanned the table takes 3 milliseconds because it descends a tree like yours, and nothing
-about your query changed. The index only helps when the <code>WHERE</code> clause is an equality
-or a range on the indexed column, because that is the only question a sorted tree can answer by
-descending; <code>WHERE lower(email) = ...</code>, <code>WHERE score * 2 &gt; 100</code>, or a
-<code>LIKE</code> with a leading wildcard all get a full scan even with an index on the column,
-and <code>EXPLAIN</code> will show you which happened. A composite index on
-<code>(user_id, event_time)</code> is one tree sorted by <code>user_id</code> first and
-<code>event_time</code> second, so it serves "this user's events in a time range" in one descent
-and is useless for "all users' events last Tuesday": column order in <code>CREATE INDEX</code> is
-the sort order of the tree. Every index you add costs a tree insert on every <code>INSERT</code>,
+about your query changed.</p>
+
+<p>The index only helps when the <code>WHERE</code> clause is an equality or a range on the
+indexed column, because that is the only question a sorted tree can answer by descending, and
+<code>EXPLAIN</code> will show you which happened:</p>
+
+<table>
+  <thead><tr><th>The query asks</th><th>With an index on the column</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><code>WHERE user_id = 77777</code>, or a range on <code>user_id</code></td><td>descends the tree</td><td>equality and range are the only questions a sorted tree answers by descending</td></tr>
+    <tr><td><code>WHERE lower(email) = ...</code>, <code>WHERE score * 2 &gt; 100</code>, <code>LIKE</code> with a leading wildcard</td><td>full scan anyway</td><td>the tree is sorted by the raw column, not by an expression on it</td></tr>
+    <tr><td>"this user's events in a time range", index on <code>(user_id, event_time)</code></td><td>one descent</td><td>a composite index is one tree sorted by <code>user_id</code> first, <code>event_time</code> second</td></tr>
+    <tr><td>"all users' events last Tuesday", same composite index</td><td>useless</td><td>column order in <code>CREATE INDEX</code> is the sort order of the tree</td></tr>
+  </tbody>
+</table>
+
+<p>Every index you add costs a tree insert on every <code>INSERT</code>,
 which is the build price you paid once here paid again per row, and why bulk loads drop indexes
 first and rebuild them after. The vector indexes in Lab 9 (HNSW, IVF) are different answers to
 the question your tree answers: how to find a few rows out of millions without touching most of
@@ -233,8 +246,8 @@ them, when the key is a vector of hundreds of floats and "equal" becomes "neares
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p>Due <strong>Thursday Oct 8 at class start</strong>, submitted per the course submission
-instructions.</p>
+<p class="keep-in-present"><strong>Submit <code>btree.py</code> to Gradescope, per the course submission
+instructions, by Thursday Oct 8 at class start.</strong> One file; the harness score you see locally is the grade.</p>
 
 <h3>Deliverables</h3>
 <ul>

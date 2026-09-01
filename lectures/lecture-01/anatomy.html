@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
@@ -24,6 +24,7 @@
     <li><a href="#thursday">On Thursday you build this</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
+    <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -38,12 +39,14 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 1 · Tuesday August 25, 2026</div>
   <h1>Anatomy of a Database</h1>
-  <div class="subtitle">What actually happens underneath a query, and the engine you're about to build.</div>
+  <div class="subtitle">Why does the same query take 50 µs, then 0.2 µs a second later, when nothing in the SQL changed?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-You have run thousands of queries. Today we open the box they disappeared into.
+You have run thousands of queries without ever being able to say why one took the time it did:
+the same <code>SELECT</code> costs 50 µs one moment and 0.2 µs the next, and nothing in the SQL
+explains the gap. Today we open the box the query disappeared into.
 This lecture walks one <code>SELECT</code> through every layer of a database engine:
 parser, planner, operators, <span class="gloss" data-gloss="buffer-pool">buffer pool</span>,
 disk. Then it lays out the plan for the rest of Act I: over the next seven Thursdays,
@@ -70,23 +73,27 @@ right below the sentence you're reading.
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
+<p class="keep-in-present">The problem in one run: your query touched two blocks and took 50 µs; the same
+query a second later took 0.2 µs. Nothing in the SQL explains why, and until you can, every slow
+query you will ever meet is a guess.</p>
+
 <p>One lecture, one arc: watch a query go through a real engine, understand why each piece
 it passed through has to exist, and leave with the build plan for making your own.</p>
 
 <ol class="agenda">
-  <li><strong>Watch it work</strong>: one query, all five layers, run twice.</li>
-  <li><strong>Why a database at all</strong>: exactly where pandas stops.</li>
-  <li><strong>The relational model, fast</strong>: relations, keys, and why <em>declarative</em> is a big deal.</li>
-  <li><strong>The five layers</strong>: the tour that maps the next seven weeks.</li>
-  <li><strong>Why disks shaped everything</strong>: the latency ladder and its two consequences.</li>
-  <li><strong>The microdb plan</strong>: seven Thursdays, one engine, starting in two days.</li>
+  <li><strong>Watch it</strong>: one query, run twice: 2 disk reads, then 0.</li>
+  <li><strong>Where pandas stops</strong>: four failures, each one a lab.</li>
+  <li><strong>Why the engine gets to choose</strong>: SQL says what, never how; plans 1000× apart.</li>
+  <li><strong>The five layers</strong>: the same stack in every engine, one layer per lab.</li>
+  <li><strong>The cost model</strong>: storage pays by the trip; count disk trips, nothing else.</li>
+  <li><strong>Your move</strong>: microdb, seven Thursdays, the file manager this Thursday.</li>
 </ol>
 
 <p class="keep-in-present">The course in one question: <strong>what is actually happening
 underneath the query?</strong></p>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Run a query through the machine</h2>
+<h2 id="try-it">The second run of a query never touches the disk</h2>
 
 <p>Before any definitions, watch the whole machine work. The widget below holds a tiny
 table of six students stored in two disk blocks, and one query. Press <strong>Play</strong>
@@ -138,7 +145,7 @@ then press <strong>Run again</strong> and watch what the second run does differe
   answers entirely from memory. Both facts will get whole lectures.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Run a query through the machine">What just happened</h3>
+<h3 class="new-slide" data-kicker="One query, twice">Whole blocks, not rows; a cache you build, not magic</h3>
 
 <p>Everything in this course is somewhere in that little animation. The parser and
 <span class="gloss" data-gloss="plan">planner</span> are weeks 4–5. The scan-select-project
@@ -160,13 +167,13 @@ blocks</strong>, not rows, and the second run is fast because of a <strong>cache
 build</strong>, not magic.</p>
 
 <!-- ============================================================ -->
-<h2 id="why-databases">Why not just pandas?</h2>
+<h2 id="why-databases">pandas fails in four places, and each failure is a lab</h2>
 
 <p class="keep-in-present">You already know a tool that answers questions about tables. It's called pandas, it's
 excellent, and this course is not here to talk you out of it. It's here to show you exactly
 where it stops.</p>
 
-<h3 class="new-slide" data-kicker="Why not just pandas?">Four ways the CSV dies</h3>
+<h3 class="new-slide" data-kicker="Where pandas stops">The CSV loses on memory, scale, two writers, and crashes</h3>
 
 <p>Four failures matter enough to name, because each one maps to machinery we
 build this semester:</p>
@@ -181,7 +188,7 @@ build this semester:</p>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="Why not just pandas?">The contract a database signs</h3>
+<h3 class="new-slide" data-kicker="Where pandas stops">A database promises ACID; pandas never signed that contract</h3>
 
 <p class="keep-in-present">Those four fixes aren't features; they're a <em>contract</em>. When a database says a write
 is committed, it is promising the write is <span class="gloss" data-gloss="acid">atomic,
@@ -190,7 +197,7 @@ concurrent readers, and crash-proof<sup class="src"><a href="#src-1" title="Hell
 promise while staying fast. pandas never signed it, which is exactly why pandas is light.</p>
 
 <!-- ============================================================ -->
-<h2 id="relational">The relational model, fast</h2>
+<h2 id="relational">The relational model says what, never how</h2>
 
 <p>You've written SQL, so this is a refresher with sharpened definitions; we'll need them
 precise later. A <strong>relation</strong> is a set of rows (<em>tuples</em>) sharing a
@@ -207,7 +214,7 @@ is this six-row table:</p>
   That placement is real: Thursday you write the code that puts them there.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="The relational model, fast">Keys: a promise about the future</h3>
+<h3 class="new-slide" data-kicker="The relational model">A key is a promise about rows that don't exist yet</h3>
 
 <p class="keep-in-present">A <strong>key</strong> is a minimal set of fields that uniquely identifies a row<sup class="src"><a href="#src-2" title="E. F. Codd, A Relational Model of Data for Large Shared Data Banks (CACM 1970)">2</a></sup>:
 <code>id</code> here. The subtlety students miss: a key is not a fact about the rows you
@@ -228,7 +235,7 @@ immortal.</p>
   </details>
 </div>
 
-<h3 class="new-slide" data-kicker="The relational model, fast">Declarative means the engine chooses</h3>
+<h3 class="new-slide" data-kicker="The relational model">Declarative SQL lets the planner pick a plan 1000× cheaper</h3>
 
 <p>SQL is <strong>declarative</strong>: the query names the rows you want, never the steps to
 find them. That one design decision creates the entire middle of a database engine, because
@@ -248,12 +255,14 @@ planner, not you:</p>
   </div>
 </div>
 
+<p class="key-fact keep-in-present"><strong>1000×</strong> the work between two correct plans for one query; the planner picks, not your phrasing</p>
+
 <p class="keep-in-present">Same query, same answer, and on a table of a few thousand blocks
 <strong>Strategy A does 1000× the work</strong>. The freedom
 to pick B without you rewriting anything is what "declarative" buys, and why I dedicated
 two lectures to the planner (week 5, week 9).</p>
 
-<h3 class="new-slide" data-kicker="The relational model, fast">The catalog: tables about tables</h3>
+<h3 class="new-slide" data-kicker="The relational model">The schema itself lives in tables: the catalog</h3>
 
 <p class="keep-in-present">One more idea completes the model. The schema itself (which tables exist, their columns,
 types, and file locations) has to live somewhere, and the relational answer is pleasingly
@@ -275,12 +284,12 @@ catalog; in microdb, you build it in Lab 3, and notice those offsets: they're th
 you'll place by hand on Thursday.</p>
 
 <!-- ============================================================ -->
-<h2 id="layers">The five layers of every database</h2>
+<h2 id="layers">Every database engine is the same five layers</h2>
 
-<p>Now the box itself. Postgres, SQLite, DuckDB, Oracle: radically different engines, same
+<p class="keep-in-present">Now the box itself. Postgres, SQLite, DuckDB, Oracle: radically different engines, same
 five layers. Before you tour them, ask what they must be.</p>
 
-<h3 class="new-slide" data-kicker="The five layers">The universal stack</h3>
+<h3 class="new-slide" data-kicker="The five layers">Each layer runs on the one below it</h3>
 
 <div class="viz" id="viz-layer-stack">
   <div class="viz-title">Every layer runs on the one below it · hover each</div>
@@ -290,7 +299,7 @@ five layers. Before you tour them, ask what they must be.</p>
   <div class="ls-info" id="ls-info">Hover a layer to see its job, its microdb file, and the week you build it.</div>
 </div>
 
-<h3 class="new-slide" data-kicker="Layer 1 of 5">SQL front end: text in, plan out</h3>
+<h3 class="new-slide" data-kicker="Layer 1 of 5">Only the front end ever sees your SQL</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Job</span><span>Turn SQL text into a checked, executable plan tree, and reject nonsense with a good error message.</span></div>
@@ -304,7 +313,7 @@ five layers. Before you tour them, ask what they must be.</p>
 plan tree, which is why the planner's choice of tree, not your phrasing of the query, decides
 the speed.</p>
 
-<h3 class="new-slide" data-kicker="Layer 2 of 5">Execution engine: rows flow up a pipeline</h3>
+<h3 class="new-slide" data-kicker="Layer 2 of 5">Operators all answer "next row?", so plans stack like Lego</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Job</span><span>Run the plan: a pipeline of operators, each answering one question, "give me your next row."</span></div>
@@ -317,7 +326,7 @@ the speed.</p>
 <p class="keep-in-present">The elegant part: because every operator speaks the same "next row?" interface, the planner
 can stack them in any order without the operators knowing or caring; plans are Lego.</p>
 
-<h3 class="new-slide" data-kicker="Layer 3 of 5">Records &amp; catalog: meaning imposed on bytes</h3>
+<h3 class="new-slide" data-kicker="Layer 3 of 5">The records layer is where bytes become rows</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Job</span><span>Decide how a row's values are arranged inside a page, and record every table's schema in the catalog.</span></div>
@@ -357,7 +366,7 @@ about this layer.</p>
 <p class="keep-in-present">No SQL, no rows, no meaning, just bytes at computed offsets. It's the least glamorous
 layer and the one everything else stands on, which is exactly why you build it first.</p>
 
-<h3 class="new-slide" data-kicker="The five layers">The rail beside the stack: the write-ahead log</h3>
+<h3 class="new-slide" data-kicker="The five layers">The write-ahead log is why COMMIT means something</h3>
 
 <p class="keep-in-present">One component sits beside the stack rather than in it, touching everything: the
 write-ahead log. Before any layer changes a page,
@@ -373,12 +382,12 @@ crash, replaying and undoing those notes restores a clean database<sup class="sr
 </div>
 
 <!-- ============================================================ -->
-<h2 id="storage">Why disks shaped everything</h2>
+<h2 id="storage">Storage pays by the trip, not by the byte</h2>
 
-<p>One design decision explains more of database architecture than any other: <em>storage is
+<p class="keep-in-present">One design decision explains more of database architecture than any other: <em>storage is
 brutally slower than memory, and it pays by the trip, not by the byte.</em></p>
 
-<h3 class="new-slide" data-kicker="Why disks shaped everything">The ladder, measured</h3>
+<h3 class="new-slide" data-kicker="Pay by the trip">One spinning-disk seek costs ten million L1 hits</h3>
 
 <div class="viz" id="viz-latency">
   <div class="viz-title">The latency ladder</div>
@@ -395,7 +404,7 @@ brutally slower than memory, and it pays by the trip, not by the byte.</em></p>
   your hardware varies. The <em>ratios</em> are what to remember.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Why disks shaped everything">Consequence 1: move whole blocks</h3>
+<h3 class="new-slide" data-kicker="Pay by the trip">Consequence 1: fetch the whole block, never the value</h3>
 
 <p class="keep-in-present">Because each trip to storage costs the same whether it fetches 8 bytes or 8&nbsp;KB,
 databases never read a value; they read a whole block
@@ -412,7 +421,9 @@ and keep it around, betting that nearby bytes will be wanted next.</p>
   100&nbsp;ns, a <strong>250× discount</strong> for one design decision.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Why disks shaped everything">Consequence 2: count the disk trips, nothing else</h3>
+<p class="key-fact keep-in-present"><strong>250×</strong> one NVMe trip (25 µs) costs what 250 buffer-pool hits (100 ns) cost</p>
+
+<h3 class="new-slide" data-kicker="Pay by the trip">Consequence 2: count the disk trips, nothing else</h3>
 
 <p>A query reads every block it needs from one of two places: from disk, or from memory because
 some earlier read left it there. The first costs hundreds to hundreds of thousands of times more
@@ -433,6 +444,8 @@ the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Less
 technique in this course (the buffer pool, B+ trees, column stores, even the vector indexes in
 Act II) is one strategy for shrinking it: <strong>touch fewer blocks.</strong></p>
 
+<h3 class="new-slide" data-kicker="Pay by the trip">Check yourself: the speedup grows with the table</h3>
+
 <div class="exercise">
   <span class="ex-label">Check yourself · the only arithmetic that matters</span>
   <p>A table occupies 500 blocks. Query A scans all of them. Query B uses an index that
@@ -448,7 +461,7 @@ Act II) is one strategy for shrinking it: <strong>touch fewer blocks.</strong></
   </details>
 </div>
 
-<h3 class="new-slide" data-kicker="Why disks shaped everything">Check it against real engines</h3>
+<h3 class="new-slide" data-kicker="Pay by the trip">Every real engine picked a block size for its workload</h3>
 
 <p>If the block logic is right, every real engine should have chosen a block size, and the
 analytics engines, which scan far more than they seek, should have chosen bigger ones:</p>
@@ -467,13 +480,13 @@ analytics engines, which scan far more than they seek, should have chosen bigger
 right block becomes enormous, and the right layout flips from rows to columns.</p>
 
 <!-- ============================================================ -->
-<h2 id="microdb">The microdb plan</h2>
+<h2 id="microdb">You build the engine bottom-up, one layer per Thursday</h2>
 
-<p>Here is Act I as a build plan. Seven Thursdays, seven layers, bottom-up: each lab's code
+<p class="keep-in-present">Here is Act I as a build plan. Seven Thursdays, seven layers, bottom-up: each lab's code
 runs on top of the previous labs', and by the end you have a database engine you wrote every
 line of.</p>
 
-<h3 class="new-slide" data-kicker="The microdb plan">Seven labs, one engine</h3>
+<h3 class="new-slide" data-kicker="The microdb plan">Seven labs stack into one engine on frozen interfaces</h3>
 
 <div class="viz" id="viz-microdb-plan">
   <div class="viz-title">Bottom-up build order · hover each layer</div>
@@ -483,7 +496,7 @@ line of.</p>
   <div class="ls-info" id="mp-info">Hover a layer: what it does, what you'll implement, what you'll measure.</div>
 </div>
 
-<h3 class="new-slide" data-kicker="The microdb plan">Ground rules for the build</h3>
+<h3 class="new-slide" data-kicker="The microdb plan">Reference layers ship each week; every lab ends with a number</h3>
 
 <div class="callout note">
   <span class="label">Two rules that make a cumulative build humane</span>
@@ -520,7 +533,7 @@ the lab page.</p>
 without fsync. Bring the ratio to next Tuesday's
 lecture; it explains the buffer pool before I say a word.</p>
 
-<h3 class="new-slide" data-kicker="On Thursday you build this">Little-endian, and why you care</h3>
+<h3 class="new-slide" data-kicker="On Thursday you build this">Byte order is a choice, and the wrong one still round-trips</h3>
 
 <p><code>set_int(0, 1)</code> has to put four bytes somewhere, and the order it puts them in is a
 decision, not a fact. Both answers are in use: your laptop's CPU is little-endian, every integer
@@ -572,9 +585,18 @@ these.</p>
   1000× apart, chosen by machinery, not by phrasing.</li>
 </ul>
 
+<p class="key-fact keep-in-present"><strong>250× · 1000×</strong> one disk trip costs 250 memory reads; two correct plans for one query can differ by 1000×</p>
+
 <p class="keep-in-present"><strong>Thursday:</strong> build the file manager (bring a charged
 laptop). <strong>Next Tuesday:</strong> the buffer pool; bring your fsync ratio and Quiz 1
 opens the class (files, blocks &amp; pages).</p>
+
+<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<ul>
+  <li><strong>Read</strong> the <a href="../../labs/lab-01/filemanager.html">Lab 1 page</a> through Part 1 · Build, plus the setup checklist above.</li>
+  <li><strong>Run</strong> <code>python3 test_filemanager.py</code> against the unedited starter and confirm it prints <strong>0/9 passed</strong>.</li>
+  <li><strong>Bring</strong> a charged laptop with Python 3.11+ and the three starter files (<code>file_manager.py</code>, <code>test_filemanager.py</code>, <code>measure_io.py</code>) in a local, unsynced folder.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

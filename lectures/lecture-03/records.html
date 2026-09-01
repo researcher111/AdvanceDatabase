@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -15,15 +15,16 @@
   <div class="toc-title">Lecture 3</div>
   <ul>
     <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#gap">Bytes don't know they're rows</a></li>
-    <li><a href="#try-it">Drive a record page</a></li>
-    <li><a href="#layout">Schema → Layout</a></li>
-    <li><a href="#recordpage">RecordPage: slots in a block</a></li>
-    <li><a href="#tablescan">TableScan: the whole table</a></li>
-    <li><a href="#catalog">The catalog</a></li>
+    <li><a href="#gap">Packed rows break the moment one row changes</a></li>
+    <li><a href="#try-it">In a slotted page, nothing ever moves</a></li>
+    <li><a href="#layout">The schema fixes every offset before any row exists</a></li>
+    <li><a href="#recordpage">RecordPage works one pinned block at a time</a></li>
+    <li><a href="#tablescan">TableScan walks the whole table through one frame</a></li>
+    <li><a href="#catalog">The schema is data: your offsets become catalog rows</a></li>
     <li><a href="#thursday">On Thursday you build it</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
+    <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -38,13 +39,14 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 3 · Tuesday September 8, 2026</div>
   <h1>Record Layout &amp; the Catalog</h1>
-  <div class="subtitle">Bytes become rows, files become tables, and the database starts describing itself.</div>
+  <div class="subtitle">Lab 1 packed rows end to end, so one rename shifts every byte after it: how does a database find, update, and delete rows without ever moving one?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-Two weeks ago you placed the ada row into a page by hand, byte by byte. Today we make that
-placement <em>systematic</em>: a schema computes every field's offset, rows live in fixed-size
+Two weeks ago you placed the ada row into a page by hand, byte by byte, and that packing
+breaks the moment ben becomes benjamin: every byte after him shifts, and every saved position
+behind him points at the wrong data. Today we make that placement <em>systematic</em>: a schema computes every field's offset, rows live in fixed-size
 slots inside the <span class="gloss" data-gloss="heap-file">heap file</span>, a scan walks
 every row of a table through your buffer pool, and the layout rules themselves get stored
 in tables, because in a relational system even the schema is data<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: Chapter 52. System Catalogs">1</a></sup>. Thursday, microdb learns
@@ -72,13 +74,18 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p>Quiz first, then the layer that turns last week's cache of anonymous bytes into tables.</p>
 
+<p class="keep-in-present">Lab 1 packed rows end to end. Rename ben to benjamin and every
+byte after him shifts, every saved position behind him is wrong, and finding row 4 means parsing
+rows 1 to 3 first. SQL never mentioned any of this.</p>
+
 <ol class="agenda">
   <li><strong>Quiz 2</strong>: the buffer pool (10 min, first thing).</li>
-  <li><strong>Bytes don't know they're rows</strong>: packing rows end to end, the way Lab 1 did, breaks the moment a row is updated, deleted, or looked up by number.</li>
-  <li><strong>Drive a record page</strong>: slots, flags, and deletion as a bit flip.</li>
-  <li><strong>Schema → Layout</strong>: computing every offset from the schema.</li>
-  <li><strong>RecordPage &amp; TableScan</strong>: one block of rows, then the whole table.</li>
-  <li><strong>The catalog</strong>: table layouts are stored as rows in a table, which raises the question of how the catalog table reads its own layout.</li>
+  <li><strong>Why Lab 1's packing fails</strong>: packed rows break on the first update, delete, or lookup by number.</li>
+  <li><strong>Drive a record page</strong>: insert, delete, and rename rows and watch nothing move.</li>
+  <li><strong>Where the offsets come from</strong>: the schema fixes every offset before a row exists; <code>VARCHAR(8)</code> is a promise.</li>
+  <li><strong>The record layer</strong>: RecordPage and TableScan; deletion is a flag; every row gets an address.</li>
+  <li><strong>The catalog</strong>: the schema is data; layouts are stored as rows in a table that reads itself.</li>
+  <li><strong>Thursday</strong>: you build the record layer on your Labs 1 and 2 code.</li>
 </ol>
 
 <p class="keep-in-present">Today's claim: <strong>a table is two things. A file on disk, cut into
@@ -87,9 +94,7 @@ record the table's name, its columns, and where each column's bytes sit inside a
 Nothing else.</p>
 
 <!-- ============================================================ -->
-<h2 id="gap">Bytes don't know they're rows</h2>
-
-<h3 class="new-slide" data-kicker="Bytes don't know they're rows">What tight packing costs</h3>
+<h2 id="gap">Packed rows break the moment one row changes</h2>
 
 <p>Worked out in bytes: renaming ben in a packed page shifts every later byte in the block,
 and any saved position that pointed at those bytes now points at the wrong data.</p>
@@ -103,7 +108,7 @@ and any saved position that pointed at those bytes now points at the wrong data.
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="Bytes don't know they're rows">The three operations a layout must survive</h3>
+<h3 class="new-slide" data-kicker="Packed rows break">Fixed-size slots make all three operations arithmetic</h3>
 
 <p class="keep-in-present">The fix every row store converges on: <strong>fixed-size slots</strong>.
 Reserve the maximum bytes each record could need, all records identical, and the three operations
@@ -119,7 +124,7 @@ from the table above become arithmetic:</p>
 </table>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Drive a record page</h2>
+<h2 id="try-it">In a slotted page, nothing ever moves</h2>
 
 <p>Here is one 128-byte block wearing the students schema: five 24-byte slots, each
 <code>[flag][id][name][gpa]</code>. Insert the pinned students, delete one, rename one,
@@ -144,7 +149,7 @@ and watch that nothing ever moves.</p>
   <code>bartholomew</code> and the layout says no. That refusal is the price of \(O(1)\).</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Drive a record page">The arithmetic underneath</h3>
+<h3 class="new-slide" data-kicker="Nothing moves">Every address is one multiply and one add</h3>
 
 <div class="math">
 \[ \text{start}(k) \;=\; k \cdot \text{slot\_size} \]
@@ -158,9 +163,7 @@ and watch that nothing ever moves.</p>
 what "structured" means to a storage engine.</p>
 
 <!-- ============================================================ -->
-<h2 id="layout">Schema → Layout</h2>
-
-<h3 class="new-slide" data-kicker="Schema → Layout">The question SQL has been asking you all along</h3>
+<h2 id="layout">The schema fixes every offset before any row exists</h2>
 
 <pre><code class="language-sql">CREATE TABLE students (
     id    INT,
@@ -206,7 +209,7 @@ is not a rule about names. It is a promise to the layout.</p>
   </details>
 </div>
 
-<h3 class="new-slide" data-kicker="Schema → Layout">Two small classes carry it all</h3>
+<h3 class="new-slide" data-kicker="Fixed offsets">Schema declares, Layout computes: one place to be right</h3>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="schema" data-step-name="Schema" data-explain="Pure description: field names, types, varchar capacities. No bytes, no offsets; schemas are what users declare.">schema = Schema().add_int_field("id").add_string_field("name", 8).add_int_field("gpa")</div>
@@ -215,7 +218,7 @@ is not a rule about names. It is a promise to the layout.</p>
   <div class="code-explain-panel">Hover a line: this split (declared schema vs computed layout) recurs in every engine.</div>
 </div>
 
-<h3 class="new-slide" data-kicker="Schema → Layout">The worked map, byte by byte</h3>
+<h3 class="new-slide" data-kicker="Fixed offsets">Four fields, 24 bytes, 170 students per block</h3>
 
 <table>
   <thead><tr><th>Bytes</th><th>Holds</th><th>Why there</th></tr></thead>
@@ -227,8 +230,8 @@ is not a rule about names. It is a promise to the layout.</p>
   </tbody>
 </table>
 
-<p class="keep-in-present">slot_size = 24 → a 4&nbsp;KB block holds 170 students, with 16
-bytes left over. Thursday's measurement makes you compute (then prove) this for three
+<p class="key-fact keep-in-present"><strong>170</strong> students per 4&nbsp;KB block: slot_size = 24,
+with 16 bytes left over. Thursday's measurement makes you compute (then prove) this for three
 different schemas.</p>
 
 <div class="exercise">
@@ -246,7 +249,7 @@ different schemas.</p>
   </details>
 </div>
 
-<h3 class="new-slide" data-kicker="Schema → Layout">The price: air in every slot</h3>
+<h3 class="new-slide" data-kicker="Fixed offsets">Every varchar carries its worst case in every slot</h3>
 
 <div class="callout insight">
   <span class="label">Internal fragmentation, quantified</span>
@@ -256,6 +259,8 @@ different schemas.</p>
   deliberate rent paid for \(O(1)\) addressing<sup class="src"><a href="#src-3" title="Operating Systems: Three Easy Pieces, chapter 17, Free-Space Management">3</a></sup>. A <code>bio varchar(200)</code> schema fits only 19
   rows per block; whether that rent is fair depends entirely on how full a typical value runs.</p>
 </div>
+
+<h3 class="new-slide" data-kicker="Fixed offsets">Rent is fair only when typical fill is high</h3>
 
 <div class="viz" id="viz-slotcalc">
   <div class="viz-title">the rent calculator · schema (id int, name varchar(?), gpa int), 4 KB block</div>
@@ -275,7 +280,10 @@ different schemas.</p>
   fair only when typical fill is high.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Schema → Layout">What about NULL?</h3>
+<p class="key-fact keep-in-present"><strong>59 vs 527</strong> blocks for the same 10,000 rows, decided
+by nothing but the varchar capacity the schema reserves</p>
+
+<h3 class="new-slide" data-kicker="Fixed offsets">NULL costs a bit, not a field's bytes</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">microdb</span><span>has no NULL at all: every field always holds a value (0 for an int, "" for a string). That is acceptable for a teaching engine, but real data has missing values, and "missing" is not the same as 0 or "".</span></div>
@@ -283,7 +291,7 @@ different schemas.</p>
   <div class="lc-row"><span class="lc-k">The DS connection</span><span>this is why <code>NULL</code> and <code>0</code> and <code>""</code> are genuinely different things in SQL: the bitmap distinguishes "absent" from any value your bytes could spell<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 9.2. Comparison Functions and Operators">5</a></sup>.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="Schema → Layout">And truly variable data? TOAST</h3>
+<h3 class="new-slide" data-kicker="Fixed offsets">Huge values move out; the slot keeps a pointer</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The problem</span><span>a 2&nbsp;MB essay can't reserve worst-case capacity in every slot; reservation only works when maxima are modest.</span></div>
@@ -292,16 +300,21 @@ different schemas.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="recordpage">RecordPage: slots in a block</h2>
+<h2 id="recordpage">RecordPage works one pinned block at a time</h2>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Job</span><span>All record operations within ONE block: read/write a field of slot k, find free slots, flip flags.</span></div>
   <div class="lc-row"><span class="lc-k">Runs on</span><span>your Lab 2 pool: it <strong>pins its block on construction and unpins on close()</strong>. This is the pin/unpin contract from week 2, now used by real code: while a RecordPage is working on a block, the pool cannot evict it.</span></div>
   <div class="lc-row"><span class="lc-k">Key methods</span><span><code>get/set_int</code>, <code>get/set_string</code> (arithmetic + Lab 1 page calls), <code>insert_after</code> / <code>next_after</code> (find EMPTY / find USED), <code>delete</code> (flip to EMPTY).</span></div>
+</div>
+
+<h3 class="new-slide" data-kicker="One pinned block">Every write ends with set_modified() or it is lost</h3>
+
+<div class="layer-card">
   <div class="lc-row"><span class="lc-k">One rule</span><span>every write ends with <code>set_modified()</code>, which marks the buffer dirty. Skip it and the pool believes the frame is unchanged, evicts it without writing it to disk, and the write is lost.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="RecordPage">The flag lifecycle</h3>
+<h3 class="new-slide" data-kicker="One pinned block">One flag per slot tracks EMPTY and USED</h3>
 
 <table>
   <thead><tr><th>State</th><th>Flag</th><th>Field bytes hold</th><th>Who moves it</th></tr></thead>
@@ -313,7 +326,7 @@ different schemas.</p>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="RecordPage">Deletion is a bit flip</h3>
+<h3 class="new-slide" data-kicker="One pinned block">Deletion is a bit flip</h3>
 
 <p class="keep-in-present">A deleted row's bytes are still on disk; the slot is a
 <span class="gloss" data-gloss="tombstone">tombstone</span> waiting for reuse, not a hole.
@@ -322,9 +335,7 @@ recoverable in forensics, why <code>DELETE</code> doesn't shrink files, and why 
 need a vacuum process: all one design decision, visible in your 24-byte slots<sup class="src"><a href="#src-8" title="PostgreSQL Documentation: 24.1. Routine Vacuuming">8</a></sup>.</p>
 
 <!-- ============================================================ -->
-<h2 id="tablescan">TableScan: the whole table</h2>
-
-<h3 class="new-slide" data-kicker="TableScan">next(), annotated</h3>
+<h2 id="tablescan">TableScan walks the whole table through one frame</h2>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="ask" data-step-name="ask this block" data-explain="next_after scans flags forward within the pinned block; the common case costs a few flag reads and no I/O at all.">slot = rp.next_after(current_slot)         # next USED slot here?</div>
@@ -335,7 +346,7 @@ need a vacuum process: all one design decision, visible in your 24-byte slots<su
   <div class="code-explain-panel">Hover a line: this dozen lines is most of Thursday's thinking.</div>
 </div>
 
-<h3 class="new-slide" data-kicker="TableScan">insert(): when every slot is full</h3>
+<h3 class="new-slide" data-kicker="One-frame scan">insert() recycles tombstones before it grows the file</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">First choice</span><span>reuse: <code>insert_after</code> hunts forward for any EMPTY slot; tombstones get recycled before the file grows.</span></div>
@@ -343,7 +354,7 @@ need a vacuum process: all one design decision, visible in your 24-byte slots<su
   <div class="lc-row"><span class="lc-k">The invariant</span><span>files grow by whole blocks, only at the end, only when truly full; Thursday's harness counts your blocks to check exactly this.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="TableScan">Every row now has an address: the RID</h3>
+<h3 class="new-slide" data-kicker="One-frame scan">Every row now has an address: the RID</h3>
 
 <p class="keep-in-present">A row's identity in the storage engine is its
 <span class="gloss" data-gloss="rid">RID</span>: <strong>(block&nbsp;#, slot&nbsp;#)</strong>:
@@ -351,7 +362,7 @@ ada is <code>(0, 0)</code>, row twelve is <code>(2, 1)</code>. Fixed slots make 
 updates and deletes move nothing, so the address keeps working<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 8.19. Object Identifier Types (tid)">9</a></sup>. File this away carefully:
 <em>an index (week 6) is nothing but a map from values to RIDs<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 64.1. Basic API Structure for Indexes">10</a></sup>.</em></p>
 
-<h3 class="new-slide" data-kicker="TableScan">This loop is the floor of the query engine</h3>
+<h3 class="new-slide" data-kicker="One-frame scan">This loop is the floor of the query engine</h3>
 
 <table>
   <thead><tr><th>Next week builds</th><th>Out of</th></tr></thead>
@@ -367,9 +378,7 @@ next / get_*</code>. That shared interface is the <span class="gloss" data-gloss
 reads blocks from disk.</p>
 
 <!-- ============================================================ -->
-<h2 id="catalog">The catalog</h2>
-
-<h3 class="new-slide" data-kicker="The catalog">The catalog rows for students, with exact offsets</h3>
+<h2 id="catalog">The schema is data: your offsets become catalog rows</h2>
 
 <p>Lecture 1 sketched this table; now it's exact, offsets and all: these are the rows
 Thursday's <code>create_table</code> writes and the harness checks:</p>
@@ -389,14 +398,16 @@ readable by a TableScan, reconstructable into a Layout. The catalog is the
 <em>first user</em> of your record layer: in the lab <code>catalog.py</code> is provided complete, and it reads and writes
 its own tables through your RecordPage and TableScan, so it works exactly when your code does.</p>
 
-<p>There is a loop hiding here. To read any table you need its layout, and layouts live in
+<h3 class="new-slide" data-kicker="Schema is data">The catalog reads itself through hardcoded layouts</h3>
+
+<p class="keep-in-present">There is a loop hiding here. To read any table you need its layout, and layouts live in
 <code>field_catalog</code>. But <code>field_catalog</code> is itself a table, so to read it you
 would need its layout, which is stored in <code>field_catalog</code>. The way out is a small
 <span class="gloss" data-gloss="bootstrap">bootstrap</span>: the layouts of the catalog tables
 themselves are computed in code, never read from disk. That handful of hardcoded offsets is
 enough to open the catalog, and everything else is read from it.</p>
 
-<h3 class="new-slide" data-kicker="The catalog">The same idea, grown up</h3>
+<h3 class="new-slide" data-kicker="Schema is data">Postgres does the same: \d students is a catalog query</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Postgres</span><span><code>pg_class</code> (one row per table) and <code>pg_attribute</code> (one per column); <code>\d students</code> is a catalog query, not magic<sup class="src"><a href="#src-11" title="PostgreSQL Documentation: 52.7. pg_attribute">11</a></sup>.</span></div>
@@ -419,7 +430,7 @@ code, and the catalog comes free once your scan works.</p>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="On Thursday you build it">The shape of your job</h3>
+<h3 class="new-slide" data-kicker="On Thursday you build it">Three pieces: the offset walk, slot ops, two loops</h3>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="lay" data-step-name="Layout walk" data-explain="One pass over schema.fields(): start at 4 (the flag owns 0–3), ints advance 4, varchar(n) advances 4+n. Ten minutes, and the harness's first test names the exact offsets.">Layout.__init__          # offsets: id→4, name→8, gpa→20 · slot_size 24</div>
@@ -453,9 +464,19 @@ code, and the catalog comes free once your scan works.</p>
   first code to use your scan is the catalog itself.</li>
 </ul>
 
+<p class="key-fact keep-in-present"><strong>170</strong> students per 4&nbsp;KB block at 24 bytes a slot ·
+<strong>59 vs 527</strong> blocks for the same 10,000 rows, decided by the varchar capacity alone</p>
+
 <p class="keep-in-present"><strong>Thursday:</strong> build the record layer (three-layer
 cumulative starter). <strong>Next Tuesday:</strong> the iterator model: Select, Project, and
 Join stack on your TableScan. Quiz 3 opens class: records &amp; the catalog.</p>
+
+<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<ul>
+  <li><strong>Read</strong> Sciore ch. 6 (record management) and the Lab 3 page, so the six starter files are familiar before class.</li>
+  <li><strong>Run</strong> <code>python3 test_records.py</code> on the unedited starter and confirm it prints <strong>0/12 passed</strong>.</li>
+  <li><strong>Bring</strong> Lab 2 submitted and, on paper, the slot layout of <code>course(dept varchar(4), num int, credits int)</code>: every offset and the slot size.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

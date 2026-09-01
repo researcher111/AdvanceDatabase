@@ -20,10 +20,13 @@
     },
     'duck-typing': {
       title: 'Duck typing',
-      body: '<p>Python’s stance that an object’s type is whatever it can <em>do</em>: anything ' +
-        'with before_first/next/get_val/has_field/close IS a scan, no declaration needed. ' +
-        '“If it walks like a duck and quacks like a duck…” — which is exactly how a TableScan ' +
-        'and a ProductScan get to be interchangeable.</p>',
+      body: '<p>Python’s rule that what an object can <em>do</em> decides what it is. There is no ' +
+        '“implements Scan” step: if an object has before_first, next, get_val, has_field, and ' +
+        'close, every operator accepts it as a scan, because operators only ever call those five ' +
+        'methods. The name comes from the saying “if it walks like a duck and quacks like a duck, ' +
+        'it is a duck.” It is what lets a SelectScan wrap a TableScan today and a ProductScan next ' +
+        'week without a line of it changing. The price: a missing method is discovered only when ' +
+        'it is called, not when the object is created.</p>',
     },
     'cartesian-product': {
       title: 'Cartesian product',
@@ -204,4 +207,92 @@
   document.getElementById('odo-next').addEventListener('click', next);
   document.getElementById('odo-reset').addEventListener('click', beforeFirst);
   beforeFirst();
+})();
+
+/* ---------------- Predicate step-through widget ---------------- */
+(function () {
+  const root = document.getElementById('viz-pred');
+  if (!root) return;
+  const $ = id => document.getElementById(id);
+  const termsEl = $('pd-terms'), rowEl = $('pd-row'), evalEl = $('pd-eval'), logEl = $('pd-log');
+
+  const STUDENTS = [
+    { name: 'ada', gpa: 39, mid: 1 }, { name: 'ben', gpa: 31, mid: 2 }, { name: 'cyd', gpa: 37, mid: 2 },
+    { name: 'dee', gpa: 28, mid: 1 }, { name: 'eli', gpa: 36, mid: 3 }, { name: 'fay', gpa: 34, mid: 2 },
+  ];
+  const MAJORS = [{ mid2: 1, dept: 'cs' }, { mid2: 2, dept: 'stat' }, { mid2: 3, dept: 'econ' }];
+  const PRODUCT = [];
+  STUDENTS.forEach(s => MAJORS.forEach(m => PRODUCT.push(Object.assign({}, s, m))));
+  const F = name => ({ field: name });                       // "this rhs is a field"
+  const OPS = { '>': (a, b) => a > b, '=': (a, b) => a === b, '<': (a, b) => a < b };
+  const PRESETS = {
+    p1: { rows: STUDENTS, terms: [['gpa', '>', 35]] },
+    p2: { rows: STUDENTS, terms: [['gpa', '>', 35], ['mid', '=', 2]] },
+    p3: { rows: PRODUCT, terms: [['mid', '=', F('mid2')], ['gpa', '>', 35]] },
+  };
+  let preset, rowIdx, termIdx, termState, passed, checked;
+
+  const fmtRhs = rhs => (rhs && rhs.field !== undefined) ? `F("${rhs.field}")` : String(rhs);
+  const fmtTerm = ([f, op, rhs]) => `("${f}", "${op}", ${fmtRhs(rhs)})`;
+  const rowLabel = r => r.dept ? `(${r.name}, ${r.dept})` : r.name;
+
+  function load(key) {
+    preset = PRESETS[key]; rowIdx = 0; termIdx = 0; termState = []; passed = 0; checked = 0;
+    logEl.innerHTML = ''; evalEl.textContent = 'Press check next term.';
+    root.querySelectorAll('.qj-controls .btn').forEach(b => b.classList.toggle('primary', b.id === 'pd-' + key || b.id === 'pd-step'));
+    render();
+  }
+
+  function render() {
+    termsEl.innerHTML = preset.terms.map((t, i) => {
+      const cls = termState[i] || (i === termIdx && rowIdx < preset.rows.length ? 'cur' : '');
+      return `<span class="pd-term ${cls}">${fmtTerm(t)}</span>`;
+    }).join('<span class="pd-and">AND</span>');
+    const row = preset.rows[rowIdx];
+    $('pd-rowno').textContent = row ? `· ${rowIdx + 1} of ${preset.rows.length}` : '· done';
+    rowEl.innerHTML = row
+      ? Object.entries(row).map(([k, v]) => `<span class="pd-field"><b>${k}</b> = ${v}</span>`).join('')
+      : '<span class="pd-field">every row checked</span>';
+    $('pd-count').textContent = `· ${passed} of ${checked} passed`;
+  }
+
+  function step() {
+    const row = preset.rows[rowIdx];
+    if (!row) { evalEl.textContent = `Done: ${passed} of ${preset.rows.length} rows satisfy the predicate. Reset to run again.`; return; }
+    const [field, op, rhs] = preset.terms[termIdx];
+    const lhsVal = row[field];
+    const isF = rhs && rhs.field !== undefined;
+    const rhsVal = isF ? row[rhs.field] : rhs;
+    const ok = OPS[op](lhsVal, rhsVal);
+    const resolve = isF ? `rhs is F("${rhs.field}"), so ask the row: get_val("${rhs.field}") = ${rhsVal}` : `rhs is the literal ${rhs}`;
+    evalEl.innerHTML = `<div>term ${termIdx + 1}: get_val("${field}") = <b>${lhsVal}</b></div><div>${resolve}</div>` +
+      `<div>${lhsVal} ${op === '=' ? '==' : op} ${rhsVal} → <b class="${ok ? 'ok' : 'bad'}">${ok}</b></div>`;
+    termState[termIdx] = ok ? 'ok' : 'bad';
+    if (!ok) {
+      const skipped = preset.terms.length - termIdx - 1;
+      checked++;
+      logEl.insertAdjacentHTML('beforeend', `<div class="rej">✗ ${rowLabel(row)}: term ${termIdx + 1} false${skipped ? `, ${skipped} term${skipped > 1 ? 's' : ''} skipped` : ''}</div>`);
+      advance();
+    } else if (termIdx === preset.terms.length - 1) {
+      checked++; passed++;
+      logEl.insertAdjacentHTML('beforeend', `<div class="pass">✓ ${rowLabel(row)}: every term true, row passes</div>`);
+      advance();
+    } else {
+      termIdx++;
+    }
+    logEl.scrollTop = logEl.scrollHeight;
+    render();
+  }
+
+  function advance() {
+    rowIdx++; termIdx = 0; termState = [];
+    const nxt = preset.rows[rowIdx];
+    // the trace box describes the row on screen; the log keeps the history
+    setTimeout(() => { evalEl.textContent = nxt ? `next: ${rowLabel(nxt)}. Press check next term.` : `Done: ${passed} of ${preset.rows.length} rows satisfy the predicate.`; }, 900);
+  }
+
+  ['p1', 'p2', 'p3'].forEach(k => $('pd-' + k).addEventListener('click', () => load(k)));
+  $('pd-step').addEventListener('click', step);
+  $('pd-reset').addEventListener('click', () => load(Object.keys(PRESETS).find(k => PRESETS[k] === preset)));
+  load('p2');
 })();

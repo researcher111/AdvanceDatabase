@@ -5,7 +5,7 @@
 <title>Lecture 13 · Distributed Compute · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -14,15 +14,16 @@
   <div class="toc-title">Lecture 13</div>
   <ul>
     <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#wall">The one-machine wall</a></li>
-    <li><a href="#partition">Partitioning</a></li>
-    <li><a href="#mapreduce">MapReduce</a></li>
-    <li><a href="#try-it">Trace the shuffle</a></li>
-    <li><a href="#spark">Spark</a></li>
-    <li><a href="#ray">Ray</a></li>
+    <li><a href="#wall">One machine hits a wall</a></li>
+    <li><a href="#partition">Hash or range</a></li>
+    <li><a href="#mapreduce">Two functions, MapReduce owns the rest</a></li>
+    <li><a href="#try-it">Only the shuffle widens</a></li>
+    <li><a href="#spark">Spark: pattern plus lazy plan</a></li>
+    <li><a href="#ray">Ray: one decorator</a></li>
     <li><a href="#thursday">On Thursday you run all three</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
+    <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -37,13 +38,14 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 13 · Tuesday November 17, 2026</div>
   <h1>Distributed Compute</h1>
-  <div class="subtitle">Partitioning, MapReduce, Spark's lazy plans, and Ray: what changes when the data outgrows the machine, and what stubbornly doesn't.</div>
+  <div class="subtitle">Your job no longer fits on one machine: what has to change when the data outgrows the box, and what stubbornly doesn't?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-Every system this semester fit on your laptop: microdb, DuckDB, microvector, micro-rag. Today
-the data stops fitting, and the fix is the same move you've now seen four times: split the
+A 10 TB job spends about 85 minutes just reading its input once on one machine, and one crash
+sends it back to zero. Every system this semester fit on your laptop: microdb, DuckDB, microvector,
+micro-rag. Today the data stops fitting, and the fix is the same move you've now seen four times: split the
 data (partitioning), push the work to the pieces (like predicate pushdown), and pay a
 structured price to regroup (the <span class="gloss" data-gloss="shuffle">shuffle</span>, the network's version of Lab 4's join cost). One
 pattern, MapReduce, organizes all of it; Spark packages the pattern behind lazy query plans
@@ -71,13 +73,18 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p>Quiz 10 first (RAG), then the biggest jump of the semester: from one machine to many.</p>
 
+<p class="keep-in-present">Counting per URL is the same computation at 10&nbsp;TB as at 10&nbsp;MB. The machine is
+not the same: reading the input once takes about 85 minutes, the working set no longer fits in
+RAM, and the first crash restarts the job from zero.</p>
+
 <ol class="agenda">
-  <li><strong>The one-machine wall</strong>: what actually breaks at 10&nbsp;TB.</li>
-  <li><strong>Partitioning</strong>: hash vs range: you've already used both.</li>
-  <li><strong>MapReduce</strong>: the 2004 pattern, traced by hand on toy data.</li>
-  <li><strong>Trace the shuffle</strong>: step through map → shuffle → reduce, live.</li>
-  <li><strong>Spark</strong>: the pattern with a lazy query plan on top.</li>
-  <li><strong>Ray</strong>: distributed Python without the query engine.</li>
+  <li><strong>Quiz 10</strong>: RAG (first thing).</li>
+  <li><strong>The one-machine wall</strong>: at 10&nbsp;TB one machine runs out of time, RAM, and luck; the logic never broke.</li>
+  <li><strong>Partitioning</strong>: hash or range decides which machine owns a record, and one famous key breaks both.</li>
+  <li><strong>MapReduce</strong>: two functions from you, placement and retry from the framework.</li>
+  <li><strong>Trace the shuffle</strong>: map → shuffle → reduce live; only the shuffle widens with scale.</li>
+  <li><strong>Spark and Ray</strong>: Spark is the pattern behind a lazy plan; Ray is the pattern minus the query engine.</li>
+  <li><strong>Thursday</strong>: build the shuffle by hand, then run the same job on both.</li>
 </ol>
 
 <p class="keep-in-present">Today's claim: <strong>the shuffle is the whole story</strong>:
@@ -85,9 +92,11 @@ every distributed engine is a scheme for moving matching keys to the same machin
 as possible, and everything else is packaging.</p>
 
 <!-- ============================================================ -->
-<h2 id="wall">The one-machine wall</h2>
+<h2 id="wall">At 10 TB, one machine runs out of time, RAM, and luck</h2>
 
-<h3 class="new-slide" data-kicker="The one-machine wall">What breaks, precisely</h3>
+<p class="key-fact keep-in-present"><strong>~85 min</strong> just to read 10 TB once on one machine at 2 GB/s; 100 machines each read their own 100 GB in about 1 min</p>
+
+<h3 class="new-slide" data-kicker="The wall">Splitting the data fixes disk, RAM, and failure at once</h3>
 
 <table>
   <thead><tr><th>Resource</th><th>One machine</th><th>10 TB job needs</th><th>The distributed answer</th></tr></thead>
@@ -98,18 +107,20 @@ as possible, and everything else is packaging.</p>
   </tbody>
 </table>
 
+<h3 class="new-slide" data-kicker="The wall">The logic never broke; only placement, movement, and retry did</h3>
+
 <p class="keep-in-present">Note what did <em>not</em> break: the logic. Counting per URL is
 the same computation at any scale; the distributed problem is placement, movement, and
 retry. That's why MapReduce, the pattern the rest of this lecture is about, separates <strong>what you compute</strong> (two functions you
 write, map and reduce) from <strong>where it runs</strong> (the placement, movement, and retry machinery that the framework supplies and you never write).</p>
 
 <!-- ============================================================ -->
-<h2 id="partition">Partitioning</h2>
+<h2 id="partition">Hash or range decides which machine owns each record</h2>
 
 <p class="keep-in-present">To spread data you need a rule for which machine owns which
 record. Two rules cover practically everything, and you have used both:</p>
 
-<h3 class="new-slide" data-kicker="Partitioning">Hash vs range: the only two ideas</h3>
+<h3 class="new-slide" data-kicker="Hash or range">Hash spreads keys evenly; range keeps neighbors together</h3>
 
 <table>
   <thead><tr><th></th><th>Hash partitioning</th><th>Range partitioning</th></tr></thead>
@@ -121,7 +132,7 @@ record. Two rules cover practically everything, and you have used both:</p>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="Partitioning">Feel the difference: run both rules</h3>
+<h3 class="new-slide" data-kicker="Hash or range">Count the machines a query wakes: that is the whole decision</h3>
 
 <div class="viz" id="viz-part">
   <div class="viz-title">the same 12 keys, both rules, side by side</div>
@@ -143,7 +154,7 @@ record. Two rules cover practically everything, and you have used both:</p>
   picks its rule by which query it must make cheap.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Partitioning">Skew: when one key is famous</h3>
+<h3 class="new-slide" data-kicker="Hash or range">One famous key makes the whole cluster wait on one worker</h3>
 
 <p class="keep-in-present">Hash partitioning promises balance <em>across keys</em>, not
 <em>across rows</em>: if one key carries 40% of the records
@@ -168,6 +179,8 @@ running long after 99 finished; now you know what that means<sup class="src"><a 
   of a second aggregation round.</p>
 </div>
 
+<h3 class="new-slide" data-kicker="Hash or range">Popularity is power-law, so your hottest key breaks uniform hashing</h3>
+
 <div class="callout note">
   <span class="label">War story · the Justin Bieber problem</span>
   <p class="keep-in-present">Skew has a celebrity mascot. Instagram's early engineers spoke
@@ -179,7 +192,7 @@ running long after 99 finished; now you know what that means<sup class="src"><a 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="mapreduce">MapReduce</h2>
+<h2 id="mapreduce">Write map and reduce; MapReduce owns placement, movement, and retry</h2>
 
 <p class="keep-in-present">Google's 2004 observation: nearly every batch job over partitioned
 data fits one shape, and if you write just the two computation functions, the framework can
@@ -194,13 +207,15 @@ word count:  map:    "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
              shuffle: every (the,1) (from every machine) arrives at the same reducer
              reduce:  the,[1,1,1,…] → (the, 50)</code></pre>
 
+<h3 class="new-slide" data-kicker="MapReduce">Reduce sees every value for its key, and nothing else</h3>
+
 <p class="keep-in-present">The design's whole cleverness is what reduce may assume:
 <strong>it sees every value for its key, and nothing else.</strong> That guarantee is
 manufactured by the shuffle alone, which is why Thursday's Part A makes you build the
 shuffle and hands you everything else.</p>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Trace the shuffle</h2>
+<h2 id="try-it">Adding machines widens only the shuffle, never map or reduce</h2>
 
 <p>The whole pattern on four toy documents, two reducers. Step through it; hover any pair to
 see the routing arithmetic.</p>
@@ -223,9 +238,11 @@ see the routing arithmetic.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="spark">Spark</h2>
+<h2 id="spark">Spark is the same pattern behind a lazy query plan</h2>
 
-<h3 class="new-slide" data-kicker="Spark">Word count, Spark edition</h3>
+<p class="keep-in-present">Spark's unit of data is the <span class="gloss" data-gloss="rdd">RDD</span>, a resilient distributed dataset: one collection, cut into partitions that live on different machines. A transformation is a call that derives a new RDD from an old one.</p>
+
+<h3 class="new-slide" data-kicker="Spark">Word count in Spark is three chained calls and one shuffle</h3>
 
 <pre><code class="language-python">counts = (lines                                       # an RDD, split into 4 partitions
     .flatMap(lambda t: re.findall(r"[a-z]+", t.lower()))   # your map_words
@@ -234,7 +251,9 @@ see the routing arithmetic.</p>
 
 counts.collect()                                      # NOW it runs</code></pre>
 
-<p class="keep-in-present">Spark's unit of data is the <span class="gloss" data-gloss="rdd">RDD</span>, a resilient distributed dataset: one collection, cut into partitions that live on different machines. A transformation is a call that derives a new RDD from an old one. Transformations come in two kinds, and the difference is the
+<h3 class="new-slide" data-kicker="Spark">Count the wide transformations and you have counted the stages</h3>
+
+<p class="keep-in-present">Transformations come in two kinds, and the difference is the
 entire cost model: <strong>narrow</strong> ones (<code>flatMap</code>, <code>map</code>,
 <code>filter</code>) stay inside each partition: free to chain, and Spark fuses them into
 one pass. <strong>Wide</strong> ones (<code>reduceByKey</code>, <code>join</code>,
@@ -242,7 +261,16 @@ one pass. <strong>Wide</strong> ones (<code>reduceByKey</code>, <code>join</code
 wide transformations in a Spark job and you've counted its
 <span class="gloss" data-gloss="stage">stages</span>.</p>
 
-<h3 class="new-slide" data-kicker="Spark">The plan, printed: Thursday's Part B</h3>
+<table>
+  <thead><tr><th></th><th>Narrow</th><th>Wide</th></tr></thead>
+  <tbody>
+    <tr><td>Examples</td><td><code>flatMap</code>, <code>map</code>, <code>filter</code></td><td><code>reduceByKey</code>, <code>join</code>, <code>groupBy</code></td></tr>
+    <tr><td>Where it runs</td><td>inside each partition; Spark fuses a chain into one pass</td><td>needs matching keys on the same machine, so it triggers the shuffle</td></tr>
+    <tr><td>What it costs</td><td>free to chain</td><td>one stage boundary each</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Spark">In the printed plan, the stage break is the shuffle</h3>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span><span class="t-mute">        # Part B, on the 4,000 arXiv abstracts</span>
 === the DAG (read bottom-up; the stage break is the shuffle) ===
@@ -254,20 +282,24 @@ wide transformations in a Spark job and you've counted its
     |  ParallelCollectionRDD[0] at readRDDFromFile at PythonRDD.scala:326 []</code></pre>
 
 <p class="keep-in-present">Read it bottom-up like an <code>EXPLAIN</code>: the indentation
-break is the stage boundary, and the stage boundary <em>is</em> the shuffle. Spark also keeps
+break is the stage boundary, and the stage boundary <em>is</em> the shuffle.</p>
+
+<h3 class="new-slide" data-kicker="Spark">Lineage recomputes a lost partition from the plan, not a backup</h3>
+
+<p class="keep-in-present">Spark also keeps
 this plan around as <span class="gloss" data-gloss="lineage">lineage</span>: if a machine
 dies mid-job, its partitions are recomputed from the plan rather than restored from a backup<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup>.
 Nothing is copied ahead of time; the recorded plan is what makes a lost partition recoverable.</p>
 
 <!-- ============================================================ -->
-<h2 id="ray">Ray</h2>
+<h2 id="ray">Ray distributes a plain Python function; no dataflow required</h2>
 
 <p class="keep-in-present">Spark wants your problem shaped like a dataflow over records. Much
 of data-science compute isn't; it's "run this Python function 10,000 times": embed every
 document, train per-city models, tune hyperparameters. Ray's offer is exactly that, with
 almost no ceremony:</p>
 
-<h3 class="new-slide" data-kicker="Ray">Tasks: one decorator makes a function distributed</h3>
+<h3 class="new-slide" data-kicker="Ray">One decorator turns a function into a distributed task</h3>
 
 <pre><code class="language-python">@ray.remote                               # this function may run anywhere
 def knn_remote(doc):
@@ -275,6 +307,10 @@ def knn_remote(doc):
 
 futures = [knn_remote.remote(d) for d in docs]      # all launched, returns instantly
 graph = ray.get(futures)                            # wait; order preserved<sup class="src"><a href="#src-13" title="ray.get (Ray Core API reference)">13</a></sup></code></pre>
+
+<h3 class="new-slide" data-kicker="Ray">Launch every task first, then wait once: 3.5× on a laptop</h3>
+
+<p class="key-fact keep-in-present"><strong>3.5×</strong> faster from one decorator on a 10-core laptop: 2.27 s serial became 0.66 s parallel, identical results</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span><span class="t-mute">             # Part C, measured on a 10-core laptop</span>
 200 documents, 10 nearest neighbors each, brute force over 4,000 vectors
@@ -289,11 +325,15 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
 
 <p class="keep-in-present">The measured run, Thursday's Part C. The classic mistake is calling
 <code>ray.get()</code> inside the launch loop: each task is then launched and waited on before the next is launched, so the tasks run one at a time exactly as the serial version did, with the cost of shipping each call to a worker added on top, and<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup>
-the lab's timing test catches it. For state that must live <em>on</em> a worker (a loaded
+the lab's timing test catches it.</p>
+
+<h3 class="new-slide" data-kicker="Ray">Actors hold state on a worker: @ray.remote on a class</h3>
+
+<p class="keep-in-present">For state that must live <em>on</em> a worker (a loaded
 model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors</span>:
 <code>@ray.remote</code> on a class instead of a function<sup class="src"><a href="#src-15" title="Actors (Ray Core documentation)">15</a></sup>.</p>
 
-<h3 class="new-slide" data-kicker="Ray">Choosing: the one-table version</h3>
+<h3 class="new-slide" data-kicker="Ray">One machine until it stops fitting, then Spark or Ray</h3>
 
 <table>
   <thead><tr><th>Your job looks like…</th><th>Reach for</th><th>Because</th></tr></thead>
@@ -336,9 +376,19 @@ products:</p>
   actors for arbitrary Python).</li>
 </ul>
 
+<p class="key-fact keep-in-present"><strong>~85 min</strong> just to read 10 TB once on one machine; 100 machines do it in about 1 min</p>
+<p class="key-fact keep-in-present"><strong>3.5×</strong> from one Ray decorator on a 10-core laptop, identical results</p>
+
 <p class="keep-in-present"><strong>Thursday:</strong> Lab 11. <strong>Next Tuesday:</strong>
 Google's other 2004-era gift: Bigtable, LSM trees, and how NoSQL stores write at absurd<sup class="src"><a href="#src-16" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006 paper PDF)">16</a></sup>
 rates. Quiz 11 opens class: MapReduce, Spark &amp; Ray.</p>
+
+<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<ul>
+  <li><strong>Read</strong> Dean &amp; Ghemawat, <em>MapReduce: Simplified Data Processing on Large Clusters</em> (OSDI 2004, 13 pages); Lab 11's Part A is that paper's shuffle, built by hand.</li>
+  <li><strong>Run</strong> <code>pip install pyspark ray</code>, then confirm <code>java -version</code> works; pyspark will not start without Java.</li>
+  <li><strong>Bring</strong> that laptop with both installs working: Parts B and C run locally in class, and the autograder grades Part A.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

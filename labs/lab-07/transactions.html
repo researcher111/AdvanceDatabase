@@ -5,7 +5,7 @@
 <title>Lab 7 · Transactions &amp; Recovery · microdb part 7</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -13,9 +13,9 @@
 <aside class="toc">
   <div class="toc-title">Lab 7 · microdb 7</div>
   <ul>
-    <li><a href="#try-it">Murder rehearsal</a></li>
+    <li><a href="#try-it">Fates before writes</a></li>
     <li><a href="#big-idea">One rule, one fsync</a></li>
-    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#the-api">Five ordering disciplines</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · The kill</a></li>
@@ -36,13 +36,14 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 7 · Thursday October 15, 2026 · microdb part 7 of 7 · the capstone layer</div>
   <h1>Transactions &amp; Recovery</h1>
-  <div class="subtitle">The write-ahead log, rollback, recovery, locks, then you kill your engine and watch it come back.</div>
+  <div class="subtitle">Kill the engine mid-transfer and $50 vanishes from disk. What must be written, and in what order, so it comes back?</div>
   <div class="byline">Follows Lectures 7–8 · in class: 75 min · aim to finish Build + Verify · due <strong>Tuesday Oct 20</strong> at class start (before the midterm)</div>
 </header>
 
 <p class="lede">
-The last layer of microdb is the one that makes it a database instead of a file format with
-opinions. You enact the <span class="gloss" data-gloss="undo-log">write-ahead rule</span> in <code>set_int</code>, place the one
+Kill microdb halfway through a transfer today and it reopens with $50 gone: the debit reached
+disk, the credit never did, and nothing in the engine knows. The last layer fixes that, and it
+is the one that makes it a database instead of a file format with opinions. You enact the <span class="gloss" data-gloss="undo-log">write-ahead rule</span> in <code>set_int</code>, place the one
 <span class="gloss" data-gloss="the-fsync">fsync that matters</span> in <code>commit</code>,
 walk the log backwards in <code>rollback</code>, and write the <code>recover()</code> that
 runs at startup. Then <code>crash_demo.py</code> murders your engine mid-transfer, and your
@@ -66,7 +67,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Murder rehearsal</h2>
+<h2 id="try-it">Read the log backwards: fates arrive before writes</h2>
 
 <p>Before you write a line: practice being <code>recover()</code>. Here is a log as your code
 will find it after a crash: read it backwards and sentence each transaction.</p>
@@ -103,15 +104,17 @@ will find it after a crash: read it backwards and sentence each transaction.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">One rule, one fsync</h2>
+<h2 id="big-idea">Log the old value first; one fsync makes commit real</h2>
 
-<p>Everything in this lab is consequences of one sentence: <em>the old value reaches the log
+<p class="keep-in-present">Everything in this lab is consequences of one sentence: <em>the old value reaches the log
 before the page changes, and the COMMIT record's fsync is the moment of truth.</em> The log
 is an append-only file of JSON lines, which is not a toy stand-in;
 an append-only file with disciplined fsyncs <em>is</em> what a WAL is.</p>
 
+<p class="key-fact keep-in-present"><strong>1 fsync</strong>, the one on the COMMIT record, is the moment a transaction becomes durable</p>
+
 <!-- ============================================================ -->
-<h2 id="the-api">The contract</h2>
+<h2 id="the-api">Five functions, each an ordering discipline, not an algorithm</h2>
 
 <p>The <code>LogManager</code> (append + backward read) and the <span class="gloss" data-gloss="strict-2pl">strict-2PL</span>
 <code>LockTable</code> ship complete and are worth reading; together they're 60 lines. You
@@ -212,7 +215,7 @@ after recover():        A=$60  B=$90   <- tx[2] undone; the committed transfer s
 
 CONSISTENT. Your database survives kill -9.</code></pre>
 
-<p><strong>Now change something.</strong> Delete the <code>bm.flush_all()</code> line inside
+<p class="keep-in-present"><strong>Now change something.</strong> Delete the <code>bm.flush_all()</code> line inside
 the <code>CRASH</code> string in <code>crash_demo.py</code>, the one that steals tx2's dirty page
 to disk, and rerun. Report the "reopening the wreckage" line and the "after recover()" line, then
 explain why <code>recover()</code> still lists tx2 as undone even though the disk already held the
@@ -222,7 +225,7 @@ right balances; say what your undo wrote and why it was harmless.</p>
 JSON line that said <code>"old": 60</code>. Every database you will ever trust is doing
 exactly this, at scale, right now. microdb is complete: seven layers, every line yours.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · The kill">Where you'll meet this layer at work</h3>
+<h3 class="new-slide" data-kicker="Part 3 · The kill">Postgres restarts by running the recovery you just wrote</h3>
 
 <p>A training-data pipeline that dies halfway through writing its output leaves a torn
 file if the output was a CSV or a Parquet file rewritten in place, and a consistent table if the
@@ -240,11 +243,22 @@ first's and nobody is told; with your <code>LockTable</code>, the second <code>x
 the log. Postgres's <code>pg_wal</code> directory, MySQL's redo log, and SQLite's journal are this
 file under different names.</p>
 
+<table>
+  <thead><tr><th>Where you'll meet it</th><th>What the log and the lock table buy</th></tr></thead>
+  <tbody>
+    <tr><td>A pipeline dies halfway through writing its output</td><td>A CSV or in-place Parquet file is torn; a Postgres table written in one transaction reads as if the job never started</td></tr>
+    <tr><td>An Airflow task is retried after a crash</td><td>Safe only because the database guarantees the failed attempt left nothing behind</td></tr>
+    <tr><td>A loop commits one row at a time</td><td>Runs at your durable-writes rate, one log fsync per commit; <code>COPY</code>, or one transaction around ten thousand inserts, runs near the buffered rate</td></tr>
+    <tr><td>Two notebooks write the same table</td><td>A shared CSV lets the second writer land on top of the first, silently; the second <code>xlock</code> raises <code>LockAbortError</code></td></tr>
+  </tbody>
+</table>
+
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p>Due <strong>TUESDAY Oct 20 at class start</strong>, one week minus two days, so the decks
-are clear for Thursday's midterm. Start in class.</p>
+<p class="keep-in-present"><strong>Submit <code>transaction.py</code> to Gradescope, per the course submission instructions, by Tuesday Oct 20 at class start.</strong> One file; the harness score you see locally is the grade.</p>
+
+<p>That is one week minus two days, so the decks are clear for Thursday's midterm. Start in class.</p>
 
 <h3>Deliverables</h3>
 <ul>

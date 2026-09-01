@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -14,13 +14,13 @@
 <aside class="toc">
   <div class="toc-title">Lab 11</div>
   <ul>
-    <li><a href="#try-it">Trace what you'll build</a></li>
-    <li><a href="#big-idea">One pattern, three costumes</a></li>
-    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#try-it">One line routes every pair</a></li>
+    <li><a href="#big-idea">Pattern yours, plumbing rented</a></li>
+    <li><a href="#the-api">One graded file</a></li>
     <li><a href="#build">Part 1 · micro-mapreduce</a></li>
     <li><a href="#spark">Part 2 · Spark</a></li>
     <li><a href="#ray">Part 3 · Ray</a></li>
-    <li><a href="#verify">Verify</a></li>
+    <li><a href="#verify">Bugs hide at n=1</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -38,13 +38,15 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 11 · Thursday November 19, 2026</div>
   <h1>Spark &amp; Ray · the pattern and the products</h1>
-  <div class="subtitle">Build MapReduce naked in 60 lines, then watch Spark and Ray sell you the same three phases with better plumbing.</div>
+  <div class="subtitle">Nobody coordinates a thousand machines counting words, yet every word must end with exactly one total: build that guarantee in 60 lines, then find it inside Spark and Ray.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-Tuesday ended with a claim: the shuffle is the whole story. Today you test it by building the
-story yourself. Part 1 is pure stdlib: you write map, hash partitioning, the shuffle, and
+Spread a word count over a thousand machines and no machine sees the whole corpus, nobody hands
+out assignments, and every word still has to end with exactly one total. Tuesday ended with a
+claim: the shuffle is the whole story. Today you test it by building the story yourself. Part 1
+is pure stdlib: you write map, hash partitioning, the shuffle, and
 reduce, and a harness checks the one guarantee everything depends on (every value for a key
 in exactly one partition). Parts 2 and 3 are the products: the same word count in three
 chained Spark calls (find the shuffle in the printed plan), and a real job, the nearest-neighbor graph of
@@ -70,7 +72,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Trace what you'll build</h2>
+<h2 id="try-it">One line of arithmetic routes every pair</h2>
 
 <p>The lecture's step-through, here for reference while you code: four documents, two
 partitions, every chip colored by the arithmetic your <code>partition_for</code> will do.</p>
@@ -101,7 +103,7 @@ partitions, every chip colored by the arithmetic your <code>partition_for</code>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">One pattern, three costumes</h2>
+<h2 id="big-idea">The pattern is yours; the plumbing is rented</h2>
 
 <p class="keep-in-present">Parts 1 and 2 run map → shuffle → reduce on the same 4,000 abstracts; Part 3
 runs a different job, one task per abstract, on the same machine. What changes is who owns the
@@ -119,7 +121,7 @@ part you'd rent. That separation is the pattern's whole design, and writing the 
 contract yourself is how you'll know what you're renting.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">The contract</h2>
+<h2 id="the-api">One file is graded; two more you run and read</h2>
 
 <table>
   <thead><tr><th>File</th><th>Ships as</th><th>What's inside</th></tr></thead>
@@ -218,6 +220,8 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
    Novel Table Search [Technical Report]
    Toward Multi-Database Query Reasoning for Text2Cypher</code></pre>
 
+<p class="key-fact keep-in-present"><strong>3.5×</strong> faster on 10 cores, identical results, from two lines of Ray</p>
+
 <p class="keep-in-present">Not 10× on 10 cores: Ray pays startup, ships the 4,000 vectors to each
 worker once, and a two-second job is small. The overhead is fixed, the win scales with the work;
 the full graph over all 4,000 abstracts costs 45 seconds serially and the fixed cost disappears.
@@ -225,13 +229,15 @@ The neighbors it prints are the payoff: a paper about table retrieval sits next 
 multi-table retrieval and table search, found by arithmetic over vectors you built an index for
 last week.</p>
 
-<p><strong>Now change something.</strong> Set <code>N_DOCS = 1000</code> and run again; then leave
+<h3 class="new-slide" data-kicker="Part 3 · Ray">The overhead is fixed; the win grows with the work</h3>
+
+<p class="keep-in-present"><strong>Now change something.</strong> Set <code>N_DOCS = 1000</code> and run again; then leave
 it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the three speedups
 (200 docs on all cores, 1000 docs on all cores, 1000 docs on 2 cores) and say which of the two
 numbers, cores or documents, moved the speedup more and why the answer is not "cores".</p>
 
 <!-- ============================================================ -->
-<h2 id="verify">Verify</h2>
+<h2 id="verify">Routing bugs hide at n=1, so the harness varies n</h2>
 
 <p>With everything installed, all three groups run; without pyspark or ray the harness
 skips those groups and scores what ran; the
@@ -276,9 +282,11 @@ part either way:</p>
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p>Due <strong>Tuesday Nov 24 at class start</strong> (Thanksgiving week, no Thursday
-class). Submit <code>mapreduce.py</code> to Gradescope. The autograder runs the OFFLINE group,
-and that is the whole grade; Parts 2 and 3 are for class discussion.</p>
+<p class="keep-in-present"><strong>Submit <code>mapreduce.py</code> to Gradescope, per the course
+submission instructions, by Tuesday Dec 1 at class start.</strong> One file; the harness score you
+see locally is the grade.</p>
+<p>Thursday Nov 26 is Thanksgiving, so there is no Thursday class that week; the lab is due the Tuesday after the break, Dec 1. The autograder runs the
+OFFLINE group, and that is the whole grade; Parts 2 and 3 are for class discussion.</p>
 
 <h3>Deliverables</h3>
 <ul>

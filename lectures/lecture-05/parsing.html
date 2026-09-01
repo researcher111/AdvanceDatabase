@@ -5,7 +5,7 @@
 <title>Lecture 5 · From SQL Text to Plan · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -23,6 +23,7 @@
     <li><a href="#thursday">On Thursday you build it</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
+    <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -37,13 +38,13 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 5 · Tuesday September 22, 2026</div>
   <h1>From SQL Text to Plan</h1>
-  <div class="subtitle">A lexer, a recursive-descent parser, a naive planner, and microdb gets a prompt.</div>
+  <div class="subtitle">Every layer beneath SQL now exists and none of it can read a typed line: how does text become a plan?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-Every layer that runs beneath SQL now exists: storage, cache, records, operators. What is missing
-is SQL itself: nothing yet turns a typed statement into calls on those layers. Today we build the <span class="gloss" data-gloss="front-end">front
+Your engine has storage, a cache, records, and operators, and still cannot answer one typed line
+of SQL: nothing yet turns a statement into calls on those layers. Today we build the <span class="gloss" data-gloss="front-end">front
 end</span>: text becomes <span class="gloss" data-gloss="token">tokens</span>, tokens become a description of intent, and the description
 becomes a Lab 4 plan, mechanically, by code you can read in one sitting. Thursday microdb
 answers <code>SELECT name FROM students WHERE gpa &gt; 35</code> typed at a prompt, and your
@@ -70,32 +71,24 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p>Quiz first, then the last microdb layer before your engine speaks SQL.</p>
 
+<p class="keep-in-present">You type <code>SELECT name FROM students WHERE gpa &gt; 35</code> at microdb and
+nothing answers. Every layer beneath SQL exists, and not one of them can read that line.</p>
+
 <ol class="agenda">
   <li><strong>Quiz 4</strong>: the iterator model (10 min, first thing).</li>
-  <li><strong>Text is not a program</strong>: why "just use regex" collapses.</li>
-  <li><strong>Watch SQL become a plan</strong>: tokens, tree, scans, live.</li>
-  <li><strong>The grammar</strong>: microSQL in seven lines.</li>
-  <li><strong>Recursive descent</strong>: one method per rule, four helper verbs.</li>
-  <li><strong>The planner</strong>: description → scan tree, honestly naive.</li>
-  <li><strong>Dying well</strong>: what a good syntax error owes its user.</li>
+  <li><strong>Why not a regex</strong>: "just use regex" collapses the moment text has structure.</li>
+  <li><strong>Watch it happen</strong>: text → tokens → description → plan, live.</li>
+  <li><strong>The grammar</strong>: seven lines, one method each, four verbs.</li>
+  <li><strong>The planner</strong>: naive, and always correct.</li>
+  <li><strong>What falls out</strong>: good errors for free, and one query fires every layer.</li>
+  <li><strong>Thursday</strong>: five methods, then SQL at your own prompt.</li>
 </ol>
 
 <p class="keep-in-present">Today's claim: <strong>parsing is just disciplined reading</strong>,
 and the discipline fits in four helper methods.</p>
 
 <!-- ============================================================ -->
-<h2 id="pipeline">Text is not a program</h2>
-
-<h3 class="new-slide" data-kicker="Text is not a program">Split the job: lex, then parse</h3>
-
-<table>
-  <thead><tr><th>Stage</th><th>In → out</th><th>Knows about</th><th>In the lab</th></tr></thead>
-  <tbody>
-    <tr><td><strong>Lexer</strong></td><td>characters → tokens</td><td>spelling only: it recognizes numbers, quoted 'strings', words, and punctuation, and labels each one, without caring what order they come in</td><td>provided; read it before Thursday</td></tr>
-    <tr><td><strong>Parser</strong></td><td>tokens → description</td><td>grammar only: which token may follow which, so it can check that the tokens form a legal statement and record what the statement asks for</td><td><strong>you</strong> write it</td></tr>
-    <tr><td><strong>Planner</strong></td><td>description → scan tree</td><td>the catalog, to look up each table's layout, and Lab 4's scan operators, to build a tree that produces the rows</td><td><strong>you</strong> write it</td></tr>
-  </tbody>
-</table>
+<h2 id="pipeline">Two simple machines beat one clever regex</h2>
 
 <p class="keep-in-present">Here is the problem a regex cannot solve cleanly. In
 <code>SELECT name FROM students WHERE nick = 'from'</code>, the word <code>from</code> appears
@@ -106,6 +99,8 @@ sees an opening quote it reads to the closing quote and emits a single STR token
 for a keyword. The parser then reads <em>tokens</em>, never characters, so it never has to think
 about quotes at all. Two simple machines beat one clever regex.</p>
 
+<h3 class="new-slide" data-kicker="Two simple machines">One regex stopped much of the internet for 27 minutes</h3>
+
 <div class="callout note">
   <span class="label">War story · the regex that stopped the internet, 2019</span>
   <p class="keep-in-present">On July 2, 2019, Cloudflare (which fronts a large slice of the
@@ -113,13 +108,24 @@ about quotes at all. Two simple machines beat one clever regex.</p>
   catastrophically. On real traffic it pinned every CPU in every datacenter to 100%, and for
   about 27 minutes a good fraction of the internet returned errors<sup class="src"><a href="#src-3" title="Details of the Cloudflare outage on July 2, 2019 (Cloudflare Blog)">3</a></sup>. Their postmortem is
   admirably blunt: a regex was being asked to do structural work, recognizing nested and
-  repeating patterns, and a regex engine cannot promise an upper limit on how long that takes. That is this
-slide's lesson at planetary scale: when text has structure, you want a lexer and a parser
+  repeating patterns, and a regex engine cannot promise an upper limit on how long that takes. That is today's
+lesson at planetary scale: when text has structure, you want a lexer and a parser
   whose worst case you can state, not one clever pattern whose worst case you discover in
   production.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Text is not a program">Tokens, concretely</h3>
+<h3 class="new-slide" data-kicker="Two simple machines">Lex, then parse: spelling and grammar are different jobs</h3>
+
+<table>
+  <thead><tr><th>Stage</th><th>In → out</th><th>Knows about</th><th>In the lab</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Lexer</strong></td><td>characters → tokens</td><td>spelling only: it recognizes numbers, quoted 'strings', words, and punctuation, and labels each one, without caring what order they come in</td><td>provided; read it before Thursday</td></tr>
+    <tr><td><strong>Parser</strong></td><td>tokens → description</td><td>grammar only: which token may follow which, so it can check that the tokens form a legal statement and record what the statement asks for</td><td><strong>you</strong> write it</td></tr>
+    <tr><td><strong>Planner</strong></td><td>description → scan tree</td><td>the catalog, to look up each table's layout, and Lab 4's scan operators, to build a tree that produces the rows</td><td><strong>you</strong> write it</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Two simple machines">Five token kinds cover all of microSQL</h3>
 
 <pre class="equation"><code>"SELECT name FROM students WHERE gpa > 35"
 
@@ -133,8 +139,17 @@ STR · PUNCT</code>. Keywords are ordinary words that happen to be on the lexer'
 words; any word on that list is labeled KEYWORD wherever it appears, which is why
 you can't name a table <code>select</code>, in microdb or in Postgres<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</p>
 
+<h3 class="new-slide" data-kicker="Two simple machines">Every naming freedom is paid for in parser lines</h3>
+
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The rule</span><span>the lexer labels any word in its keyword set as KEYWORD the moment it reads the word, before the parser has seen what comes before or after it, so <code>select</code> can never reach the parser as a table name.</span></div>
+  <div class="lc-row"><span class="lc-k">What we bought</span><span>a lexer that is one regular expression, and a parser that can trust every token's kind and never has to reconsider whether a KEYWORD might really be a name.</span></div>
+  <div class="lc-row"><span class="lc-k">What Postgres bought</span><span>flexible naming: many keywords can also be used as table or column names. The price is a system of reserved and non-reserved keyword tiers and thousands of grammar lines that decide which reading applies<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">The lesson</span><span>every naming freedom a language grants its users is paid for with extra parser complexity, and that cost is paid for the life of the language.</span></div>
+</div>
+
 <!-- ============================================================ -->
-<h2 id="try-it">Watch SQL become a plan</h2>
+<h2 id="try-it">Three stages turn typed text into a scan tree</h2>
 
 <p>The whole front end, live. Pick a statement and watch it pass through all three stages,
 the same three stages your Thursday code implements.</p>
@@ -155,7 +170,7 @@ the same three stages your Thursday code implements.</p>
   found instead. Those two facts are all a parser can offer the person who typed the query.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Watch SQL become a plan">The four artifacts</h3>
+<h3 class="new-slide" data-kicker="Text to plan">Each artifact is simpler than the one before it</h3>
 
 <table>
   <thead><tr><th>Stage</th><th>Artifact</th><th>Shaped like</th><th>Owned by</th></tr></thead>
@@ -171,9 +186,7 @@ the same three stages your Thursday code implements.</p>
 design. By the time bytes are involved, SQL is a distant memory.</p>
 
 <!-- ============================================================ -->
-<h2 id="grammar">The grammar</h2>
-
-<h3 class="new-slide" data-kicker="The grammar">microSQL in seven lines</h3>
+<h2 id="grammar">Seven lines of grammar are the whole language</h2>
 
 <pre class="equation"><code>query   :=  SELECT fieldlist FROM tablelist [ WHERE predicate ]
 fieldlist := * | field { , field }
@@ -188,7 +201,7 @@ and reading it is a superpower: every database, config format, and language you'
 publishes one of these. <code>{ }</code> means repeat, <code>[ ]</code> means optional, and
 each line becomes <strong>one Python method</strong>.</p>
 
-<h3 class="new-slide" data-kicker="The grammar">Small on purpose</h3>
+<h3 class="new-slide" data-kicker="Seven-line grammar">Everything missing is more of the same moves</h3>
 
 <table>
   <thead><tr><th>microSQL has</th><th>microSQL lacks (and who adds it)</th></tr></thead>
@@ -201,21 +214,14 @@ each line becomes <strong>one Python method</strong>.</p>
 machinery. A grammar that fits on a slide is a grammar you can hold in your head while
 debugging, for the same reason microdb prefers readable code over clever code everywhere else.</p>
 
-<h3 class="new-slide" data-kicker="Text is not a program">Why you can't name a table <code>select</code></h3>
-
-<div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The rule</span><span>the lexer labels any word in its keyword set as KEYWORD the moment it reads the word, before the parser has seen what comes before or after it, so <code>select</code> can never reach the parser as a table name.</span></div>
-  <div class="lc-row"><span class="lc-k">What we bought</span><span>a lexer that is one regular expression, and a parser that can trust every token's kind and never has to reconsider whether a KEYWORD might really be a name.</span></div>
-  <div class="lc-row"><span class="lc-k">What Postgres bought</span><span>flexible naming: many keywords can also be used as table or column names. The price is a system of reserved and non-reserved keyword tiers and thousands of grammar lines that decide which reading applies<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">The lesson</span><span>every naming freedom a language grants its users is paid for with extra parser complexity, and that cost is paid for the life of the language.</span></div>
-</div>
-
 <!-- ============================================================ -->
-<h2 id="descent">Recursive descent</h2>
+<h2 id="descent">One grammar rule becomes one Python method</h2>
 
 <p>The parsing technique is almost embarrassingly direct: one method per grammar rule, and
 four helper verbs on the token stream. Here is the <em>provided</em> INSERT parser; Thursday
 you write SELECT by imitation:</p>
+
+<p class="key-fact keep-in-present"><strong>4 verbs</strong> peek, next, match, expect: every parsing method you write is built from only these</p>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="h" data-step-name="the four verbs" data-explain="peek looks without consuming; next consumes; match asks 'is the current token this?'; expect consumes-or-dies with a message naming what it wanted. Every rule below is built from only these.">peek() · next() · match(kind, val) · expect(kind, val)</div>
@@ -248,7 +254,7 @@ you write SELECT by imitation:</p>
 breakpoint mid-parse and the stack trace <em>is</em> the parse tree so far. This is why
 recursive descent is the debuggable parsing technique.</p>
 
-<h3 class="new-slide" data-kicker="Recursive descent">A parse, frame by frame</h3>
+<h3 class="new-slide" data-kicker="Recursive descent">The stack grows only where the grammar nests</h3>
 
 <p>The claim above, animated. One fixed query, every token consumption, every call and
 return; step through and watch the stack breathe:</p>
@@ -274,6 +280,7 @@ return; step through and watch the stack breathe:</p>
   Thursday you write exactly these three methods; this trace is their test run.</p>
 </div>
 
+<h3 class="new-slide" data-kicker="Recursive descent">The parser returns data, not scans</h3>
 
 <table>
   <thead><tr><th>Statement</th><th>Parses into</th><th>Holding</th></tr></thead>
@@ -290,9 +297,7 @@ planner be a separate, swappable stage. Week 9's optimizer will read the <em>sam
 QueryData and build a better plan; the parser won't change by one line.</p>
 
 <!-- ============================================================ -->
-<h2 id="planner">The planner</h2>
-
-<h3 class="new-slide" data-kicker="The planner">The naive recipe: four steps, always correct</h3>
+<h2 id="planner">Four planner steps, always correct, never clever</h2>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">1 · scans</span><span>a TableScan per table in the FROM list; layouts fetched from your Lab 3 catalog.</span></div>
@@ -301,13 +306,15 @@ QueryData and build a better plan; the parser won't change by one line.</p>
   <div class="lc-row"><span class="lc-k">4 · project</span><span>one ProjectScan with the field list, unless it was <code>*</code>. No useless wrappers: <code>SELECT * FROM t</code> plans as a bare TableScan.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="The planner">Naive, and knows it</h3>
+<h3 class="new-slide" data-kicker="The naive planner">Correct today, fast in week 9, same QueryData</h3>
 
 <p>Thursday's measurement prints your planner's own plan for the join query and counts its
 work, next to Lab 4's hand-optimized shape:</p>
 
 <pre class="equation"><code>your planner:      SelectScan[everything] ← Product        900 pairs examined
 Lab 4, by hand:    Select[join] ← Product(σ(s) × σ(m))      60 pairs examined</code></pre>
+
+<p class="key-fact keep-in-present"><strong>900 vs 60</strong> pairs examined: your naive plan against Lab 4's hand-built one, for the same join query</p>
 
 <p class="keep-in-present">The two plans differ in where the filter runs. Your planner builds
 the full product of the two tables and filters afterward, so every pair of rows is formed and
@@ -316,7 +323,7 @@ Correct first, fast later, and "later" has a date: week 9's
 optimizer reads the same QueryData and does that <span class="gloss" data-gloss="pushdown">pushdown</span> mechanically, using statistics your
 catalog will learn to keep. The parser you write this week never changes again.</p>
 
-<h3 class="new-slide" data-kicker="The planner">The whole trip, once</h3>
+<h3 class="new-slide" data-kicker="The naive planner">One typed query now fires every layer since week 1</h3>
 
 <table>
   <thead><tr><th>Layer</th><th>Week</th><th>What it does for this one query</th></tr></thead>
@@ -333,9 +340,7 @@ catalog will learn to keep. The parser you write this week never changes again.<
 August. Thursday you get to feel it.</p>
 
 <!-- ============================================================ -->
-<h2 id="errors">Dying well</h2>
-
-<h3 class="new-slide" data-kicker="Dying well">expect() is the whole error strategy</h3>
+<h2 id="errors">Good syntax errors fall out of expect() for free</h2>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="e1" data-explain="One helper, used everywhere: if the current token isn't what the grammar demands, die, naming both what was WANTED and what was FOUND.">def expect(self, kind, value=None):</div>
@@ -347,7 +352,7 @@ August. Thursday you get to feel it.</p>
   <div class="code-explain-panel">Hover a line: the REPL prints these messages verbatim; your classmates are the users.</div>
 </div>
 
-<h3 class="new-slide" data-kicker="Dying well">Bedside manner, compared</h3>
+<h3 class="new-slide" data-kicker="Errors for free">Four lines of helper beat Postgres at explaining errors</h3>
 
 <table>
   <thead><tr><th>Engine</th><th>For <code>SELECT name FORM students</code></th><th>Grade</th></tr></thead>
@@ -362,7 +367,7 @@ August. Thursday you get to feel it.</p>
 Because every rule reports failure through <code>expect()</code>, every error automatically names what was expected and what was found; no rule needs its own error-handling code.</p>
 
 <!-- ============================================================ -->
-<h2 id="thursday">On Thursday you build it</h2>
+<h2 id="thursday">Thursday: five methods, and your engine speaks SQL</h2>
 
 <p class="keep-in-present">Five methods total, and much of the work is the <code>{ , }</code> idiom from <code>parse_insert</code>, which you will type three times: for the field list and the table list in <code>parse_query</code>, and for the AND chain in <code>_parse_predicate</code>.
 The <span class="gloss" data-gloss="repl">REPL</span> and both worked-example parsers ship complete.</p>
@@ -377,7 +382,7 @@ The <span class="gloss" data-gloss="repl">REPL</span> and both worked-example pa
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="On Thursday you build it">Before class checklist</h3>
+<h3 class="new-slide" data-kicker="Thursday's build">Five boxes to tick before Thursday's class</h3>
 
 <ul class="checklist">
   <li>☐ Lab 4 submitted: the starter now ships reference Labs 1–4 (five layers).</li>
@@ -405,9 +410,18 @@ The <span class="gloss" data-gloss="repl">REPL</span> and both worked-example pa
   that lets week 9 swap in an optimizer without touching your parser.</li>
 </ul>
 
+<p class="key-fact keep-in-present"><strong>4 verbs</strong> build every parsing method · <strong>900 vs 60</strong> pairs: naive today, pushed down in week 9</p>
+
 <p class="keep-in-present"><strong>Thursday:</strong> five methods, then type SQL at your own
 engine. <strong>Next Tuesday:</strong> B+ trees: the structure that finds one row in a
 million without scanning. Quiz 5 opens class: parsing &amp; planning.</p>
+
+<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<ul>
+  <li><strong>Read</strong> <code>parse_insert</code> until you can say what each line consumes (Sciore ch. 9 for the long form).</li>
+  <li><strong>Run</strong> <code>python3 test_sql.py</code> on the nine Lab 5 starter files; it should print <strong>0/12 passed</strong>.</li>
+  <li><strong>Bring</strong> a laptop with Lab 4 submitted and the Lab 5 starter on it.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

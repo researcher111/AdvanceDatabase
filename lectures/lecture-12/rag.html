@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -15,16 +15,17 @@
   <div class="toc-title">Lecture 12</div>
   <ul>
     <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#why">Why the model needs a database</a></li>
-    <li><a href="#try-it">Ask this course a question</a></li>
+    <li><a href="#why">Teaching a model your data</a></li>
+    <li><a href="#try-it">What the retriever hands it</a></li>
     <li><a href="#pipeline">The pipeline is the course</a></li>
-    <li><a href="#chunking">Chunking</a></li>
-    <li><a href="#eval">Measuring retrieval</a></li>
-    <li><a href="#failures">How RAG fails</a></li>
-    <li><a href="#production">Beyond the lab</a></li>
-    <li><a href="#thursday">On Thursday you wire it</a></li>
+    <li><a href="#chunking">Chunking is record design</a></li>
+    <li><a href="#eval">Retrieval quality is measurable</a></li>
+    <li><a href="#failures">RAG fails like databases</a></li>
+    <li><a href="#production">Production upgrades</a></li>
+    <li><a href="#thursday">You write the retriever</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
+    <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -39,13 +40,13 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 12 · Tuesday November 10, 2026</div>
   <h1>RAG as a Systems Problem</h1>
-  <div class="subtitle">Chunk, embed, index, retrieve, assemble: the database course hiding inside every "chat with your documents" product.</div>
+  <div class="subtitle">The model has never seen your documents and cannot hold them all in its prompt, so how does "chat with your documents" work at all?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-A language model answers from <span class="gloss" data-gloss="parametric">parametric
-knowledge</span>, whatever its training run baked into the weights<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup>. Your documents aren't in
+Ask a language model about your own documents and it has nothing to answer from. It answers from <span class="gloss" data-gloss="parametric">parametric
+knowledge</span>, whatever its training run baked into the weights<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup>; your documents aren't in
 there, and its <span class="gloss" data-gloss="context-window">context window</span> is too
 small to hold them all. Retrieval-augmented generation is the standard fix, and the central claim of
 this lecture is that the "retrieval" half is not an AI technique. It is a
@@ -74,22 +75,24 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p>Quiz 9 first (vector search), then the pipeline your project is building.</p>
 
+<p class="keep-in-present">Your project's corpus is not in any model's weights, and it will not fit in any model's prompt. Nothing about the model fixes that. What fixes it is a database, and you have already built most of it.</p>
+
 <ol class="agenda">
-  <li><strong>Why the model needs a database</strong>: three ways to teach an LLM your data, priced.</li>
-  <li><strong>Ask this course a question</strong>: a complete RAG retrieval stage, live in the page.</li>
-  <li><strong>The pipeline</strong>: five stages, and which week of this course each one is.</li>
-  <li><strong>Chunking</strong>: the schema-design decision hiding in "split the text".</li>
-  <li><strong>Measuring retrieval</strong>: two scores, <span class="gloss" data-gloss="hit-at-k">hit@k</span> and <span class="gloss" data-gloss="mrr">MRR</span>, that grade the retriever on its own, without anyone reading the model's answer.</li>
-  <li><strong>Failure modes</strong>: the synonym wall, lost in the middle, stale indexes.</li>
+  <li><strong>Why the model needs a database</strong>: your documents are not in it and will not fit in its prompt; three fixes, priced.</li>
+  <li><strong>Watch retrieval live</strong>: a complete retrieval stage in the page, showing exactly what the model is handed.</li>
+  <li><strong>You built this already</strong>: the pipeline is five stages, and you have built four of them.</li>
+  <li><strong>Chunk, then measure</strong>: chunking is record design, and a 12-question <span class="gloss" data-gloss="eval-set">eval set</span> scored by <span class="gloss" data-gloss="hit-at-k">hit@k</span> and <span class="gloss" data-gloss="mrr">MRR</span> grades the retriever without anyone reading an answer.</li>
+  <li><strong>How RAG fails</strong>: the synonym wall, lost in the middle, and stale indexes are database failures, and so are the production fixes.</li>
+  <li><strong>Thursday</strong>: you wire micro-rag; your project is the same wiring at scale.</li>
 </ol>
 
 <p class="keep-in-present">Today's claim: <strong>RAG quality is mostly retrieval quality, and
 retrieval quality is measurable</strong>, with a hand-labeled <span class="gloss" data-gloss="eval-set">eval set</span>, not by reading a few answers and forming an impression.</p>
 
 <!-- ============================================================ -->
-<h2 id="why">Why the model needs a database</h2>
+<h2 id="why">Teaching a model your data is a database workload</h2>
 
-<h3 class="new-slide" data-kicker="Why the model needs a database">Three ways to teach a model your data</h3>
+<h3>Three ways to teach a model your data</h3>
 
 <table>
   <thead><tr><th>Approach</th><th>Per update</th><th>Per question</th><th>Where it breaks</th></tr></thead>
@@ -100,13 +103,15 @@ retrieval quality is measurable</strong>, with a hand-labeled <span class="gloss
   </tbody>
 </table>
 
+<h3 class="new-slide" data-kicker="A database workload">Retrieval turns the problem into a database workload</h3>
+
 <p class="keep-in-present">Retrieval wins on update cost, question cost, and citability, by
 turning the problem into a database workload: <strong>keep documents in a store, index them
 for similarity, query per question</strong>. Fresh data means updating an index, not
 retraining a model.</p>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Ask this course a question</h2>
+<h2 id="try-it">The model sees only what the retriever hands it</h2>
 
 <p>Below is a complete RAG retrieval stage running in your browser: the same math as Thursday's
 <code>micro_rag.py</code>, including its <span class="gloss" data-gloss="hashed-bag-of-words">hashed bag-of-words</span> embedder, over a 24-document corpus that summarizes
@@ -149,7 +154,7 @@ question ──embed──▶ query vector ──────retrieve (top-k)─
                                           │
                         assemble context ─┴─▶ prompt ──generate──▶ answer + citations</code></pre>
 
-<h3 class="new-slide" data-kicker="The pipeline is the course">Five stages, and where you've seen them</h3>
+<h3 class="new-slide" data-kicker="The pipeline is the course">Four of five stages are database machinery you built</h3>
 
 <div class="viz" id="viz-pipe">
   <div class="viz-title">the pipeline · click a stage · green means "you already built this"</div>
@@ -161,9 +166,15 @@ question ──embed──▶ query vector ──────retrieve (top-k)─
   retrieval, not generation, sets the quality ceiling.</p>
 </div>
 
+<p class="key-fact keep-in-present"><strong>4 of 5</strong> RAG stages are database machinery you have already built; only generate is new, and Thursday mocks it</p>
+
+<h3 class="new-slide" data-kicker="The pipeline is the course">The quality ceiling is set before any model runs</h3>
+
 <p class="keep-in-present">This is why the project spec calls the LLM "the easy part."
 The pipeline's quality ceiling is set before any model runs: <strong>if the right chunk
 isn't retrieved, no prompt engineering can quote it.</strong></p>
+
+<h3 class="new-slide" data-kicker="The pipeline is the course">Your project proposal is this pipeline as four tables</h3>
 
 <p class="keep-in-present">The project spec now asks for the same discipline in your own data before any code:
 a four-table schema, <code>documents</code>, <code>chunks</code>, <code>embeddings</code>, and
@@ -173,9 +184,9 @@ cite its source. The schema, and why each column exists for the evaluation, is i
 <a href="../../project.html#schema">the project spec</a>.</p>
 
 <!-- ============================================================ -->
-<h2 id="chunking">Chunking</h2>
+<h2 id="chunking">Chunking is record design, not text splitting</h2>
 
-<h3 class="new-slide" data-kicker="Chunking">Chunk size is record design</h3>
+<h3>Whole document, paragraph, or sentence</h3>
 
 <table>
   <thead><tr><th>Choice</th><th>Retrieval precision</th><th>Context delivered</th><th>Failure mode</th></tr></thead>
@@ -186,6 +197,8 @@ cite its source. The schema, and why each column exists for the evaluation, is i
   </tbody>
 </table>
 
+<h3 class="new-slide" data-kicker="Chunking is record design">Overlap and metadata are record design too</h3>
+
 <p class="keep-in-present">Production refinements are record design too: <strong>overlap</strong>
 (repeat ~10–15% at boundaries so a claim split across chunks survives whole in one of them)<sup class="src"><a href="#src-6" title="Chunk large documents for vector search solutions in Azure AI Search">6</a></sup>
 and <strong>metadata</strong> (store doc id, title, position with each chunk; Thursday's
@@ -193,7 +206,7 @@ chunks carry <code>doc</code> and <code>title</code> precisely so answers can ci
 would call this a layout decision; LangChain calls it a text splitter<sup class="src"><a href="#src-7" title="LangChain Docs: Text splitters">7</a></sup>; it is the same
 decision.</p>
 
-<h3 class="new-slide" data-kicker="Chunking">The dial, measured on Thursday's corpus</h3>
+<h3 class="new-slide" data-kicker="Chunking is record design">One topic per chunk, however many words that takes</h3>
 
 <div class="viz" id="viz-chunk">
   <div class="viz-title">chunk size vs retrieval quality · measured on the reference solution, eval set attached</div>
@@ -213,9 +226,9 @@ decision.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="eval">Measuring retrieval</h2>
+<h2 id="eval">Retrieval quality is measurable: two numbers, twelve questions</h2>
 
-<h3 class="new-slide" data-kicker="Measuring retrieval">Two numbers from one hand-labeled set</h3>
+<h3>Two numbers from one hand-labeled set</h3>
 
 <div class="math">
 <p>The eval set is 12 pairs of (question, relevant doc ids), labeled by hand, once. Two numbers
@@ -226,7 +239,7 @@ come out of it<sup class="src"><a href="#src-8" title="Building a Question Answe
 0.5, rank 3 scores 0.33, and a doc that never appears scores 0.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Measuring retrieval">Thursday's numbers, previewed</h3>
+<h3 class="new-slide" data-kicker="Retrieval is measurable">One config line moved hit@3 from 0.42 to 0.92</h3>
 
 <p class="keep-in-present">Thursday's embedder is hashed bag-of-words: each word in the text is run through a
 hash function that picks one of DIM slots in the vector, and that slot is incremented, so the width DIM is a dial.
@@ -242,17 +255,21 @@ look similar, and the eval set catches the damage without anyone reading an answ
   </tbody>
 </table>
 
+<p class="key-fact keep-in-present"><strong>0.42 → 0.92</strong> hit@3 from one config line (DIM 64 to 2048), caught by a 12-question eval set in milliseconds</p>
+
+<h3 class="new-slide" data-kicker="Retrieval is measurable">Twelve labeled questions grade every experiment in milliseconds</h3>
+
 <p class="keep-in-present">This table is the whole argument for eval sets: a one-line config
 change moved retrieval from "coin flip" to "reliable," and <strong>a 12-question labeled set
 detected it in milliseconds.</strong> Your project must ship one for its own corpus.</p>
 
 <!-- ============================================================ -->
-<h2 id="failures">How RAG fails</h2>
+<h2 id="failures">RAG fails the way databases fail, starting with vocabulary</h2>
+
+<h3>The synonym wall, measured</h3>
 
 <p class="keep-in-present">Measured on the widget's corpus above: same information need,
 two phrasings, DIM=2048:</p>
-
-<h3 class="new-slide" data-kicker="How RAG fails">The synonym wall, measured</h3>
 
 <pre class="equation"><code>"Why can't the OS page cache replace the database's own cache?"
       → bufferpool (0.25) ✓     wal (0.13)      catalog (0.12)
@@ -267,15 +284,22 @@ scores barely above zero. A learned embedding model maps both phrasings near the
 that upgrade is exactly one function swap in Thursday's code, and it's the swap your project
 makes.</p>
 
-<h3 class="new-slide" data-kicker="How RAG fails">The rest of the failure catalog</h3>
+<h3 class="new-slide" data-kicker="RAG fails like databases">Retrieved is not read: two ranking failures</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Lost in the middle</span><span>models attend best to the start and end of a long context; retrieved-but-buried evidence gets skimmed (Liu et&nbsp;al. above measured the U-shape)<sup class="src"><a href="#src-10" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172)">10</a></sup>. Mitigation: retrieve less, order deliberately, put the best chunk first.<sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Right doc, wrong rank</span><span>the relevant chunk is retrieved but lands third in a list of five, so hit@3 counts the question as a success even though the model reads two weaker chunks first. MRR is the metric that notices, because rank 3 scores 0.33 instead of 1.0. The fix belongs to the assembly stage: order the retrieved chunks so the best-scoring one comes first.</span></div>
+</div>
+
+<h3 class="new-slide" data-kicker="RAG fails like databases">Staleness, drift, and overconfidence are database failures too</h3>
+
+<div class="layer-card">
   <div class="lc-row"><span class="lc-k">Stale index</span><span>documents changed; vectors didn't. The index answers from the past with full confidence, the RAG version of the <span class="gloss" data-gloss="stale-cache">cache-invalidation problem</span>, solved the same way: re-embed on write, version the index.</span></div>
   <div class="lc-row"><span class="lc-k">Confident grounding failure</span><span>retrieval returns weak chunks; the model answers anyway, citing them. Defenses: score thresholds ("if the best cosine is 0.09, say so"), and prompts that permit "the sources don't answer this."</span></div>
   <div class="lc-row"><span class="lc-k">Embedding drift</span><span>change the embedding model and every stored vector becomes meaningless, because vectors from two different models do not live in the same space and distances between them say nothing (last week's lesson, now as an operations problem). Treat the embedding model's version like a schema version: record which model produced each vector, and re-embed the whole corpus to migrate.</span></div>
 </div>
+
+<h3 class="new-slide" data-kicker="RAG fails like databases">Fabricated citations have already reached a courtroom</h3>
 
 <div class="callout note">
   <span class="label">War story · Mata v. Avianca, 2023</span>
@@ -291,12 +315,12 @@ makes.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="production">Beyond the lab</h2>
+<h2 id="production">Production upgrades are access-path ideas you already know</h2>
+
+<h3>The production retrieval stack</h3>
 
 <p class="keep-in-present">Three upgrades separate Thursday's 200 lines from a production
 retrieval stack, each one a database idea you can now name:</p>
-
-<h3 class="new-slide" data-kicker="Beyond the lab">The production retrieval stack</h3>
 
 <table>
   <thead><tr><th>Upgrade</th><th>What it is</th><th>Database idea underneath</th></tr></thead>
@@ -307,14 +331,16 @@ retrieval stack, each one a database idea you can now name:</p>
   </tbody>
 </table>
 
+<h3 class="new-slide" data-kicker="Production upgrades">After Thursday, a misbehaving retriever is debuggable</h3>
+
 <p class="keep-in-present">Frameworks (LangChain, LlamaIndex) package these stages behind
 one import. Fine, but after Thursday the stages are ~200 lines you have personally written,
 and "the retriever is misbehaving" will be a debuggable statement, not a support ticket.</p>
 
 <!-- ============================================================ -->
-<h2 id="thursday">On Thursday you wire it</h2>
+<h2 id="thursday">Thursday you write the retriever and the assembly</h2>
 
-<p>micro-rag: the full pipeline over the course-summary corpus you just queried. The chunker,
+<p class="keep-in-present">micro-rag: the full pipeline over the course-summary corpus you just queried. The chunker,
 the embedder, and the LLM call are provided in the starter files; you write the retriever (on top of Lab 9's
 <code>microvector</code>) and the context assembly, then run the eval set against them.</p>
 
@@ -341,9 +367,18 @@ the embedder, and the LLM call are provided in the starter files; you write the 
   access-path ideas you learned in weeks 4–6.</li>
 </ul>
 
+<p class="key-fact keep-in-present"><strong>4 of 5 · 0.42 → 0.92</strong> four of the five RAG stages are database machinery you built; one config line moved hit@3 from 0.42 to 0.92, and twelve labeled questions caught it</p>
+
 <p class="keep-in-present"><strong>Thursday:</strong> build micro-rag. <strong>Next
 Tuesday:</strong> the data outgrows one machine: partitioning, MapReduce, Spark, and Ray.
 Quiz 10 opens class: RAG.</p>
+
+<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<ul>
+  <li><strong>Read</strong> the <a href="../../labs/lab-10/microrag.html">Lab 10 page</a> through the pipeline diagram, plus the four-table schema (<code>documents</code>, <code>chunks</code>, <code>embeddings</code>, <code>eval_questions</code>) in <a href="../../project.html#schema">the project spec</a>.</li>
+  <li><strong>Run</strong> <code>python3 test_rag.py</code> on the unedited Lab 10 starter files; it should print <strong>0/7</strong>.</li>
+  <li><strong>Bring</strong> Lab 9's <code>microvector</code> working (the retriever builds on it) and, project teams, ten questions a real user of your corpus would ask.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

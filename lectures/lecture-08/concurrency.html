@@ -5,7 +5,7 @@
 <title>Lecture 8 · Concurrency: Locks, Isolation &amp; MVCC · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -14,14 +14,15 @@
   <div class="toc-title">Lecture 8</div>
   <ul>
     <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#anomalies">Ways to be wrong together</a></li>
-    <li><a href="#try-it">Interleave two transactions</a></li>
-    <li><a href="#locking">Two-phase locking</a></li>
-    <li><a href="#levels">Isolation levels</a></li>
-    <li><a href="#mvcc">MVCC: readers don't block</a></li>
+    <li><a href="#anomalies">Correct alone, wrong together</a></li>
+    <li><a href="#try-it">Build the lost update</a></li>
+    <li><a href="#locking">2PL buys serializability</a></li>
+    <li><a href="#levels">Levels are priced trades</a></li>
+    <li><a href="#mvcc">MVCC: keep every version</a></li>
     <li><a href="#thursday">On Thursday you build it</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
+    <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -36,14 +37,16 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 8 · Tuesday October 13, 2026</div>
   <h1>Concurrency: Locks, Isolation &amp; MVCC</h1>
-  <div class="subtitle">Two transactions, one row, and every way that can go wrong, named, priced, and prevented.</div>
+  <div class="subtitle">How do two individually correct transactions share one row and lose money with no crash anywhere, and what does each way of stopping it cost?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <p class="lede">
-Thursday's log made one transaction crash-proof; today two of them meet. Interleave a pair of
-correct transactions carelessly and money vanishes with no crash anywhere; the anomalies
-have names, the fixes have prices, and every engine picks its trade. We build up from
+Two cashiers each add $10 to the same $100 account, both commit cleanly, and the balance
+reads $110: no crash, no error, and one deposit gone. Thursday's log made one transaction
+crash-proof; today two of them meet, and interleaving a pair of correct transactions
+carelessly is all it takes to lose money with no failure anywhere. The anomalies have
+names, the fixes have prices, and every engine picks its trade. We build up from
 two-phase locking (the classic, and your lab) to
 <span class="gloss" data-gloss="mvcc-intro">MVCC</span>, the keep-every-version trick that
 lets Postgres run reports and updates through the same rows without either waiting<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: 13.1. Introduction (Concurrency Control)">1</a></sup>.
@@ -67,23 +70,33 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p>Quiz first, then the I in ACID.</p>
+<p>Quiz 6 first (B+ trees, 10 min), then the I in ACID.</p>
+
+<p class="keep-in-present">Account A holds $100. Two cashiers each add $10: each reads 100,
+each writes 110, both commit. The balance is $110, one deposit has vanished, and no crash,
+no error, and no log entry will ever say so.</p>
 
 <ol class="agenda">
-  <li><strong>Quiz 6</strong>: B+ trees (10 min, first thing).</li>
-  <li><strong>Ways to be wrong together</strong>: lost updates, dirty reads, phantoms, and write skew, shown live.</li>
-  <li><strong>Interleave it yourself</strong>: build the disaster, then prevent it.</li>
-  <li><strong>Two-phase locking</strong>: the classic fix, and its deadlock bill.</li>
-  <li><strong>Isolation levels</strong>: the menu of safety-for-speed trades.</li>
-  <li><strong>MVCC</strong>: Postgres's answer: keep every version, block almost no one.</li>
+  <li><strong>Two correct transactions, one row</strong>: a deposit vanishes without a crash anywhere.</li>
+  <li><strong>The anomaly zoo</strong>: five named ways to be wrong together, and the exchange one of them closed.</li>
+  <li><strong>Interleave it yourself</strong>: build the lost update by hand, then watch locks refuse the same clicks.</li>
+  <li><strong>The classic fix</strong>: two-phase locking, serializability bought with waiting and deadlocks.</li>
+  <li><strong>Isolation levels</strong>: a menu of priced trades of safety for throughput.</li>
+  <li><strong>Postgres's answer</strong>: MVCC keeps every version, so readers and writers stop waiting on each other.</li>
+  <li><strong>Thursday</strong>: you build the lock table into microdb, then kill it mid-transaction.</li>
 </ol>
 
 <p class="keep-in-present">Today's claim: <strong>isolation is purchased</strong>: every level pays for its safety with one of three things: transactions waiting on locks, transactions aborted and retried, or old row versions kept on disk. There is no free level.</p>
 
 <!-- ============================================================ -->
-<h2 id="anomalies">Ways to be wrong together</h2>
+<h2 id="anomalies">Correct alone is not correct together</h2>
 
-<h3 class="new-slide" data-kicker="Ways to be wrong together">The anomaly zoo: learn the names</h3>
+<p class="keep-in-present">The gold standard is
+<span class="gloss" data-gloss="serializable">serializability</span>: the result equals
+<em>some</em> serial order. Everything else on today's menu is a named, priced deviation
+from it.</p>
+
+<h3 class="new-slide" data-kicker="Wrong together">Five anomalies, each with a name and a recipe</h3>
 
 <table>
   <thead><tr><th>Anomaly</th><th>The story in one line</th><th>Needs</th></tr></thead>
@@ -96,10 +109,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   </tbody>
 </table>
 
-<p class="keep-in-present">The gold standard is
-<span class="gloss" data-gloss="serializable">serializability</span>: the result equals
-<em>some</em> serial order. Everything else on today's menu is a named, priced deviation
-from it.</p>
+<h3 class="new-slide" data-kicker="Wrong together">One lost update closed an exchange</h3>
 
 <div class="callout note">
   <span class="label">War story · the lost update that closed a bank, 2014</span>
@@ -112,8 +122,10 @@ from it.</p>
   days. The two-cashier demo in the next section is the same exploit with smaller numbers. Preventing it is what the rest of today's lecture is about.</p>
 </div>
 
+<p class="key-fact keep-in-present"><strong>About 896 BTC</strong> withdrawn from Flexcoin in 2014 by one lost update, with no crash anywhere</p>
+
 <!-- ============================================================ -->
-<h2 id="try-it">Interleave two transactions</h2>
+<h2 id="try-it">Build the lost update by hand, then let locks refuse it</h2>
 
 <p>Two cashiers, one account, and you as the scheduler. Build the disaster by hand, then flip
 the locks on and watch the same schedule get refused.</p>
@@ -140,7 +152,7 @@ the locks on and watch the same schedule get refused.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="locking">Two-phase locking</h2>
+<h2 id="locking">2PL buys serializability with waiting</h2>
 
 <p class="keep-in-present">The classic prevention: make conflicting access <em>impossible</em>
 by fencing rows with locks. Every serious engine shipped it for decades; yours ships it
@@ -153,7 +165,7 @@ conflict table:        S      X
                  S    ok    WAIT
                  X   WAIT   WAIT        ← every anomaly dies in these three WAITs<sup class="src"><a href="#src-4" title="Sciore, Database Design and Implementation, 2nd ed., Chapter 5 Transaction Management">4</a></sup></code></pre>
 
-<h3 class="new-slide" data-kicker="Two-phase locking">The protocol</h3>
+<h3 class="new-slide" data-kicker="Two-phase locking">Lock first, grow then shrink, hold to commit</h3>
 
 <table>
   <thead><tr><th>Rule</th><th>Statement</th><th>Why</th></tr></thead>
@@ -164,7 +176,7 @@ conflict table:        S      X
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="Two-phase locking">The bill: waiting, and worse</h3>
+<h3 class="new-slide" data-kicker="Two-phase locking">The bill is waiting, and sometimes deadlock</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Waiting</span><span>a conflicting lock means someone sits idle: a long report holding shared locks makes an update wait for its exclusive lock, and the next report then waits behind that update. Every transaction that is waiting is one that could have been doing work, so throughput falls even though nothing has gone wrong.</span></div>
@@ -174,9 +186,7 @@ conflict table:        S      X
 </div>
 
 <!-- ============================================================ -->
-<h2 id="levels">Isolation levels</h2>
-
-<h3 class="new-slide" data-kicker="Isolation levels">The menu, explorable</h3>
+<h2 id="levels">Every isolation level is a priced trade</h2>
 
 <div class="viz" id="viz-iso">
   <div class="viz-title">four levels, three anomalies · click a level, watch what it buys</div>
@@ -191,13 +201,13 @@ conflict table:        S      X
   that order IS the standard's definition of the levels<sup class="src"><a href="#src-7" title="ISO/IEC 9075:1992 (SQL-92) draft text, section 4.28 SQL-transactions">7</a></sup>.</p>
 </div>
 
+<h3 class="new-slide" data-kicker="Isolation levels">REPEATABLE READ has a gray zone the standard never named</h3>
+
 <p class="keep-in-present">Set it per transaction:
 <code>SET TRANSACTION ISOLATION LEVEL SERIALIZABLE<sup class="src"><a href="#src-8" title="PostgreSQL Documentation: SET TRANSACTION">8</a></sup></code>. The gray zone the explorer shows at REPEATABLE READ is why the Berenson paper in the citations exists. The ANSI standard defines each level only by which of the anomalies above it forbids, and those definitions were written before snapshot isolation existed. Snapshot isolation forbids everything the standard lists for REPEATABLE READ, yet still allows write skew (see the FAQ), an anomaly the standard never names<sup class="src"><a href="#src-2" title="A Critique of ANSI SQL Isolation Levels (Berenson et al., SIGMOD 1995)">2</a></sup>.</p>
 
 <!-- ============================================================ -->
-<h2 id="mvcc">MVCC: readers don't block</h2>
-
-<h3 class="new-slide" data-kicker="MVCC">How Postgres actually does it</h3>
+<h2 id="mvcc">Postgres keeps every version so readers never block</h2>
 
 <table>
   <thead><tr><th>Piece</th><th>Mechanism</th><th>You already built the bones</th></tr></thead>
@@ -209,10 +219,14 @@ conflict table:        S      X
   </tbody>
 </table>
 
+<p class="key-fact keep-in-present"><strong>2 stamps</strong> per row version, xmin and xmax: the whole visibility test is two comparisons, no locks</p>
+
+<h3 class="new-slide" data-kicker="MVCC">MVCC moved the cost, it didn't erase it</h3>
+
 <p class="keep-in-present"><strong>Readers never block writers; writers never block
 readers.</strong> Writers still block writers (locks live on)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3. Explicit Locking">6</a></sup>, and a transaction that holds its snapshot open for a long time forces the engine to keep every old version that snapshot might still read, so vacuum cannot reclaim them and the table grows: MVCC moved the cost, it didn't erase it<sup class="src"><a href="#src-13" title="PostgreSQL Documentation: 19.11. Client Connection Defaults (idle_in_transaction_session_timeout)">13</a></sup>. No free level, ever.</p>
 
-<h3 class="new-slide" data-kicker="MVCC">Walk a version chain</h3>
+<h3 class="new-slide" data-kicker="MVCC">Visibility is arithmetic on two stamps, never a lock</h3>
 
 <p>One account, three updates, four possible readers. The two-field visibility test from the
 table above, run live; drag the slider to move the reader's snapshot through time:</p>
@@ -261,10 +275,19 @@ today guarding every read and write. Then you kill the process partway through a
   and vacuumed, exactly the storage moves Lab 3 taught, aimed at isolation.</li>
 </ul>
 
+<p class="key-fact keep-in-present"><strong>About 896 BTC</strong> lost to one unguarded read-check-write · <strong>2 stamps</strong> xmin and xmax: MVCC's whole visibility test, no locks</p>
+
 <p class="keep-in-present"><strong>Thursday:</strong> Lab 7, the kill -9 lab.
 <strong>Next Tuesday:</strong> the optimizer: statistics, selectivity, and why the planner
 finally gets to be smart, plus midterm review. Quiz 7 (transactions &amp; MVCC) lands
 Tuesday Oct 27, after the exam.</p>
+
+<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<ul>
+  <li><strong>Read</strong> Sciore ch. 5 and Postgres's isolation docs (linked above); be able to retell the FAQ's write-skew story.</li>
+  <li><strong>Run</strong> the lost-update interleaving on paper (read, read, write, write) and mark the step where strict 2PL refuses it; then run the Lab 7 harness on the eight starter files and see <strong>0/9</strong>.</li>
+  <li><strong>Bring</strong> Lab 6 submitted and the WAL rule by heart: old value to the log, before the page.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

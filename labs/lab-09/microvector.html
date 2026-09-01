@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<link rel="stylesheet" href="../_shared/lab-base.css?v=20">
+<link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -14,9 +14,9 @@
 <aside class="toc">
   <div class="toc-title">Lab 9 · microvector</div>
   <ul>
-    <li><a href="#try-it">Set the dial</a></li>
+    <li><a href="#try-it">The ANN bend</a></li>
     <li><a href="#big-idea">Skip most of the space</a></li>
-    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#the-api">Three methods, one counter</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
@@ -37,13 +37,14 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 9 · Thursday November 5, 2026 · Act II, lab 2 of 4 · your project's retrieval layer</div>
   <h1>microvector</h1>
-  <div class="subtitle">Brute force, then IVF, and the recall-vs-speed dial becomes yours to set.</div>
+  <div class="subtitle">Exact search scores all 4,000 vectors on every query; how much recall will you trade to skip most of them?</div>
   <div class="byline">Follows Lecture 11 (Vector Databases) · in class: 75 min · aim to finish Build + Verify · due Thu Nov 12 at class start</div>
 </header>
 
 <p class="lede">
-Four thousand real arXiv abstracts, embedded by a real sentence model, and the ANN trade is in
-your hands: an exact
+Your project's retrieval layer will score every stored chunk on every question unless you build
+something that lets a query skip most of them, and skipping costs recall. This lab puts that trade
+in your hands on four thousand real arXiv abstracts, embedded by a real sentence model: an exact
 <span class="gloss" data-gloss="brute-baseline">brute-force baseline</span>, an IVF index
 (k-means ships complete; you bucket and probe), and a measurement whose table (<span class="gloss" data-gloss="recall-at-k">recall@10</span>
 against comparisons-per-query) is the exact dial every production vector store exposes as
@@ -67,7 +68,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Set the dial</h2>
+<h2 id="try-it">Every ANN deployment lives somewhere on this bend</h2>
 
 <p>The lab's own measurement, interactive: drag the probe knob and watch recall and work
 move against each other. These are the real numbers from the reference solution over the
@@ -96,14 +97,37 @@ seeded dataset; your Thursday table must match.</p>
   buy the last 1.5% at triple the work. Every ANN deployment lives somewhere on this bend.</p>
 </div>
 
+<p class="key-fact keep-in-present"><strong>0.917 recall for 4.3× fewer comparisons</strong> at probe 4: nine of ten true neighbors found while scoring 924 vectors instead of 4,000</p>
+
 <!-- ============================================================ -->
-<h2 id="big-idea">Skip most of the space</h2>
+<h2 id="big-idea">Partition the space so a query skips most of it</h2>
 
 <p>The move is week 6's, wearing geometry: build a structure that lets each query ignore most
 of the data. A B+ tree partitions an <em>ordered line</em>; k-means <span class="gloss" data-gloss="centroid">centroids</span> partition a <em>vector
 space</em>, and then a query only searches the few partitions its neighborhood could
 plausibly live in. The cost of the analogy's imperfection (space has no clean fences; near
 things straddle borders) is exactly what recall@k measures.</p>
+
+<table>
+  <thead><tr><th></th><th>B+ tree (week 6)</th><th>IVF (this lab)</th></tr></thead>
+  <tbody>
+    <tr><td>Partitions</td><td>an ordered line</td><td>a vector space</td></tr>
+    <tr><td>Fences</td><td>key ranges, clean</td><td>k-means centroids, no clean borders</td></tr>
+    <tr><td>A query searches</td><td>one root-to-leaf path</td><td>the few nearest partitions</td></tr>
+    <tr><td>Can it miss?</td><td>no</td><td>yes; recall@k measures how often</td></tr>
+  </tbody>
+</table>
+
+<h3 class="new-slide" data-kicker="Partition the space">Real papers in, real papers out: judge results by title</h3>
+
+<table>
+  <tbody>
+    <tr><td>Vectors</td><td>4,000 arXiv abstracts, 800 each from five fields</td></tr>
+    <tr><td>Model</td><td>all-MiniLM-L6-v2, 384 dimensions</td></tr>
+    <tr><td>Shipped copy</td><td>reduced to 64 dimensions by PCA, re-normalized, so pure Python stays fast</td></tr>
+    <tr><td>Queries</td><td>40 real questions, embedded the same way</td></tr>
+  </tbody>
+</table>
 
 <p>The vectors are real. <code>data/arxiv_4000.f16</code> holds sentence embeddings of 4,000 arXiv
 abstracts, 800 each from databases, information retrieval, machine learning, statistics, and
@@ -115,7 +139,7 @@ fast enough to run in a loop. The full 384-dimensional vectors ship too
 (<code>python3 measure_recall.py 384</code>), and Part 3 asks what the reduction cost.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">The contract</h2>
+<h2 id="the-api">Three methods to write; the comparison counter is the grade</h2>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="bf" data-step-name="BruteForceIndex.search" data-explain="Score all n vectors with dot() (count each in self.comparisons), keep the top k. heapq.nsmallest with key (-sim, id) gives best-first with deterministic ties. Six lines, exact by construction.">BruteForceIndex.search(q, k)   # the truth, at O(n) per query</div>
@@ -213,12 +237,16 @@ actually returns:</p>
          IVF |    16 |         0.997 |             3,229 |     1.2x
          IVF |    20 |         1.000 |             4,020 |     1.0x</code></pre>
 
+<p class="key-fact keep-in-present"><strong>0.917 for 4.3×</strong> probe 4 is the row to remember: nine of ten true neighbors at under a quarter of brute force's work</p>
+
 <p class="keep-in-present">Read the bend: going from probe 1 to probe 4 buys 27 points of recall
 for 680 extra comparisons; going from probe 8 to probe 20 buys 3.5 points for 2,260. Production
 ANN tuning is choosing your point on this curve <em>for your application's stakes</em>, which is
 question 3, and your project's writeup requirement.</p>
 
-<p><strong>Now change something.</strong> Run <code>python3 measure_recall.py 384</code> to use
+<h3 class="new-slide" data-kicker="Part 3 · Measure">At 384 dims the work quintuples and the curve barely moves</h3>
+
+<p class="keep-in-present"><strong>Now change something.</strong> Run <code>python3 measure_recall.py 384</code> to use
 the model's full 384-dimensional vectors instead of the 64-dimensional copies. Report the run time
 of both (about five times longer at 384) and the recall at probe 4 (0.905 at 384 against 0.917
 at 64 on the reference solution). Then answer: the 64-d vectors keep two thirds of the model's
@@ -228,8 +256,9 @@ does that tell you about what the recall table is measuring, and what it is not?
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p>Due <strong>Thursday Nov 12 at class start</strong> (with the project's retrieval
-milestone; this lab is most of it).</p>
+<p class="keep-in-present"><strong>Submit <code>microvector.py</code> to Gradescope, per the course submission
+instructions, by Thursday Nov 12 at class start.</strong> One file; the harness score you see locally is
+the grade. It lands with the project's retrieval milestone; this lab is most of it.</p>
 
 <h3>Deliverables</h3>
 <ul>

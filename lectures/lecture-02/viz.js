@@ -70,7 +70,7 @@
       title: 'Thrashing',
       body: '<p>The failure mode where a system spends its time moving data in and out of a ' +
         'too-small cache instead of doing work: each new page evicts one that’s needed again ' +
-        'moments later. The sequential-flooding cliff is a controlled demonstration of it: ' +
+        'moments later. The scan demo in this lecture is a controlled demonstration of it: ' +
         'hit rate pinned at zero while the disk works flat out.</p>',
     },
     'checkpoint': {
@@ -177,33 +177,6 @@
   $('bs-reset').addEventListener('click', reset);
 
   reset();
-})();
-
-/* ---------------- Widget: the measured cliff ---------------- */
-(function () {
-  const holder = document.getElementById('cf-rows');
-  if (!holder) return;
-  // Real output of Lab 2's measure_hits.py (reference solution, seeded workloads).
-  const DATA = [
-    { pool: 5,  scan: 0.0,  hot: 77.6 },
-    { pool: 10, scan: 0.0,  hot: 91.2 },
-    { pool: 25, scan: 0.0,  hot: 93.8 },
-    { pool: 45, scan: 0.0,  hot: 97.2 },
-    { pool: 49, scan: 0.0,  hot: 97.5 },
-    { pool: 50, scan: 50.0, hot: 97.5 },
-    { pool: 55, scan: 50.0, hot: 97.5 },
-  ];
-  let html = `<div class="cf-head"><span class="cf-pool">pool size</span>` +
-             `<span>sequential scan ×2</span><span>hot set (90% on 5 blocks)</span></div>`;
-  DATA.forEach(d => {
-    const edge = d.pool === 50 ? ' cliff-edge' : '';
-    html += `<div class="cf-row${edge}"><span class="cf-pool">${d.pool}</span>` +
-      `<span class="cf-track"><span class="cf-bar scan" style="width:${Math.max(d.scan, 1)}%"></span>` +
-      `<span class="cf-val">${d.scan.toFixed(1)}%</span></span>` +
-      `<span class="cf-track"><span class="cf-bar hot" style="width:${d.hot}%"></span>` +
-      `<span class="cf-val">${d.hot.toFixed(1)}%</span></span></div>`;
-  });
-  holder.innerHTML = html;
 })();
 
 /* ---------------- Widget: effective access time ---------------- */
