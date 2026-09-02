@@ -147,12 +147,11 @@ record. Two rules cover practically everything, and you have used both:</p>
 
 <h3 class="new-slide" data-kicker="Hash or range">One famous key makes the whole cluster wait on one worker</h3>
 
-<p class="keep-in-present">Hash partitioning promises balance <em>across keys</em>, not
-<em>across rows</em>: if one key carries 40% of the records
-(<span class="gloss" data-gloss="skew">skew</span>, the "celebrity problem"), its partition
-becomes the <span class="gloss" data-gloss="straggler">straggler</span> the whole job waits on. Real engines salt the hot key: append a random
-suffix to it so its rows spread across several partitions, aggregate each of those partitions, then strip the suffix and aggregate the partial totals once more; or they handle the famous key separately<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup>. Diagnosis first: Spark's UI shows one task
-running long after 99 finished; now you know what that means<sup class="src"><a href="#src-7" title="Skew and spill (Databricks on AWS documentation)">7</a></sup>.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The promise</span><span>hash partitioning promises balance <em>across keys</em>, not <em>across rows</em>: if one key carries 40% of the records (<span class="gloss" data-gloss="skew">skew</span>, the "celebrity problem"), its partition becomes the <span class="gloss" data-gloss="straggler">straggler</span> the whole job waits on.</span></div>
+  <div class="lc-row"><span class="lc-k">The fix</span><span>real engines salt the hot key: append a random suffix to it so its rows spread across several partitions, aggregate each of those partitions, then strip the suffix and aggregate the partial totals once more. Or they handle the famous key separately<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">The diagnosis</span><span>comes first: Spark's UI shows one task running long after 99 finished, and now you know what that means<sup class="src"><a href="#src-7" title="Skew and spill (Databricks on AWS documentation)">7</a></sup>.</span></div>
+</div>
 
 <div class="viz" id="viz-skew">
   <div class="viz-title">skew · one famous key vs eight partitions</div>

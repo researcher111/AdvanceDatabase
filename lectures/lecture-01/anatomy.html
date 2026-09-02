@@ -271,9 +271,10 @@ catalog</span>, and microdb's will look almost exactly like this:</p>
   </tbody>
 </table>
 
-<p>In Postgres, <code>\dt</code> and <code>\d students</code> are just queries against the
-catalog; in microdb, you build it in Lab 3, and notice those offsets: they're the exact bytes
-you'll place by hand on Thursday.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Postgres</span><span><code>\dt</code> and <code>\d students</code> are just queries against the catalog: the psql commands read catalog rows, nothing more.</span></div>
+  <div class="lc-row"><span class="lc-k">microdb</span><span>you build the catalog in Lab 3. And notice those offsets in the table above: they're the exact bytes you'll place by hand on Thursday.</span></div>
+</div>
 
 <!-- ============================================================ -->
 <h2 id="layers">Every database engine is the same five layers</h2>
@@ -527,11 +528,12 @@ lecture; it explains the buffer pool before I say a word.</p>
 
 <h3 class="new-slide" id="byte-order" data-kicker="On Thursday you build this">Byte order is a choice, and the wrong one still round-trips</h3>
 
-<p><code>set_int(0, 1)</code> has to put four bytes somewhere, and the order it puts them in is a
-decision, not a fact. Both answers are in use: your laptop's CPU is little-endian, every integer
-that crosses a network is big-endian, and SQLite's file header is big-endian inside files your<sup class="src"><a href="#src-12" title="RFC 1700: Assigned Numbers (Data Notations)">12</a></sup>
-little-endian machine wrote<sup class="src"><a href="#src-13" title="SQLite Database File Format">13</a></sup>. Thursday's spec picks one, <code>struct '&lt;i'</code>, and the tests
-enforce it literally.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The decision</span><span><code>set_int(0, 1)</code> has to put four bytes somewhere, and the order it puts them in is a decision, not a fact.</span></div>
+  <div class="lc-row"><span class="lc-k">Both in use</span><span>your laptop's CPU is little-endian, every integer that crosses a network is big-endian<sup class="src"><a href="#src-12" title="RFC 1700: Assigned Numbers (Data Notations)">12</a></sup>,
+  and SQLite's file header is big-endian inside files your little-endian machine wrote<sup class="src"><a href="#src-13" title="SQLite Database File Format">13</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Thursday's spec</span><span>picks one, <code>struct '&lt;i'</code> (little-endian), and the tests enforce it literally.</span></div>
+</div>
 
 <p>Every byte in this course prints as two hex digits, and reading one is a multiply and an
 add: the first digit counts 16s, the second counts 1s, and the digits A through F stand for

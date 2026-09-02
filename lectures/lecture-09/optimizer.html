@@ -103,8 +103,11 @@ budget</strong>. It never runs a plan to learn what it costs; it predicts the co
 <!-- ============================================================ -->
 <h2 id="try-it">EXPLAIN ANALYZE prints the guess beside the truth</h2>
 
-<p>The skill to leave with: decoding <span class="gloss" data-gloss="explain-analyze"><code>EXPLAIN ANALYZE</code></span>. <code>EXPLAIN</code> asks the engine to print the plan it chose, with its cost and row-count estimates, instead of the query's results; adding <code>ANALYZE</code> also runs the query and prints the measured row counts and times next to each estimate. Here's a real Postgres
-plan for our join, annotated; hover every line.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k"><code>EXPLAIN</code></span><span>asks the engine to print the plan it chose, with its cost and row-count estimates, instead of the query's results.</span></div>
+  <div class="lc-row"><span class="lc-k">Adding <code>ANALYZE</code></span><span>also runs the query and prints the measured row counts and times next to each estimate. Decoding <span class="gloss" data-gloss="explain-analyze"><code>EXPLAIN ANALYZE</code></span> output is the skill to leave with today.</span></div>
+  <div class="lc-row"><span class="lc-k">The plan below</span><span>a real Postgres plan for our join, annotated; hover every line.</span></div>
+</div>
 
 <div class="code-annotated" data-lang="sql">
   <div class="code-step" data-step="e0" data-step-name="the query" data-explain="Lab 4's join, in Postgres: honors students and their departments.">EXPLAIN ANALYZE SELECT name, dept FROM students JOIN majors ON mid = mid2 WHERE gpa > 35;</div>
@@ -191,8 +194,11 @@ is your Lab 4 CountingScan experiment, run <em>hypothetically</em> over every ca
 
 <h3 class="new-slide" data-kicker="Costing in blocks">Above about 1% selectivity, the index loses to the scan</h3>
 
-<p>The first two formulas above, the table scan and the index lookup, disagree about which is cheaper, and the answer depends entirely on
-<span class="gloss" data-gloss="selectivity">selectivity</span>. The table scan costs B blocks no matter how many rows match; the index costs about one block read per matching row, so it gets more expensive as more rows match. Drag the slider and watch the optimizer's choice flip:</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Table scan</span><span>costs B blocks no matter how many rows match: the whole table is read either way.</span></div>
+  <div class="lc-row"><span class="lc-k">Index lookup</span><span>costs about one block read per matching row, so it gets more expensive as more rows match.</span></div>
+  <div class="lc-row"><span class="lc-k">The crossover</span><span>the first two formulas above therefore disagree about which plan is cheaper, and the answer depends entirely on <span class="gloss" data-gloss="selectivity">selectivity</span>. Drag the slider and watch the optimizer's choice flip.</span></div>
+</div>
 
 <div class="viz" id="viz-flip">
   <div class="viz-title">index scan vs sequential scan · 100,000 rows, 1,000 blocks, tree height 3</div>

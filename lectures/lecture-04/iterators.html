@@ -276,22 +276,11 @@ exact lines you'll write Thursday. Readability is the point: each class states i
 
 <h3 class="new-slide" data-kicker="Select and Project">ProjectScan hides columns without copying a single row</h3>
 
-<p>Take <code>SELECT name FROM students</code>. The scan underneath produces full rows with three
-fields: <code>id</code>, <code>name</code>, <code>gpa</code>. The query wants only
-<code>name</code>. One way to deliver that is to build a fresh, one-field row for every input
-row: copy <code>name</code> out, drop the other two. For 60,000 students that is 60,000 new
-little rows.</p>
-
-<p>ProjectScan builds nothing. Every row stays where it is, inside the scan underneath, with all
-three fields still in it. ProjectScan sits on top holding one thing: the list of allowed columns,
-here <code>["name"]</code>. When the caller asks <code>get_val("name")</code>, ProjectScan passes
-the question down and hands the answer back. When the caller asks <code>get_val("gpa")</code>,
-ProjectScan raises <code>ValueError</code>, because <code>gpa</code> is not on the list. That is
-the whole operator: a list of column names and a check.</p>
-
-<p>Two things follow. Nothing is copied, so the projection costs no memory and no work per row.
-And a caller who reaches for a column the query said it did not want finds out at once, instead
-of silently reading a value that was supposed to be invisible.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The problem</span><span>Take <code>SELECT name FROM students</code>. The scan underneath produces full rows with three fields (<code>id</code>, <code>name</code>, <code>gpa</code>) and the query wants only <code>name</code>. Building a fresh, one-field row for every input row (copy <code>name</code> out, drop the other two) means 60,000 new little rows for 60,000 students.</span></div>
+  <div class="lc-row"><span class="lc-k">ProjectScan's answer</span><span>build nothing. Every row stays where it is, inside the scan underneath, with all three fields still in it; ProjectScan sits on top holding one thing, the list of allowed columns, here <code>["name"]</code>. Ask <code>get_val("name")</code> and it passes the question down and hands the answer back; ask <code>get_val("gpa")</code> and it raises <code>ValueError</code>, because <code>gpa</code> is not on the list. That is the whole operator: a list of column names and a check.</span></div>
+  <div class="lc-row"><span class="lc-k">What follows</span><span>Nothing is copied, so the projection costs no memory and no work per row. And a caller who reaches for a column the query said it did not want finds out at once, instead of silently reading a value that was supposed to be invisible.</span></div>
+</div>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="p1" data-explain="Wraps any scan plus the list of fields to keep.">class ProjectScan:                      # the SELECT list</div>
@@ -305,12 +294,11 @@ of silently reading a value that was supposed to be invisible.</p>
 
 <h3 class="new-slide" data-kicker="Select and Project">F() turns a filter term into a join condition</h3>
 
-<p>A predicate is a WHERE clause turned into a Python value the engine can walk. Take
-<code>WHERE gpa &gt; 35 AND mid = 2</code>. As data it is a list of two <em>terms</em>:
-<code>("gpa", "&gt;", 35)</code> and <code>("mid", "=", 2)</code>, each a triple of the field to
-look at, the comparison to apply, and the value to compare against. The terms are joined by AND,
-so a row passes the predicate only if every term is true for it; the first false term rejects the
-row. The right-hand side is normally a literal such as 35. Wrapping it in <code>F</code> marks it as the name of another field instead, so <code>("mid", "=", F("mid2"))</code> means "compare this row&#39;s mid with its mid2", which is exactly a join condition.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">A predicate</span><span>is a WHERE clause turned into a Python value the engine can walk. <code>WHERE gpa &gt; 35 AND mid = 2</code> becomes a list of two <em>terms</em>, <code>("gpa", "&gt;", 35)</code> and <code>("mid", "=", 2)</code>: each is a triple of the field to look at, the comparison to apply, and the value to compare against.</span></div>
+  <div class="lc-row"><span class="lc-k">Joined by AND</span><span>a row passes the predicate only if every term is true for it; the first false term rejects the row.</span></div>
+  <div class="lc-row"><span class="lc-k">The F wrapper</span><span>the right-hand side of a term is normally a literal such as 35. Wrapping it in <code>F</code> marks it as the name of another field instead, so <code>("mid", "=", F("mid2"))</code> means "compare this row&#39;s mid with its mid2", which is exactly a join condition.</span></div>
+</div>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="f" data-step-name="F" data-explain="Four lines that unlock joins: F('mid2') marks a right-hand side as a FIELD to look up, not a literal to compare against.">class F:                                  # "this rhs is a field"</div>

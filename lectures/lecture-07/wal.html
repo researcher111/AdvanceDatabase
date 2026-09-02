@@ -139,8 +139,10 @@ the log itself:  an APPEND-ONLY file, no seeks, no slots, no structure.
                  Sequential writes are the one thing disks do at full speed,
                  which is why logging every change costs less than it sounds.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 28.1 Reliability (WAL introduction)">4</a></sup></code></pre>
 
-<p class="keep-in-present">The log stores <em>old</em> values because our recovery only ever
-undoes. (ARIES logs new values too, so it can also redo a committed change whose page never reached disk; the write-ahead rule is the same, the record just carries more information.)<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup></p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">microdb</span><span>logs only the <em>old</em> value, because our recovery only ever undoes: it puts back what was there before an unfinished change.</span></div>
+  <div class="lc-row"><span class="lc-k">Real engines</span><span>ARIES logs the new value too, so it can also redo a committed change whose page never reached disk. The write-ahead rule is the same; the record just carries more information<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup>.</span></div>
+</div>
 
 <h3 class="new-slide" data-kicker="The write-ahead rule">Fifty pages, one fsync: durability stays affordable</h3>
 
@@ -206,12 +208,12 @@ began.</strong> One backward pass over the log does it.</p>
 
 <h3 class="new-slide" data-kicker="Recovery">Recovery must survive its own crash</h3>
 
-<p class="keep-in-present">Then recovery runs again at the next startup, and must do no new
-damage. Undo-only recovery is naturally <span class="gloss" data-gloss="idempotent">idempotent</span>:
-restoring an old value twice restores it once. The ROLLBACK records written at the end of the pass (the receipts in the code above) make the second pass
-skip cleanly; the lab tests literally run <code>recover()</code> twice and check nothing
-moves. A general rule of systems design: <strong>any repair process must survive being
-interrupted by the disaster it repairs.</strong></p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The threat</span><span>a crash can interrupt recovery itself. Recovery then runs again at the next startup, and the second run must do no new damage.</span></div>
+  <div class="lc-row"><span class="lc-k">Idempotence</span><span>undo-only recovery is naturally <span class="gloss" data-gloss="idempotent">idempotent</span>: restoring an old value twice restores it once, so repeating the pass changes nothing.</span></div>
+  <div class="lc-row"><span class="lc-k">The receipts</span><span>the ROLLBACK records written at the end of the pass (the receipts in the code above) make the second pass skip cleanly; the lab tests literally run <code>recover()</code> twice and check nothing moves.</span></div>
+  <div class="lc-row"><span class="lc-k">The rule</span><span>a general rule of systems design: <strong>any repair process must survive being interrupted by the disaster it repairs.</strong></span></div>
+</div>
 
 <!-- ============================================================ -->
 <h2 id="policies">Buffer policy decides what recovery must do</h2>
@@ -252,9 +254,12 @@ moment of the crash; that single fact decides everything recovery must do.</p>
 
 <h3 class="new-slide" data-kicker="Force and steal">ARIES is this lecture plus bookkeeping</h3>
 
-<p class="keep-in-present">ARIES is this lecture plus bookkeeping: log new values too (redo),
-number every record with a log sequence number (LSN) so a page can record which log entry last changed it, and checkpoint so recovery starts from a recent point instead of reading days of log.<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup> The <em>rule</em>,
-log before page, never changes.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Redo values</span><span>ARIES logs the new value alongside the old, so recovery can also redo committed work whose pages never reached disk.</span></div>
+  <div class="lc-row"><span class="lc-k">LSNs</span><span>every record is numbered with a log sequence number (LSN), so a page can record which log entry last changed it.</span></div>
+  <div class="lc-row"><span class="lc-k">Checkpoints</span><span>a checkpoint marks a recent safe starting point, so recovery starts there instead of reading days of log<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">The rule</span><span>the <em>rule</em>, log before page, never changes; ARIES is this lecture plus bookkeeping.</span></div>
+</div>
 
 <!-- ============================================================ -->
 <h2 id="nextweek">Next Thursday you build it, then kill it</h2>

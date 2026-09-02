@@ -191,12 +191,11 @@ cite its source. The schema, and why each column exists for the evaluation, is i
 
 <h3 class="new-slide" data-kicker="Chunking is record design">Overlap and metadata are record design too</h3>
 
-<p class="keep-in-present">Production refinements are record design too: <strong>overlap</strong>
-(repeat ~10–15% at boundaries so a claim split across chunks survives whole in one of them)<sup class="src"><a href="#src-6" title="Chunk large documents for vector search solutions in Azure AI Search">6</a></sup>
-and <strong>metadata</strong> (store doc id, title, position with each chunk; Thursday's
-chunks carry <code>doc</code> and <code>title</code> precisely so answers can cite). Sciore
-would call this a layout decision; LangChain calls it a text splitter<sup class="src"><a href="#src-7" title="LangChain Docs: Text splitters">7</a></sup>; it is the same
-decision.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">Overlap</span><span>repeat ~10–15% of the text at chunk boundaries, so a claim split across chunks survives whole in one of them<sup class="src"><a href="#src-6" title="Chunk large documents for vector search solutions in Azure AI Search">6</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Metadata</span><span>store the doc id, title, and position with each chunk; Thursday's chunks carry <code>doc</code> and <code>title</code> precisely so answers can cite.</span></div>
+  <div class="lc-row"><span class="lc-k">Same decision</span><span>Sciore would call these production refinements a layout decision; LangChain calls them a text splitter<sup class="src"><a href="#src-7" title="LangChain Docs: Text splitters">7</a></sup>. Either way it is record design: deciding what one stored chunk carries.</span></div>
+</div>
 
 <h3 class="new-slide" data-kicker="Chunking is record design">One topic per chunk, however many words that takes</h3>
 
@@ -269,12 +268,11 @@ two phrasings, DIM=2048:</p>
 "What keeps the most popular pages sitting in memory?"
       → wal (0.10) ✗            selectivity (0.09)      blocks (0.09)     [bufferpool: absent]</code></pre>
 
-<p class="keep-in-present">This is the synonym wall: two phrasings of the same question that share no words, so an
-embedder that matches words cannot tell they mean the same thing. Bag-of-words matches <em>words</em>, not meaning: "popular pages
-in memory" shares no content words with the buffer-pool document, so it retrieves noise at
-scores barely above zero. A learned embedding model maps both phrasings near the same point;
-that upgrade is exactly one function swap in Thursday's code, and it's the swap your project
-makes.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The synonym wall</span><span>two phrasings of the same question share no words, so an embedder that matches words cannot tell they mean the same thing.</span></div>
+  <div class="lc-row"><span class="lc-k">Why it happens</span><span>bag-of-words matches <em>words</em>, not meaning: "popular pages in memory" shares no content words with the buffer-pool document, so it retrieves noise at scores barely above zero.</span></div>
+  <div class="lc-row"><span class="lc-k">The fix</span><span>a learned embedding model maps both phrasings near the same point. That upgrade is exactly one function swap in Thursday's code, and it is the swap your project makes.</span></div>
+</div>
 
 <h3 class="new-slide" data-kicker="RAG fails like databases">Retrieved is not read: two ranking failures</h3>
 

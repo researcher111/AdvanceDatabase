@@ -131,17 +131,12 @@ timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, rea
 <!-- ============================================================ -->
 <h2 id="tablets">Tablets are last week's range partitions, productized</h2>
 
-<p class="keep-in-present">Because rows are sorted, the table splits into contiguous key
-ranges: <strong>tablets</strong>, ~100–200&nbsp;MB each. A tablet is last week's range
-partition plus the machinery that manages it automatically: a master assigns tablets to tablet servers, hot or overgrown
-tablets split, cold ones merge, and a dead server's tablets are reassigned in seconds<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>;
-recovery is routine precisely because the data (in GFS, the Google File System, replicated 3×) never lived on the
-server's own disk. The tablet server holds only a cache of its tablets and the writes in progress; the durable copy of every byte lives in the file system, so a dead server loses nothing that another server cannot pick up<sup class="src"><a href="#src-3" title="The Google File System (SOSP 2003)">3</a></sup>.</p>
-
-<p class="keep-in-present">Note the row-key design consequence: keys prefixed by timestamp
-make the newest tablet the <span class="gloss" data-gloss="hotspot">hotspot</span> every
-write hammers: last week's skew, in range-partition form. Bigtable schema design is mostly
-key design; reversing the URL so that all pages of one domain sit together in the sorted key space is a performance decision, not a cosmetic one.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The unit</span><span>because rows are sorted, the table splits into contiguous key ranges: <strong>tablets</strong>, ~100–200&nbsp;MB each. A tablet is last week's range partition plus the machinery that manages it automatically.</span></div>
+  <div class="lc-row"><span class="lc-k">The machinery</span><span>a master assigns tablets to tablet servers, hot or overgrown tablets split, cold ones merge, and a dead server's tablets are reassigned in seconds<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Why recovery works</span><span>the data (in GFS, the Google File System, replicated 3×) never lived on the server's own disk. The tablet server holds only a cache of its tablets and the writes in progress; the durable copy of every byte lives in the file system, so a dead server loses nothing that another server cannot pick up<sup class="src"><a href="#src-3" title="The Google File System (SOSP 2003)">3</a></sup>. Recovery is routine for exactly this reason.</span></div>
+  <div class="lc-row"><span class="lc-k">Key design</span><span>keys prefixed by timestamp make the newest tablet the <span class="gloss" data-gloss="hotspot">hotspot</span> every write hammers: last week's skew, in range-partition form. Bigtable schema design is mostly key design; reversing the URL so that all pages of one domain sit together in the sorted key space is a performance decision, not a cosmetic one.</span></div>
+</div>
 
 <h3 class="new-slide" data-kicker="Tablets">Key design is capacity planning: prove it</h3>
 

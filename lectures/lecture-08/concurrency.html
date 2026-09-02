@@ -214,8 +214,11 @@ conflict table:        S      X
 
 <h3 class="new-slide" data-kicker="MVCC">MVCC moved the cost, it didn't erase it</h3>
 
-<p class="keep-in-present"><strong>Readers never block writers; writers never block
-readers.</strong> Writers still block writers (locks live on)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3. Explicit Locking">6</a></sup>, and a transaction that holds its snapshot open for a long time forces the engine to keep every old version that snapshot might still read, so vacuum cannot reclaim them and the table grows: MVCC moved the cost, it didn't erase it<sup class="src"><a href="#src-13" title="PostgreSQL Documentation: 19.11. Client Connection Defaults (idle_in_transaction_session_timeout)">13</a></sup>. No free level, ever.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The payoff</span><span><strong>readers never block writers, and writers never block readers</strong>: a report and an update pass through the same rows without waiting on each other.</span></div>
+  <div class="lc-row"><span class="lc-k">Writers still wait</span><span>writers still block writers; locks live on for write-write conflicts<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3. Explicit Locking">6</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">The new bill</span><span>a transaction that holds its snapshot open for a long time forces the engine to keep every old version that snapshot might still read, so vacuum cannot reclaim them and the table grows<sup class="src"><a href="#src-13" title="PostgreSQL Documentation: 19.11. Client Connection Defaults (idle_in_transaction_session_timeout)">13</a></sup>. MVCC moved the cost, it didn't erase it. No free level, ever.</span></div>
+</div>
 
 <h3 class="new-slide" data-kicker="MVCC">Visibility is arithmetic on two stamps, never a lock</h3>
 

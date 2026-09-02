@@ -152,10 +152,11 @@ storage:  each node keeps its <span class="gloss" data-gloss="adjacency-list">ad
 
 <h3 class="new-slide" data-kicker="Materialized join">Lab 6's index trade and Lecture 13's skew, in graph form</h3>
 
-<p class="keep-in-present">Say it in this course's vocabulary: <strong>a graph database
-materializes the join at write time.</strong> Adding the edge does the key-matching once;
-every future traversal follows the stored pointer<sup class="src"><a href="#src-4" title="Native vs. Non-Native Graph Technology (Neo4j blog)">4</a></sup>. The trade should feel familiar by now:
-it's the index trade (Lab 6) with the cost moved to a different operation: every write pays a little extra to store the pointer, and every read gets its neighbors without a lookup. Even the failure mode is familiar: a <span class="gloss" data-gloss="supernode">supernode</span>, a node with far more edges than the rest, is the skew problem from Lecture 13 in graph form: one key that carries most of the work, so any traversal through it does far more work than the average node.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The move</span><span>say it in this course's vocabulary: <strong>a graph database materializes the join at write time.</strong> Adding the edge does the key-matching once; every future traversal follows the stored pointer<sup class="src"><a href="#src-4" title="Native vs. Non-Native Graph Technology (Neo4j blog)">4</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">The trade</span><span>this should feel familiar by now: it's the index trade (Lab 6) with the cost moved to a different operation. Every write pays a little extra to store the pointer, and every read gets its neighbors without a lookup.</span></div>
+  <div class="lc-row"><span class="lc-k">The failure mode</span><span>also familiar: a <span class="gloss" data-gloss="supernode">supernode</span>, a node with far more edges than the rest, is the skew problem from Lecture 13 in graph form: one key that carries most of the work, so any traversal through it does far more work than the average node.</span></div>
+</div>
 
 <!-- ============================================================ -->
 <h2 id="cypher">SQL can traverse; Cypher draws the question's shape</h2>
@@ -254,14 +255,11 @@ dependency chains) that's the graph database's home turf.</p>
 <!-- ============================================================ -->
 <h2 id="graphrag">Vector retrieval finds sound-alikes; graph traversal finds connections</h2>
 
-<p class="keep-in-present">Your project retrieves by <em>similarity</em>: question vector →
-nearest chunks. Its known blind spot is questions whose answer is <em>spread across</em>
-documents ("how do the WAL and the buffer pool interact?"; no single chunk says it).
-GraphRAG's move: extract an entity graph from the corpus at ingest<sup class="src"><a href="#src-12" title="From Local to Global: A Graph RAG Approach to Query-Focused Summarization (arXiv 2404.16130)">12</a></sup> (nodes for entities such as the WAL, the buffer pool, and a page; typed edges for the relationships the text states between them, such as “WAL constrains page flushing” and “buffer pool defers writes”), retrieve by <em>traversing</em> from mentioned
-entities, and hand the LLM connected subgraphs instead of disconnected paragraphs.
-Similarity finds what a question <em>sounds like</em>; traversal finds what it's
-<em>connected to</em>; <span class="gloss" data-gloss="knowledge-graph">knowledge-graph</span>
-retrieval and vector retrieval compose, and hybrid is the production pattern.</p>
+<div class="layer-card">
+  <div class="lc-row"><span class="lc-k">The blind spot</span><span>your project retrieves by <em>similarity</em>: question vector → nearest chunks. Its known blind spot is questions whose answer is <em>spread across</em> documents ("how do the WAL and the buffer pool interact?"; no single chunk says it).</span></div>
+  <div class="lc-row"><span class="lc-k">GraphRAG's move</span><span>extract an entity graph from the corpus at ingest<sup class="src"><a href="#src-12" title="From Local to Global: A Graph RAG Approach to Query-Focused Summarization (arXiv 2404.16130)">12</a></sup> (nodes for entities such as the WAL, the buffer pool, and a page; typed edges for the relationships the text states between them, such as “WAL constrains page flushing” and “buffer pool defers writes”), retrieve by <em>traversing</em> from mentioned entities, and hand the LLM connected subgraphs instead of disconnected paragraphs.</span></div>
+  <div class="lc-row"><span class="lc-k">Why they compose</span><span>similarity finds what a question <em>sounds like</em>; traversal finds what it's <em>connected to</em>; <span class="gloss" data-gloss="knowledge-graph">knowledge-graph</span> retrieval and vector retrieval compose, and hybrid is the production pattern.</span></div>
+</div>
 
 <h3 class="new-slide" data-kicker="GraphRAG">A 1-hop entity expansion is a GraphRAG you can finish</h3>
 
