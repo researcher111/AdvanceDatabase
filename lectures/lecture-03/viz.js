@@ -313,3 +313,130 @@
   $('pk-reset').addEventListener('click', reset);
   render();
 })();
+
+/* ---------------- TOAST: huge values move out ---------------- */
+(function () {
+  const root = document.getElementById('viz-toast');
+  if (!root) return;
+  const $ = id => document.getElementById(id);
+  const pipe = $('to-pipeline'), heap = $('to-heap'), side = $('to-side'), msg = $('to-msg');
+  const FIXED = 24;        /* flag 4 + id 4 + name 12 + gpa 4 */
+  const THRESHOLD = 2000;  /* "normally 2 kB" */
+  const RATIO = 3;         /* representative compression for English prose */
+  const CHUNK = 1996;      /* "about 2000 bytes", four chunk rows per page */
+  const PER_PAGE = 4;
+  const PTR = 18;
+  const CHUNK_ID = 16391;
+  const SCENARIOS = [
+    { btn: 'to-s0', size: 150 },
+    { btn: 'to-s1', size: 3000 },
+    { btn: 'to-s2', size: 12000 },
+    { btn: 'to-s3', size: 2000000 },
+  ];
+  const fmt = n => n.toLocaleString('en-US');
+  let cur;
+
+  function decide(size) {
+    const raw = FIXED + size;
+    if (raw <= THRESHOLD) return { mode: 'inline', size, raw, slot: raw };
+    const comp = Math.ceil(size / RATIO);
+    if (FIXED + comp <= THRESHOLD) return { mode: 'compressed', size, raw, comp, slot: FIXED + comp };
+    const chunks = Math.ceil(comp / CHUNK);
+    return { mode: 'out', size, raw, comp, chunks, pages: Math.ceil(chunks / PER_PAGE), slot: FIXED + PTR };
+  }
+
+  function step(name, detail, state) {
+    return '<span class="to-step ' + state + '"><span class="to-step-name">' + name +
+      '</span><span class="to-step-detail">' + detail + '</span></span>';
+  }
+
+  function render() {
+    const d = cur;
+    pipe.innerHTML =
+      step('store inline', 'row would be ' + fmt(d.raw) + ' B vs the ~2,000 B threshold',
+        d.mode === 'inline' ? 'pass' : 'fail') +
+      '<span class="to-arrow">→</span>' +
+      step('compress (~3×)', d.mode === 'inline' ? 'not needed' : fmt(d.size) + ' B → ' + fmt(d.comp) + ' B',
+        d.mode === 'inline' ? 'skip' : (d.mode === 'compressed' ? 'pass' : 'fail')) +
+      '<span class="to-arrow">→</span>' +
+      step('move out of line', d.mode === 'out' ? d.chunks + ' chunks of ' + fmt(CHUNK) + ' B' : 'not needed',
+        d.mode === 'out' ? 'pass' : 'skip');
+
+    const essaySeg =
+      d.mode === 'inline' ? '<span class="to-seg to-seg-essay">essay · ' + fmt(d.size) + ' B</span>' :
+      d.mode === 'compressed' ? '<span class="to-seg to-seg-essay">essay (compressed) · ' + fmt(d.comp) + ' B</span>' :
+      '<span class="to-seg to-seg-ptr">→ pointer · ' + PTR + ' B</span>';
+    const verdict =
+      d.mode === 'inline' ? 'fits beside its neighbors' :
+      d.mode === 'compressed' ? 'back under the threshold' :
+      'small and fixed again, however far the essay grows';
+    heap.innerHTML = '<div class="to-panel-title">heap page · ada’s slot</div>' +
+      '<div class="to-slot"><span class="to-seg">flag 4</span><span class="to-seg">id 4</span>' +
+      '<span class="to-seg">name 12</span><span class="to-seg">gpa 4</span>' + essaySeg + '</div>' +
+      '<div class="to-slotmeta">slot total: <strong>' + fmt(d.slot) + ' B</strong> · ' + verdict + '</div>';
+
+    if (d.mode !== 'out') {
+      side.innerHTML = '<div class="to-panel-title">pg_toast_16388 · the side table</div>' +
+        '<div class="to-empty">(empty · nothing moved out)</div>';
+    } else {
+      const row = (seq, bytes) => '<div class="to-chunk">chunk_id ' + CHUNK_ID +
+        ' · chunk_seq ' + seq + ' · ' + fmt(bytes) + ' B</div>';
+      const last = d.comp - CHUNK * (d.chunks - 1);
+      let rows = '';
+      if (d.chunks <= 4) {
+        for (let i = 0; i < d.chunks; i++) rows += row(i, i === d.chunks - 1 ? last : CHUNK);
+      } else {
+        rows += row(0, CHUNK) + row(1, CHUNK) + row(2, CHUNK) +
+          '<div class="to-chunk to-ellipsis">⋯</div>' + row(d.chunks - 1, last);
+      }
+      side.innerHTML = '<div class="to-panel-title">pg_toast_16388 · the side table</div>' + rows +
+        '<div class="to-slotmeta">' + d.chunks + ' chunks · ' + d.pages +
+        ' page' + (d.pages > 1 ? 's' : '') + ' · unique index on (chunk_id, chunk_seq)</div>';
+    }
+  }
+
+  function select(i) {
+    cur = decide(SCENARIOS[i].size);
+    heap.classList.remove('read'); side.classList.remove('read');
+    render();
+    const d = cur;
+    if (d.mode === 'inline') {
+      msg.innerHTML = 'Row is ' + fmt(d.raw) + ' B: under the ~2,000 B threshold, so the essay stores inline like any other field.';
+    } else if (d.mode === 'compressed') {
+      msg.innerHTML = 'Row would be ' + fmt(d.raw) + ' B: over the threshold. Compression (~3×) brings the essay to ' +
+        fmt(d.comp) + ' B and the row to ' + fmt(d.slot) + ' B, back under; it stays inline, compressed.';
+    } else {
+      msg.innerHTML = 'Row would be ' + fmt(d.raw) + ' B; even compressed to ' + fmt(d.comp) +
+        ' B it is too wide. The essay moves out: <strong>' + d.chunks +
+        ' chunks</strong> in the side table, and the slot keeps ' + FIXED +
+        ' B of fields plus an ' + PTR + '-byte pointer.';
+    }
+  }
+
+  function queryName() {
+    heap.classList.add('read'); side.classList.remove('read');
+    msg.innerHTML = 'SELECT name reads <strong>1 block</strong>: the heap block holding the slot. ' +
+      'essay is not in the select list, so its bytes are never fetched' +
+      (cur.mode === 'out' ? '; the pointer is not even followed.' : '.');
+  }
+
+  function queryEssay() {
+    heap.classList.add('read');
+    if (cur.mode === 'out') {
+      side.classList.add('read');
+      msg.innerHTML = 'SELECT essay reads 1 heap block + ' + cur.pages + ' side-table page' +
+        (cur.pages > 1 ? 's' : '') + ' = <strong>' + (1 + cur.pages) +
+        ' blocks</strong> (plus the index reads that locate the chunks). The chunks are fetched, stitched, ' +
+        'and decompressed only now, because only now did a query ask for them.';
+    } else {
+      side.classList.remove('read');
+      msg.innerHTML = 'SELECT essay reads <strong>1 block</strong>: the essay is right there in the slot' +
+        (cur.mode === 'compressed' ? ', decompressed in memory on the way out.' : '.');
+    }
+  }
+
+  SCENARIOS.forEach((s, i) => $(s.btn).addEventListener('click', () => select(i)));
+  $('to-qname').addEventListener('click', queryName);
+  $('to-qessay').addEventListener('click', queryEssay);
+  select(0);
+})();

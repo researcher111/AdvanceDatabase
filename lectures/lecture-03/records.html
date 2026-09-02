@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 
@@ -18,6 +18,7 @@
     <li><a href="#gap">Packed rows break the moment one row changes</a></li>
     <li><a href="#try-it">In a slotted page, nothing ever moves</a></li>
     <li><a href="#layout">The schema fixes every offset before any row exists</a></li>
+    <li><a href="#toast">Huge values move out; the slot keeps a pointer</a></li>
     <li><a href="#recordpage">RecordPage works one pinned block at a time</a></li>
     <li><a href="#tablescan">TableScan walks the whole table through one frame</a></li>
     <li><a href="#catalog">The schema is data: your offsets become catalog rows</a></li>
@@ -322,7 +323,12 @@ by nothing but the varchar capacity the schema reserves</p>
   <div class="lc-row"><span class="lc-k">The DS connection</span><span>this is why <code>NULL</code> and <code>0</code> and <code>""</code> are genuinely different things in SQL: the bitmap distinguishes "absent" from any value your bytes could spell<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 9.2. Comparison Functions and Operators">5</a></sup>.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="Fixed offsets">Huge values move out; the slot keeps a pointer</h3>
+<!-- ============================================================ -->
+<h2 id="toast">Huge values move out; the slot keeps a pointer</h2>
+
+<p>The rent calculator just showed reservation working when maxima are modest. So what happens
+when the maximum is not modest at all: an essay column where one student pastes in 2&nbsp;MB?
+Every engine answers the same way, and the answer is a pattern this course will meet twice more.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The problem</span><span>a 2&nbsp;MB essay can't reserve worst-case capacity in every slot; reservation only works when maxima are modest.</span></div>
@@ -330,10 +336,58 @@ by nothing but the varchar capacity the schema reserves</p>
   <div class="lc-row"><span class="lc-k">The pattern</span><span>reserve fixed space when the maximum is modest, and store a small pointer to data kept elsewhere when it is not; the same trick appears again in column stores (week 10) and vector storage (week 11).</span></div>
 </div>
 
+<h3 class="new-slide" data-kicker="TOAST">Watch ada's essay outgrow her row</h3>
+
+<p>Give the students table an <code>essay TEXT</code> column and grow ada's essay. Postgres
+leaves a value alone until the row passes about 2&nbsp;KB, then compresses it in place, and
+only when the row is still too wide moves the value into the table's <code>pg_toast</code>
+side table, split into chunks of about 2,000 bytes, four to a page, found again through a
+unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>.</p>
+
+<div class="viz" id="viz-toast">
+  <div class="viz-title">TOAST · students(id, name, gpa, essay TEXT) · one heap slot and its side table</div>
+  <p class="viz-description">Pick an essay size and watch the storage decision run: inline if
+  the row fits, compressed if that is enough, out to the side table if not. Then run the two
+  queries and count the blocks each one reads.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="to-s0">150 B note</button>
+    <button type="button" class="btn" id="to-s1">3 KB one-pager</button>
+    <button type="button" class="btn" id="to-s2">12 KB application essay</button>
+    <button type="button" class="btn" id="to-s3">2 MB thesis draft</button>
+  </div>
+  <div class="to-pipeline" id="to-pipeline"></div>
+  <div class="to-panels">
+    <div class="to-panel" id="to-heap"></div>
+    <div class="to-panel" id="to-side"></div>
+  </div>
+  <div class="qj-controls">
+    <button type="button" class="btn" id="to-qname">SELECT name FROM students</button>
+    <button type="button" class="btn" id="to-qessay">SELECT essay FROM students</button>
+  </div>
+  <div class="qj-msg" id="to-msg">Start small: the 150 B note stores like any other field. Then grow it.</div>
+  <p class="viz-caption">The 2&nbsp;KB threshold, the ~2,000-byte chunks (four to a page), and
+  the 18-byte pointer are Postgres's real figures<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>;
+  the 3× compression ratio here is a representative figure for English prose, not a measured
+  one. Green marks what a query reads, warm marks the side table. The essay comes back only
+  when a query actually selects it: <code>SELECT name</code> never touches the side table.</p>
+</div>
+
+<p class="keep-in-present">The whole design in one sentence: <strong>the slot gives up 18 bytes
+so the page never gives up its shape</strong>, and a value of up to 1&nbsp;GB hangs off that
+pointer without moving a single neighbor<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>.</p>
+
 <!-- ============================================================ -->
 <h2 id="recordpage">RecordPage works one pinned block at a time</h2>
 
+<p>Everything so far has been rules on paper: a Layout knows where every field's bytes sit,
+and your Lab 2 pool can pin a block in memory, but neither of them can read a row. RecordPage
+is the class that joins the two, and it is the first code in microdb that treats a block as
+rows instead of anonymous bytes. It holds exactly one pinned block and the table's layout,
+and everything it does is the offset arithmetic from the slides above, wrapped in methods
+with row-shaped names.</p>
+
 <div class="layer-card">
+  <div class="lc-row"><span class="lc-k">What it is</span><span>a wrapper around ONE pinned block plus the table's Layout, turning offset arithmetic into row operations: "the gpa of slot 3 is at byte 3 × 24 + 20 = 92" becomes <code>rp.get_int(3, "gpa")</code>.</span></div>
   <div class="lc-row"><span class="lc-k">Job</span><span>All record operations within ONE block: read/write a field of slot k, find free slots, flip flags.</span></div>
   <div class="lc-row"><span class="lc-k">Runs on</span><span>your Lab 2 pool: it <strong>pins its block on construction and unpins on close()</strong>. This is the pin/unpin contract from week 2, now used by real code: while a RecordPage is working on a block, the pool cannot evict it.</span></div>
   <div class="lc-row"><span class="lc-k">Key methods</span><span><code>get/set_int</code>, <code>get/set_string</code> (arithmetic + Lab 1 page calls), <code>insert_after</code> / <code>next_after</code> (find EMPTY / find USED), <code>delete</code> (flip to EMPTY).</span></div>
@@ -482,7 +536,7 @@ code, and the catalog comes free once your scan works.</p>
 <!-- ============================================================ -->
 <h2 id="recap">Recap &amp; next time</h2>
 
-<p>Three ideas from today, all of which the rest of the engine will lean on.</p>
+<p>Four ideas from today, all of which the rest of the engine will lean on.</p>
 
 <ul class="recap-list">
   <li><strong>Fixed slots buy \(O(1)\) with wasted air.</strong> Find/update/delete became one
@@ -490,6 +544,10 @@ code, and the catalog comes free once your scan works.</p>
   "bartholomew" in an 8-char field.</li>
   <li><strong>Deletion is a flag, addresses are stable.</strong> Tombstones recycle, nothing
   shifts, and every row keeps a permanent RID, the address that indexes will point to in week 6.</li>
+  <li><strong>Huge values move out.</strong> When a value can't reserve worst-case space in
+  every slot, TOAST compresses it, chunks it into a side table, and leaves an 18-byte pointer
+  in the row; the same reserve-or-point pattern returns in column stores (week 10) and vector
+  storage (week 11).</li>
   <li><strong>The schema is data.</strong> A table's layout is written to the catalog as ordinary rows and read back into a Layout; the
   catalog's own layouts are hardcoded so that reading the catalog does not first require reading the catalog; and the
   first code to use your scan is the catalog itself.</li>
@@ -564,7 +622,7 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=5"></script>
+<script src="viz.js?v=6"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
