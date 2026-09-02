@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
 
@@ -91,6 +91,31 @@ Nothing else.</p>
 <p>Worked out in bytes: renaming ben in a packed page shifts every later byte in the block,
 and any saved position that pointed at those bytes now points at the wrong data.</p>
 
+<div class="viz" id="viz-packed">
+  <div class="viz-title">Lab 1's packing · four rows, end to end, no slots</div>
+  <p class="viz-description">Letters are name bytes; every other byte is shown in hex. Ints
+  are 4 bytes with the least significant byte first
+  (<a href="../lecture-01/anatomy.html#byte-order">little-endian, with Lecture 1's hex
+  table</a>), so id 1 is <code>01 00 00 00</code>, and a gpa byte like <code>27</code> reads
+  as 2×16&nbsp;+&nbsp;7&nbsp;=&nbsp;39.
+  The <span class="pk-legend-mark">outlined</span> byte is an address you saved earlier:
+  cyd starts at byte 30.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="pk-rename">rename ben → "benjamin"</button>
+    <button type="button" class="btn" id="pk-read">read the saved address (byte 30)</button>
+    <button type="button" class="btn" id="pk-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="pk-msg">Four rows, 60 bytes, no gaps. Read the saved address first to prove it works, then rename ben.</div>
+  <div class="pk-strip" id="pk-strip"></div>
+  <div class="pk-info" id="pk-info">hover a byte to decode it · the first gpa byte carries the hex refresher</div>
+  <p class="viz-caption">Warm bytes changed, moved, or appeared; plain bytes stayed put. After
+  the rename every address saved past byte 25 points at the wrong data, and the only way to
+  find cyd again is to re-parse the page from byte 0. The fix this lecture builds, fixed-size
+  slots, keeps the warm set permanently empty: the slotted page below never moves a byte.</p>
+</div>
+
+<h3 class="new-slide" data-kicker="Packed rows break">Update, delete, and find-by-number all fail in a packed page</h3>
+
 <table>
   <thead><tr><th>Operation</th><th>Packed (Lab 1 style)</th><th>What breaks</th></tr></thead>
   <tbody>
@@ -114,6 +139,20 @@ from the table above become arithmetic:</p>
     <tr><td>Delete a row</td><td>flip the slot's in-use flag</td><td>\(O(1)\), nothing moves</td></tr>
   </tbody>
 </table>
+
+<pre><code class="language-sql">CREATE TABLE students (
+    id    INT,
+    name  VARCHAR(8),   -- capacity reserved here, before any row exists
+    gpa   INT
+);
+
+UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwritten in place</code></pre>
+
+<p class="keep-in-present">The "pre-reserved" capacity is the <code>8</code> you type in
+<code>CREATE TABLE</code>: from that moment every slot sets aside 8 bytes for a name, so this
+UPDATE overwrites the name bytes of ben's slot (bytes 8 to 19, length prefix included) and
+touches nothing else. Why SQL demands that number before a single row exists is where this
+lecture is headed.</p>
 
 <!-- ============================================================ -->
 <h2 id="try-it">In a slotted page, nothing ever moves</h2>
@@ -525,7 +564,7 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=4"></script>
+<script src="viz.js?v=5"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>

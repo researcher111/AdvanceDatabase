@@ -525,13 +525,28 @@ the lab page.</p>
 without fsync. Bring the ratio to next Tuesday's
 lecture; it explains the buffer pool before I say a word.</p>
 
-<h3 class="new-slide" data-kicker="On Thursday you build this">Byte order is a choice, and the wrong one still round-trips</h3>
+<h3 class="new-slide" id="byte-order" data-kicker="On Thursday you build this">Byte order is a choice, and the wrong one still round-trips</h3>
 
 <p><code>set_int(0, 1)</code> has to put four bytes somewhere, and the order it puts them in is a
 decision, not a fact. Both answers are in use: your laptop's CPU is little-endian, every integer
 that crosses a network is big-endian, and SQLite's file header is big-endian inside files your<sup class="src"><a href="#src-12" title="RFC 1700: Assigned Numbers (Data Notations)">12</a></sup>
 little-endian machine wrote<sup class="src"><a href="#src-13" title="SQLite Database File Format">13</a></sup>. Thursday's spec picks one, <code>struct '&lt;i'</code>, and the tests
 enforce it literally.</p>
+
+<p>Every byte in this course prints as two hex digits, and reading one is a multiply and an
+add: the first digit counts 16s, the second counts 1s, and the digits A through F stand for
+10 through 15. Keep this table handy; it decodes every byte the widget below prints.</p>
+
+<table id="hex-table">
+  <thead><tr><th>Hex byte</th><th>Arithmetic</th><th>Decimal</th></tr></thead>
+  <tbody>
+    <tr><td><code>0x09</code></td><td>0×16 + 9</td><td>9</td></tr>
+    <tr><td><code>0x10</code></td><td>1×16 + 0</td><td>16</td></tr>
+    <tr><td><code>0x27</code></td><td>2×16 + 7</td><td>39 (ada's gpa)</td></tr>
+    <tr><td><code>0x1F</code></td><td>1×16 + 15, because F is 15</td><td>31</td></tr>
+    <tr><td><code>0xFF</code></td><td>15×16 + 15</td><td>255, the largest value one byte holds</td></tr>
+  </tbody>
+</table>
 
 <div class="viz" id="viz-endian">
   <div class="viz-title">One int, two byte orders · change the value</div>

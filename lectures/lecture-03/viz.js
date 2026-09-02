@@ -193,3 +193,123 @@
   fill.addEventListener('input', render);
   render();
 })();
+
+/* ---------------- Packed-page demo (the Lab 1 layout) ---------------- */
+(function () {
+  const root = document.getElementById('viz-packed');
+  if (!root) return;
+  const $ = id => document.getElementById(id);
+  const strip = $('pk-strip'), msg = $('pk-msg'), info = $('pk-info');
+  const INFO_DEFAULT = info.textContent;
+  const ROWS = [
+    { id: 1, name: 'ada', gpa: 39 },
+    { id: 2, name: 'ben', gpa: 31 },
+    { id: 3, name: 'cyd', gpa: 37 },
+    { id: 4, name: 'dee', gpa: 28 },
+  ];
+  const SAVED = 30;
+  let renamed = false;
+
+  const hex = n => n.toString(16).toUpperCase().padStart(2, '0');
+  const leBytes = v => [0, 1, 2, 3].map(i => (v >> (8 * i)) & 0xFF);
+  const leSpelled = v => leBytes(v).map(hex).join(' ');
+
+  // One byte = {hexv, chr, row, key, tip}. key identifies the byte's meaning
+  // (row, field, position, value) so a re-pack can tell which bytes changed.
+  function pack(withRename) {
+    const out = [];
+    ROWS.forEach((r, ri) => {
+      const name = (withRename && r.id === 2) ? 'benjamin' : r.name;
+      const int4 = (val, field, firstTip) => {
+        leBytes(val).forEach((b, i) => {
+          out.push({
+            hexv: hex(b), chr: null, row: ri,
+            key: ri + ':' + field + ':' + i + ':' + b,
+            tip: 'byte ' + out.length + ': ' + field + ' of ' + r.name + ', byte ' + (i + 1) +
+              ' of 4' + (i === 0 ? '. ' + firstTip : ' (higher bytes of ' + val + '; all zero here)'),
+          });
+        });
+      };
+      int4(r.id, 'id', 'int ' + r.id + ', least significant byte first: ' + leSpelled(r.id));
+      int4(name.length, 'name length', name.length + ' name bytes follow');
+      Array.from(name).forEach((ch, i) => {
+        out.push({
+          hexv: hex(ch.charCodeAt(0)), chr: ch, row: ri,
+          key: ri + ':chr:' + i + ':' + ch,
+          tip: "byte " + out.length + ": '" + ch + "' of \"" + name + '", ASCII 0x' + hex(ch.charCodeAt(0)),
+        });
+      });
+      int4(r.gpa, 'gpa', '0x' + hex(r.gpa) + ' = ' + (r.gpa >> 4) + '×16 + ' + (r.gpa & 15) + ' = ' + r.gpa);
+    });
+    return out;
+  }
+
+  function render(readTo) {
+    const base = pack(false);
+    const bytes = pack(renamed);
+    const groups = ROWS.map(() => []);
+    bytes.forEach((b, i) => groups[b.row].push(
+      '<span class="pk-byte' + (b.chr ? ' pk-char' : '') +
+      (renamed && (i >= base.length || b.key !== base[i].key) ? ' warm' : '') +
+      (i === SAVED ? ' pk-saved' : '') +
+      (readTo !== undefined && i >= SAVED && i <= readTo ? ' pk-read' : '') +
+      '" data-tip="' + b.tip.replace(/"/g, '&quot;') + '">' + (b.chr || b.hexv) + '</span>'));
+    let start = 0;
+    strip.innerHTML = groups.map((cells, ri) => {
+      const name = (renamed && ri === 1) ? 'ben → benjamin' : ROWS[ri].name;
+      const label = 'row ' + ri + ' · ' + name + ' · bytes ' + start + '–' + (start + cells.length - 1);
+      start += cells.length;
+      return '<div class="pk-row"><div class="pk-bytes">' + cells.join('') +
+        '</div><div class="pk-rowlabel">' + label + '</div></div>';
+    }).join('');
+  }
+
+  function doRename() {
+    if (renamed) { msg.innerHTML = 'Already renamed. Reset to shrink him back.'; return; }
+    renamed = true;
+    render();
+    msg.innerHTML = 'ben is now <strong>benjamin</strong>: the length byte changed in place, 5 new ' +
+      'name bytes appeared, and the 34 bytes after them (his gpa, cyd, and dee) shifted 5 places ' +
+      'right. Nothing updated your saved address. Now read it.';
+  }
+
+  function readSaved() {
+    const bytes = pack(renamed);
+    const le = i => bytes.slice(i, i + 4).reduce((v, b, k) => v + (parseInt(b.hexv, 16) << (8 * k)), 0);
+    const spell = i => bytes.slice(i, i + 4).map(b => b.hexv).join(' ');
+    const id = le(SAVED), len = le(SAVED + 4);
+    if (!renamed) {
+      render(SAVED + 14);
+      msg.innerHTML = 'Read a row at byte 30: id = ' + spell(SAVED) + ' → <strong>' + id +
+        '</strong>, length ' + len + ', name "cyd", gpa 0x25 → 37. Correct, exactly as saved.';
+    } else {
+      render(SAVED + 7);
+      msg.innerHTML = 'Read a row at byte 30: id = ' + spell(SAVED) + ' → <strong>' + id +
+        '</strong> (that "id" is the last n of benjamin plus ben’s gpa), then a name length of ' +
+        len + ' that runs far past the end of the page. The address never moved; the data under it ' +
+        'did. cyd now starts at byte 35 and nothing in the page says so.';
+    }
+  }
+
+  function reset() {
+    renamed = false;
+    render();
+    msg.textContent = 'Four rows, 60 bytes, no gaps. Read the saved address first to prove it works, then rename ben.';
+    info.textContent = INFO_DEFAULT;
+  }
+
+  strip.addEventListener('mouseover', e => {
+    const t = e.target.closest('.pk-byte');
+    if (t) info.textContent = t.dataset.tip;
+  });
+  strip.addEventListener('mouseleave', () => { info.textContent = INFO_DEFAULT; });
+  strip.addEventListener('click', e => {
+    const t = e.target.closest('.pk-byte');
+    if (t) info.textContent = t.dataset.tip;
+  });
+
+  $('pk-rename').addEventListener('click', doRename);
+  $('pk-read').addEventListener('click', readSaved);
+  $('pk-reset').addEventListener('click', reset);
+  render();
+})();
