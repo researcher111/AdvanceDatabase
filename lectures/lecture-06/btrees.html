@@ -71,22 +71,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p>Quiz first, then the structure that makes databases feel instant.</p>
+<p class="keep-in-present"><strong>Quiz 5</strong> first (parsing &amp; planning, 10 min), then the structure that
+makes databases feel instant.</p>
 
 <p class="keep-in-present">To find one student's row, your Lab 3 engine reads all 100,000 rows across 294 blocks,
 and reads all 294 again for the next lookup. Postgres finds one row in a billion by reading
 four nodes. Today: how, and what it costs.</p>
 
-<ol class="agenda">
-  <li><strong>Quiz 5</strong>: parsing &amp; planning (10 min, first thing).</li>
-  <li><strong>Why scans lose</strong>: a scan pays for every row to find one.</li>
-  <li><strong>Grow a tree live</strong>: watch it split and stay level.</li>
-  <li><strong>The shape</strong>: leaves hold data, internal nodes hold only directions.</li>
-  <li><strong>The split</strong>: one move, push the middle key up, and the tree stays balanced.</li>
-  <li><strong>Why it stays shallow</strong>: <span class="gloss" data-gloss="fanout">fan-out</span> 200 makes a billion rows a four-level tree.</li>
-  <li><strong>The bill</strong>: every index is paid for on every write.</li>
-  <li><strong>Thursday</strong>: you build it in four methods.</li>
-</ol>
 
 <p class="keep-in-present">Today's claim: <strong>an index is a map from values to RIDs</strong>;
 everything else is keeping that map balanced on disk.</p>
@@ -250,7 +241,7 @@ invariant after all the splits have finished.</p>
 <table>
   <thead><tr><th>Pivot choice</th><th>Result</th><th>Long-run <span class="gloss" data-gloss="occupancy">occupancy</span></th></tr></thead>
   <tbody>
-    <tr><td><code>mid = len // 2</code></td><td>two half-full nodes</td><td>every node stays at least half full, so the tree never needs more nodes, or more height, than the log-base-fan-out bound assumes<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, 1970/1972)">1</a></sup></td></tr>
+    <tr><td><code>mid = len // 2</code></td><td>two half-full nodes</td><td>every node stays at least half full, so the tree never needs more nodes, or more height, than the log-base-<span class="gloss" data-gloss="fanout">fan-out</span> bound assumes<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, 1970/1972)">1</a></sup></td></tr>
     <tr><td><code>mid = 1</code> (skewed)</td><td>one nearly empty node, one nearly full one</td><td>collapses under sequential inserts: each split leaves a nearly empty node behind, so the same data needs more nodes and a taller tree</td></tr>
   </tbody>
 </table>

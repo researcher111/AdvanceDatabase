@@ -79,16 +79,8 @@ similar to a user's question among a million embeddings. Every index you have bu
 walks an order; this query has no key and no order, and scoring all million vectors for every
 question is a bill that only grows.</p>
 
-<p>Quiz 8 first (columnar &amp; the analytics stack), then the index your project depends on.</p>
+<p class="keep-in-present"><strong>Quiz 8</strong> first (columnar &amp; the analytics stack, 10 min), then the index your project depends on.</p>
 
-<ol class="agenda">
-  <li><strong>Why your indexes fail here</strong>: similarity has no equality to hash and no order to walk.</li>
-  <li><strong>The wall</strong>: exact search is always right and, at scale, never fast enough; watch it live.</li>
-  <li><strong>Skip on purpose</strong>: IVF probes a few clusters, <span class="gloss" data-gloss="hnsw">HNSW</span> walks a graph, and both skip most vectors.</li>
-  <li><strong>The honesty metric</strong>: <span class="gloss" data-gloss="recall">recall</span>@k says exactly what the skipping cost, and one dial sets it.</li>
-  <li><strong>The landscape</strong>: every vector product is those two structures plus the dial; you only choose where it lives.</li>
-  <li><strong>Thursday</strong>: you build IVF and defend your dial with your own measurements.</li>
-</ol>
 
 <p class="keep-in-present">Today's claim: <strong>ANN indexes trade correctness for speed on
 an explicit dial</strong>, and you are responsible for reading the dial.</p>
@@ -187,7 +179,7 @@ scale, like always.</p>
 one setting that decides how much to skip. That setting is the whole contract.</p>
 
 <table>
-  <thead><tr><th></th><th>IVF</th><th>HNSW</th></tr></thead>
+  <thead><tr><th></th><th>IVF</th><th><span class="gloss" data-gloss="hnsw">HNSW</span></th></tr></thead>
   <tbody>
     <tr><td><strong>Build</strong></td><td>k-means the vectors into <em>C</em> lists, once, offline</td><td>a layered graph: a few long-range links on top, near-neighbor links at the bottom</td></tr>
     <tr><td><strong>Search</strong></td><td>score the centroids, brute-force inside the best <em>P</em> lists</td><td>greedy walk: hop to whichever neighbor is closest to the query, drop a layer when stuck</td></tr>

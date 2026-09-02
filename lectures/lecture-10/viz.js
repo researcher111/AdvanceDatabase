@@ -11,10 +11,6 @@
       title: 'Fact table',
       body: '<p>The big table at the center of an analytics schema: one row per event (a ride, a sale, a click), holding a numeric measure or two and a set of keys or codes recording when, where, and who. Fact tables are wide and long: tens of columns, millions of rows, appended in bulk and rarely updated. That shape is exactly what compression likes, because each column is a long run of one type with many repeated values. The rides table in Thursday’s lab is a small fact table.</p>',
     },
-    'late-materialization': {
-      title: 'Late materialization',
-      body: '<p>Delaying the step of rebuilding whole rows for as long as possible. A row store reads full rows and then throws away the columns it does not need. A column store instead runs the filter on just the filtered column, keeps a list of matching row positions, and only fetches the other columns for those positions at the very end, when the result must be assembled. Fewer bytes are decompressed and copied, and the operators keep working on tight one-type arrays for most of the query. It is one of the tricks that make the columnar layout pay off in practice.</p>',
-    },
     'vectorized': {
       title: 'Vectorized execution',
       body: '<p>Processing a batch (~2048 values) per operator call instead of one row — the ' +

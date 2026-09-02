@@ -74,22 +74,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p>Quiz 11 first (MapReduce, Spark &amp; Ray), then the write-optimized half of the storage
-world.</p>
+<p class="keep-in-present"><strong>Quiz 11</strong> first (MapReduce, Spark &amp; Ray, 10 min), then the write-optimized
+half of the storage world.</p>
 
 <p class="keep-in-present">The problem in one line: a crawler that writes a million rows a second
 onto machines that die daily. A B+ tree pays a random disk write per insert, so it cannot keep
 up; a single server cannot survive the failures. Something has to be organized around the write.</p>
 
-<ol class="agenda">
-  <li><strong>Google's 2004 problem</strong>: why sharded MySQL wasn't the answer<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>.</li>
-  <li><strong>The Bigtable model</strong>: a sorted key-value map that is presented as a table but is not a relational one.</li>
-  <li><strong>Tablets</strong>: last week's range partitioning, productized.</li>
-  <li><strong>The LSM tree</strong>: writes are buffered in memory, flushed to sorted files on disk, and merged in the background; nothing on disk is ever overwritten in place.</li>
-  <li><strong>Run the write path</strong>: <span class="gloss" data-gloss="memtable">memtable</span>, <span class="gloss" data-gloss="sstable">SSTables</span>, and <span class="gloss" data-gloss="compaction">compaction</span>, live.</li>
-  <li><strong>LSM vs B+ tree</strong>: what each design pays on writes and what it pays on reads, side by side.</li>
-  <li><strong>Replication &amp; CAP</strong>: what partitions force you to choose.</li>
-</ol>
 
 <p class="keep-in-present">Today's claim: <strong>the B+ tree and the LSM tree are the two
 poles of one trade</strong> (organize on write (pay before reads) or organize later (pay
@@ -191,7 +182,7 @@ background:    COMPACTION                  merge-sort several SSTables into one,
 
 <p class="keep-in-present">Every disk write is sequential: the WAL, the flushes, the
 merges. Random writes have been <em>abolished</em>, at the price of the same key now living
-in several places at once: the memtable, maybe three SSTables. That price lands on reads,
+in several places at once: the <span class="gloss" data-gloss="memtable">memtable</span>, maybe three <span class="gloss" data-gloss="sstable">SSTables</span>. That price lands on reads,
 which is the next section, but first, run the write path yourself in the widget below.</p>
 
 <!-- ============================================================ -->
@@ -203,7 +194,7 @@ SSTables, compact, and then look keys up to see where reads must search.</p>
 <div class="viz" id="viz-lsm">
   <div class="viz-title">LSM engine · memtable (cap 6) → L0 SSTables → compaction</div>
   <p class="viz-description">Each write goes to the memtable (sorted, in RAM). At 6 entries
-  it flushes to an immutable SSTable. <strong>Compact</strong> merge-sorts all SSTables into
+  it flushes to an immutable SSTable. <span class="gloss" data-gloss="compaction"><strong>Compact</strong></span> merge-sorts all SSTables into
   one, dropping old versions of re-written keys. Then <strong>look up</strong> a key: every
   structure that must be checked lights up, newest first.</p>
   <div class="qj-controls">
