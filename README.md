@@ -10,7 +10,9 @@ analytics stack, vector search, RAG, distributed compute, LSM engines and graphs
 
 Every page is plain HTML, CSS and JavaScript. There is no build step: open any
 `.html` file in a browser and it works. Press `P` on a lecture page for
-presentation mode.
+presentation mode. For the dedicated animation-based decks, open
+[`slides/index.html`](slides/index.html). Each lecture includes 60 minutes of
+teaching, presenter notes, and tablet pen/pointer tools.
 
 ## Get the code
 
@@ -40,7 +42,8 @@ is an optional extension.
 | `index.html` | course home |
 | `schedule.html` | day-by-day schedule, the source of truth for dates |
 | `project.html` | the team RAG project spec |
-| `lectures/lecture-NN/` | one lecture deck |
+| `lectures/lecture-NN/` | one lecture reading with interactive examples |
+| `slides/` | visual lecture decks and timed presenter guides |
 | `labs/lab-NN/` | one lab page plus its `starter/` code |
 | `labs/_shared/` | the shared style base every page loads |
 
