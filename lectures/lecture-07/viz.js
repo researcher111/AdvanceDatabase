@@ -13,7 +13,7 @@
     },
     'kill-9': {
       title: 'kill -9',
-      body: '<p>A Unix command that tells the operating system to terminate a process immediately, with no warning and no chance to run cleanup code. Anything the process held only in memory, including data pages it had not yet written and log records still sitting in its buffers, is gone the instant the command lands. The operating system&#39;s own cache survives, so bytes already handed to the OS but not yet fsync&#39;d are in a grey zone: they may reach disk, or may not. That makes kill -9 a convenient stand-in for a power cut when testing a database: if the engine&#39;s recovery works after kill -9, it has kept its durability promise without help from an orderly shutdown.</p>',
+      body: '<p>A Unix command that tells the operating system to terminate a process immediately, with no warning and no chance to run cleanup code. Anything the process held only in memory, including data pages it had not yet written and log records still sitting in its buffers, is gone the instant the command lands. The operating system&#39;s own cache survives, so bytes already handed to the OS but not yet fsync&#39;d are in a grey zone: they may reach disk, or may not. This tests an abrupt process exit, not a power cut: the OS cache survives process termination. Power-loss and torn-write testing require additional fault injection.</p>',
     },
     'mvcc': {
       title: 'MVCC',
@@ -73,26 +73,26 @@
   const STEPS = [
     { msg: 'Fresh database: A=$100, B=$50 on disk. The log is empty.',
       fx: st => {} },
-    { msg: 'tx1 begins. START is appended — buffered, no fsync needed yet.',
-      fx: st => st.log.push({ t: 'START tx1', c: 'buffered' }) },
-    { msg: 'tx1 sets A := 60. FIRST the old value (100) goes to the log; THEN the page changes — in the buffer pool only. Disk still says 100.',
-      fx: st => { st.log.push({ t: 'SET A old=100', c: 'buffered' }); st.note = 'buffer: A=60'; } },
-    { msg: 'tx1 sets B := 90, same dance. Old value 50 logged; disk untouched.',
-      fx: st => { st.log.push({ t: 'SET B old=50', c: 'buffered' }); st.note = 'buffer: A=60 B=90'; } },
+    { msg: 'tx1 begins. START is appended and synced by the lab logger.',
+      fx: st => st.log.push({ t: 'START tx1', c: 'synced' }) },
+    { msg: 'tx1 sets A := 60. FIRST the old value (100) is logged and synced; THEN the page changes — in the buffer pool only. Disk still says 100.',
+      fx: st => { st.log.push({ t: 'SET A old=100', c: 'synced' }); st.note = 'buffer: A=60'; } },
+    { msg: 'tx1 sets B := 90, same dance. Old value 50 logged and synced; data page not yet flushed.',
+      fx: st => { st.log.push({ t: 'SET B old=50', c: 'synced' }); st.note = 'buffer: A=60 B=90'; } },
     { msg: 'tx1 COMMITS: data pages flush (FORCE)… disk now 60/90… then the COMMIT record is appended WITH FSYNC. When that returns, the promise is binding.',
       fx: st => { st.a = 60; st.b = 90; st.note = '';
                   st.log.forEach(e => e.c = 'synced');
                   st.log.push({ t: 'COMMIT tx1  «fsync»', c: 'synced' }); } },
-    { msg: 'tx2 begins a $50 transfer: A := 10. Old value 60 logged; new value in the buffer.',
-      fx: st => { st.log.push({ t: 'START tx2', c: 'buffered' });
-                  st.log.push({ t: 'SET A old=60', c: 'buffered' });
+    { msg: 'tx2 begins a $50 transfer: A := 10. Old value 60 logged and synced; new value in the buffer.',
+      fx: st => { st.log.push({ t: 'START tx2', c: 'synced' });
+                  st.log.push({ t: 'SET A old=60', c: 'synced' });
                   st.note = 'buffer: A=10'; } },
     { msg: 'The pool STEALS the dirty page to disk (eviction pressure — its right, per week 2). Disk now says A=$10. B was never credited. And then—',
       fx: st => { st.a = 10; st.note = 'uncommitted data ON DISK';
                   st.log.forEach(e => { if (e.t.includes('old=60') || e.t.includes('tx2')) e.c = 'synced'; }); } },
     { msg: 'KILL -9. The process is gone. No rollback ran. Disk: A=$10, B=$90 — $50 of the $150 has ceased to exist.',
       fx: st => { st.dead = true; st.note = ''; } },
-    { msg: 'Restart → recover() reads the log BACKWARDS: no COMMIT for tx2 → its SET record (old=60) is an undo instruction. A := 60 restored; a ROLLBACK receipt appended.',
+    { msg: 'Restart → recover() reads the log BACKWARDS: no COMMIT for tx2 → its SET record (old=60) is an undo instruction. A := 60 restored and flushed; then a ROLLBACK receipt is synced.',
       fx: st => { st.a = 60; st.undone = true; st.dead = false;
                   st.log.push({ t: 'ROLLBACK tx2  «fsync»', c: 'synced' }); } },
     { msg: 'Consistent: A=$60, B=$90 — the committed transfer stands, the doomed one never happened. That is the whole promise, kept.',
@@ -115,7 +115,7 @@
       return `<div class="${cls.join(' ')}">${e.t}</div>`;
     }).join('') || '<em>(empty)</em>';
     stats.textContent = `step ${idx + 1} / ${STEPS.length}` +
-      `    fsyncs so far: ${st.log.filter(e => e.t.includes('fsync')).length}`;
+      `    durable log records: ${st.log.filter(e => e.c === 'synced').length} (data flushes also sync)`;
   }
 
   function runTo(n) {

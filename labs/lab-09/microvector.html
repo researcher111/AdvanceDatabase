@@ -93,11 +93,12 @@ seeded dataset; your Thursday table must match.</p>
   <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
 <pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
 <span class="cl-line">cd AdvanceDatabase/labs/lab-09/starter</span></pre>
-  <p class="viz-caption">Notice where the curve bends: probes 1→4 buy recall cheaply; 8→20
-  buy the last 1.5% at triple the work. Every ANN deployment lives somewhere on this bend.</p>
+  <p class="viz-caption">Notice where the curve bends: probes 1→4 buy recall cheaply; 8→20 buy the remaining recall at triple the work. Every ANN deployment lives somewhere on this bend.</p>
 </div>
 
 <p class="key-fact keep-in-present"><strong>0.917 recall for 4.3× fewer comparisons</strong> at probe 4: nine of ten true neighbors found while scoring 924 vectors instead of 4,000</p>
+
+<p>Download the entire <code>starter/</code> directory, including <code>data/</code>. The individual Python links do not include the corpus and vector files. Cloning the repository is the simplest way to get everything.</p>
 
 <!-- ============================================================ -->
 <h2 id="big-idea">Partition the space so a query skips most of it</h2>
@@ -248,7 +249,7 @@ question 3, and your project's writeup requirement.</p>
 
 <p class="keep-in-present"><strong>Now change something.</strong> Run <code>python3 measure_recall.py 384</code> to use
 the model's full 384-dimensional vectors instead of the 64-dimensional copies. Report the run time
-of both (about five times longer at 384) and the recall at probe 4 (0.905 at 384 against 0.917
+of both (about six times as much arithmetic at 384) and the recall at probe 4 (0.905 at 384 against 0.917
 at 64 on the reference solution). Then answer: the 64-d vectors keep two thirds of the model's
 variance and only about 60% of its exact top-10 neighbors, yet the IVF curve barely moves. What
 does that tell you about what the recall table is measuring, and what it is not?</p>
@@ -264,8 +265,7 @@ the grade. It lands with the project's retrieval milestone; this lab is most of 
 <ul>
   <li>☐ <code>microvector.py</code>: all seven tests pass (<code>7/7</code>).</li>
 </ul>
-<p>That is the whole upload. The grade is the test harness: the score you see locally is the score
-Gradescope reports.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
@@ -284,8 +284,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <table>
   <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
   <tbody>
-    <tr><td>Correctness</td><td>Gradescope runs the lab's test harness. Every test is worth the same share of
-    the points, and the local pass count is the grade.</td><td>100%</td></tr>
+    <tr><td>Correctness</td><td>Gradescope runs the graded test group described above. Each test contributes an equal share of the points.</td><td>100%</td></tr>
   </tbody>
 </table>
 
@@ -310,11 +309,7 @@ handling (sort by <code>(-sim, id)</code> exactly) or k-means drift from calling
 assignment.</p>
 
 <h3 class="keep-in-present">Why is Python fine here when it was "too slow" for real engines?</h3>
-<p class="keep-in-present">\(4{,}000 \times 64 \approx 250{,}000\) multiply-adds per brute query; Python shrugs. At
-the model's own 384 dims the same script takes five times longer, which is the first hint.
-The real thing does 1536 dims × millions with SIMD (FAISS) precisely because the constant
-factor matters at scale. The <em>structure</em> and the <em>dial</em> (what this lab
-teaches) are identical at both scales.</p>
+<p class="keep-in-present">The 64-dimensional dataset needs about 256,000 multiply-adds per brute-force query. Moving to 384 dimensions multiplies that arithmetic by six. Actual latency also depends on the implementation and hardware. Production libraries use compiled loops, batching, and SIMD to reduce those costs.</p>
 
 <h3 class="keep-in-present">Should my project use microvector or pgvector/FAISS?</h3>
 <p class="keep-in-present">Spec says any real index. microvector earns style points and

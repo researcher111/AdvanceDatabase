@@ -79,8 +79,7 @@ fit in RAM, and it must survive power loss), and disk is 250× to 100,000× slow
 Unless something decides which blocks stay in memory, every query pays the disk price.</p>
 
 
-<p class="keep-in-present">Today's claim: <strong>a database is fast exactly when its buffer
-pool is winning.</strong></p>
+<p class="keep-in-present">Today's claim: <strong>a high buffer-pool hit rate can remove a major source of query latency.</strong></p>
 
 <!-- ============================================================ -->
 <h2 id="problem">Data must live on disk; only RAM is fast enough</h2>
@@ -173,7 +172,7 @@ the lecture:</p>
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The pool</span><span>N fixed <strong>frames</strong>, allocated once at startup; Postgres calls the setting<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup> <code>shared_buffers</code>. Each frame holds exactly one block's page.</span></div>
   <div class="lc-row"><span class="lc-k">The lookup</span><span>"is block <em>b</em> already here?": microdb scans its handful of frames; real engines keep a <span class="gloss" data-gloss="hash-table">hash table</span> from BlockId → frame so the answer costs \(O(1)\).</span></div>
-  <div class="lc-row"><span class="lc-k">The bookkeeping</span><span>per frame: which block · a <strong><span class="gloss" data-gloss="pin-count">pin count</span></strong> · a <strong><span class="gloss" data-gloss="dirty">dirty</span></strong> flag · a <strong>last-used tick</strong>. Twelve bytes of metadata that decide everything.</span></div>
+  <div class="lc-row"><span class="lc-k">The bookkeeping</span><span>per frame: which block · a <strong><span class="gloss" data-gloss="pin-count">pin count</span></strong> · a <strong><span class="gloss" data-gloss="dirty">dirty</span></strong> flag · a <strong>last-used tick</strong>. A small set of metadata; Python object overhead is larger than these logical fields.</span></div>
   <div class="lc-row"><span class="lc-k">The interface</span><span>two verbs only: <code>pin(block)</code> and <code>unpin(buffer)</code>. Every read and write in the rest of microdb goes through them, forever.</span></div>
 </div>
 
@@ -214,7 +213,7 @@ with two sides:</p>
 <h3 class="new-slide" data-kicker="The pool">The OS cache can't pin, order writes, or see ahead</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Pinning</span><span>The OS offers no "don't evict this, I'm using it."<sup class="src"><a href="#src-6" title="Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)">6</a></sup> A database must be able to hold a page mid-operation; that alone forces its own pool.</span></div>
+  <div class="lc-row"><span class="lc-k">Pinning</span><span>Operating systems offer facilities such as memory locking, but not the database’s complete pin, eviction, and write-ordering protocol.<sup class="src"><a href="#src-6" title="Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)">6</a></sup> A database must be able to hold a page mid-operation; that alone forces its own pool.</span></div>
   <div class="lc-row"><span class="lc-k">Write ordering</span><span>Recovery (week 7) requires the log to reach disk <em>before</em> the data page it describes. The OS flushes whenever it likes; the database must control the order<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">Smarter eviction</span><span>The database knows its own future ("this is a one-pass scan, don't cache it"), and can pick policies per workload<sup class="src"><a href="#src-8" title="Operating System Support for Database Management (Stonebraker, Communications of the ACM, July 1981)">8</a></sup>. The OS sees anonymous bytes.</span></div>
   <div class="lc-row"><span class="lc-k">The <span class="gloss" data-gloss="mmap">mmap</span> trap</span><span>Mapping the file into memory looks like a free buffer pool; the CIDR 2022 paper in the citations is titled "Are you sure?" for a reason: no pinning, no write ordering, surprise stalls<sup class="src"><a href="#src-6" title="Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)">6</a></sup>.</span></div>
@@ -306,12 +305,12 @@ most workloads, and Thursday you implement the full version, tick and all.</p>
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Postgres</span><span>clock-sweep (an LRU approximation with a usage counter), plus <strong>ring buffers</strong>: a big sequential scan gets a tiny private ring so it can't flood the shared pool<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">MySQL/InnoDB</span><span>midpoint LRU: new pages enter the <em>middle</em> of the list, not the head; a page must be touched again to reach the protected young region<sup class="src"><a href="#src-11" title="MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool">11</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">DuckDB</span><span>analytics engines take a different route. DuckDB still caches storage pages while memory lasts, but a big scan streams through in fixed-size chunks instead of flooding that cache. The cache shares one memory budget with running queries, so a join building a big hash table competes with the cached pages for space. When the budget runs out, the join writes part of its own work to disk; the cached pages stay in memory<sup class="src"><a href="#src-14" title="DuckDB blog: Memory Management in DuckDB (2024)">14</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">DuckDB</span><span>analytics engines take a different route. DuckDB still caches storage pages while memory lasts, but a big scan streams through in fixed-size chunks instead of flooding that cache. The cache shares one memory budget with running queries, so a join building a big hash table competes with the cached pages for space. When the budget runs out, the buffer manager may evict cached storage pages or spill temporary query data to disk<sup class="src"><a href="#src-14" title="DuckDB blog: Memory Management in DuckDB (2024)">14</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The shared idea</span><span>detect "this access pattern won't reuse" and refuse to let it evict what will.</span></div>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="dirty">Dirty pages reach disk on eviction or flush, not commit</h2>
+<h2 id="dirty">Dirty pages reach disk on eviction or an explicit flush</h2>
 
 <p class="keep-in-present">Reads were the easy half. Once queries <em>modify</em> pages, the pool holds data the disk
 doesn't have yet, and must never lose track of that fact.</p>
@@ -322,7 +321,7 @@ doesn't have yet, and must never lose track of that fact.</p>
     <tr><td><strong>Eviction</strong></td><td>the pool, inside <code>pin()</code></td><td>a miss with no free frame means a victim page is thrown out so its frame can hold the new block. If that victim is dirty, the pool writes it to disk first, then overwrites the frame; skip that write and the change exists nowhere</td></tr>
     <tr><td><strong><code>flush_all()</code></strong></td><td>shutdown / <span class="gloss" data-gloss="checkpoint">checkpoint</span></td><td>writes every dirty page in the pool to disk in one sweep. At shutdown that is how the changes outlive the process; at a checkpoint it puts a ceiling on how much work recovery has to redo after a crash, since everything before the checkpoint is already on disk</td></tr>
     <tr><td><strong>Never on unpin</strong></td><td>&nbsp;</td><td>unpin only says the caller is done with the page, not that it should be written. A hot page that many transactions touch stays dirty in memory for a long time, on purpose: writing it on every unpin would turn each small change into a disk trip</td></tr>
-    <tr><td><strong>Not at <span class="gloss" data-gloss="commit">COMMIT</span></strong></td><td>the log instead</td><td>commit does not write the data pages. It forces the <em>write-ahead log</em> to disk instead, one sequential fsync of a small record, and the pages follow later at their own pace. That is the week-7 escape from the fsync ratio you measured in Lab 1<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup></td></tr>
+    <tr><td>At COMMIT: policy-dependent</td><td>FORCE or NO-FORCE</td><td>Lab 7 uses FORCE: data pages are durable before COMMIT is logged. With NO-FORCE, commit can force the log and defer data-page writes, so recovery also needs redo information.</td></tr>
   </tbody>
 </table>
 
@@ -348,7 +347,7 @@ doesn't have yet, and must never lose track of that fact.</p>
 contribute <strong>96%</strong> of the total time. Caches aren't good until they're
 <em>absurdly</em> good; this is why the scan's 0% hit rate hurts so much.</p>
 
-<h3 class="new-slide" data-kicker="The miss term">The last percent of hit rate outweighs the first 89</h3>
+<h3 class="new-slide" data-kicker="The miss term">Each extra hit reduces the same absolute I/O cost</h3>
 
 <div class="viz" id="viz-eat">
   <div class="viz-title">Effective access time, live</div>
@@ -359,7 +358,7 @@ contribute <strong>96%</strong> of the total time. Caches aren't good until they
     <input type="range" id="eat-h" min="500" max="1000" value="900">
   </div>
   <div class="eat-readout" id="eat-readout"></div>
-  <p class="viz-caption">The last percent of hit rate is worth more than the first eighty-nine.</p>
+  <p class="viz-caption">Each percentage point saves the same absolute time in this model. Near a 100% hit rate, that saving is a much larger fraction of the remaining latency.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="The miss term">Size the pool to the working set, not a percentage</h3>

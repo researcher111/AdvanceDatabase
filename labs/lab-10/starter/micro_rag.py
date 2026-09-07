@@ -48,8 +48,8 @@ why will with you your""".split())
 # ------------------------------------------------- provided: chunk + embed
 
 def chunk_corpus(max_words: int = 60) -> list[dict]:
-    """Split each doc into chunks of at most `max_words` words (sentence
-    boundaries respected). Returns [{"doc": id, "title": t, "text": ...}].
+    """Split each doc at sentence boundaries, targeting `max_words` words.
+    A single sentence longer than the target stays intact. Returns [{"doc": id, "title": t, "text": ...}].
     With this corpus most docs yield 1-2 chunks — chunking earns its keep
     on real corpora; the interface is what matters."""
     chunks = []

@@ -36,24 +36,16 @@ DOCS = [
      "in-place, and deletes a flag flip. The waste inside reserved space is internal "
      "fragmentation, the deliberate rent paid for O(1) access."),
     ("tombstone", "Tombstones and deletion",
-     "Deleting a record flips its flag to empty and moves nothing; the old bytes "
-     "linger until an insert reuses the slot. This makes deletion cheap and deleted "
-     "data forensically recoverable, and it is why databases need vacuum or "
-     "compaction processes to reclaim space."),
+     'In microdb, deleting a record marks its slot empty; a later insert can reuse the slot. The old bytes may remain until overwritten. Production engines use different deletion schemes, including MVCC versions or tombstones, and may need vacuum or compaction to reclaim space.'),
     ("rid", "Record identifiers",
-     "A RID is a row's physical address: block number and slot number. Because "
-     "slotted storage never moves records, RIDs stay valid indefinitely, which is "
-     "what makes indexes safe: an index is a map from field values to RIDs."),
+     "A RID is a row's physical address: block number and slot number. In microdb, the address stays stable while the row exists. An index maps field values to RIDs and must remove stale entries when a row is deleted or its slot is reused."),
     ("catalog", "The system catalog",
      "The catalog stores every table's schema and layout in ordinary tables like "
      "field_catalog. The catalog's own layout is hardcoded at startup to break the "
      "circular dependency, a move called bootstrapping. In Postgres the psql "
      "backslash-d command is just a catalog query."),
     ("iterator", "The iterator model",
-     "Every query operator implements the same interface: before_first, next, "
-     "get_val, close. Operators wrap each other into plans; rows flow up on demand "
-     "one at a time, so memory tracks plan depth rather than data size. Sort and "
-     "group-by are the exceptions that must materialize."),
+     'Every query operator implements before_first, next, get_val, has_field, and close. Pipelined scans pass rows on demand with little buffering. Sorts, hash joins, and some aggregations retain data, so the iterator interface alone does not guarantee constant memory.'),
     ("product", "Products and joins",
      "A join is a cartesian product filtered by a predicate. The nested-loop "
      "product rewinds its right input for every left row, so pairing costs the "
@@ -86,10 +78,7 @@ DOCS = [
      "scan on unselective ones, where random jumps cost more than one smooth read. "
      "Optimizers estimate selectivity from statistics to choose."),
     ("wal", "Write-ahead logging",
-     "Before changing a page, the database writes the old value to an append-only "
-     "log; the log record must reach disk before the changed page can. Commit "
-     "flushes data pages then fsyncs a commit record: that single fsync is the "
-     "moment a transaction becomes durable."),
+     "In this lab's undo log, the old value must reach durable storage before the changed data page can. Commit flushes data pages before syncing the commit record. This FORCE/STEAL design needs earlier log and page syncs as well as the final commit sync."),
     ("recovery", "Crash recovery",
      "Recovery reads the log newest first, so each transaction's fate is known "
      "before its writes are encountered. Writes of unfinished transactions are "
@@ -101,10 +90,7 @@ DOCS = [
      "guarantees serializability and prevents dirty reads, at the price of "
      "waiting and deadlocks, which engines break by aborting a victim."),
     ("mvcc", "Multi-version concurrency control",
-     "Updates create new row versions instead of overwriting; each reader sees a "
-     "snapshot of versions committed when it began. Readers never block writers "
-     "and writers never block readers. Vacuum reclaims versions no snapshot can "
-     "see. Postgres stamps versions with xmin and xmax transaction ids."),
+     'Updates create new row versions. A snapshot determines which committed versions a reader can see: per statement at READ COMMITTED, or per transaction at REPEATABLE READ in PostgreSQL. Ordinary snapshot reads do not block row writers, but explicit locks can conflict. Vacuum reclaims versions no snapshot needs.'),
     ("columnar", "Columnar storage",
      "Analytics touches all rows but few columns, so column stores keep each "
      "column's values contiguous: queries read only named columns, and runs of "

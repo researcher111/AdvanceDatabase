@@ -145,7 +145,7 @@ block-hopping helpers are provided.</p>
   <li><strong><code>Layout.__init__</code></strong>: the offset walk. Run the harness: the
   LAYOUT group names the exact numbers it expects (4 / 8 / 20 / 24).</li>
   <li><strong><code>_field_pos</code>, then the four get/set methods</strong>: one formula,
-  four one-liners. Setters end with <code>set_modified()</code>. RECORD test 1 goes green.</li>
+  four one-liners. Before writing a string, reject it if its UTF-8 byte length exceeds the schema capacity. Setters end with <code>set_modified()</code>. RECORD test 1 goes green.</li>
   <li><strong><code>insert_after</code>, <code>next_after</code>, <code>delete</code></strong>:
   three flag scans. All of RECORD passes.</li>
   <li><strong><code>TableScan.next()</code>, then <code>insert()</code></strong>: the two loops
@@ -171,7 +171,7 @@ disk), RECORD works within one page, SCAN crosses blocks and pools, and CATALOG 
 provided <code>create_table</code>/<code>get_layout</code>, which exercises literally
 everything above it. The sharpest test is the quietest:
 <em>one pin at a time</em> runs your 3-block scan through a <strong>2-frame pool</strong>;
-if TableScan ever holds two pins, the pool aborts on the spot.</p>
+leaked pins eventually exhaust the pool; the harness also checks pin counts.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_records.py</span>
 <span class="t-head">LAYOUT group</span>
@@ -230,24 +230,20 @@ making a cameo: a full pass through an 8-frame pool re-uses nothing.</p>
 <h3 class="new-slide" data-kicker="Part 3 · Measure">Catalogs, RIDs, and VACUUM are this layer at work</h3>
 
 <ul>
-  <li><code>df.info()</code>, <code>\d students</code> in psql, and <code>DESCRIBE</code> in
-  DuckDB all read a catalog: rows in a table that record each column's name, type, and width, which
-  is what your <code>Catalog.create_table</code> wrote and <code>get_layout</code> read back.</li>
+  <li><code>\d students</code> in psql and <code>DESCRIBE</code> in DuckDB inspect schema metadata. Your catalog stores similar information: field names, types, capacities, and offsets. <code>df.info()</code> inspects the dataframe’s own metadata rather than querying a database catalog.</li>
   <li>When Arrow or Parquet calls a column fixed-width (<code>int64</code>, <code>float64</code>, a
   timestamp) or variable-width (<code>string</code>, <code>binary</code>), it is the distinction
   behind your <code>Layout</code>: a fixed-width column can be located by arithmetic and copied
   straight into a NumPy array, a variable-width one needs an offsets array first, which is why
   string columns are the slow ones in pandas.</li>
-  <li>The <code>VARCHAR(8)</code> you sized reserves 8 characters whether a name uses them or not;
+  <li>The <code>VARCHAR(8)</code> you sized reserves 8 UTF-8 bytes whether a name uses them or not;
   Postgres stores strings at their actual length instead, and pays for it by walking every earlier
   column's length to find a later column's bytes, which is why a wide table with many text columns
   is slow to read the last column of.</li>
   <li>The <span class="gloss" data-gloss="rid">RID</span> your <code>TableScan.rid()</code> returns, a block number and a slot, is what every
   index in Lab 6 stores next to a key, and what a vector store hands back from a nearest-neighbor
   query is the same thing: an id that points at a row, not the row.</li>
-  <li>When a Postgres table bloats after many updates and deletes, the cause is slots marked
-  <code>EMPTY</code> that no scan reclaims until <code>VACUUM</code> runs; you wrote the flag it
-  checks.</li>
+  <li>PostgreSQL retains old row versions for active snapshots. <code>VACUUM</code> reclaims them when they are no longer visible. This resembles our need to reuse space, but does not use microdb’s EMPTY flag.</li>
 </ul>
 
 <!-- ============================================================ -->
@@ -260,8 +256,7 @@ instructions, by Thursday Sep 17 at class start.</strong> One file; the harness 
 <ul>
   <li>☐ <code>record_manager.py</code>: all twelve local tests pass (<code>12/12</code>).</li>
 </ul>
-<p>That is the whole upload. The grade is the test harness: the score you see locally is the score
-Gradescope reports.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
@@ -290,8 +285,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <table>
   <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
   <tbody>
-    <tr><td>Correctness</td><td>Gradescope runs the lab's test harness. Every test is worth the same share of
-    the points, and the local pass count is the grade.</td><td>100%</td></tr>
+    <tr><td>Correctness</td><td>Gradescope runs the graded test group described above. Each test contributes an equal share of the points.</td><td>100%</td></tr>
   </tbody>
 </table>
 
@@ -303,8 +297,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 pair, the exact call an index will make in week 6, and about six lines); add a
 <strong>free-slot hint</strong> (remember the last block that had room, so insert() stops
 re-scanning full blocks; measure inserts before and after on the 10k-row table); or implement
-<strong><code>Schema.add_from(other, fields)</code></strong>, building a sub-schema; you'll
-want it for Project in next week's lab, and future-you will send thanks.</p>
+<strong><code>Schema.add_from(other, fields)</code></strong>, building a sub-schema; it will help with next week’s projection operator.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

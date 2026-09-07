@@ -129,7 +129,7 @@ lesson at planetary scale: when text has structure, you want a lexer and a parse
 <p class="keep-in-present">Five token kinds cover all of microSQL: <code>KEYWORD · ID · NUM ·
 STR · PUNCT</code>. Keywords are ordinary words that happen to be on the lexer's fixed list of reserved
 words; any word on that list is labeled KEYWORD wherever it appears, which is why
-you can't name a table <code>select</code>, in microdb or in Postgres<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</p>
+microdb rejects <code>select</code> as a table name; PostgreSQL permits it as a quoted identifier<sup class="src"><a href="#src-4" title="PostgreSQL Documentation, Appendix C. SQL Key Words">4</a></sup>.</p>
 
 <h3 class="new-slide" data-kicker="Two simple machines">Every naming freedom is paid for in parser lines</h3>
 
@@ -188,7 +188,7 @@ term    :=  field ( = | < | > ) value
 value   :=  number | 'string' | field          ← field here means: a join!
 insert  :=  INSERT INTO table VALUES ( value { , value } )</code></pre>
 
-<p class="keep-in-present">This notation is <span class="gloss" data-gloss="bnf">BNF</span>,
+<p class="keep-in-present">This notation is <span class="gloss" data-gloss="bnf">extended BNF (EBNF)</span>,
 and reading it is a superpower: every database, config format, and language you'll ever use<sup class="src"><a href="#src-5" title="ISO/IEC 14977:1996 Extended BNF (final draft text)">5</a></sup>
 publishes one of these. <code>{ }</code> means repeat, <code>[ ]</code> means optional, and
 each line becomes <strong>one Python method</strong>.</p>
@@ -308,12 +308,7 @@ Lab 4, by hand:    Select[join] ← Product(σ(s) × σ(m))      60 pairs examin
 
 <p class="key-fact keep-in-present"><strong>900 vs 60</strong> pairs examined: your naive plan against Lab 4's hand-built one, for the same join query</p>
 
-<p class="keep-in-present">The two plans differ in where the filter runs. Your planner builds
-the full product of the two tables and filters afterward, so every pair of rows is formed and
-examined. Lab 4's hand-built plan filters each table first, so far fewer pairs are ever formed.
-Correct first, fast later, and "later" has a date: week 9's
-optimizer reads the same QueryData and does that <span class="gloss" data-gloss="pushdown">pushdown</span> mechanically, using statistics your
-catalog will learn to keep. The parser you write this week never changes again.</p>
+<p class="keep-in-present">Lecture 9 explains how an optimizer can choose a better plan using statistics. Implementing that optimizer is optional; the required labs keep this simple planner.</p>
 
 <h3 class="new-slide" data-kicker="The naive planner">One typed query now fires every layer since week 1</h3>
 
@@ -339,8 +334,8 @@ August. Thursday you get to feel it.</p>
   <div class="code-step" data-step="e1" data-explain="">    if not self.match(kind, value):</div>
   <div class="code-step" data-step="e1" data-explain="The two facts every parse error owes its user: expected WHAT, found WHAT. Position is a nice third (Going Further).">        raise ParseError(f"expected {want!r}, found {v!r}")</div>
   <div class="code-step" data-step="e1" data-explain="">    return self.next()[1]</div>
-  <div class="code-step" data-step="e2" data-step-name="the payoff" data-explain="Because every rule funnels through expect, good errors happen by construction: 'SELECT name FORM students' fails with the message: expected 'from', found 'FORM'. No error-handling code was written; the grammar's own shape produced it.">Parser("SELECT name FORM students").parse()
-# ParseError: expected 'from', found 'FORM'</div>
+  <div class="code-step" data-step="e2" data-step-name="the payoff" data-explain="Because every rule funnels through expect, good errors happen by construction: 'SELECT name FORM students' fails with the message: expected 'from', found 'form'. No error-handling code was written; the grammar's own shape produced it.">Parser("SELECT name FORM students").parse()
+# ParseError: expected 'from', found 'form'</div>
   <div class="code-explain-panel">Hover a line: the REPL prints these messages verbatim; your classmates are the users.</div>
 </div>
 
@@ -349,7 +344,7 @@ August. Thursday you get to feel it.</p>
 <table>
   <thead><tr><th>Engine</th><th>For <code>SELECT name FORM students</code></th><th>Grade</th></tr></thead>
   <tbody>
-    <tr><td>microdb (yours)</td><td><code>expected 'from', found 'FORM'</code></td><td>names both what it expected and what it found</td></tr>
+    <tr><td>microdb (yours)</td><td><code>expected 'from', found 'form'</code></td><td>names both what it expected and what it found</td></tr>
     <tr><td>Postgres</td><td><code>syntax error at or near "FORM"</code></td><td>names the offending token, but not what it expected in its place<sup class="src"><a href="#src-6" title="PostgreSQL Documentation, 36.5. Query Language (SQL) Functions">6</a></sup></td></tr>
     <tr><td>older versions of MySQL</td><td><code>You have an error in your SQL syntax; check the manual<sup class="src"><a href="#src-7" title="mysql-server/share/messages_to_clients.txt (MySQL source, GitHub)">7</a></sup>…</code></td><td>names neither, and sends the user to the manual</td></tr>
   </tbody>
@@ -359,9 +354,9 @@ August. Thursday you get to feel it.</p>
 Because every rule reports failure through <code>expect()</code>, every error automatically names what was expected and what was found; no rule needs its own error-handling code.</p>
 
 <!-- ============================================================ -->
-<h2 id="thursday">Thursday: five methods, and your engine speaks SQL</h2>
+<h2 id="thursday">Thursday: four methods, and your engine speaks SQL</h2>
 
-<p class="keep-in-present">Five methods total, and much of the work is the <code>{ , }</code> idiom from <code>parse_insert</code>, which you will type three times: for the field list and the table list in <code>parse_query</code>, and for the AND chain in <code>_parse_predicate</code>.
+<p class="keep-in-present">Four methods total, and much of the work is the <code>{ , }</code> idiom from <code>parse_insert</code>, which you will type three times: for the field list and the table list in <code>parse_query</code>, and for the AND chain in <code>_parse_predicate</code>.
 The <span class="gloss" data-gloss="repl">REPL</span> and both worked-example parsers ship complete.</p>
 
 <table>
@@ -395,7 +390,7 @@ The <span class="gloss" data-gloss="repl">REPL</span> and both worked-example pa
 <ul class="recap-list">
   <li><strong>Lex, then parse.</strong> Spelling and grammar are different jobs; splitting them
   is what makes each one simple. (Regex was doing both, badly.)</li>
-  <li><strong>One rule, one method, four verbs.</strong> Recursive descent turns a BNF grammar
+  <li><strong>One rule, one method, four verbs.</strong> Recursive descent turns an EBNF grammar
   into code by transliteration, and <code>expect()</code> makes good errors a structural
   freebie.</li>
   <li><strong>Parse to data, plan from data.</strong> The AST between the stages is the seam
@@ -404,7 +399,7 @@ The <span class="gloss" data-gloss="repl">REPL</span> and both worked-example pa
 
 <p class="key-fact keep-in-present"><strong>4 verbs</strong> build every parsing method · <strong>900 vs 60</strong> pairs: naive today, pushed down in week 9</p>
 
-<p class="keep-in-present"><strong>Thursday:</strong> five methods, then type SQL at your own
+<p class="keep-in-present"><strong>Thursday:</strong> four methods, then type SQL at your own
 engine. <strong>Next Tuesday:</strong> B+ trees: the structure that finds one row in a
 million without scanning. Quiz 5 opens class: parsing &amp; planning.</p>
 
@@ -421,7 +416,7 @@ million without scanning. Quiz 5 opens class: parsing &amp; planning.</p>
 <h3 class="keep-in-present">Is real SQL parsed this way?</h3>
 <p class="keep-in-present">SQLite hand-writes its parser's lexer and uses a generated parser<sup class="src"><a href="#src-8" title="Architecture of SQLite">8</a></sup>
 (Lemon); Postgres uses a grammar file compiled by Bison<sup class="src"><a href="#src-9" title="PostgreSQL Documentation, 51.3. The Parser Stage">9</a></sup>, generated cousins of what you're
-writing. DuckDB forked Postgres's<sup class="src"><a href="#src-10" title="DuckDB v2.0: Your Database Deserves a Better Parser (DuckDB blog)">10</a></sup>. Recursive descent by hand is how Lua, Go, and most<sup class="src"><a href="#src-11" title="The Implementation of Lua 5.0 (Ierusalimschy, de Figueiredo, Celes), Journal of Universal Computer Science, 2005">11</a></sup>
+writing. DuckDB used a PostgreSQL-derived parser through v1.x; v2.0 introduces a PEG parser<sup class="src"><a href="#src-10" title="DuckDB v2.0: Your Database Deserves a Better Parser (DuckDB blog)">10</a></sup>. Recursive descent by hand is how Lua, Go, and most<sup class="src"><a href="#src-11" title="The Implementation of Lua 5.0 (Ierusalimschy, de Figueiredo, Celes), Journal of Universal Computer Science, 2005">11</a></sup>
 teaching compilers do it, because it's the readable one<sup class="src"><a href="#src-12" title="Go compiler internals: adding a new statement to Go - Part 1 (Eli Bendersky)">12</a></sup>.</p>
 
 <h3 class="keep-in-present">Why does microSQL forbid naming a column <code>select</code>?</h3>
@@ -434,7 +429,7 @@ Postgres bought flexible naming with about twenty thousand lines of grammar<sup 
 <p class="keep-in-present">It's a <em>string-building</em> thing: gluing untrusted text into
 SQL before the parser sees it. The parser can't tell your intent from the attacker's; both
 arrive as valid tokens. The fix (parameterized queries) hands values around the parser<sup class="src"><a href="#src-13" title="OWASP SQL Injection Prevention Cheat Sheet">13</a></sup>
-entirely. Week 15's security lecture returns to this with your new eyes.</p>
+entirely. Lecture 15 covers graph databases; parameter binding is a useful optional extension to this parser.</p>
 
 <h3 class="keep-in-present">Could the planner cache plans for repeated queries?</h3>
 <p class="keep-in-present">Yes: real engines hash the text and reuse plans (prepared<sup class="src"><a href="#src-14" title="PostgreSQL Documentation, PREPARE">14</a></sup>

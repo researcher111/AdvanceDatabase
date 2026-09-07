@@ -28,8 +28,10 @@ python3 test_filemanager.py      # 0/9 passing is the correct starting state
 ```
 
 Labs 1 to 7 are cumulative: each `starter/` folder ships a working reference
-implementation of every layer below the one you are building, so a rough week
-never sinks the next one.
+implementation of every layer below the one you are building, so a difficult week
+does not prevent you from starting the next. Lab 6 supplies an in-memory index;
+Lab 7 supplies a separate transaction API. Integrating them with the SQL REPL
+is an optional extension.
 
 ## Layout
 
@@ -45,7 +47,23 @@ never sinks the next one.
 ## Requirements
 
 Python 3.11 or newer. Labs 1 to 7 are pure standard library. Later labs add
-`duckdb` (Lab 8), and `pyspark` and `ray` (Lab 11).
+`duckdb` (Lab 8) and optional `pandas` for the dataframe comparison. Lab 11’s
+graded portion uses only the standard library; its Spark and Ray exercises
+need `pyspark`, a compatible JDK (17 or newer), and `ray`.
+
+Clone the whole repository or download each complete `starter/` directory.
+Labs 8–11 include data files that the individual Python download links do not
+include. Labs 9–10 require no model download or paid API for the graded work.
+
+Run each lab from its `starter/` directory. Unimplemented exercises deliberately
+fail their tests; implement the marked methods before expecting a passing suite.
+Measurements and reflections are for discussion, as stated on the lab pages.
+
+## Maintainer checks
+
+Run `python3 -m unittest discover -s tests -v` from the repository root to check
+supplied infrastructure. These ungraded checks do not require student TODOs
+to be completed and are separate from each lab’s exercise tests.
 
 ## Note
 

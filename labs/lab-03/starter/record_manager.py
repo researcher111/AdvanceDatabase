@@ -13,7 +13,7 @@ SLOT LAYOUT (the contract; every later lab depends on it):
     A record slot is [ 4-byte in-use flag ][ field bytes, schema order ].
         flag: int 0 = EMPTY, 1 = USED (at slot offset 0)
         int field:        4 bytes
-        varchar(n) field: 4 + n bytes  (length prefix + capacity)
+        varchar(n) field: 4 + n bytes  (length prefix + UTF-8 byte capacity)
     slot_size  = 4 + sum(field bytes)
     slot k of a block starts at byte  k * slot_size
     slots per block = block_size // slot_size   (leftover bytes are waste)
@@ -139,7 +139,8 @@ class RecordPage:
         raise NotImplementedError
 
     def set_string(self, slot: int, fldname: str, val: str) -> None:
-        # TODO: write + set_modified.
+        # TODO: reject len(val.encode("utf-8")) > schema.length_of(fldname)
+        #       before writing, then write + set_modified.
         raise NotImplementedError
 
     def insert_after(self, slot: int) -> int:

@@ -139,14 +139,16 @@ class ProductScan:
 
     def before_first(self) -> None:
         """Position for the first pair: left on its FIRST row (rewind,
-        then one next()), right before its first."""
+        then one next()), right before its first. Remember whether left.next()
+        succeeded so an empty left input produces no pairs."""
         # TODO
         raise NotImplementedError
 
     def next(self) -> bool:
         """Advance right; when right runs out, rewind it and advance
-        left. False only when left runs out too."""
-        # TODO: three lines. Get them in the right order.
+        left. Return False if either input is empty, and remain exhausted
+        until before_first() is called."""
+        # TODO: handle empty inputs as well as the normal rollover.
         raise NotImplementedError
 
     def get_val(self, fld):

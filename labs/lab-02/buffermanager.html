@@ -150,8 +150,7 @@ coding; the tests check it literally.</p>
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
 <p>Download the four starter files into <code>microdb-lab2/</code>. Note that
-<code>file_manager.py</code> is the <strong>reference Lab 1 implementation</strong>; use it
-even if yours passed, so your layer 1 matches everyone's. The four functions depend on each
+<code>file_manager.py</code> is the <strong>reference Lab 1 implementation</strong>; use it for a consistent baseline, or use your own implementation if it satisfies the same interface. The four functions depend on each
 other, so most of the test cases may not pass until all four functions are properly
 implemented. Build in this order:</p>
 
@@ -259,28 +258,14 @@ tuning parameter you will ever set.</p>
   <thead><tr><th>Where you meet it</th><th>In buffer-pool terms</th></tr></thead>
   <tbody>
     <tr><td><code>pd.read_parquet</code> on a file larger than RAM</td><td>pandas asks for every block and keeps all of them (<code>MemoryError</code>); DuckDB pulls blocks through a small pool and releases each one, so it finishes</td></tr>
-    <tr><td>Spark <code>.cache()</code> / <code>.persist()</code></td><td>pins; when more is pinned than fits, Spark drops partitions and recomputes them where your pool raises <code>BufferAbortError</code></td></tr>
+    <tr><td>Spark <code>.cache()</code> / <code>.persist()</code></td><td>requests caching; evicted partitions may be recomputed or read from disk, depending on storage level</td></tr>
     <tr><td>Second run of a notebook cell that reads a large file</td><td>the OS page cache is a buffer pool, and the blocks are still in it from the first run</td></tr>
     <tr><td>Feature store serving online predictions</td><td>a hot-set workload by design: a few thousand active users get almost every read from a pool that is a small fraction of the table</td></tr>
     <tr><td>Nightly backfill scanning the whole table through the same pool</td><td>the scan cliff in production: it evicts the hot rows, and online lookups miss until they are read back in; Postgres routes large scans through a small ring of frames for exactly this reason</td></tr>
   </tbody>
 </table>
 
-<p>The scan column explains why <code>pd.read_parquet</code> on a file larger than RAM dies
-with <code>MemoryError</code> while DuckDB reading the same file finishes: pandas asks for every
-block at once and keeps all of them, DuckDB pulls blocks through a pool a fraction of that size and
-releases each one as soon as the operator above it is done. Spark's <code>.cache()</code> and
-<code>.persist()</code> are pins: a request that a dataset stay in memory across the next several
-actions, and when more is pinned than fits, Spark drops partitions and recomputes them where your
-pool raises <code>BufferAbortError</code>. The second run of a notebook cell that reads a large file
-is fast for the same reason your hot set hit 97%: the operating system keeps its own buffer pool,
-the page cache, and the file's blocks are still in it from the first run. A feature store serving
-online predictions is a hot-set workload by design: a few thousand active users get almost every
-read, and the pool needed to serve them is a small fraction of the table. The nightly backfill that
-scans the whole table through the same pool is the scan cliff hitting production: it evicts the
-hot rows, and the next hour of online lookups misses until they are read back in. Postgres reads a
-large sequential scan through a small ring of frames instead of the main pool for exactly this
-reason.</p>
+<p>A dataframe must fit its materialized result in memory; a query engine can often stream a larger input through a bounded pool. Spark’s <code>cache()</code> and <code>persist()</code> request reuse, but do not pin partitions against eviction. Lost partitions can be recomputed, and some storage levels spill them to disk. In every case, reuse and memory pressure determine the benefit.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
@@ -292,8 +277,7 @@ instructions, by Thursday Sep 10 at class start.</strong> One file; the harness 
 <ul>
   <li>☐ <code>buffer_manager.py</code>: all ten local tests pass (<code>10/10</code>).</li>
 </ul>
-<p>That is the whole upload. The grade is the test harness: the score you see locally is the score
-Gradescope reports.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
@@ -322,8 +306,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <table>
   <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
   <tbody>
-    <tr><td>Correctness</td><td>Gradescope runs the lab's test harness. Every test is worth the same share of
-    the points, and the local pass count is the grade.</td><td>100%</td></tr>
+    <tr><td>Correctness</td><td>Gradescope runs the graded test group described above. Each test contributes an equal share of the points.</td><td>100%</td></tr>
   </tbody>
 </table>
 
@@ -331,11 +314,10 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
 <p class="keep-in-present">Fast finishers, in rough order of payoff: give <code>pin()</code> a
-<strong>scan-resistant mode</strong>: a boolean <code>sequential=True</code> that makes the
-pinned block eligible for immediate eviction (a one-frame "ring buffer", exactly Postgres's
+<strong>scan-resistant mode</strong>: a boolean <code>sequential=True</code> that makes the block a preferred victim after it is unpinned (a one-frame "ring buffer", exactly Postgres's
 trick) and re-run <code>measure_hits.py</code> to show the hot set is now protected from the
 scan; or implement <strong>clock</strong> eviction (a rotating hand and one reference bit per
-frame, LRU's cheap approximation) and verify all ten tests still pass; or replace
+frame, LRU's cheap approximation) and compare its behavior with LRU; the LRU-specific victim-order tests need not pass; or replace
 <code>_find_existing</code>'s linear scan with a <strong>dict <span class="gloss" data-gloss="page-table">page table</span></strong>
 (<code>{BlockId: Buffer}</code>; BlockId is hashable for exactly this reason) and keep it
 consistent through evictions.</p>

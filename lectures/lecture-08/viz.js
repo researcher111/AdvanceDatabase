@@ -5,7 +5,7 @@
   const GLOSSARY = {
     'snapshot-isolation': {
       title: 'Snapshot isolation',
-      body: '<p>An isolation level where each transaction works from a snapshot: the set of transactions that had committed at the moment it began. Every read returns the row versions those transactions produced and nothing committed later, so a transaction sees one consistent state for its whole run, and readers take no locks at all. Two transactions that try to write the same row still conflict, and the second one to commit is aborted. What it does not catch is two transactions that read overlapping rows and then write <em>different</em> rows, which is write skew. Postgres&#39;s REPEATABLE READ level is snapshot isolation; its SERIALIZABLE level adds the extra checks needed to catch write skew.</p>',
+      body: '<p>An isolation level where each transaction works from a snapshot: the set of transactions that had committed at the moment it began. Every read returns the row versions those transactions produced and nothing committed later, so a transaction sees one consistent state for its whole run, and ordinary snapshot reads avoid conflicting row locks. Two transactions that try to write the same row still conflict, and the second one to commit is aborted. What it does not catch is two transactions that read overlapping rows and then write <em>different</em> rows, which is write skew. Postgres&#39;s REPEATABLE READ level is snapshot isolation; its SERIALIZABLE level adds the extra checks needed to catch write skew.</p>',
     },
     'strict-2pl': {
       title: 'Strict 2PL (strict two-phase locking)',
@@ -15,8 +15,8 @@
       title: 'MVCC (multi-version concurrency control)',
       body: '<p>Instead of overwriting a row, UPDATE creates a new <em>version</em> and the old ' +
         'one lingers, stamped with which transactions created and superseded it. Each reader ' +
-        'sees a consistent snapshot — the versions current when it began — so reads take no ' +
-        'locks at all. Postgres, Oracle, and most modern engines run on it.</p>',
+        'sees a consistent snapshot — the versions current when it began — so ordinary snapshot reads avoid conflicting row ' +
+        'locks. Postgres, Oracle, and most modern engines run on it.</p>',
     },
     'serializable': {
       title: 'Serializability',

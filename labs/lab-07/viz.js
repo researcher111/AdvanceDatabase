@@ -5,11 +5,7 @@
   const GLOSSARY = {
     'the-fsync': {
       title: 'The fsync that matters',
-      body: '<p>Lab 1 priced fsync; Lab 7 spends exactly one per transaction: on the COMMIT ' +
-        'record. Data pages flush first (FORCE), SET records ride along unsynced — but the ' +
-        'instant the COMMIT record’s fsync returns, the transaction is durable against ' +
-        'anything. Before that instant, it officially never happened. Databases are cheap ' +
-        'with fsyncs because they must be, and exact about the one they buy.</p>',
+      body: '<p>Lab 7 uses FORCE/STEAL. LogManager syncs records by default, so the old value is durable before a page can be flushed. Commit flushes data pages before syncing COMMIT. Rollback and recovery flush restored data before syncing their receipts. This costs multiple syncs; production engines use LSNs and redo logging to batch work safely.</p>',
     },
     'idempotent-recall': {
       title: 'Idempotence — recall',

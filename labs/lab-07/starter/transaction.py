@@ -1,7 +1,8 @@
 """microdb · part 7 — transactions: the write-ahead log, rollback, recovery.
 
 Lab 7 of Advanced Databases for Data Science (DS 6XXX, Fall 2026).
-Runs on Labs 1-6 (reference implementations ship in this folder).
+Uses the reference storage and query layers from Labs 1-4.
+The SQL front end and B+ tree are not integrated into this transaction API.
 
 THE ONE RULE (write-ahead logging):
 
@@ -15,13 +16,13 @@ a database survives kill -9.
 
 Policy honesty: microdb uses FORCE (commit flushes data pages) + STEAL
 (dirty pages may hit disk anytime), which needs only UNDO recovery. Real
-engines use NO-FORCE + STEAL and add redo — that's ARIES, and it's this
-lab plus bookkeeping.
+engines often use NO-FORCE + STEAL and need redo. ARIES adds
+analysis, page LSNs, compensation records, and restartable recovery.
 
 The log itself is a plain append-only file of JSON lines, fsync'd on the
-records that matter. That is not a simplification — an append-only file
-with disciplined fsyncs IS what a WAL is; Postgres's pg_wal is the same
-idea with binary records.
+records that matter. This is a teaching simplification: production WAL
+formats also detect corruption and torn writes. This lab demonstrates
+abrupt process exits; it does not simulate disk corruption or power loss.
 
 Run the tests any time:   python3 test_tx.py
 Watch it survive murder:  python3 crash_demo.py
@@ -90,9 +91,12 @@ class LogManager:
         self.path = os.path.join(db_dir, logfile)
         self._f = open(self.path, "a+")
 
-    def append(self, record: dict, sync: bool = False) -> None:
-        """Add one record. sync=True forces it to disk NOW — commit
-        records must reach disk before commit() may return."""
+    def append(self, record: dict, sync: bool = True) -> None:
+        """Append and sync by default. SET records must be durable before
+        their data can be flushed; terminal records follow durable data
+        or undo. This simple lab pays per record rather than tracking LSNs.
+        sync=False is available only for records not needed for WAL safety.
+        """
         self._f.write(json.dumps(record) + "\n")
         self._f.flush()
         if sync:
@@ -127,8 +131,11 @@ class Transaction:
         self.bm = bm
         self.lm = lm
         self.locks = locks
-        self.txnum = Transaction._next_txnum
-        Transaction._next_txnum += 1
+        # A restarted process must not reuse an ID still present in the log.
+        logged_max = max((r["tx"] for r in lm.records_backwards() if "tx" in r),
+                         default=0)
+        self.txnum = max(Transaction._next_txnum, logged_max + 1)
+        Transaction._next_txnum = self.txnum + 1
         self._pins: dict[BlockId, object] = {}
         self.lm.append({"kind": "START", "tx": self.txnum})
 
@@ -163,7 +170,8 @@ class Transaction:
         then (and only then) write the new one through the buffer.
 
         Steps: xlock · read the old int straight from the buffer's page ·
-        append a SET_INT record with it · write the new value ·
+        append a SET_INT record with it using sync=True (the default) ·
+        write the new value ·
         set_modified. Order is everything — the tests check it."""
         # TODO
         raise NotImplementedError
@@ -190,8 +198,8 @@ class Transaction:
         1. walk lm.records_backwards(); for each SET_* record belonging
            to THIS tx, pin its block and write the old value back
            (set_modified too) — stop at this tx's START record
-        2. append a ROLLBACK record
-        3. flush, release locks, unpin"""
+        2. flush restored pages BEFORE appending a durable ROLLBACK record
+        3. release locks, unpin"""
         # TODO
         raise NotImplementedError
 
@@ -208,6 +216,7 @@ def recover(fm: FileManager, bm: BufferManager, lm: LogManager) -> list[int]:
     ROLLBACK seen — remember, we're reading newest-first, so the fate is
     known before the writes appear). For SET_* records of unfinished txs:
     pin the block, restore the old value, set_modified, unpin. Afterwards:
-    flush all, append a ROLLBACK record per undone tx."""
+    flush all, then append a durable ROLLBACK record per undone tx.
+    Complete recovery before admitting new transactions."""
     # TODO
     raise NotImplementedError

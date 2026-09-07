@@ -85,7 +85,7 @@ it passed through has to exist, and leave with the build plan for making your ow
 underneath the query?</strong></p>
 
 <!-- ============================================================ -->
-<h2 id="try-it">The second run of a query never touches the disk</h2>
+<h2 id="try-it">A warm buffer pool can avoid disk reads</h2>
 
 <p>Before any definitions, watch the whole machine work. The widget below holds a tiny
 table of six students stored in two disk blocks, and one query. Press <strong>Play</strong>
@@ -199,11 +199,11 @@ is this six-row table:</p>
 <div class="viz" id="viz-students">
   <div class="viz-title">The toy table · <code>students(id int, name varchar, gpa int)</code></div>
   <p class="viz-description">Six rows, pinned. You will meet these exact values in every widget
-  from here to the midterm: gpa is stored ×10 as an int (3.9 → 39) because microdb won't grow
-  floats until Lab 3.</p>
+  from here to the midterm: gpa is stored ×10 as an int (3.9 → 39) because the core microdb labs support integers and strings.</p>
+<p>Lecture widgets sometimes display GPAs as decimals for readability. In runnable microdb examples, use the stored integer scale: <code>gpa &gt; 35</code> means a GPA above 3.5. The two-block widget is an illustration; the Lab 3 layout fits 170 student rows in a 4096-byte block.</p>
   <table class="students-table" id="students-table"></table>
   <p class="viz-caption">Rows 1–3 live in block 0 of <code>students.tbl</code>; rows 4–6 in block 1.
-  That placement is real: Thursday you write the code that puts them there.</p>
+  The widget spreads the rows across two blocks to make caching visible; the later record layout packs more rows into each block.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="The relational model">A key is a promise about rows that don't exist yet</h3>
@@ -273,11 +273,11 @@ catalog</span>, and microdb's will look almost exactly like this:</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Postgres</span><span><code>\dt</code> and <code>\d students</code> are just queries against the catalog: the psql commands read catalog rows, nothing more.</span></div>
-  <div class="lc-row"><span class="lc-k">microdb</span><span>you build the catalog in Lab 3. And notice those offsets in the table above: they're the exact bytes you'll place by hand on Thursday.</span></div>
+  <div class="lc-row"><span class="lc-k">microdb</span><span>you build the catalog in Lab 3. And notice those offsets in the table above: these are Lab 1’s hand-packed example offsets; Lab 3 adds a flag and reserved string capacity.</span></div>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="layers">Every database engine is the same five layers</h2>
+<h2 id="layers">Five layers help us understand a database engine</h2>
 
 <p class="keep-in-present">Now the box itself. Postgres, SQLite, DuckDB, Oracle: radically different engines, same
 five layers. Before you tour them, ask what they must be.</p>
@@ -298,7 +298,7 @@ five layers. Before you tour them, ask what they must be.</p>
   <div class="lc-row"><span class="lc-k">Job</span><span>Turn SQL text into a checked, executable plan tree, and reject nonsense with a good error message.</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span><code>"SELECT name FROM students WHERE gpa &gt; 3.5"</code> → Project(Select(Scan))</span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>a lexer (text → tokens), a recursive-descent parser (tokens → tree), a planner (tree → strategy)</span></div>
-  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 5 · <code>parser.py</code>, <code>planner.py</code>; after it, microdb answers SQL typed at a prompt</span></div>
+  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 5 · <code>sql_frontend.py</code>; after it, microdb answers SQL typed at a prompt</span></div>
   <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>Postgres's <code>syntax error at or near "FORM"</code> is this layer talking</span></div>
 </div>
 
@@ -312,7 +312,7 @@ the speed.</p>
   <div class="lc-row"><span class="lc-k">Job</span><span>Run the plan: a pipeline of operators, each answering one question, "give me your next row."</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span>plan tree → result rows, streamed one at a time</span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>Scan reads rows · Select filters them · Project trims columns · Join pairs them · all the same interface, stacked</span></div>
-  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 4 · <code>scans.py</code>: the iterator (Volcano) model, the pattern every real engine uses<sup class="src"><a href="#src-1" title="Hellerstein, Stonebraker and Hamilton, Architecture of a Database System (Section 4.4)">1</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 4 · <code>query_engine.py</code>: the iterator (Volcano) model, the pattern every real engine uses<sup class="src"><a href="#src-1" title="Hellerstein, Stonebraker and Hamilton, Architecture of a Database System (Section 4.4)">1</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>every node in an <span class="gloss" data-gloss="explain"><code>EXPLAIN</code></span> output is one of these operators</span></div>
 </div>
 
@@ -325,7 +325,7 @@ can stack them in any order without the operators knowing or caring; plans are L
   <div class="lc-row"><span class="lc-k">Job</span><span>Decide how a row's values are arranged inside a page, and record every table's schema in the catalog.</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span>"row 2 of students" → the exact byte offsets holding <code>(2, 'ben', 31)</code></span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>record pages (fixed layout per schema), table scans (walk every record), the catalog (tables about tables)</span></div>
-  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 3 · <code>record_page.py</code>, <code>table_scan.py</code>, <code>catalog.py</code></span></div>
+  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 3 · <code>record_manager.py</code>, <code>catalog.py</code></span></div>
   <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>Postgres's <code>\d students</code> is a catalog query; its heap tuples are this layer's records<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: psql">3</a></sup></span></div>
 </div>
 
@@ -352,7 +352,7 @@ about this layer.</p>
   <div class="lc-row"><span class="lc-k">Job</span><span>Treat each file as an array of fixed-size blocks; read and write exactly one whole block at a time.</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span>BlockId('students.tbl', 1) → 4096 bytes, moved between disk and a <span class="gloss" data-gloss="page">Page</span></span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>seek to <code>block × block_size</code> · read/write · and <span class="gloss" data-gloss="fsync">fsync</span> when durability demands it</span></div>
-  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 1 · <code>file_manager.py</code>: <strong>Thursday.</strong> Three classes, twelve methods, nine tests.</span></div>
+  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 1 · <code>file_manager.py</code>: <strong>Thursday.</strong> Three classes, ten methods, nine tests.</span></div>
   <div class="lc-row"><span class="lc-k">Spot it in the wild</span><span>SQLite's whole file format doc is this layer, grown up; Postgres's is<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/smgr/README">5</a></sup> <code>storage/smgr</code></span></div>
 </div>
 
@@ -416,7 +416,7 @@ and keep it around, betting that nearby bytes will be wanted next.</p>
 
 <p class="key-fact keep-in-present"><strong>250×</strong> one NVMe trip (25 µs) costs what 250 buffer-pool hits (100 ns) cost</p>
 
-<h3 class="new-slide" data-kicker="Pay by the trip">Consequence 2: count the disk trips, nothing else</h3>
+<h3 class="new-slide" data-kicker="Pay by the trip">Consequence 2: start by counting disk trips</h3>
 
 <p>A query reads every block it needs from one of two places: from disk, or from memory because
 some earlier read left it there. The first costs hundreds to hundreds of thousands of times more
@@ -430,12 +430,10 @@ buffer-pool hit<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Less
 the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>.</p>
 <p><code>students</code> lives in 2 blocks, so the demo's two runs of the same query cost:</p>
 \[ \text{cold run: } 2 \cdot 25\,\mu\text{s} + 0 \cdot 100\,\text{ns} = 50\,\mu\text{s} \qquad\quad \text{warm run: } 0 \cdot 25\,\mu\text{s} + 2 \cdot 100\,\text{ns} = 0.2\,\mu\text{s} \]
-<p>The warm run is 250× faster. The query did not change; only the first term did.</p>
+<p>In this simplified I/O model, the warm run is 250× faster. These figures count block access only; they are not measured end-to-end Python query times.</p>
 </div>
 
-<p class="keep-in-present">So the first term is the only one worth attacking, and every speed
-technique in this course (the buffer pool, B+ trees, column stores, even the vector indexes in
-Act II) is one strategy for shrinking it: <strong>touch fewer blocks.</strong></p>
+<p class="keep-in-present">Reducing disk reads is our first optimization target. CPU work, memory bandwidth, parsing, and network traffic also matter; later lectures extend this cost model.</p>
 
 <h3 class="new-slide" data-kicker="Pay by the trip">Check yourself: the speedup grows with the table</h3>
 

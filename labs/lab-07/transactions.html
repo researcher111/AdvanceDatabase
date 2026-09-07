@@ -14,7 +14,7 @@
   <div class="toc-title">Lab 7 · microdb 7</div>
   <ul>
     <li><a href="#try-it">Fates before writes</a></li>
-    <li><a href="#big-idea">One rule, one fsync</a></li>
+    <li><a href="#big-idea">Write ordering makes recovery possible</a></li>
     <li><a href="#the-api">Five ordering disciplines</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
@@ -43,10 +43,9 @@
 <p class="lede">
 Kill microdb halfway through a transfer today and it reopens with $50 gone: the debit reached
 disk, the credit never did, and nothing in the engine knows. The last layer fixes that, and it
-is the one that makes it a database instead of a file format with opinions. You enact the <span class="gloss" data-gloss="undo-log">write-ahead rule</span> in <code>set_int</code>, place the one
-<span class="gloss" data-gloss="the-fsync">fsync that matters</span> in <code>commit</code>,
+is the one that makes it a database instead of a file format with opinions. You enact the <span class="gloss" data-gloss="undo-log">write-ahead rule</span> in <code>set_int</code>, make data durable before the final <span class="gloss" data-gloss="the-fsync">commit fsync</span>,
 walk the log backwards in <code>rollback</code>, and write the <code>recover()</code> that
-runs at startup. Then <code>crash_demo.py</code> murders your engine mid-transfer, and your
+runs at startup. Then <code>crash_demo.py</code> stops your engine mid-transfer, and your
 recovery puts every dollar back.
 </p>
 
@@ -104,14 +103,11 @@ will find it after a crash: read it backwards and sentence each transaction.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">Log the old value first; one fsync makes commit real</h2>
+<h2 id="big-idea">Sync the old value before changing the page</h2>
 
-<p class="keep-in-present">Everything in this lab is consequences of one sentence: <em>the old value reaches the log
-before the page changes, and the COMMIT record's fsync is the moment of truth.</em> The log
-is an append-only file of JSON lines, which is not a toy stand-in;
-an append-only file with disciplined fsyncs <em>is</em> what a WAL is.</p>
+<p class="keep-in-present">The write-ahead rule is precise: recovery information must reach durable storage before the data it protects. This lab syncs each log append by default, then uses FORCE at commit: flush dirty data pages before syncing COMMIT. JSON lines make the log readable; production formats add checksums and recovery metadata.</p>
 
-<p class="key-fact keep-in-present"><strong>1 fsync</strong>, the one on the COMMIT record, is the moment a transaction becomes durable</p>
+<p class="key-fact keep-in-present"><strong>Commit completes after the required data writes and the COMMIT log record are durable.</strong> This lab performs multiple syncs per transaction.</p>
 
 <!-- ============================================================ -->
 <h2 id="the-api">Five functions, each an ordering discipline, not an algorithm</h2>
@@ -121,9 +117,9 @@ an append-only file with disciplined fsyncs <em>is</em> what a WAL is.</p>
 write five things:</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="si" data-step-name="set_int / set_string" data-explain="The WAL rule as four lines: xlock(block) · read the OLD value from the buffer's page · append the SET record carrying it · write the new value + set_modified. The harness literally checks the log holds the old value.">set_int:   xlock · log OLD value · write new · set_modified</div>
+  <div class="code-step" data-step="si" data-step-name="set_int / set_string" data-explain="The WAL rule as four lines: xlock(block) · read the OLD value from the buffer's page · append the SET record carrying it · write the new value + set_modified. The harness literally checks the log holds the old value.">set_int:   xlock · sync OLD value to log · write new · set_modified</div>
   <div class="code-step" data-step="cm" data-step-name="commit" data-explain="The safe order: bm.flush_all() (FORCE: data first) · lm.append(COMMIT, sync=True), which is THE fsync · release locks · unpin. Four calls; the order is the content.">commit:    flush pages · fsync COMMIT · release · unpin</div>
-  <div class="code-step" data-step="rb" data-step-name="rollback" data-explain="Walk lm.records_backwards(); for records of THIS tx: SET → restore the old value through the buffer (pin if needed); START → stop. Then a ROLLBACK record, flush, release, unpin. Newest-first matters when one slot was set twice.">rollback:  walk back · restore olds · receipt · release</div>
+  <div class="code-step" data-step="rb" data-step-name="rollback" data-explain="Walk lm.records_backwards(); for records of THIS tx: SET → restore the old value through the buffer (pin if needed); START → stop. Then a ROLLBACK record, flush, release, unpin. Newest-first matters when one slot was set twice.">rollback:  walk back · restore olds · flush · sync receipt · release</div>
   <div class="code-step" data-step="rc" data-step-name="recover" data-explain="One backward pass over everything: COMMIT/ROLLBACK seen → that tx is finished; SET from an UNfinished tx → restore its old value. Then flush and write ROLLBACK receipts so a second recovery is a no-op (idempotence, tested).">recover:   fates first, then undo the unfinished · receipts</div>
   <div class="code-explain-panel">Hover a line: five jobs, and every one is an ordering discipline more than an algorithm.</div>
 </div>
@@ -142,7 +138,7 @@ write five things:</p>
   <li><strong><code>rollback</code></strong>: backward walk, restore, receipt. Mind the
   same-slot-twice test.</li>
   <li><strong><code>recover</code></strong>: the module-level function; fates before writes,
-  receipts after. The subprocess-murder tests go green, and with them, the semester's
+  receipts after. The subprocess crash tests go green, and with them, the semester's
   promise.</li>
 </ol>
 
@@ -207,7 +203,7 @@ the full drama: a committed transfer, a half-done one, a
 opening balances:   A=$100  B=$50
 tx1 COMMITTED:      A=$60   B=$90   (a $40 transfer)
 tx2 mid-transfer:   A=$10 written, B not yet credited --
-KILLED. (os._exit, no rollback, no flush, no mercy)
+KILLED. (os._exit, no rollback, no flush, abrupt exit)
 ============================================================
 
 reopening the wreckage: A=$10  B=$90   <- $100 total: $50 has VANISHED mid-transfer
@@ -221,33 +217,17 @@ to disk, and rerun. Report the "reopening the wreckage" line and the "after reco
 explain why <code>recover()</code> still lists tx2 as undone even though the disk already held the
 right balances; say what your undo wrote and why it was harmless.</p>
 
-<p class="keep-in-present">Fifty dollars ceased to exist, and your code minted it back from a
-JSON line that said <code>"old": 60</code>. Every database you will ever trust is doing
-exactly this, at scale, right now. microdb is complete: seven layers, every line yours.</p>
+<p class="keep-in-present">The log lets recovery restore A to $60 while preserving the committed transfer. You have now built the core database components. Integrating the SQL front end, index, and transaction API is an optional next step.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · The kill">Postgres restarts by running the recovery you just wrote</h3>
+<h3 class="new-slide" data-kicker="Part 3 · The kill">Production databases use different recovery designs</h3>
 
-<p>A training-data pipeline that dies halfway through writing its output leaves a torn
-file if the output was a CSV or a Parquet file rewritten in place, and a consistent table if the
-output was a Postgres table written inside one transaction: on restart Postgres runs the recovery
-you just wrote, undoes the half-done writes from its WAL, and the table reads as if the job never
-started. What <code>commit</code> costs is the log fsync you priced in Lab 1, once per commit, so
-a loop that inserts one row per transaction runs at your durable-writes rate while
-<code>COPY</code>, or one transaction around ten thousand inserts, runs near the buffered rate;
-that is the whole reason bulk loaders batch commits. An Airflow task can be retried after a crash
-only because the database guarantees the failed attempt left nothing behind. Two notebooks
-writing the same table need a database rather than a shared CSV because the lock table is the
-only thing that orders their writes: with a file, the second writer's bytes land on top of the
-first's and nobody is told; with your <code>LockTable</code>, the second <code>xlock</code> raises
-<code>LockAbortError</code>, and every byte on disk belongs to a transaction whose outcome is in
-the log. Postgres's <code>pg_wal</code> directory, MySQL's redo log, and SQLite's journal are this
-file under different names.</p>
+<p>Your lab uses physical undo. PostgreSQL instead replays WAL and uses transaction visibility to keep aborted row versions out of query results. Both protect a transaction’s all-or-nothing outcome, but their recovery algorithms differ. A retryable pipeline also needs idempotency: an earlier attempt may have committed before the client lost its connection. <a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL’s WAL introduction</a> explains its redo design.</p>
 
 <table>
   <thead><tr><th>Where you'll meet it</th><th>What the log and the lock table buy</th></tr></thead>
   <tbody>
     <tr><td>A pipeline dies halfway through writing its output</td><td>A CSV or in-place Parquet file is torn; a Postgres table written in one transaction reads as if the job never started</td></tr>
-    <tr><td>An Airflow task is retried after a crash</td><td>Safe only because the database guarantees the failed attempt left nothing behind</td></tr>
+    <tr><td>An Airflow task is retried after a crash</td><td>requires idempotency or deduplication if the earlier attempt may already have committed</td></tr>
     <tr><td>A loop commits one row at a time</td><td>Runs at your durable-writes rate, one log fsync per commit; <code>COPY</code>, or one transaction around ten thousand inserts, runs near the buffered rate</td></tr>
     <tr><td>Two notebooks write the same table</td><td>A shared CSV lets the second writer land on top of the first, silently; the second <code>xlock</code> raises <code>LockAbortError</code></td></tr>
   </tbody>
@@ -264,8 +244,7 @@ file under different names.</p>
 <ul>
   <li>☐ <code>transaction.py</code>: all nine local tests pass (<code>9/9</code>).</li>
 </ul>
-<p>That is the whole upload. The grade is the test harness: the score you see locally is the score
-Gradescope reports.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
@@ -283,8 +262,8 @@ are just not turned in. Bring your numbers and your answers to class, where we c
   <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
   <tbody>
     <tr><td><code>transaction.py</code></td><td>LogManager, LockTable, pin plumbing, get_int/get_string</td><td>set_int · set_string · commit · rollback · recover</td></tr>
-    <tr><td><code>crash_demo.py</code></td><td>complete, the murder is scripted</td><td>run it, record the drama</td></tr>
-    <tr><td>reference layers ×5</td><td>Labs 1–6, do not edit</td><td>&nbsp;</td></tr>
+    <tr><td><code>crash_demo.py</code></td><td>complete, the crash is scripted</td><td>run it, record the results</td></tr>
+    <tr><td>reference layers ×5</td><td>Labs 1–4, do not edit</td><td>&nbsp;</td></tr>
   </tbody>
 </table>
 
@@ -292,21 +271,14 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <table>
   <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
   <tbody>
-    <tr><td>Correctness</td><td>Gradescope runs the lab's test harness. Every test is worth the same share of
-    the points, and the local pass count is the grade.</td><td>100%</td></tr>
+    <tr><td>Correctness</td><td>Gradescope runs the graded test group described above. Each test contributes an equal share of the points.</td><td>100%</td></tr>
   </tbody>
 </table>
 
 <!-- ============================================================ -->
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
-<p class="keep-in-present">Fast finishers: add a <strong>checkpoint record</strong>
-(<code>{"kind": "CHECKPOINT"}</code> after a flush_all; recovery stops its backward walk
-there; measure recovery time on a 10,000-record log with and without); log <strong>new
-values too</strong> and write <code>redo()</code>: you are now one bookkeeping pass from
-ARIES, so read §3 of the paper and see how close; or wire transactions into the
-<strong>REPL</strong>: <code>BEGIN</code>/<code>COMMIT</code>/<code>ROLLBACK</code> statements
-in Lab 5's parser, and your SQL sessions become atomic.</p>
+<p class="keep-in-present">Optional: add a <em>quiescent checkpoint</em>. Stop admitting transactions, finish or roll back all active transactions, flush data, then sync a CHECKPOINT record. Only then may undo recovery stop at that record. Supporting checkpoints while transactions remain active needs additional recovery metadata. Another extension is to add redo records and study the extra machinery ARIES requires.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
@@ -320,8 +292,7 @@ nothing. The bug is in the write path, not the recovery.</p>
 <h3 class="keep-in-present">Why JSON for log records? Real WALs are binary.</h3>
 <p class="keep-in-present">Readable logs debug themselves: <code>cat microdb.log</code> is a
 complete forensic timeline, which is worth more to a student (and frankly to many engineers)
-than the bytes JSON wastes. The structure per record is identical to ARIES's: who, where,
-old-what.</p>
+than the bytes JSON wastes. These records identify the transaction, location, and old value. ARIES records carry additional information for redo and restartable undo.</p>
 
 <h3 class="keep-in-present">Could two transactions deadlock in microdb?</h3>
 <p class="keep-in-present">No: conflicts abort immediately instead of waiting, and no wait

@@ -127,7 +127,7 @@ and their data flows into columnar systems that analyze it.</p>
 <!-- ============================================================ -->
 <h2 id="columnar">Columns unlock three tricks, and they compound</h2>
 
-<p class="keep-in-present">Storing columns together is not the speedup by itself. It makes three further tricks possible, and they compound. Each one fails in row storage, where a row's mixed types (an integer, then a string, then a float) sit next to each other every few bytes:</p>
+<p class="keep-in-present">Storing columns together is not the speedup by itself. It makes three further tricks possible, and they compound. Each is easier to apply effectively to columns than to rows, where a row's mixed types (an integer, then a string, then a float) sit next to each other every few bytes:</p>
 
 <table>
   <thead><tr><th>Trick</th><th>Needs</th><th>Buys</th></tr></thead>
@@ -146,7 +146,7 @@ and their data flows into columnar systems that analyze it.</p>
   payment:  card card cash card...   dictionary:  {card:0, cash:1} + bits
   ride_id:  0 1 2 3 4...             delta:       start + (+1 +1 +1...)
 
-row storage interleaves types every few bytes; none of these tricks survive it.
+row storage interleaves types every few bytes; these column-specific encodings are less straightforward, though row stores can also compress data.
 smaller files = fewer blocks = faster scans: compression IS performance here.</code></pre>
 
 <h3 class="new-slide" data-kicker="Three tricks">The pattern in the data picks the encoding</h3>
@@ -164,7 +164,7 @@ smaller files = fewer blocks = faster scans: compression IS performance here.</c
   <div id="enc-stage"></div>
   <p class="viz-caption">These three cover most real columns, and they compound: Parquet
   dictionary-encodes then run-length-encodes the dictionary codes<sup class="src"><a href="#src-2" title="Parquet Encodings">2</a></sup>. A 20-column <span class="gloss" data-gloss="fact-table">fact table</span>
-  routinely shrinks 10–20×, and every saved byte is a block the scan never reads<sup class="src"><a href="#src-3" title="Querying Parquet with Precision Using DuckDB">3</a></sup>.</p>
+  can shrink substantially, depending on values, encodings, and codecs, and every saved byte is a block the scan never reads<sup class="src"><a href="#src-3" title="Querying Parquet with Precision Using DuckDB">3</a></sup>.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="Three tricks">Vectorized execution pays interpreter overhead once per 2048 rows</h3>
@@ -192,7 +192,7 @@ smaller files = fewer blocks = faster scans: compression IS performance here.</c
   <details><summary>Show answer</summary>
   <p>(a) all of it: \(60{,}000 \times 12 \times 8 \approx\) <strong>5.8 MB</strong>.
   (b) one column: \(60{,}000 \times 8 \approx\) <strong>0.48 MB</strong>, 12× less.
-  (c) one column of one partition: \(0.48\ \text{MB} / 12 \approx\) <strong>40 KB</strong>, roughly <strong>96×</strong>
+  (c) one column of one partition: \(0.48\ \text{MB} / 12 \approx\) <strong>40 KB</strong>, <strong>144×</strong>
   less than (a), before compression shrinks it further. Thursday's measured 100×+ is this
   arithmetic with real files and real codecs; you can now predict a benchmark before
   running it, which is the whole point of a cost model.</p>
@@ -258,7 +258,7 @@ a budgeting skill; Thursday's measurement is your first invoice audit.</code></p
 <h2 id="thursday">Thursday you drive a real engine and measure the 100×</h2>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The queries</span><span>seven SQL queries against the 60k-row rides dataset, using GROUP BY, window functions, and LIMIT: the full-SQL versions of what microSQL supported. There are no layers to build this week; Act II labs drive real engines.</span></div>
+  <div class="lc-row"><span class="lc-k">The queries</span><span>eight SQL queries against the 60k-row rides dataset, using GROUP BY, window functions, and LIMIT: the full-SQL versions of what microSQL supported. There are no layers to build this week; Act II labs drive real engines.</span></div>
   <div class="lc-row"><span class="lc-k">File format</span><span>the first measurement compares the same query over CSV and over Parquet.</span></div>
   <div class="lc-row"><span class="lc-k">Projection</span><span>the second measures reading one column instead of all of them.</span></div>
   <div class="lc-row"><span class="lc-k">Pruning</span><span>the third measures skipping the partitions a filter rules out.</span></div>
@@ -269,7 +269,7 @@ a budgeting skill; Thursday's measurement is your first invoice audit.</code></p
   <code>python3 -c "import duckdb"</code>.</li>
   <li>☐ Download the Lab 8 starter files; <code>python3 gen_data.py</code> builds your
   dataset (deterministic; everyone's numbers match).</li>
-  <li>☐ Harness prints <strong>0/7</strong> until your queries exist.</li>
+  <li>☐ Harness prints <strong>0/8</strong> until your queries exist.</li>
   <li>☐ <strong>Project proposals due Thursday</strong>: one page, per the
   <a href="../../project.html">project spec</a>: corpus in hand, questions, planned index,
   evaluation sketch.</li>
@@ -299,7 +299,7 @@ analytics stack.</p>
 <p class="keep-in-present"><strong>Before Thursday:</strong></p>
 <ul>
   <li><strong>Read</strong> the <a href="https://duckdb.org/why_duckdb">Why DuckDB</a> page and skim Parquet's <a href="https://parquet.apache.org/docs/file-format/">file-format docs</a>, both linked above.</li>
-  <li><strong>Run</strong> <code>pip install duckdb</code>, verify with <code>python3 -c "import duckdb"</code>, then download the Lab 8 starter and run <code>python3 gen_data.py</code>; the harness should print <strong>0/7</strong>.</li>
+  <li><strong>Run</strong> <code>pip install duckdb</code>, verify with <code>python3 -c "import duckdb"</code>, then download the Lab 8 starter and run <code>python3 gen_data.py</code>; the harness should print <strong>0/8</strong>.</li>
   <li><strong>Bring</strong> your one-page project proposal (due Thursday, per the <a href="../../project.html">project spec</a>) and your predicted (a)-to-(c) ratio from the exercise above.</li>
 </ul>
 
@@ -316,12 +316,10 @@ one line.</p>
 <p class="keep-in-present">Two separate sins: CSV must be <em>parsed</em> (every byte
 inspected, every number decoded from text), and it has no column structure, so the whole
 file moves even for one column. Parquet stores typed binary columns with stats; most bytes<sup class="src"><a href="#src-3" title="Querying Parquet with Precision Using DuckDB">3</a></sup>
-never move, and none need parsing.</p>
+never move, and values still need decoding and may need decompression.</p>
 
 <h3 class="keep-in-present">Is DuckDB replacing Postgres?</h3>
-<p class="keep-in-present">Different workload, different tool: DuckDB has no concurrent
-writers, no WAL-grade durability story for hot OLTP, on purpose<sup class="src"><a href="#src-15" title="DuckDB Concurrency">15</a></sup>. The modern pattern is
-Postgres running the app, Parquet snapshots in a lake, and DuckDB or a warehouse reading them.</p>
+<p class="keep-in-present">DuckDB supports transactions, WAL, and concurrent writers within one process. Its embedded concurrency model and analytical execution differ from PostgreSQL’s server model. Choose based on the workload and deployment requirements. <a href="https://duckdb.org/docs/stable/connect/concurrency">DuckDB’s concurrency guide</a> explains the boundary.</p>
 
 <h3 class="keep-in-present">What's "time travel" in the lakehouse pitch?</h3>
 <p class="keep-in-present">Old manifests are kept: query the table <em>as of</em> last

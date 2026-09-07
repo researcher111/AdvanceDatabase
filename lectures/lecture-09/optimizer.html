@@ -106,16 +106,16 @@ budget</strong>. It never runs a plan to learn what it costs; it predicts the co
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k"><code>EXPLAIN</code></span><span>asks the engine to print the plan it chose, with its cost and row-count estimates, instead of the query's results.</span></div>
   <div class="lc-row"><span class="lc-k">Adding <code>ANALYZE</code></span><span>also runs the query and prints the measured row counts and times next to each estimate. Decoding <span class="gloss" data-gloss="explain-analyze"><code>EXPLAIN ANALYZE</code></span> output is the skill to leave with today.</span></div>
-  <div class="lc-row"><span class="lc-k">The plan below</span><span>a real Postgres plan for our join, annotated; hover every line.</span></div>
+  <div class="lc-row"><span class="lc-k">The plan below</span><span>an illustrative PostgreSQL-style plan for our join, annotated; hover every line.</span></div>
 </div>
 
 <div class="code-annotated" data-lang="sql">
-  <div class="code-step" data-step="e0" data-step-name="the query" data-explain="Lab 4's join, in Postgres: honors students and their departments.">EXPLAIN ANALYZE SELECT name, dept FROM students JOIN majors ON mid = mid2 WHERE gpa > 35;</div>
+  <div class="code-step" data-step="e0" data-step-name="the query" data-explain="Lab 4's join, in Postgres: honors students and their departments.">EXPLAIN ANALYZE SELECT name, dept FROM students JOIN majors ON mid = mid2 WHERE gpa > 35 AND dept = 'cs';</div>
   <div class="code-step" data-step="e1" data-step-name="the join node" data-explain="Read plans INSIDE-OUT: deepest nodes ran first. This top node is a hash join: build a hash table on one side, probe with the other. cost=a..b are OPTIMIZER GUESSES in abstract units; actual time is measured reality, in ms.">Hash Join  (cost=1.07..8.72 rows=20 width=13) (actual time=0.04..0.11 rows=20 loops=1)</div>
   <div class="code-step" data-step="e2" data-explain="The join condition, as the executor sees it.">  Hash Cond: (students.mid = majors.mid2)</div>
   <div class="code-step" data-step="e3" data-step-name="the outer side" data-explain="A sequential scan (your TableScan) with the filter pushed INTO it (pushdown, mechanically applied). rows=60: the planner PREDICTED 60 survivors from statistics; actual rows=60 means the guess was perfect.">  ->  Seq Scan on students  (cost=0.00..6.75 rows=60 ...) (actual ... rows=60 ...)</div>
   <div class="code-step" data-step="e4" data-explain="The pushed-down predicate, plus a count of what it removed.">        Filter: (gpa > 35)   Rows Removed by Filter: 240<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></div>
-  <div class="code-step" data-step="e5" data-step-name="the inner side" data-explain="The build side: tiny majors is read once into an in-memory hash table, the CachingScan idea from Lab 4's Going Further, industrialized.">  ->  Hash  (cost=1.03..1.03 rows=3 ...)  ->  Seq Scan on majors (rows=3)</div>
+  <div class="code-step" data-step="e5" data-step-name="the inner side" data-explain="The build side: tiny majors is read once into an in-memory hash table, the CachingScan idea from Lab 4's Going Further, industrialized.">  ->  Hash  (cost=1.03..1.03 rows=1 ...)  ->  Seq Scan on majors (rows=1, filter: dept = 'cs')</div>
   <div class="code-step" data-step="e6" data-step-name="the verdict" data-explain="Planning took longer than executing, normal for tiny data. When ESTIMATED rows and ACTUAL rows diverge wildly on big data, you've caught the optimizer guessing badly: stale statistics, usually. That comparison is the whole diagnostic art.">Planning Time: 0.28 ms   Execution Time: 0.15 ms<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></div>
   <div class="code-explain-panel">Hover a line: estimated-vs-actual is the diagnostic; inside-out is the reading order.</div>
 </div>
@@ -137,7 +137,7 @@ and the plan it built from that information is usually where your query went wro
 <p>Per table: <em>N</em> rows and <em>B</em> blocks. Per column: the number of distinct values
 <em>V</em>, the min and max, and a <span class="gloss" data-gloss="histogram">histogram</span><sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner">3</a></sup>. The selectivity guesses are System R's, and still everywhere<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>:</p>
 \[ \text{sel}(f = c) = \frac{1}{V(f)} \qquad \text{sel}(f_1 = f_2) = \frac{1}{\max\bigl(V(f_1), V(f_2)\bigr)} \qquad \text{sel}(f > c) = \frac{\max(f) - c}{\max(f) - \min(f)} \]
-<p>The last one assumes values are spread uniformly between the min and the max. Then</p>
+<p>The last one assumes values are spread uniformly between the min and the max. Clamp the estimate to [0, 1], handle a constant-valued column separately, and treat this as a continuous approximation for integer data. Equality estimates also assume the queried value exists; join estimates assume compatible value domains. Then</p>
 \[ \text{survivors}(\sigma) \;=\; N \cdot \text{sel} \]
 <p>and for ANDed terms the selectivities are multiplied together, which assumes they are independent<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 76.1. Row Estimation Examples">5</a></sup>.</p>
 </div>
@@ -183,7 +183,7 @@ in place of the real row counts. The unit of cost is the one this course has use
 \text{cost}(\text{HashJoin}) &= B(L) + B(R) \\
 \text{cost}(\text{MergeJoin}) &= \text{sort costs} + B(L) + B(R)
 \end{aligned} \]
-<p>The table scan is week 1's lesson formalized and the index select is week 6's. The nested
+<p>These are simplified I/O estimates: hash join assumes the build side fits in memory; repeated heap visits may hit cached pages; spilling, output size, and CPU work add cost. The table scan is week 1's lesson formalized and the index select is week 6's. The nested
 loop's <em>N</em>(<em>L</em>) · <em>B</em>(<em>R</em>) is the multiplier that hurts<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>; the hash join reads
 each side once, plus memory for the hash table. Pick the plan with the smallest total, computed
 from statistics, before running anything.</p>
@@ -192,7 +192,7 @@ from statistics, before running anything.</p>
 <p class="keep-in-present">Same currency since Lecture 1: count block touches<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>. The optimizer
 is your Lab 4 CountingScan experiment, run <em>hypothetically</em> over every candidate shape.</p>
 
-<h3 class="new-slide" data-kicker="Costing in blocks">Above about 1% selectivity, the index loses to the scan</h3>
+<h3 class="new-slide" data-kicker="Costing in blocks">In this cost model, the crossover is about 1% selectivity</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Table scan</span><span>costs B blocks no matter how many rows match: the whole table is read either way.</span></div>
@@ -226,7 +226,7 @@ is your Lab 4 CountingScan experiment, run <em>hypothetically</em> over every ca
 the rows, and <em>which order</em> the tables meet in), and the second one explodes
 combinatorially. Both were foreshadowed weeks ago.</p>
 
-<h3 class="new-slide" data-kicker="Two choices per join">Nested loop, hash, merge: you have basically built all three</h3>
+<h3 class="new-slide" data-kicker="Two choices per join">Nested loop, hash, and merge reuse familiar ideas</h3>
 
 <table>
   <thead><tr><th>Algorithm</th><th>Idea</th><th>Shines when</th><th>You've basically built it</th></tr></thead>
@@ -295,7 +295,7 @@ you can pass it.</p>
     <tr><td>4 · iterators</td><td>one Scan interface; pull rows one at a time instead of building whole intermediate tables; rearranging the plan tree is free, but the work each shape does is not</td><td>900 vs 60 pairs</td></tr>
     <tr><td>5 · SQL</td><td>lex → parse → describe → plan; correct first</td><td>the same 900, now automatic</td></tr>
     <tr><td>6 · B+ trees</td><td>a full node splits and pushes one key up; the tree grows only at the root; a large fan-out keeps the height tiny</td><td>4,091× and height 11</td></tr>
-    <tr><td>7 · WAL</td><td>old value to the log first; one fsync that matters</td><td>$50 vanished and returned</td></tr>
+    <tr><td>7 · WAL</td><td>sync recovery information before data; commit after the required flushes</td><td>$50 vanished and returned</td></tr>
     <tr><td>8 · concurrency</td><td>isolation has a price, paid in locks or in versions; 2PL vs MVCC</td><td>110 where 120 belonged</td></tr>
   </tbody>
 </table>

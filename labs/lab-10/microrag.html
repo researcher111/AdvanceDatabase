@@ -51,7 +51,7 @@ ship; the LLM call ships (mocked offline in <span class="gloss" data-gloss="echo
 mode</span>, one env var away from real). You write the two stages that decide whether the
 right evidence ever reaches the model (the retriever and the context assembly), and then a
 12-question <span class="gloss" data-gloss="eval-set">eval set</span> grades your retrieval
-with numbers, not vibes.
+with reproducible measurements.
 </p>
 
 <div class="cite">
@@ -108,6 +108,8 @@ Your job today is to make <code>python3 ask.py</code> produce exactly this.</p>
 <pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
 <span class="cl-line">cd AdvanceDatabase/labs/lab-10/starter</span></pre>
 </div>
+
+<p>Download the entire <code>starter/</code> directory, including <code>data/</code>. The individual Python links do not include the corpus and vector files. Cloning the repository is the simplest way to get everything.</p>
 
 <!-- ============================================================ -->
 <h2 id="big-idea">Five stages fit in one file; two of them are yours</h2>
@@ -338,8 +340,7 @@ Embedding 4000 abstracts with your hashed embedder (DIM=2048)...
 three of the ten papers, and in each of those the question happened to share an exact word with
 the abstract (<em>join tree</em>, <em>snapshot</em>, <em>transaction log</em>). Where the
 paraphrase used different words for the same idea, hashing has nothing to match and the paper does
-not appear in the top ten at all. The model finds nine of ten, three at rank one, having never seen
-these papers or questions: it learned that "pieces by meaning" and "semantic chunking" are near each
+not appear in the top ten at all. The model finds nine of ten, five at rank one in this table. Its learned representation can place "pieces by meaning" and "semantic chunking" near each
 other. That difference is the entire case for a learned embedder, and it is measured, not asserted.
 It is also why your project's evaluation questions must be written by people who read the corpus,
 not generated from the titles.</p>
@@ -347,8 +348,8 @@ not generated from the titles.</p>
 <h3 class="new-slide" data-kicker="Part 4 · Real papers">Now shrink DIM and measure what 700,000 words lose</h3>
 
 <p class="keep-in-present"><strong>Now change something.</strong> Set <code>DIM = 256</code> in <code>micro_rag.py</code>
-and re-run <code>measure_real.py</code>. The course corpus lost nine points of hit@3 at 256 in
-Part 3; report what the real corpus loses and explain why a vocabulary of 700,000 words is more
+and re-run <code>measure_real.py</code>. The course corpus lost about nine percentage points of hit@3 at 256 in
+Part 3; report what the real corpus loses and explain why a corpus of about 700,000 word occurrences is more
 sensitive to hash collisions than one of 3,000.</p>
 
 <!-- ============================================================ -->
@@ -361,8 +362,7 @@ sensitive to hash collisions than one of 3,000.</p>
 <ul>
   <li>☐ <code>micro_rag.py</code>: all seven tests pass (<code>7/7</code>).</li>
 </ul>
-<p>That is the whole upload. The grade is the test harness: the score you see locally is the score
-Gradescope reports.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
@@ -387,8 +387,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <table>
   <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
   <tbody>
-    <tr><td>Correctness</td><td>Gradescope runs the lab's test harness. Every test is worth the same share of
-    the points, and the local pass count is the grade.</td><td>100%</td></tr>
+    <tr><td>Correctness</td><td>Gradescope runs the graded test group described above. Each test contributes an equal share of the points.</td><td>100%</td></tr>
   </tbody>
 </table>
 
@@ -411,7 +410,7 @@ tuning.</p>
 <h3 class="keep-in-present">Why brute force instead of the IVF index I built last week?</h3>
 <p class="keep-in-present">25 chunks. IVF's bookkeeping costs more than it saves below a few
 thousand vectors: Tuesday's "at small scale, brute force is the right answer," practiced.
-The import swap is one line when your project corpus crosses that line; that's why
+Switching to IVF also requires choosing cluster and probe settings when your project corpus crosses that line; that's why
 <code>microvector.py</code> ships whole.</p>
 
 <h3 class="keep-in-present">My hit@3 is 0.92, not 1.00. Is that a bug?</h3>

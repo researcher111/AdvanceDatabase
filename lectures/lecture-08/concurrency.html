@@ -43,8 +43,7 @@
 
 <p class="lede">
 Two cashiers each add $10 to the same $100 account, both commit cleanly, and the balance
-reads $110: no crash, no error, and one deposit gone. Thursday's log made one transaction
-crash-proof; today two of them meet, and interleaving a pair of correct transactions
+reads $110: no crash, no error, and one deposit gone. Last lecture explained crash recovery; today two transactions meet, and interleaving a pair of correct transactions
 carelessly is all it takes to lose money with no failure anywhere. The anomalies have
 names, the fixes have prices, and every engine picks its trade. We build up from
 two-phase locking (the classic textbook algorithm, and the one you build in lab) to
@@ -139,7 +138,7 @@ the locks on and watch the same schedule get refused.</p>
   </div>
   <div class="bs-stats" id="il-stats"></div>
   <p class="viz-caption">With locks on, the "disaster schedule" hits a LockAbortError at the
-  second read, the exact behavior your Lab 7 lock table implements.</p>
+  first attempted write after both transactions have read. Both S locks succeed; the X-lock upgrade conflicts, just as in Lab 7.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -154,7 +153,7 @@ X lock (exclusive / write): one holder, no readers, no exceptions
 
 conflict table:        S      X
                  S    ok    WAIT
-                 X   WAIT   WAIT        ← every anomaly dies in these three WAITs<sup class="src"><a href="#src-4" title="Sciore, Database Design and Implementation, 2nd ed., Chapter 5 Transaction Management">4</a></sup></code></pre>
+                 X   WAIT   WAIT        ← conflicting accesses cannot proceed together; range predicates also need protection<sup class="src"><a href="#src-4" title="Sciore, Database Design and Implementation, 2nd ed., Chapter 5 Transaction Management">4</a></sup></code></pre>
 
 <h3 class="new-slide" data-kicker="Two-phase locking">Lock first, grow then shrink, hold to commit</h3>
 
@@ -172,7 +171,7 @@ conflict table:        S      X
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Waiting</span><span>a conflicting lock means someone sits idle: a long report holding shared locks makes an update wait for its exclusive lock, and the next report then waits behind that update. Every transaction that is waiting is one that could have been doing work, so throughput falls even though nothing has gone wrong.</span></div>
   <div class="lc-row"><span class="lc-k"><span class="gloss" data-gloss="deadlock">Deadlock</span></span><span>tx1 holds A wants B; tx2 holds B wants A, forever. Engines detect the cycle and shoot one participant (your app must retry)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3.4. Deadlocks">6</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">microdb's version</span><span>microdb runs one transaction at a time on a single thread, so a transaction that waited for a lock would be waiting for a holder that cannot run to release it. Instead, a conflicting request raises <code>LockAbortError</code> immediately and that transaction rolls back. The lock rules are the same as a real engine's; only the response to a conflict differs.</span></div>
+  <div class="lc-row"><span class="lc-k">microdb's version</span><span>microdb runs one transaction at a time on a single thread, so a transaction that waited for a lock would be waiting for a holder that cannot run to release it. Instead, a conflicting request raises <code>LockAbortError</code> immediately and the caller must roll that transaction back. The lock rules are the same as a real engine's; only the response to a conflict differs.</span></div>
   <div class="lc-row"><span class="lc-k">The open question</span><span>most conflicts involve a <em>reader</em>, and readers don't change anything. Must a report really block a deposit? The MVCC section below answers no.</span></div>
 </div>
 
@@ -198,29 +197,29 @@ conflict table:        S      X
 <code>SET TRANSACTION ISOLATION LEVEL SERIALIZABLE<sup class="src"><a href="#src-8" title="PostgreSQL Documentation: SET TRANSACTION">8</a></sup></code>. The gray zone the explorer shows at REPEATABLE READ is why the Berenson paper in the citations exists. The ANSI standard defines each level only by which of the anomalies above it forbids, and those definitions were written before snapshot isolation existed. Snapshot isolation forbids everything the standard lists for REPEATABLE READ, yet still allows write skew (see the FAQ), an anomaly the standard never names<sup class="src"><a href="#src-2" title="A Critique of ANSI SQL Isolation Levels (Berenson et al., SIGMOD 1995)">2</a></sup>.</p>
 
 <!-- ============================================================ -->
-<h2 id="mvcc">Postgres keeps every version so readers never block</h2>
+<h2 id="mvcc">Postgres keeps row versions for snapshot reads</h2>
 
 <table>
   <thead><tr><th>Piece</th><th>Mechanism</th><th>You already built the bones</th></tr></thead>
   <tbody>
-    <tr><td>Versions</td><td>UPDATE = insert a new row version; the old one stays. Every version carries two stamps, xmin and xmax: the id of the transaction that created it, and the id of the transaction that later deleted or replaced it (empty while the version is still current)<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 5.6. System Columns">9</a></sup></td><td>Lab 3's record file worked the same way: a new row went into a free slot, and a deleted row's slot kept its bytes, marked with a tombstone, until something reused it</td></tr>
-    <tr><td><span class="gloss" data-gloss="snapshot">Snapshots</span></td><td>each transaction records, at its start, which transaction ids had already committed; it sees exactly the versions those transactions produced, and nothing committed later<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 13.2. Transaction Isolation">10</a></sup></td><td>&nbsp;</td></tr>
-    <tr><td>Visibility check</td><td>per row version: visible if the transaction in xmin had committed before my snapshot was taken AND the transaction in xmax had not (or xmax is empty). Two field comparisons, no locks<sup class="src"><a href="#src-11" title="Serializable Snapshot Isolation in PostgreSQL (Ports and Grittner, VLDB 2012)">11</a></sup></td><td>the same shape as a Lab 4 Predicate: a boolean test evaluated against a row's fields, here the two stamps</td></tr>
-    <tr><td>The trash</td><td><span class="gloss" data-gloss="vacuum">VACUUM</span> reclaims versions no living snapshot can see<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 24.1. Routine Vacuuming">12</a></sup></td><td>the same job as Lab 3's tombstone reuse, done by a background process across the whole database</td></tr>
+    <tr><td>Versions</td><td>UPDATE = insert a new row version; the old one stays. Every version carries two stamps, xmin and xmax: the id of the transaction that created it, and the id of the transaction that later deleted or replaced it (empty while the version is still current)<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 5.6. System Columns">9</a></sup></td><td>Lab 3 introduced reusable record slots: a new row went into a free slot, and a deleted row's slot kept its bytes, marked with a tombstone, until something reused it</td></tr>
+    <tr><td><span class="gloss" data-gloss="snapshot">Snapshots</span></td><td>at PostgreSQL REPEATABLE READ, queries share a transaction snapshot; at the default READ COMMITTED level, each statement takes a fresh snapshot<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 13.2. Transaction Isolation">10</a></sup></td><td>&nbsp;</td></tr>
+    <tr><td>Visibility check</td><td>per row version: visible if the transaction in xmin had committed before my snapshot was taken AND the transaction in xmax had not (or xmax is empty). This is a simplified visibility rule; real checks also use transaction status, snapshot membership, and the transaction’s own writes<sup class="src"><a href="#src-11" title="Serializable Snapshot Isolation in PostgreSQL (Ports and Grittner, VLDB 2012)">11</a></sup></td><td>the same shape as a Lab 4 Predicate: a boolean test evaluated against a row's fields, here the two stamps</td></tr>
+    <tr><td>The trash</td><td><span class="gloss" data-gloss="vacuum">VACUUM</span> reclaims versions no living snapshot can see<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 24.1. Routine Vacuuming">12</a></sup></td><td>unlike Lab 3's immediate slot reuse, reclamation must wait until no snapshot needs the old version</td></tr>
   </tbody>
 </table>
 
-<p class="key-fact keep-in-present"><strong>2 stamps</strong> per row version, xmin and xmax: the whole visibility test is two comparisons, no locks</p>
+<p class="key-fact keep-in-present"><strong>2 stamps</strong> per row version, xmin and xmax: important inputs to visibility; transaction status and snapshot membership matter too</p>
 
 <h3 class="new-slide" data-kicker="MVCC">MVCC moved the cost, it didn't erase it</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The payoff</span><span><strong>readers never block writers, and writers never block readers</strong>: a report and an update pass through the same rows without waiting on each other.</span></div>
+  <div class="lc-row"><span class="lc-k">The payoff</span><span><strong>ordinary snapshot reads avoid row-level conflicts with writes</strong>: a report and an update pass through the same rows without waiting on each other.</span></div>
   <div class="lc-row"><span class="lc-k">Writers still wait</span><span>writers still block writers; locks live on for write-write conflicts<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3. Explicit Locking">6</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The new bill</span><span>a transaction that holds its snapshot open for a long time forces the engine to keep every old version that snapshot might still read, so vacuum cannot reclaim them and the table grows<sup class="src"><a href="#src-13" title="PostgreSQL Documentation: 19.11. Client Connection Defaults (idle_in_transaction_session_timeout)">13</a></sup>. MVCC moved the cost, it didn't erase it. No free level, ever.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="MVCC">Visibility is arithmetic on two stamps, never a lock</h3>
+<h3 class="new-slide" data-kicker="MVCC">Visibility depends on row versions and the snapshot</h3>
 
 <p>One account, three updates, four possible readers. The two-field visibility test from the
 table above, run live; drag the slider to move the reader's snapshot through time:</p>
@@ -236,10 +235,7 @@ table above, run live; drag the slider to move the reader's snapshot through tim
     <input type="range" id="chain-slider" min="0" max="2" step="1" value="2">
   </div>
   <div id="chain-stage"></div>
-  <p class="viz-caption">No locks appear anywhere in this test; it's pure arithmetic on two
-  stamps, which is why a 10-minute report and a write flood coexist. The versions the slider
-  leaves behind are VACUUM's job; a reader parked at the leftmost snapshot is exactly the
-  "long-lived snapshot" that makes vacuum's job harder.</p>
+  <p class="viz-caption">The slider assumes these transactions committed in the shown order. Real visibility checks also track active and aborted transactions. Ordinary snapshot reads do not take conflicting row locks, but explicit locking reads and schema changes can still wait.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -269,7 +265,7 @@ today guarding every read and write. Then you kill the process partway through a
   and vacuumed, exactly the storage moves Lab 3 taught, aimed at isolation.</li>
 </ul>
 
-<p class="key-fact keep-in-present"><strong>About 896 BTC</strong> lost to one unguarded read-check-write · <strong>2 stamps</strong> xmin and xmax: MVCC's whole visibility test, no locks</p>
+<p class="key-fact keep-in-present"><strong>About 896 BTC</strong> lost to one unguarded read-check-write · <strong>2 stamps</strong> xmin and xmax: inputs to MVCC visibility, alongside the snapshot</p>
 
 <p class="keep-in-present"><strong>Thursday:</strong> Lab 7, the kill -9 lab.
 <strong>Next Tuesday:</strong> the optimizer: statistics, selectivity, and why the planner
@@ -300,7 +296,7 @@ order, no cycles possible) and retry loops<sup class="src"><a href="#src-6" titl
 code" is professional-grade advice you now understand.</p>
 
 <h3 class="keep-in-present">Does the buffer pool's pin count relate to these locks?</h3>
-<p class="keep-in-present">Different layer, different lifetime. A pin protects a <em>frame</em> of the buffer pool for microseconds, just long enough to read or write the bytes in it (week 2; Lab 3's FAQ calls this kind of short-term protection a latch). A lock protects the <em>meaning</em> of a row or block for the transaction's whole life, which can be seconds or minutes. The two APIs look alike, acquire then use then release, but they differ by three orders of magnitude in how long they hold, and they are easy to confuse for exactly that reason.</p>
+<p class="keep-in-present">A pin prevents a buffer frame from being evicted. A latch protects a shared in-memory structure during a short operation. A transaction lock protects logical access to a row, block, or key range. These are separate mechanisms; a pin alone does not stop another client from changing a page.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science

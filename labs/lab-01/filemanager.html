@@ -16,7 +16,7 @@
   <ul>
     <li><a href="#try-it">A row on disk is 15 bytes you can point at</a></li>
     <li><a href="#big-idea">Fixed-size blocks give block k one computable address</a></li>
-    <li><a href="#file-vs-page">Disk is 250× slower than RAM and never forgets</a></li>
+    <li><a href="#file-vs-page">Disk is slower than RAM and keeps durable writes</a></li>
     <li><a href="#the-api">The whole layer is three classes and one byte layout</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
@@ -42,16 +42,7 @@
   <div class="byline">Follows Lecture 1 (Anatomy of a Database) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 3 at class start</div>
 </header>
 
-<p class="lede">
-When <code>df.to_csv(...)</code> returns, your bytes are usually sitting in the operating system's
-memory, not on the SSD, and a power cut takes them with it. A database cannot live with that
-uncertainty, so its bottom layer moves bytes in fixed-size blocks and knows exactly when each one
-has landed. Postgres's storage manager (<code>storage/smgr</code>) and SQLite's file format both bottom out
-in code like the code you write today: open a file, seek to <code>block × block_size</code>, move
-exactly one <span class="gloss" data-gloss="block">block</span> of bytes. No SQL, no tables, no cleverness,
-just the disk's contract, honored precisely. It is the least glamorous layer of microdb and the
-one every other layer will stand on for the next seven weeks.
-</p>
+<p class="lede">When <code>df.to_csv(...)</code> returns, the OS may still hold buffered writes that have not reached durable storage. This lab builds a file manager that reads and writes fixed-size blocks and exposes an explicit sync option. Later layers add records, caching, and recovery on top of that interface.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 3 (SimpleDB's file manager) ·
@@ -139,13 +130,13 @@ with <span class="gloss" data-gloss="fsync">fsync</span>. The gap between those 
 write-ahead log.</p>
 
 <!-- ============================================================ -->
-<h2 id="file-vs-page">Disk is 250× slower than RAM and never forgets</h2>
+<h2 id="file-vs-page">Disk is slower than RAM and keeps durable writes</h2>
 
 <p class="keep-in-present">Your laptop keeps bytes in two places, and they could hardly be more different. The
 <strong>disk</strong> holds <code>students.tbl</code>: it keeps its bytes through a power cut,
 but every trip to it costs about 25&nbsp;µs on an SSD (the latency ladder from Tuesday).
 <strong>Memory (RAM)</strong> holds every Python object you have ever made: it answers in
-about 100&nbsp;ns, 250× faster, but forgets everything the moment your process exits. Your code
+about 100&nbsp;ns, 250× faster, but does not preserve your process’s objects after it exits; the OS page cache can outlive that process. Your code
 can only <em>work on</em> bytes in memory, and bytes only <em>survive</em> on disk, so a database
 spends its whole life copying between the two. This layer is that ferry.</p>
 
@@ -362,7 +353,7 @@ each step turns a new group green.</p>
 <ol>
   <li><strong>Read <code>file_manager.py</code> top to bottom first</strong> (5 min). The header
   docstring is the spec; <code>BlockId</code> and the file-handle plumbing are already written.
-  Your work is the twelve <code>TODO</code>-marked methods.</li>
+  Your work is the ten <code>TODO</code>-marked methods.</li>
   <li><strong><code>Page.set_int</code> / <code>get_int</code></strong>: two lines each with
   <code>struct.pack_into("&lt;i", …)</code> / <code>unpack_from</code>. Run
   <code>python3 test_filemanager.py</code>: the first PAGE test goes green.</li>
@@ -544,17 +535,9 @@ possible version of surviving a restart.</p>
 
 <div class="exercise">
   <span class="ex-label">Exercise · read the failure</span>
-  <p>A classmate's harness shows <code>adjacent values don't clobber</code> failing:
-  <code>get_int(11)</code> returns <code>39</code> correctly, but <code>get_string(4)</code>
-  comes back as <code>"ada\x00\x00\x00\x27"</code>-ish garbage, too long. Which single method
-  has the bug, and what exactly is it doing wrong?</p>
+  <p>A classmate stores the 15-byte ada row. <code>get_int(11)</code> returns 39, but <code>get_string(4)</code> reads past the three bytes of the name. Which parts of the byte-storage contract should they inspect?</p>
   <details><summary>Show answer</summary>
-  <p><code>set_bytes</code> (or <code>set_string</code> calling it) is writing the payload at
-  <code>off</code> instead of <code>off+4</code>, then writing the length prefix over the first
-  payload bytes, or writing the length as more than 4 bytes. The string's stored length claims
-  more bytes than were written, so <code>get_string</code> reads into the neighboring field.
-  The length prefix and payload have swapped or overlapped territory; re-check who writes at
-  <code>off</code> and who writes at <code>off+4</code>.</p>
+  <p>Check the length prefix at offset 4, the payload start at offset 8, and the slice used by <code>get_bytes</code>. The stored length must be 3, and the read must return exactly those three payload bytes. The symptom alone does not identify one faulty method.</p>
   </details>
 </div>
 
@@ -631,8 +614,7 @@ course home) <strong>by Thursday Sep 3 at class start</strong>.</p>
 <ul>
   <li>☐ <code>file_manager.py</code>: all nine local tests pass (<code>9/9</code>).</li>
 </ul>
-<p>That is the whole upload. The grade is the test harness: the score you see locally is the score
-Gradescope reports.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
@@ -659,8 +641,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <table>
   <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
   <tbody>
-    <tr><td>Correctness</td><td>Gradescope runs the lab's test harness. Every test is worth the same share of
-    the points, and the local pass count is the grade.</td><td>100%</td></tr>
+    <tr><td>Correctness</td><td>Gradescope runs the graded test group described above. Each test contributes an equal share of the points.</td><td>100%</td></tr>
   </tbody>
 </table>
 
@@ -671,8 +652,7 @@ get), run Measure tonight, and bring your ratio to class while it is still surpr
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
 <p class="keep-in-present">Fast finishers, in rough order of payoff: add <code>get_float/set_float</code> with
-<code>struct '&lt;d'</code> and a round-trip test (microdb officially grows floats in Lab 3;
-arrive having already built it); re-run <code>measure_io.py</code> with
+<code>struct '&lt;d'</code> and a round-trip test (an optional extension; the core labs use integers and strings); re-run <code>measure_io.py</code> with
 <code>BLOCK_SIZE = 512</code> and <code>65536</code> and explain which direction moved the
 <em>ratio</em> and why; or take a real SQLite file (any <code>.db</code> on your machine) and
 find its page size (bytes 16–17 of the file, big-endian, per the format doc in the citations)
@@ -684,8 +664,7 @@ using nothing but <code>hexdump -C</code> and your new fluency in
 
 <h3>My two runs of measure_io.py differ by 30%. Is something broken?</h3>
 <p class="keep-in-present">No, you're timing a real OS with other work to do. Run it three times, report the middle
-result, and remember the lab grades the presence and interpretation of your numbers, not their
-absolute size.</p>
+result, and remember the measurements are ungraded; bring the median and your interpretation to class.</p>
 
 <h3>I'm on macOS and my fsync ratio seems suspiciously small.</h3>
 <p class="keep-in-present">Sharp eyes. On macOS, <code>fsync</code> flushes to the drive but doesn't force the drive's

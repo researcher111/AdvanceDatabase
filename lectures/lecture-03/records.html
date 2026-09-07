@@ -174,7 +174,7 @@ and watch that nothing ever moves.</p>
     <button type="button" class="btn" id="rp-ren11">rename → "bartholomew"</button>
     <button type="button" class="btn" id="rp-reset">Reset</button>
   </div>
-  <div class="qj-msg" id="rp-msg">A fresh block is all zeros: five EMPTY slots. Insert the first student.</div>
+  <div class="qj-msg" id="rp-msg">A fresh block is all zeros: five EMPTY slots in this widget. Insert the first student.</div>
   <div class="rp-slots" id="rp-slots"></div>
   <p class="viz-caption">Delete ada, then insert again: the new row lands in her old slot.
   Rename ben to <code>benjamin</code>: exactly 8 chars, fits his reserved capacity. Try
@@ -230,8 +230,7 @@ is not a rule about names. It is a promise to the layout.</p>
   name's length and add it, per row, which is the parsing this lecture set out to eliminate.
   And renaming <code>ada</code> to <code>adelaide</code> would need five more bytes in the
   middle of the slot, pushing <code>gpa</code> and every later field to the right: the
-  shift-everything update from the opening table. The length in <code>VARCHAR(8)</code> is
-  what lets the engine refuse that rename cheaply instead of rewriting the block.</p>
+  shift-everything update from the opening table. Both names fit in eight UTF-8 bytes, so the fixed-width layout can update ada to adelaide in place. A longer name must be rejected.</p>
   <p>You have met this trade before. NumPy's fixed-width string dtype, <code>dtype='U8'</code>,
   reserves 8 characters per element for exactly the same reason, and pandas' <code>object</code>
   columns are the variable-length alternative: flexible, and slower to scan. Postgres offers
@@ -276,7 +275,7 @@ different schemas.</p>
   <code>credits</code> at 8&nbsp;+&nbsp;(4&nbsp;+&nbsp;12)&nbsp;=&nbsp;24. Slot size
   4&nbsp;+&nbsp;4&nbsp;+&nbsp;16&nbsp;+&nbsp;4&nbsp;=&nbsp;<strong>28</strong> bytes;
   ⌊4096&nbsp;/&nbsp;28⌋&nbsp;=&nbsp;<strong>146 rows per block</strong> (8 bytes left over).
-  If you got 150, you forgot the flag; the most common Thursday bug, and the tests check
+  If you got 170, you forgot the flag; the most common Thursday bug, and the tests check
   offsets before anything else.</p>
   </details>
 </div>
@@ -285,7 +284,7 @@ different schemas.</p>
 
 <div class="callout insight">
   <span class="label">Internal fragmentation, quantified</span>
-  <p class="keep-in-present">ada's name is 3 chars in a 8-char reservation: 5 bytes of air.
+  <p class="keep-in-present">ada's name is 3 chars in an 8-byte reservation: 5 bytes of air.
   Every varchar carries its worst case everywhere. That waste inside allocated space is
   <span class="gloss" data-gloss="internal-fragmentation">internal fragmentation</span>: the
   deliberate rent paid for \(O(1)\) addressing<sup class="src"><a href="#src-3" title="Operating Systems: Three Easy Pieces, chapter 17, Free-Space Management">3</a></sup>. A <code>bio varchar(200)</code> schema fits only 19
@@ -435,7 +434,7 @@ need a vacuum process: all one design decision, visible in your 24-byte slots<su
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">First choice</span><span>reuse: <code>insert_after</code> hunts forward for any EMPTY slot; tombstones get recycled before the file grows.</span></div>
-  <div class="lc-row"><span class="lc-k">Last resort</span><span>growth: every block full → <code>fm.append()</code> hands back a fresh <em>zeroed</em> block, which is five EMPTY slots by construction. This is why Lab 1's <code>append</code> had to zero-fill new blocks: 0 is the EMPTY flag, so a zeroed block reads as five empty slots with no extra setup.</span></div>
+  <div class="lc-row"><span class="lc-k">Last resort</span><span>growth: every block full → <code>fm.append()</code> hands back a fresh <em>zeroed</em> block, which contains <code>block_size // slot_size</code> empty slots. This is why Lab 1's <code>append</code> had to zero-fill new blocks: 0 is the EMPTY flag, so a zeroed block reads as empty slots with no extra setup.</span></div>
   <div class="lc-row"><span class="lc-k">The invariant</span><span>files grow by whole blocks, only at the end, only when truly full; Thursday's harness counts your blocks to check exactly this.</span></div>
 </div>
 
@@ -444,7 +443,7 @@ need a vacuum process: all one design decision, visible in your 24-byte slots<su
 <p class="keep-in-present">A row's identity in the storage engine is its
 <span class="gloss" data-gloss="rid">RID</span>: <strong>(block&nbsp;#, slot&nbsp;#)</strong>:
 ada is <code>(0, 0)</code>, row twelve is <code>(2, 1)</code>. Fixed slots make RIDs stable:
-updates and deletes move nothing, so the address keeps working<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 8.19. Object Identifier Types (tid)">9</a></sup>. File this away carefully:
+updates and deletes move nothing, so an existing live row keeps its address; after deletion, that slot may be reused<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 8.19. Object Identifier Types (tid)">9</a></sup>. File this away carefully:
 <em>an index (week 6) is nothing but a map from values to RIDs<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 64.1. Basic API Structure for Indexes">10</a></sup>.</em></p>
 
 <h3 class="new-slide" data-kicker="One-frame scan">This loop is the floor of the query engine</h3>
@@ -541,9 +540,8 @@ code, and the catalog comes free once your scan works.</p>
 <ul class="recap-list">
   <li><strong>Fixed slots buy \(O(1)\) with wasted air.</strong> Find/update/delete became one
   multiply and one add, paid for by internal fragmentation and a refusal to store
-  "bartholomew" in an 8-char field.</li>
-  <li><strong>Deletion is a flag, addresses are stable.</strong> Tombstones recycle, nothing
-  shifts, and every row keeps a permanent RID, the address that indexes will point to in week 6.</li>
+  "bartholomew" in an 8-byte field.</li>
+  <li><strong>Deletion is a flag; live-row addresses stay stable.</strong> A deleted slot can be reused for another row, so indexes must be updated when rows are deleted or replaced.</li>
   <li><strong>Huge values move out.</strong> When a value can't reserve worst-case space in
   every slot, TOAST compresses it, chunks it into a side table, and leaves an 18-byte pointer
   in the row; the same reserve-or-point pattern returns in column stores (week 10) and vector

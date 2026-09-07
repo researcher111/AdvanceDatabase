@@ -143,7 +143,7 @@ scripted insert of the pinned gpa values first, then feed it your own keys.</p>
 <table>
   <thead><tr><th>Script</th><th>Splits</th><th>Height</th><th>The moment to replay</th></tr></thead>
   <tbody>
-    <tr><td>the six gpas</td><td>1</td><td>2</td><td>the fifth key (36) arrives; [28 31 34 37 39] splits; 36 is copied up as the first root</td></tr>
+    <tr><td>the six gpas</td><td>1</td><td>2</td><td>the fifth key (36) arrives; [28 31 36 37 39] splits; 36 is copied up as the first root</td></tr>
     <tr><td>1–20 in order</td><td>6</td><td>3</td><td>sequential inserts always split the rightmost leaf; watch the splits march right</td></tr>
   </tbody>
 </table>
@@ -179,7 +179,7 @@ two-step dance at every scale; only the height changes, and the height barely ch
   descend once to 31's leaf ......... [28 31 34] → collect 31, 34
   follow next → sibling ............. [36 37 39] → collect 36, 37; 39 > hi → stop
 
-  one descent + a walk.  A sorted structure with NO chain would descend per key.</code></pre>
+  one descent + a walk.  Without a leaf chain, an ordered tree can still traverse successors using a stack or parent links; the chain makes the scan simpler.</code></pre>
 
 <p class="keep-in-present">This is why <code>BETWEEN</code>, <code>ORDER BY</code> on an
 indexed column, and "the last 30 days" queries are cheap, and why hash indexes, orderless,
@@ -213,7 +213,7 @@ the leaves (like binary search trees) can go lopsided; this one structurally can
 [1 2 3 4] + 5  →  split at mid=2  →   [1 2]  →  [3 4 5]      height 1 → 2
 
 keep inserting 6, 7:   [3 4 5] fills, splits at 5 → root becomes [3 5]
-insert 8, 9:           [5 6 7] fills... root [3 5 7] → root fills next split
+insert 8, 9:           [5 6 7] fills... root [3 5 7] → root gains its fourth key at 11 and overflows at 13
                        → the ROOT splits → new root, height 2 → 3</code></pre>
 
 <p class="keep-in-present">Splits are rare (a node fills only once every ~ORDER/2 inserts at each level) and local
@@ -246,7 +246,7 @@ invariant after all the splits have finished.</p>
   </tbody>
 </table>
 
-<p class="keep-in-present">Every invariant still holds under a skewed split; the tree is still correct, only
+<p class="keep-in-present">The ordering and equal-depth invariants can still hold under a skewed split, but the usual minimum-occupancy invariant fails; the tree is still correct, only
 its <em>quality</em> suffers: more nodes and more height than the same keys need. Thursday's harness includes a 500-key height check that exists to
 catch exactly this: correctness tests plus a quality bound.</p>
 
@@ -260,7 +260,7 @@ catch exactly this: correctness tests plus a quality bound.</p>
 <div class="math">
 \[ \text{height} \;\approx\; \log_{\text{fan-out}} n \]
 <table>
-  <thead><tr><th>rows</th><th>fan-out 4 (the lab)</th><th>fan-out 200 (a real page)</th></tr></thead>
+  <thead><tr><th>rows</th><th>ORDER 4 (max keys; up to 5 children)</th><th>fan-out 200 (a real page)</th></tr></thead>
   <tbody>
     <tr><td>100</td><td>4</td><td>2</td></tr>
     <tr><td>100,000</td><td>11 (you will measure it)</td><td>3</td></tr>
@@ -301,15 +301,14 @@ tree is shaped by the disk it lives on<sup class="src"><a href="#src-4" title="P
 <table>
   <thead><tr><th>Tree level (fan-out 200, 100M rows)</th><th>Nodes</th><th>Where it lives</th></tr></thead>
   <tbody>
-    <tr><td>root</td><td>1</td><td>always in the buffer pool: every lookup reads it, so it is never the least recently used page and is never evicted</td></tr>
+    <tr><td>root</td><td>1</td><td>usually cached because every lookup accesses it; memory pressure can still evict it</td></tr>
     <tr><td>level 2</td><td>~200</td><td>all in the pool on any busy system: 200 blocks is a tiny fraction of the pool, and they are read constantly</td></tr>
     <tr><td>level 3</td><td>~40,000</td><td>mostly cached; a few hundred MB, which a typical pool holds</td></tr>
     <tr><td>leaves</td><td>~10⁶</td><td>too many to cache, so this is the one level that usually costs a disk read</td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">Week 2's buffer pool and today's tree work together: a point lookup on 100 million rows is
-<strong>one disk read</strong>, steady-state. The scan for the same row: three hundred
+<p class="keep-in-present">Week 2's buffer pool and today's tree work together: a point lookup may need one leaf read plus heap reads when the upper index levels are cached. The scan for the same row: three hundred
 thousand.</p>
 
 <!-- ============================================================ -->
@@ -337,7 +336,7 @@ deciding per-query whether the index you built is actually worth using.</p>
 
 <pre class="equation"><code>WHERE score > 10        keeps ~99% of rows (low selectivity)
 
-  via index:  ~99,000 tree walks + 99,000 RANDOM heap jumps      ← disaster
+  via index:  one descent + a leaf-range scan + up to 99,000 RANDOM heap jumps      ← disaster
   via scan:   294 blocks, read once, in order                    ← boring, correct, faster</code></pre>
 
 <p class="keep-in-present">An index on an unselective predicate is slower than the plain scan it replaces. Deciding,
@@ -347,7 +346,7 @@ that judgment.</p>
 <h3 class="new-slide" data-kicker="The index bill">A covering index answers from the index alone</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The trick</span><span>store the columns a hot query needs <em>inside</em> the index entries, then answer from the index alone, zero heap visits.</span></div>
+  <div class="lc-row"><span class="lc-k">The trick</span><span>store the columns a hot query needs <em>inside</em> the index entries, then answer from the index alone, potentially zero heap visits; PostgreSQL also checks visibility, which can require a heap fetch.</span></div>
   <div class="lc-row"><span class="lc-k">The name</span><span>a <span class="gloss" data-gloss="covering-index">covering index</span>; Postgres calls the resulting plan an index-only scan and offers <code>INCLUDE</code> to build one deliberately<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 11.9. Index-Only Scans and Covering Indexes">7</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The price</span><span>fatter entries → lower fan-out → the write bill grows again. Every index decision is the same triangle: read speed, write cost, space.</span></div>
   <div class="lc-row"><span class="lc-k">Try it</span><span>Thursday's Going Further builds the toy version and measures the jumps it saves.</span></div>
@@ -414,8 +413,7 @@ the write-ahead log: what COMMIT actually promises. Quiz 6 lands Tue Oct 13.</p>
 <h3 class="keep-in-present">Why not a hash index? O(1) beats O(log n).</h3>
 <p class="keep-in-present">For pure equality it does, and Postgres offers one<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 65.2. Hash Indexes">9</a></sup>. But hashing
 destroys order: no ranges, no prefix matches, no sorted output for free<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 11.4. Indexes and ORDER BY">10</a></sup>. The B+ tree is two
-comparisons slower and infinitely more versatile; the default for a reason. (Bigtable's
-world, week 14, makes the opposite bet and pays with different machinery<sup class="src"><a href="#src-11" title="Bigtable: A Distributed Storage System for Structured Data (Chang et al., OSDI 2006)">11</a></sup>.)</p>
+comparisons slower and infinitely more versatile; the default for a reason. (Bigtable’s world, week 14, also preserves key order, but uses write-optimized log-structured storage<sup class="src"><a href="#src-11" title="Bigtable: A Distributed Storage System for Structured Data (Chang et al., OSDI 2006)">11</a></sup>.)</p>
 
 <h3 class="keep-in-present">Is the binary search tree from my algorithms class the same thing?</h3>
 <p class="keep-in-present">Same idea, wrong constants for disks: fan-out 2 means height 27

@@ -157,13 +157,13 @@ the right baseline and why, at some scale, it stops finishing in time.</p>
 <table>
   <thead><tr><th>Scale</th><th>Exact cost per query</th><th>Verdict</th></tr></thead>
   <tbody>
-    <tr><td>4k × 32-d (Thursday's lab)</td><td>128k mults, sub-millisecond</td><td>fine: brute force is the right choice at this size, but measure its cost anyway so the IVF speedup has something to be compared against</td></tr>
+    <tr><td>4k × 64-d (Thursday's lab)</td><td>256k multiplications; measure elapsed time on your machine</td><td>fine: brute force is the right choice at this size, but measure its cost anyway so the IVF speedup has something to be compared against</td></tr>
     <tr><td>100k × 768-d (a real project corpus)</td><td>\(7.7 \times 10^{7}\) mults, tens of ms</td><td>acceptable for one user at a time; tens of milliseconds per query becomes a problem once many queries arrive at once</td></tr>
-    <tr><td>10M × 1536-d, 100 queries per second (production <span class="gloss" data-gloss="rag">RAG</span>)</td><td>\(1.5 \times 10^{12}\) mults/sec</td><td>the wall: 1.5 trillion multiplications every second is more than a server can sustain, so exact search stops being an option</td></tr>
+    <tr><td>10M × 1536-d, 100 queries per second (production <span class="gloss" data-gloss="rag">RAG</span>)</td><td>\(1.5 \times 10^{12}\) mults/sec</td><td>the wall: 1.5 trillion multiplications every second is a substantial workload; batching, hardware, memory bandwidth, and latency targets determine whether exact search is practical</td></tr>
   </tbody>
 </table>
 
-<p class="key-fact keep-in-present"><strong>1.5 trillion</strong> multiplications per second: exact search over 10M × 1536-d vectors at 100 queries per second, the wall no server clears</p>
+<p class="key-fact keep-in-present"><strong>1.5 trillion</strong> multiplications per second: exact search over 10M × 1536-d vectors at 100 queries per second, a substantial compute and memory-bandwidth budget</p>
 
 <h3 class="new-slide" data-kicker="Exact search">At small scale, brute force is the right answer</h3>
 
@@ -246,7 +246,7 @@ quarter of the real neighbors, and told you so<sup class="src"><a href="#src-6" 
 <h3 class="new-slide" data-kicker="Recall">Each probe step buys recall and costs speed</h3>
 
 <table>
-  <thead><tr><th>Index</th><th>probe</th><th>avg recall@10</th><th>comparisons/query</th><th>speedup</th></tr></thead>
+  <thead><tr><th>Index</th><th>probe</th><th>avg recall@10</th><th>comparisons/query</th><th>comparison reduction</th></tr></thead>
   <tbody>
     <tr><td>brute force</td><td>&nbsp;</td><td>1.000</td><td>4,000</td><td>1.0×</td></tr>
     <tr><td>IVF</td><td>1</td><td>0.643</td><td>244</td><td><strong>16.4×</strong></td></tr>
@@ -258,9 +258,7 @@ quarter of the real neighbors, and told you so<sup class="src"><a href="#src-6" 
 
 <p class="key-fact keep-in-present"><strong>0.917 at 4.3×</strong> IVF probe 4 on Thursday's 4,000 vectors: nine of ten true neighbors for under a quarter of the comparisons</p>
 
-<p class="keep-in-present">Read it like an engineer: at probe 1 you're <em>wrong about 1 in 3
-neighbors</em> and 16× faster; at probe 4 you're wrong about 1 in 12 and still 4.3× faster.
-Neither is "right".</p>
+<p class="keep-in-present">At probe 1, this experiment misses about one in three true neighbors while using about 16× fewer comparisons than brute force. At probe 4, it misses about one in twelve and uses about 4.3× fewer comparisons. These are work reductions; elapsed-time speedups must be measured separately.</p>
 
 <h3 class="new-slide" data-kicker="Recall">The recall you need depends on who pays for a miss</h3>
 

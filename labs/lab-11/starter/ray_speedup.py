@@ -12,8 +12,8 @@ the shape Ray is built for: decorate the function, call it with .remote(),
 and the calls spread across your CPU cores. Same function, same results,
 wall clock divided.
 
-This is the "Going further" of Lab 9 (a k-NN graph is the bottom layer of
-HNSW) done for real, and the same shape as embedding a corpus, scoring a
+This is the "Going further" of Lab 9 (a k-NN graph introduces the neighbor links used by graph indexes;
+HNSW also uses layers and neighbor-selection heuristics) done for real, and the same shape as embedding a corpus, scoring a
 model over folds, or running one hyperparameter setting per core.
 """
 
@@ -59,8 +59,7 @@ def knn_all_serial(docs: list[int]) -> list[list[int]]:
 #        return ray.get(futures)                          # waits for all
 #
 #    The classic mistake is ray.get() inside the loop: that waits for each
-#    task before launching the next, which is serial with extra steps. The
-#    tests time you, so it matters.
+#    task before launching the next, which is serial with extra steps. Compare your timings, but remember that scheduling overhead depends on hardware.
 #
 #    Note what Ray ships to each worker: the function, its argument, and
 #    (once per worker, not once per task) the VECTORS list it closes over.

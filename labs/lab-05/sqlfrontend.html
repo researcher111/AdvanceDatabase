@@ -36,7 +36,7 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 5 · Thursday September 24, 2026 · microdb part 5 of 7</div>
   <h1>The SQL Front End</h1>
-  <div class="subtitle">Your engine answers only the queries you hand-build as Python plan trees; after five methods it takes SQL.</div>
+  <div class="subtitle">Your engine answers only the queries you hand-build as Python plan trees; after four methods it takes SQL.</div>
   <div class="byline">Follows Lecture 5 (From SQL Text to Plan) · in class: 75 min · aim to finish Build + Verify · due Thu Oct 1 at class start</div>
 </header>
 
@@ -119,9 +119,9 @@ its rule owns, using four verbs on the token stream
 with two new verses: the <code>*</code> alternative and the optional WHERE.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">Five methods touch every layer you have built since August</h2>
+<h2 id="the-api">Four methods touch every layer you have built since August</h2>
 
-<p>Your five methods, with the moves each one borrows:</p>
+<p>Your four methods, with the moves each one borrows:</p>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="pq" data-step-name="parse_query" data-explain="expect SELECT; then either a lone * or the { , } idiom over IDs; expect FROM; the { , } idiom over table IDs; if WHERE is next, consume it and delegate to _parse_predicate. Return QueryData(fields, tables, predicate-or-None).">parse_query        # imitates parse_insert + a * case + an optional clause</div>
@@ -147,7 +147,7 @@ ready, and your work is one file. In harness order:</p>
   idiom and the F fork. The rest of PARSE passes, including the error tests you get for free
   from <code>expect()</code>.</li>
   <li><strong><code>plan_query</code></strong>: the four-step recipe. PLAN and SQL groups
-  light up, and with them the REPL: <code>python3 microdb.py</code>, type SQL, grin.</li>
+  light up, and with them the REPL: <code>python3 microdb.py</code>, run your first SQL query.</li>
 </ol>
 
 <div class="callout note">
@@ -189,13 +189,7 @@ expressed as text and a pin-leak audit of <code>execute()</code>.</p>
   join logically… and what actually went wrong? (Hint: check their <code>_run_query</code>'s
   field list for <code>*</code>, or their ProductScan's tie-breaking.)</p>
   <details><summary>Show answer</summary>
-  <p>Trick question with a real lesson: reversing product sides is logically harmless; the
-  same pairs appear in different order, and this join has no ambiguous fields. If they see
-  zero rows, the product isn't the culprit; the usual suspect is that their planner dropped
-  the predicate (built the SelectScan from a fresh empty Predicate, or tested
-  <code>if data.predicate</code> against a Predicate with no <code>__bool__</code> …).
-  Debugging rule the exercise teaches: when a symptom survives your prime suspect's alibi,
-  re-interrogate the description: print the QueryData before blaming the plan.</p>
+  <p>Reversing the inputs changes row order, not the matching pairs in this example. Dropping the predicate would return too many rows, not zero. Check that both scans can produce rows, that the product initializes its left input, and that the predicate reads the intended fields. Inspect the intermediate rows to locate the failure.</p>
   </details>
 </div>
 
@@ -268,8 +262,7 @@ instructions, by Thursday Oct 1 at class start.</strong> One file; the harness s
 <ul>
   <li>☐ <code>sql_frontend.py</code>: all twelve local tests pass (<code>12/12</code>).</li>
 </ul>
-<p>That is the whole upload. The grade is the test harness: the score you see locally is the score
-Gradescope reports.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
@@ -297,8 +290,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <table>
   <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
   <tbody>
-    <tr><td>Correctness</td><td>Gradescope runs the lab's test harness. Every test is worth the same share of
-    the points, and the local pass count is the grade.</td><td>100%</td></tr>
+    <tr><td>Correctness</td><td>Gradescope runs the graded test group described above. Each test contributes an equal share of the points.</td><td>100%</td></tr>
   </tbody>
 </table>
 
@@ -316,10 +308,7 @@ global upgrade, the whole argument for funneling errors through one door.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">The REPL says <code>no such table in catalog</code> after I restart it.</h3>
-<p class="keep-in-present">It shouldn't: <code>./mydb</code> persists, and the catalog reads
-from disk. If tables vanish across restarts, an earlier crash likely left <code>mydb</code>
-half-written; delete the folder and re-create. (Yes: crash recovery. Lab 7 is coming for
-exactly this.)</p>
+<p class="keep-in-present">First check that you restarted in the same working directory: <code>./mydb</code> is a relative path. Close the database normally so buffers are flushed. If a crash interrupted writes, preserve a copy of the directory before investigating; Lab 7 introduces recovery.</p>
 
 <h3 class="keep-in-present">Why lowercase everything? <code>SELECT</code> and <code>select</code> both work but my strings changed case!</h3>
 <p class="keep-in-present">The lexer lowercases <em>words</em> (keywords and IDs) but not
@@ -334,13 +323,13 @@ should too. Aliases (<code>students s</code>) are a tidy Going-Further if the it
 <h3 class="keep-in-present">My parser works but the REPL prints columns in a weird order for SELECT *.</h3>
 <p class="keep-in-present">Field order for <code>*</code> comes from the catalog's schema
 rebuild, which orders by stored offset (Lab 3). If your order looks wrong, your Lab 3
-offsets were wrong first; the tower tattles on its lower floors.</p>
+offsets were wrong first; check the stored catalog offsets first.</p>
 
 <h3 class="keep-in-present">Is this how SQL injection happens?</h3>
 <p class="keep-in-present">Now you can see it: <span class="gloss" data-gloss="sql-injection">injection</span>
 is gluing untrusted text into SQL <em>before</em> your lexer runs; the attacker's words
 arrive as perfectly legal tokens. Your parser is blameless and helpless. The fix
-(parameterized queries) routes values around the front end entirely; try writing
+(parameterized queries) keeps parameter values separate from SQL syntax; try writing
 <code>db.execute_with_params()</code> if the itch strikes.</p>
 
 <footer>

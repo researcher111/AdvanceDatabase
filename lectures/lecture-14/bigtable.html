@@ -44,17 +44,7 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">
-By 2004 Google's crawler was writing faster than any single database server could absorb, on
-hardware that failed somewhere every day, and the answer was not a bigger server. In 2006 Google described the store behind web search, Maps, and Gmail: Bigtable<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>. Read today,
-the paper is mostly a collection of ideas this course has already covered: a <span class="gloss" data-gloss="wal">WAL</span>, write-ahead log (week 7), a sorted in-memory buffer flushed to immutable
-sorted files (your B+ tree's ideas, rearranged), range partitioning (last week), and caching
-(week 2), all riding on <span class="gloss" data-gloss="commodity">commodity machines</span>
-that fail constantly. The one genuinely new structure is the LSM tree, the log-structured merge tree (the write-optimized
-mirror image of your read-optimized B+ tree), and it now sits inside Cassandra, HBase,
-RocksDB, LevelDB, and the storage engine of half the databases shipped since. No lab Thursday
-(Thanksgiving); today is the last new-systems lecture, and it closes the storage story.
-</p>
+<p class="lede">Bigtable was built for large, write-heavy datasets spread across many machines. Its 2006 paper combines ideas you already know: logging, caching, sorted data, and range partitioning. Today we connect those ideas through the LSM design: collect writes in memory, flush sorted files, and merge them in the background. Then we examine the cost this shifts to reads. There is no lab on Thanksgiving; graph databases follow next week. <a href="#src-1">Read the original Bigtable paper.</a></p>
 
 <div class="cite">
   Companion reading: Chang et&nbsp;al., <a href="https://research.google/pubs/pub27898/"><em>Bigtable: A Distributed Storage System for Structured Data</em></a> (OSDI 2006) ·
@@ -77,9 +67,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <p class="keep-in-present"><strong>Quiz 11</strong> first (MapReduce, Spark &amp; Ray, 10 min), then the write-optimized
 half of the storage world.</p>
 
-<p class="keep-in-present">The problem in one line: a crawler that writes a million rows a second
-onto machines that die daily. A B+ tree pays a random disk write per insert, so it cannot keep
-up; a single server cannot survive the failures. Something has to be organized around the write.</p>
+<p class="keep-in-present">A large crawler generates a steady stream of writes across a growing key space. B+ tree buffering can combine updates, but scattered dirty pages still create pressure on storage. LSM engines organize the write path around sequential output and background merging. The question is how much read and compaction work that choice adds.</p>
 
 
 <p class="keep-in-present">Today's claim: <strong>the B+ tree and the LSM tree are the two
@@ -87,9 +75,9 @@ poles of one trade</strong> (organize on write (pay before reads) or organize la
 during reads)), and every storage engine you'll ever meet sits somewhere on that line.</p>
 
 <!-- ============================================================ -->
-<h2 id="problem">A B+ tree cannot absorb a million writes a second</h2>
+<h2 id="problem">B+ tree writes can become a storage bottleneck</h2>
 
-<p class="key-fact keep-in-present"><strong>1 random write per insert</strong> is what a B+ tree costs; at a million inserts a second that is the disk's entire budget spent before any read</p>
+<p class="key-fact keep-in-present"><strong>Scattered leaf updates</strong> can make B+ tree writes expensive. Buffering, batching, key order, and storage hardware determine the actual disk I/O.</p>
 
 <h3 class="new-slide" data-kicker="The 2004 problem">The insight: writes love sequential, reads love sorted</h3>
 
@@ -114,7 +102,7 @@ row_key    "com.cnn.www"      · URLs reversed so domains sort together (row key
 column     "anchor:cnnsi.com" · families fixed & few (schema); qualifiers open-ended (data!)
 timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, reads pick one</code></pre>
 
-<p class="keep-in-present">Read the map signature one coordinate at a time. The <strong>row key</strong> is an arbitrary string, and Bigtable keeps every row of a table sorted by it, so keys that share a prefix (all the pages of one domain, once the URL is reversed) sit next to each other on disk. A <strong>column</strong> is named in two parts: the column family, such as <code>anchor</code>, is declared up front and there are only a handful per table; the qualifier after the colon, such as <code>cnnsi.com</code>, is free-form and can be created by any write, so a row can have as many columns as it has data. The <strong>timestamp</strong> is the third coordinate: a write never replaces a cell, it adds a new version, and a read chooses which version it wants (usually the newest). The value is an uninterpreted byte string; Bigtable never looks inside it.</p>
+<p class="keep-in-present">Read the map signature one coordinate at a time. The <strong>row key</strong> is an arbitrary string, and Bigtable keeps every row of a table sorted by it, so keys that share a prefix (all the pages of one domain, once the URL is reversed) sit next to each other on disk. A <strong>column</strong> is named in two parts: the column family, such as <code>anchor</code>, is declared up front and there are only a handful per table; the qualifier after the colon, such as <code>cnnsi.com</code>, is free-form and can be created by any write, so a row can have as many columns as it has data. The <strong>timestamp</strong> is the third coordinate: a write can add a timestamped cell version; writing the same coordinate can replace its value, and a read chooses which version it wants (usually the newest). The value is an uninterpreted byte string; Bigtable never looks inside it.</p>
 
 <h3 class="new-slide" data-kicker="The data model">What each departure buys</h3>
 
@@ -123,7 +111,7 @@ timestamp  3 versions kept    · MVCC's trick, week 8: writes make versions, rea
   <tbody>
     <tr><td>rows sorted by key, always</td><td>range scans + natural range partitioning</td><td>B+ tree leaves; Lab 8's folder partitions</td></tr>
     <tr><td><span class="gloss" data-gloss="wide-column">sparse columns</span>, no fixed row width</td><td>a million anchor columns, zero storage for absent ones</td><td>the null-bitmap discussion, taken to its limit</td></tr>
-    <tr><td>versions instead of overwrites</td><td>a read picks one timestamp and sees a consistent snapshot as of that moment, without taking any lock, because writers add new versions instead of changing the one being read</td><td>MVCC (multi-version concurrency control), week 8, almost verbatim</td></tr>
+    <tr><td>versions instead of overwrites</td><td>reads can select cell versions by timestamp; this does not provide a transactionally consistent snapshot across rows</td><td>MVCC (multi-version concurrency control), week 8, almost verbatim</td></tr>
     <tr><td>no joins, no SQL, single-row transactions only<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></td><td>every operation touches one row on one server, so its cost is predictable and never depends on data held elsewhere</td><td>this is the cost of NoSQL: the features you give up, which early NoSQL marketing rarely said out loud</td></tr>
   </tbody>
 </table>
@@ -173,12 +161,9 @@ memtable full: flush to an SSTABLE        Sorted String Table: immutable file of
                                            + a sparse index: written once, NEVER edited
 
 background:    COMPACTION                  merge-sort several SSTables into one,
-                                           dropping shadowed versions and tombstones (week 3!)</code></pre>
+                                           dropping obsolete versions and tombstones only when snapshots and older files no longer need them</code></pre>
 
-<p class="keep-in-present">Every disk write is sequential: the WAL, the flushes, the
-merges. Random writes have been <em>abolished</em>, at the price of the same key now living
-in several places at once: the <span class="gloss" data-gloss="memtable">memtable</span>, maybe three <span class="gloss" data-gloss="sstable">SSTables</span>. That price lands on reads,
-which is the next section, but first, run the write path yourself in the widget below.</p>
+<p class="keep-in-present">The WAL, SSTable flushes, and compaction outputs favor sequential I/O. This reduces scattered in-place writes, but a key can appear in several runs at once. Reads must find the newest visible version, and compaction must keep the number of runs manageable.</p>
 
 <!-- ============================================================ -->
 <h2 id="try-it">Run the write path</h2>
@@ -220,7 +205,7 @@ from being a disaster:</p>
 <h3 class="new-slide" data-kicker="The read path">Three read rescues</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Bloom filters</span><span>each SSTable carries a <span class="gloss" data-gloss="bloom">Bloom filter</span>, a tiny bitmap that answers "definitely absent" or "maybe here." Most SSTables are skipped without touching disk; the filter is wrong (a false "maybe") ~1% of the time, and it is never wrong in the dangerous direction: it never says "absent" for a key that is actually in the file, so no read can miss data by trusting it<sup class="src"><a href="#src-4" title="RocksDB Bloom Filter (RocksDB wiki)">4</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Bloom filters</span><span>each SSTable carries a <span class="gloss" data-gloss="bloom">Bloom filter</span>, a tiny bitmap that answers "definitely absent" or "maybe here." Most SSTables are skipped without touching disk; a filter can be sized for about a 1% false-positive rate on absent keys, and it is never wrong in the dangerous direction: it never says "absent" for a key that is actually in the file, so no read can miss data by trusting it<sup class="src"><a href="#src-4" title="RocksDB Bloom Filter (RocksDB wiki)">4</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">Sparse indexes + caches</span><span>an SSTable keeps every Nth key, with the file offset of the block it starts, in memory as a sparse index. A lookup binary-searches that small index to find the one block that could hold the key, then reads only that block from disk<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup>. Week 2's buffer-pool logic caches the hot blocks so repeat reads never touch disk; week 6's "index = skip most of the data" logic finds the rest.</span></div>
   <div class="lc-row"><span class="lc-k">Compaction itself</span><span>compaction merges many small SSTables into fewer, bigger files whose key ranges do not overlap, so there are fewer places a key can hide. It runs in the background and consumes disk bandwidth that incoming writes could have used; that is the price paid to keep <span class="gloss" data-gloss="read-amp">read amplification</span> bounded. How hard to compact, and when, is the engine's central tuning dial.</span></div>
 </div>
@@ -259,7 +244,7 @@ Insert keys, then query keys you never inserted, and keep querying until the fil
 <table>
   <thead><tr><th></th><th>B+ tree (microdb, Postgres, MySQL)</th><th>LSM (Bigtable, Cassandra, RocksDB)</th></tr></thead>
   <tbody>
-    <tr><td>write path</td><td>descend to the leaf page that owns the key and modify it in place; each write lands on a random page, so it costs a random disk I/O</td><td>append the write to the WAL and insert it into the memtable; every disk write is sequential</td></tr>
+    <tr><td>write path</td><td>descend to the leaf page that owns the key and modify it in place; updates may touch scattered pages; the buffer pool batches dirty-page writes</td><td>append the write to the WAL and insert it into the memtable; WAL, flush, and compaction output favor sequential I/O</td></tr>
     <tr><td>read path</td><td>one root-to-leaf descent; each key has exactly one home, so one descent always finds it</td><td>check the memtable, then up to K SSTables, newest first; Bloom filters let most SSTables be skipped without a disk read</td></tr>
     <tr><td>background cost</td><td>page splits as leaves fill up, plus an occasional vacuum to reclaim space from dead rows</td><td>compaction runs continuously and must be tuned; keeping it healthy is the main operational burden</td></tr>
     <tr><td>range scans</td><td>excellent: leaf pages are linked, so a scan walks sibling leaves in key order</td><td>good: a scan merges K sorted runs, one per SSTable plus the memtable, in a single pass</td></tr>
@@ -335,7 +320,7 @@ you engines, not brand names.</p>
   <li><strong>Bigtable = course reunion</strong>: WAL + sorted-map records + range
   partitions + caching, run on failure-is-normal hardware; the model is a sorted map, and
   key design is schema design.</li>
-  <li><strong>The LSM tree abolishes random writes</strong>: memtable → immutable SSTables →
+  <li><strong>The LSM tree favors sequential writes</strong>: memtable → immutable SSTables →
   compaction; reads pay the spread and are rescued by Bloom filters, sparse indexes, and
   merging.</li>
   <li><strong>CAP is a forced choice only during partitions</strong>: refuse (CP) or serve
@@ -347,8 +332,7 @@ Tuesday (Dec 1):</strong> the last lecture: graph databases with a live Kuzu dem
 course synthesis. Quiz 12 opens class: Bigtable, LSM &amp; NoSQL. Project workshop Thu
 Dec 3; reports Mon Dec 7; presentations Dec 8.</p>
 
-<p class="keep-in-present"><strong>1 random write per insert · 2 poles, 1 trade</strong>: the B+ tree pays
-on every write, the LSM tree on every read, and Bigtable chose the write side for a crawler.</p>
+<p class="keep-in-present"><strong>B+ trees and LSM trees trade read work for write work.</strong> B+ trees update pages in place, while LSM trees buffer writes and merge sorted files. Caching, batching, and compaction determine the actual I/O cost.</p>
 
 <p class="keep-in-present"><strong>Before next Tuesday (Dec 1):</strong></p>
 <ul class="keep-in-present">

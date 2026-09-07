@@ -79,7 +79,7 @@ last new idea and the oldest ones.</p>
 
 <p class="keep-in-present">"Who does ada follow?" is one join. "Who's within three hops of ada?"
 is three self-joins, about d<sup>3</sup> intermediate rows, and a planner guessing sizes at every
-step. "How does ada reach fay?" has no SQL clause at all; you would write the search by hand.</p>
+step. "How does ada reach fay?" can be expressed with a recursive CTE; graph query languages provide more direct path syntax.</p>
 
 
 <p class="keep-in-present">Today's claim: <strong>a graph database is an index decision,
@@ -94,28 +94,28 @@ an index pre-sorts your rows.</p>
 per row). Graph: each hop is a WALK, and neighbors are found by following pointers stored on the
 node. For <em>k</em> hops from one start node with average degree <em>d</em>:</p>
 \[ \text{join chain: } k \text{ joins, about } d^{k} \text{ intermediate rows before dedup} \]
-\[ \text{traversal: about } d^{k} \text{ nodes visited, each one pointer-follow away, nothing to match} \]
-<p>Same asymptotics, wildly different constants, and the constant is the product.</p>
+\[ \text{visited-set traversal: } O(V_r + E_r) \text{ over reached vertices and examined edges} \]
+<p>Adjacency storage can reduce neighbor-lookup costs, but the algorithm and query semantics determine how many edges or paths must be explored. Benchmark the same result requirement in both engines.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="The join-depth problem">Same number of touches, far less paid per touch</h3>
 
-<p class="keep-in-present">In words: to find everyone within k hops of a start node, both approaches touch on the order of \(d^{k}\) neighbors, where \(d\) is the average number of edges leaving a node. What differs is the cost of each touch.</p>
+<p class="keep-in-present">For reachability, a breadth-first traversal with a visited set expands each reached node once and examines its outgoing edges. A bounded path query may instead enumerate multiple paths to the same node. Those are different amounts of work, whether the query is written in SQL or Cypher.</p>
 
 <table>
   <thead><tr><th></th><th>Join chain</th><th>Traversal</th></tr></thead>
   <tbody>
     <tr><td>how a row's neighbors are found</td><td>by matching keys: every hop is a hash or index probe for every row in the current set, and the planner must also choose a join order and estimate sizes at each step</td><td>by reading the list of pointers stored on the node itself: each hop is a memory read with no matching at all</td></tr>
-    <tr><td>a node reachable by several routes</td><td>one row per path, so it is counted several times until a final DISTINCT removes the duplicates</td><td>marked visited once</td></tr>
+    <tr><td>a node reachable by several routes</td><td>one row per path, so it is counted several times until a final DISTINCT removes the duplicates</td><td>can be marked visited once in a reachability algorithm; path enumeration may revisit it</td></tr>
   </tbody>
 </table>
 
-<p class="key-fact keep-in-present"><strong>d<sup>k</sup> either way</strong> the join chain and the walk touch the same number of neighbors; the walk pays a pointer read per touch, the join a key match per row and a planner guess per hop</p>
+<p class="key-fact keep-in-present"><strong>Count edges and paths separately.</strong> A visited-set traversal and a query enumerating all bounded paths need not perform the same work.</p>
 
-<p class="keep-in-present">Same growth rate, much smaller cost per step; that smaller constant is what a graph database sells.</p>
+<p class="keep-in-present">Graph-oriented storage and path operators can reduce work, but neither notation guarantees a faster plan.</p>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Joins count paths; walks expand each node once</h2>
+<h2 id="try-it">Path enumeration and reachability do different work</h2>
 
 <p>The six students, nine follows edges, the same data the Kuzu demo loads. Pick a start
 and walk outward; the counter compares pointer-follows against what a SQL join chain
@@ -141,7 +141,7 @@ touches.</p>
 <!-- ============================================================ -->
 <h2 id="model">A graph database materializes the join at write time</h2>
 
-<p class="keep-in-present">The data model every mainstream graph database shares (Neo4j,
+<p class="keep-in-present">The property-graph model used by many graph databases (Neo4j,
 Kuzu, Neptune, Memgraph):<sup class="src"><a href="#src-3" title="What Is Amazon Neptune? (AWS Neptune User Guide)">3</a></sup></p>
 
 <pre class="equation"><code>node   (:Student {name: 'ada', gpa: 39})          a record with a label + properties
@@ -220,7 +220,7 @@ loaded 6 students, 9 follows edges
 
 <p class="keep-in-present">Query 4 is the important one: <em>how does ada reach fay</em> is a
 shortest-path search (<span class="gloss" data-gloss="bfs">BFS</span>, breadth-first search, under the hood) expressed in one<sup class="src"><a href="#src-6" title="Kuzu 0.7.0 Release (Kuzu blog)">6</a></sup> <code>MATCH</code>. Ask it of
-the SQL version and you're writing a shortest-path algorithm such as Dijkstra's by hand inside a recursive CTE; ask it of Kuzu and it's one ordinary query.
+the SQL version and you're writing a shortest-path algorithm such as breadth-first search by hand inside a recursive CTE; ask it of Kuzu and it's one ordinary query.
 When the <em>path itself</em> is the answer (recommendations, fraud rings, lineage,
 dependency chains) that's the graph database's home turf.</p>
 
@@ -249,7 +249,7 @@ dependency chains) that's the graph database's home turf.</p>
   relationships into Neo4j and gave hundreds of reporters a visual graph-query front end<sup class="src"><a href="#src-11" title="How the ICIJ Used Neo4j to Unravel the Panama Papers (Neo4j blog)">11</a></sup>;
   reporters with no database training followed edges to prime ministers<sup class="src"><a href="#src-11" title="How the ICIJ Used Neo4j to Unravel the Panama Papers (Neo4j blog)">11</a></sup>. The relational
   version of that investigation is a self-join per hop with the hops unknown in advance;
-  possible, and nobody would have finished it. Choosing the data model to match the question is the course's thesis, and this is the clearest real-world case of it.</p>
+  possible, and the graph interface made exploration more accessible. Choosing the data model to match the question is the course's thesis, and this is the clearest real-world case of it.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -298,10 +298,9 @@ afternoon. That ability to transfer is what the course was for.</p>
   <li>☐ <strong>Thu Dec 3, workshop:</strong> in-class working session; instructor + TAs
   circulate. Bring your eval-set numbers and your ugliest bug.</li>
   <li>☐ <strong>Mon Dec 7, 11:59 pm, report due:</strong> the measured-decisions document:
-  chunking, index + dial setting, eval table across at least three configurations, per the
+  chunking, index + dial setting, eval table across at least two configurations, per the
   <a href="../../project.html">spec</a>.</li>
-  <li>☐ <strong>Tue Dec 8, presentations:</strong> 8 minutes + 2 Q&amp;A per team: live
-  demo, one failure you diagnosed with an eval metric, one decision you'd reverse.</li>
+  <li>☐ <strong>Tue Dec 8, presentations:</strong> 8 minutes, plus a live demo and questions per team. Show one failure you diagnosed with an eval metric and one decision you would reverse.</li>
   <li>☐ No final exam. Course evals: be specific; this course is rebuilt from them.</li>
 </ul>
 
@@ -319,15 +318,15 @@ afternoon. That ability to transfer is what the course was for.</p>
   index, log-first, declarative plans, partitioning. Every system we met this semester was some arrangement of those five.</li>
 </ul>
 
-<p class="key-fact keep-in-present"><strong>d<sup>k</sup> either way</strong> the walk and the join chain touch the same neighbors; the walk pays a pointer read per touch · <strong>5 ideas, 15 weeks</strong> every system this semester was an arrangement of the same five</p>
+<p class="key-fact keep-in-present"><strong>Count edges and paths separately.</strong> A visited-set traversal and a query enumerating all bounded paths need not perform the same work.</p>
 
 <p class="keep-in-present"><strong>Thursday:</strong> project workshop. <strong>Tuesday:</strong>
 presentations.</p>
 
 <p class="keep-in-present"><strong>Before Thursday:</strong></p>
 <ul>
-  <li><strong>Read</strong> the project <a href="../../project.html">spec</a>'s report section: chunking, index + dial setting, and an eval table across at least three configurations.</li>
-  <li><strong>Run</strong> your eval set across at least three configurations so the table exists before the workshop; run <code>python3 kuzu_demo.py</code> too if you are weighing the GraphRAG extension.</li>
+  <li><strong>Read</strong> the project <a href="../../project.html">spec</a>'s report section: chunking, index + dial setting, and an eval table across at least two configurations.</li>
+  <li><strong>Run</strong> your eval set across at least two configurations so the table exists before the workshop; run <code>python3 kuzu_demo.py</code> too if you are weighing the GraphRAG extension.</li>
   <li><strong>Bring</strong> a laptop with your eval-set numbers and your ugliest bug to Thursday's workshop.</li>
 </ul>
 
@@ -337,8 +336,8 @@ presentations.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Is Kuzu real enough to use, or a teaching toy?</h3>
-<p class="keep-in-present">Real: columnar storage, a vectorized query processor, full<sup class="src"><a href="#src-13" title="kuzudb/kuzu README (GitHub)">13</a></sup>
-Cypher, and it holds its own on benchmarks against Neo4j for embedded<sup class="src"><a href="#src-14" title="The Data Quarry: Embedded databases (2): Kuzu, an extremely fast embedded graph database">14</a></sup>
+<p class="keep-in-present">Real: columnar storage, a vectorized query processor, a Cypher query language implementation<sup class="src"><a href="#src-13" title="kuzudb/kuzu README (GitHub)">13</a></sup>
+and it holds its own on benchmarks against Neo4j for embedded<sup class="src"><a href="#src-14" title="The Data Quarry: Embedded databases (2): Kuzu, an extremely fast embedded graph database">14</a></sup>
 analytics. Like DuckDB, its niche is in-process work rather than serving a fleet of
 concurrent clients. For a server deployment with users and auth, Neo4j or Neptune; for
 "I have a graph problem in a notebook," Kuzu is exactly right. One caveat: the original

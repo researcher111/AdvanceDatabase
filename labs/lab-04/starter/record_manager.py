@@ -26,6 +26,7 @@ class Schema:
         return self
 
     def add_string_field(self, name: str, max_chars: int) -> "Schema":
+        """Reserve max_chars UTF-8 bytes (parameter name retained for the lab API)."""
         self._fields.append((name, STR, max_chars))
         return self
 
@@ -102,6 +103,8 @@ class RecordPage:
         return self._buf.contents().get_string(self._field_pos(slot, fldname))
 
     def set_string(self, slot: int, fldname: str, val: str) -> None:
+        if len(val.encode("utf-8")) > self.layout.schema.length_of(fldname):
+            raise ValueError(f"UTF-8 value exceeds capacity of {fldname!r}")
         self._buf.contents().set_string(self._field_pos(slot, fldname), val)
         self._buf.set_modified()
 

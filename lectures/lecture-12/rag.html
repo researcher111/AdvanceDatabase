@@ -89,7 +89,7 @@ retrieval quality is measurable</strong>, with a hand-labeled <span class="gloss
 <table>
   <thead><tr><th>Approach</th><th>Per update</th><th>Per question</th><th>Where it breaks</th></tr></thead>
   <tbody>
-    <tr><td><strong>Fine-tune</strong> the weights</td><td>a full training run, repeated every time the documents change</td><td>cheap: the question alone, with no extra tokens attached</td><td>the weights are stale the moment a document changes, and the model recalls specific facts from them unreliably<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup>. It also cannot cite: the answer comes from weights, not from a document it can point to</td></tr>
+    <tr><td><strong>Fine-tune</strong> the weights</td><td>an additional training job when learned behavior or knowledge needs updating</td><td>cheap: the question alone, with no extra tokens attached</td><td>the weights are stale the moment a document changes, and the model recalls specific facts from them unreliably<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup>. It also cannot cite: the answer comes from weights, not from a document it can point to</td></tr>
     <tr><td><strong>Stuff the context</strong> with everything</td><td>free: just send the new text next time</td><td>every document is billed as prompt tokens on every question</td><td>a 50k-document corpus does not fit in any context window, and what does fit gets skimmed: models attend poorly to evidence buried in the middle of a long prompt, the <span class="gloss" data-gloss="lost-in-the-middle">"lost in the middle"</span> effect measured later in this lecture</td></tr>
     <tr><td><strong>Retrieve</strong>, then generate</td><td>re-embed only the changed document and update the index</td><td>one top-k query, plus the k retrieved chunks sent as prompt tokens</td><td>the answer can only be as good as the chunks retrieved: if the right chunk does not come back, the model never sees it. That is why this lecture measures retrieval</td></tr>
   </tbody>
@@ -278,7 +278,7 @@ two phrasings, DIM=2048:</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Lost in the middle</span><span>models attend best to the start and end of a long context; retrieved-but-buried evidence gets skimmed (Liu et&nbsp;al. above measured the U-shape)<sup class="src"><a href="#src-10" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172)">10</a></sup>. Mitigation: retrieve less, order deliberately, put the best chunk first.<sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Right doc, wrong rank</span><span>the relevant chunk is retrieved but lands third in a list of five, so hit@3 counts the question as a success even though the model reads two weaker chunks first. MRR is the metric that notices, because rank 3 scores 0.33 instead of 1.0. The fix belongs to the assembly stage: order the retrieved chunks so the best-scoring one comes first.</span></div>
+  <div class="lc-row"><span class="lc-k">Right doc, wrong rank</span><span>the relevant chunk is retrieved but lands third in a list of five, so hit@3 counts the question as a success even though the model reads two weaker chunks first. MRR is the metric that notices, because rank 3 scores 0.33 instead of 1.0. The fix belongs to the assembly stage: improve the ranking, for example with a reranker; sorting by the same scores again cannot fix a poor ranking.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="RAG fails like databases">Staleness, drift, and overconfidence are database failures too</h3>
@@ -293,15 +293,7 @@ two phrasings, DIM=2048:</p>
 
 <div class="callout note">
   <span class="label">War story · Mata v. Avianca, 2023</span>
-  <p class="keep-in-present">One of these failures has already reached a courtroom. In 2023, lawyers in a routine
-  New York airline suit filed a brief citing several judicial opinions that did not exist<sup class="src"><a href="#src-12" title="Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions">12</a></sup>;
-  ChatGPT had generated them, complete with plausible names, docket numbers, and quotes<sup class="src"><a href="#src-12" title="Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions">12</a></sup>, and
-  when asked to verify, it cheerfully vouched for its own inventions<sup class="src"><a href="#src-12" title="Mata v. Avianca, Inc., 678 F.Supp.3d 443 (S.D.N.Y. 2023), Opinion and Order on Sanctions">12</a></sup>. A federal judge
-  sanctioned the lawyers, and "check whether the case is real" entered legal practice
-  overnight. Read it as an architecture lesson: an LLM answering from
-  <em>parametric</em> memory fabricates fluently, and only a retrieval layer over a real,
-  citable corpus (with the citations carried through, like your <code>[doc_id]</code>
-  tags) turns "sounds right" into "is checkably there."</p>
+  <p class="keep-in-present">In <em>Mata v. Avianca</em> (2023), lawyers submitted nonexistent opinions generated by ChatGPT and were sanctioned. The case illustrates why plausible text is not evidence. Retrieval can supply real source passages, but the system must still check that each citation exists and supports the claim. Carry source identifiers through the pipeline and inspect citation failures in your evaluation. <a href="#src-12">Source: the court’s order.</a></p>
 </div>
 
 <!-- ============================================================ -->
@@ -395,10 +387,7 @@ under a learned model. That's the point of the design: your project swaps one fu
 keeps the pipeline.</p>
 
 <h3 class="keep-in-present">What should our project's eval set look like?</h3>
-<p class="keep-in-present">10–20 questions a real user of your corpus would ask, each labeled
-with the doc(s) that answer it, written by your team, before you tune anything. Grade hit@k
-and MRR on every change (chunk size, k, embedding model, hybrid on/off). The proposal rubric
-asks for exactly this because it is the difference between measured engineering and guesswork.</p>
+<p class="keep-in-present">Write at least 25 questions a real user of your corpus would ask, each labeled with the source passages that answer it. Compare at least two configurations and report retrieval and answer quality. Keep the partner team’s questions held out while tuning, then report those results alongside your own. The proposal outlines this plan; the final report supplies the evidence.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science

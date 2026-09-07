@@ -86,9 +86,9 @@ objects</strong>, and you already built the bottom one.</p>
 <!-- ============================================================ -->
 <h2 id="pull">Build every stage in full and memory runs out</h2>
 
-<p>First, the problem. The obvious way to run <code>SELECT name FROM students WHERE gpa &gt; 3.5</code> is in stages: the scan produces a table of every student, the filter reads that table and produces a smaller one, and the projection reads that and produces the answer. Every intermediate table has to live somewhere while the next stage reads it, and for a join the first intermediate table is the product of the two inputs, which can be far larger than the tables themselves.</p>
+<p>A straightforward staged implementation materializes the scan’s output, then the filter’s output, then the projection. Each intermediate needs memory or temporary storage. Our first join deliberately uses a Cartesian product followed by a filter; production equality joins can avoid enumerating that product.</p>
 
-<p class="keep-in-present">An engine that builds each stage&#39;s whole output before starting the next runs out of memory on exactly the queries that matter.</p>
+<p class="keep-in-present">Materializing large intermediate results can exhaust memory or require a spill to disk.</p>
 
 <h3 class="new-slide" data-kicker="The memory problem">Pull rows on demand and memory is the plan's depth</h3>
 
@@ -279,7 +279,7 @@ exact lines you'll write Thursday. Readability is the point: each class states i
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The problem</span><span>Take <code>SELECT name FROM students</code>. The scan underneath produces full rows with three fields (<code>id</code>, <code>name</code>, <code>gpa</code>) and the query wants only <code>name</code>. Building a fresh, one-field row for every input row (copy <code>name</code> out, drop the other two) means 60,000 new little rows for 60,000 students.</span></div>
   <div class="lc-row"><span class="lc-k">ProjectScan's answer</span><span>build nothing. Every row stays where it is, inside the scan underneath, with all three fields still in it; ProjectScan sits on top holding one thing, the list of allowed columns, here <code>["name"]</code>. Ask <code>get_val("name")</code> and it passes the question down and hands the answer back; ask <code>get_val("gpa")</code> and it raises <code>ValueError</code>, because <code>gpa</code> is not on the list. That is the whole operator: a list of column names and a check.</span></div>
-  <div class="lc-row"><span class="lc-k">What follows</span><span>Nothing is copied, so the projection costs no memory and no work per row. And a caller who reaches for a column the query said it did not want finds out at once, instead of silently reading a value that was supposed to be invisible.</span></div>
+  <div class="lc-row"><span class="lc-k">What follows</span><span>The projection stores a field list and checks access to it, without materializing another table. And a caller who reaches for a column the query said it did not want finds out at once, instead of silently reading a value that was supposed to be invisible.</span></div>
 </div>
 
 <div class="code-annotated" data-lang="python">
@@ -348,7 +348,7 @@ exact lines you'll write Thursday. Readability is the point: each class states i
 </div>
 
 <!-- ============================================================ -->
-<h2 id="product">Every join runs on a three-line nested loop</h2>
+<h2 id="product">Our first join uses a nested loop</h2>
 
 <p class="keep-in-present">microdb has no join operator. ProductScan pairs every left row with
 every right row, a SelectScan on top keeps the pairs whose ids agree, and the product's
@@ -364,6 +364,7 @@ every right row, a SelectScan on top keeps the pairs whose ids agree, and the pr
   <div class="code-step" data-step="n2" data-step-name="the odometer" data-explain="Right side exhausted: rewind it, advance the left one row, and take the right's first row again. When the LEFT runs out too, the product is done.">        self.right.before_first()</div>
   <div class="code-step" data-step="n2" data-explain="Both must succeed; 'and' handles the end of everything.">        return self.left.next() and self.right.next()</div>
   <div class="code-explain-panel">Hover a line: the entire cartesian product is an odometer rollover.</div>
+<p>This is the rollover sketch for nonempty inputs. The complete implementation must remember whether the left scan has a current row, return no pairs if either input is empty, and keep returning <code>False</code> after exhaustion until rewound.</p>
 </div>
 
 <table>
@@ -539,7 +540,7 @@ lecture-1 demo real. The reference TableScan gained <code>get_val</code>/<code>h
   <li><strong>One interface, infinite plans.</strong> Five methods make operators Lego: any
   scan wraps any scan, and a query plan is just the resulting tower.</li>
   <li><strong>Pull, don't build.</strong> Demand flows down, single rows flow up; memory is the
-  plan's depth. Sort and group-by will be the deliberate exceptions.</li>
+  plan's depth. Blocking sorts and hash aggregation require more state; ordered streaming aggregation can emit completed groups.</li>
   <li><strong>Shape is free, work isn't.</strong> Product + select = join. Moving one filter
   changed the work 15× while the answer stayed identical, and choosing among such shapes is
   the optimizer's entire job.</li>
@@ -576,9 +577,7 @@ is served from memory anyway; the two layers cooperate without either knowing ab
 it; that's week 9's hash join, a considered trade, not a default<sup class="src"><a href="#src-11" title="PostgreSQL documentation: Planner/Optimizer">11</a></sup>.</p>
 
 <h3>Where are ORDER BY and GROUP BY?</h3>
-<p class="keep-in-present">They need to see <em>all</em> rows before emitting one (you can't
-know the smallest row until you've seen the last). They're the operators that legitimately
-break the pipeline and spill to disk<sup class="src"><a href="#src-12" title="PostgreSQL documentation: Resource Consumption (work_mem)">12</a></sup>: week 9, alongside the optimizer.</p>
+<p class="keep-in-present">A blocking sort must inspect all its input before emitting sorted output. Hash aggregation also usually waits for all input, while aggregation over input already ordered by the grouping key can emit one completed group at a time. Lecture 9 explains these tradeoffs.</p>
 
 <h3>What about OR in predicates?</h3>
 <p class="keep-in-present">microdb's Predicate is AND-only for readability; OR arrives with

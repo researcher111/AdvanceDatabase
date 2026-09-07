@@ -38,22 +38,11 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 11 · Thursday November 19, 2026</div>
   <h1>Spark &amp; Ray · the pattern and the products</h1>
-  <div class="subtitle">Nobody coordinates a thousand machines counting words, yet every word must end with exactly one total: build that guarantee in 60 lines, then find it inside Spark and Ray.</div>
+  <div class="subtitle">A framework coordinates a thousand machines counting words, yet every word must end with exactly one total: build that guarantee in 60 lines, then find it inside Spark and Ray.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">
-Spread a word count over a thousand machines and no machine sees the whole corpus, nobody hands
-out assignments, and every word still has to end with exactly one total. Tuesday ended with a
-claim: the shuffle is the whole story. Today you test it by building the story yourself. Part 1
-is pure stdlib: you write map, hash partitioning, the shuffle, and
-reduce, and a harness checks the one guarantee everything depends on (every value for a key
-in exactly one partition). Parts 2 and 3 are the products: the same word count in three
-chained Spark calls (find the shuffle in the printed plan), and a real job, the nearest-neighbor graph of
-Lab 9's vectors, fanned across your cores with two lines of Ray. The corpus is the 4,000 arXiv
-abstracts Lab 9 embedded (about 700,000 words),
-so every answer is checkable against last week's code.
-</p>
+<p class="lede">A distributed word count splits the input across workers, but must still produce one total for each word. Today you implement map, partition, shuffle, and reduce in one process so that the grouping rule is easy to inspect. Then you run the same word count in Spark and parallelize nearest-neighbor searches with Ray. The data is the same 4,000 arXiv abstracts used in Lab 9.</p>
 
 <div class="cite">
   Builds on: <a href="../lab-10/microrag.html">Lab 10 · micro-rag</a> (same corpus) ·
@@ -102,6 +91,8 @@ partitions, every chip colored by the arithmetic your <code>partition_for</code>
 <span class="cl-line">cd AdvanceDatabase/labs/lab-11/starter</span></pre>
 </div>
 
+<p>Download the entire <code>starter/</code> directory, including <code>data/</code>. The individual Python links do not include the corpus and vector files. Cloning the repository is the simplest way to get everything.</p>
+
 <!-- ============================================================ -->
 <h2 id="big-idea">The pattern is yours; the plumbing is rented</h2>
 
@@ -129,7 +120,7 @@ contract yourself is how you'll know what you're renting.</p>
     <tr><td><code>mapreduce.py</code></td><td><strong>you edit, the graded file</strong></td><td><code>run_mapreduce</code> runner provided; <code>map_words</code>, <code>partition_for</code>, <code>shuffle</code>, <code>reduce_counts</code> are YOUR JOB</td></tr>
     <tr><td><code>spark_wordcount.py</code></td><td>you edit, run locally</td><td>session setup + DAG printing provided; the three-transformation chain is YOUR JOB</td></tr>
     <tr><td><code>ray_speedup.py</code></td><td>you edit, run locally</td><td>brute-force <code>neighbors()</code>, the vectors, and the timing harness provided; <code>knn_remote</code> + <code>knn_all_parallel</code> are YOUR JOB</td></tr>
-    <tr><td><code>corpus.py</code></td><td>provided, read-only</td><td>Lab 10's 24 course-summary documents</td></tr>
+    <tr><td><code>corpus.py</code></td><td>provided, read-only</td><td>4,000 arXiv abstracts, shared with Labs 9 and 10; download the data/ folder too</td></tr>
     <tr><td><code>test_sparkray.py</code></td><td>provided</td><td>OFFLINE group always runs; SPARK/RAY groups auto-skip if not installed</td></tr>
   </tbody>
 </table>
@@ -176,10 +167,7 @@ harness grades the raw contract.</p>
 <!-- ============================================================ -->
 <h2 id="spark">Part 2 · Spark <span class="part-time">~15 min in class</span></h2>
 
-<p>Open <code>spark_wordcount.py</code>: the session, the 4-slice RDD, and the DAG printing
-ship; you write the chain: <code>flatMap</code> (your <code>map_words</code>),
-<code>map</code> to pairs, <code>reduceByKey</code> (your shuffle + reduce in one call).
-Stay lazy: no <code>collect()</code> inside the function. Then run it and read the plan:</p>
+<p>The starter provides the session and DAG printing. Write <code>flatMap</code> to emit word strings, <code>map</code> to turn each word into <code>(word, 1)</code>, and <code>reduceByKey</code> to sum counts. Part 1’s <code>map_words</code> already emits pairs, so do not pass its output through a second word-to-pair mapping.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span>
 === the DAG (read bottom-up; the stage break is the shuffle) ===
@@ -199,15 +187,7 @@ The top-15 it prints must match Part 1's exactly; the harness checks the full di
 <!-- ============================================================ -->
 <h2 id="ray">Part 3 · Ray <span class="part-time">~15 min in class</span></h2>
 
-<p>The job is real work this time: for each abstract, find the ten abstracts nearest to it in
-Lab 9's embedding space by brute force over all 4,000 vectors, which is the bottom layer of an
-HNSW graph and the same shape as embedding a corpus or scoring one model per fold. One document
-costs about \(4{,}000 \times 64\) multiply-adds in pure Python; 200 documents cost a couple of seconds
-serially, and every document's search is independent of every other's. Two edits in
-<code>ray_speedup.py</code>: decorate <code>knn_remote</code> with <code>@ray.remote</code>, and
-write <code>knn_all_parallel</code> as launch-all-then-gather. The
-<span class="gloss" data-gloss="gil">GIL</span> never gets a vote; every task is its own process.
-Measured on a 10-core laptop:</p>
+<p>For each abstract, find its ten nearest neighbors among the other 3,999 vectors. Each search is independent, so Ray can distribute the work across worker processes. This builds part of a k-nearest-neighbor graph; HNSW adds layers and neighbor-selection rules. In <code>ray_speedup.py</code>, define a remote search task, launch all tasks, then gather their results once.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span>
 200 documents, 10 nearest neighbors each, brute force over 4,000 vectors
@@ -233,8 +213,7 @@ last week.</p>
 
 <p class="keep-in-present"><strong>Now change something.</strong> Set <code>N_DOCS = 1000</code> and run again; then leave
 it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the three speedups
-(200 docs on all cores, 1000 docs on all cores, 1000 docs on 2 cores) and say which of the two
-numbers, cores or documents, moved the speedup more and why the answer is not "cores".</p>
+(200 docs on all cores, 1000 docs on all cores, 1000 docs on 2 cores) and explain which change affected your measured speedup more. Account for both useful work and scheduling overhead.</p>
 
 <!-- ============================================================ -->
 <h2 id="verify">Routing bugs hide at n=1, so the harness varies n</h2>
@@ -257,7 +236,7 @@ part either way:</p>
   <span class="t-pass">[PASS]</span> SPARK: word_counts matches the reference
 <span class="t-head">RAY group (Part C)</span>
   <span class="t-pass">[PASS]</span> RAY: parallel results identical to serial
-  <span class="t-pass">[PASS]</span> RAY: launch-all-then-wait beats serial
+  <span class="t-pass">[PASS]</span> RAY: all tasks launch before the wait
 
 <span class="t-pass">10/10 tests passed</span></code></pre>
 
@@ -292,8 +271,7 @@ OFFLINE group, and that is the whole grade; Parts 2 and 3 are for class discussi
 <ul>
   <li>☐ <code>mapreduce.py</code>: all seven OFFLINE tests pass (<code>7/7</code>).</li>
 </ul>
-<p>That is the whole upload. The grade is the test harness: the score you see locally is the score
-Gradescope reports.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>The measurement and reflection questions are still the point of the later parts of the lab; they
@@ -313,8 +291,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <table>
   <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
   <tbody>
-    <tr><td>Correctness</td><td>Gradescope runs the lab's test harness. Every test is worth the same share of
-    the points, and the local pass count is the grade.</td><td>100%</td></tr>
+    <tr><td>Correctness</td><td>Gradescope runs the graded test group described above. Each test contributes an equal share of the points.</td><td>100%</td></tr>
   </tbody>
 </table>
 
@@ -348,11 +325,7 @@ runtime noise; the startup warnings are cosmetic. If the run <em>hangs</em>, the
 culprit is Java missing or a JDK too old (need 17+): check <code>java -version</code>.</p>
 
 <h3 class="keep-in-present">My Ray speedup is only ~3× on 8 cores. Did I do it wrong?</h3>
-<p class="keep-in-present">Probably not: 200 tasks of about 10 ms is a small job, and Ray's fixed
-costs (starting workers, moving arguments) are visible at this scale. The harness only
-requires beating serial by 1.5×; the point is the launch-then-gather <em>shape</em>, whose
-payoff grows with the work. If you see ~1.0×, that IS the bug: <code>ray.get</code> inside
-the loop.</p>
+<p class="keep-in-present">Probably not. A small job may spend much of its time starting workers and moving data. The harness checks result equality and that all tasks launch before the wait; it does not impose a hardware-dependent speedup threshold. Use the timing script to investigate overhead and increase the workload before drawing conclusions.</p>
 
 <h3 class="keep-in-present">When would I genuinely choose Spark over DuckDB + Ray?</h3>
 <p class="keep-in-present">When the data doesn't fit one machine AND the workload is

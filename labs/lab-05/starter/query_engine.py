@@ -81,14 +81,22 @@ class ProductScan:
 
     def before_first(self) -> None:
         self.left.before_first()
-        self.left.next()
+        self._left_ready = self.left.next()
         self.right.before_first()
 
     def next(self) -> bool:
+        if not self._left_ready:
+            return False
         if self.right.next():
             return True
         self.right.before_first()
-        return self.left.next() and self.right.next()
+        self._left_ready = self.left.next()
+        if not self._left_ready:
+            return False
+        if self.right.next():
+            return True
+        self._left_ready = False
+        return False
 
     def get_val(self, fld):
         if self.left.has_field(fld):

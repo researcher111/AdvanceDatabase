@@ -94,7 +94,7 @@ as possible, and everything else is packaging.</p>
   <tbody>
     <tr><td>Disk read</td><td>~2 GB/s sequential</td><td>~85 min just to read once<sup class="src"><a href="#src-2" title="What is PCIe Gen 4 for SSDs, and how does it compare to Gen 3 and Gen 5? (Samsung Business Insights)">2</a></sup></td><td>100 machines read their own 100 GB in ~1 min</td></tr>
     <tr><td>Memory</td><td>hundreds of GB</td><td>the <span class="gloss" data-gloss="working-set">working set</span> (the data the job needs at hand at once) is larger than RAM, so the machine spends its time swapping it to disk and back</td><td>split 100 ways, each machine's share of the working set fits in its own RAM</td></tr>
-    <tr><td>Failure</td><td>a crash is rare, but when one happens the whole job dies and starts over from zero</td><td>with 100 machines running for hours, at least one failure is close to certain<sup class="src"><a href="#src-3" title="Designs, Lessons and Advice from Building Large Distributed Systems (Jeff Dean, LADIS 2009 keynote)">3</a></sup></td><td>only the piece that was on the failed machine is re-run, which is possible only because the job was already split into pieces</td></tr>
+    <tr><td>Failure</td><td>a crash is rare, but when one happens the whole job dies and starts over from zero</td><td>more machines and longer jobs increase the chance of a failure<sup class="src"><a href="#src-3" title="Designs, Lessons and Advice from Building Large Distributed Systems (Jeff Dean, LADIS 2009 keynote)">3</a></sup></td><td>only the piece that was on the failed machine is re-run, which is possible only because the job was already split into pieces</td></tr>
   </tbody>
 </table>
 
@@ -241,15 +241,13 @@ see the routing arithmetic.</p>
 
 counts.collect()                                      # NOW it runs</code></pre>
 
-<h3 class="new-slide" data-kicker="Spark">Count the wide transformations and you have counted the stages</h3>
+<h3 class="new-slide" data-kicker="Spark">Shuffle dependencies create stage boundaries</h3>
 
 <p class="keep-in-present">Transformations come in two kinds, and the difference is the
 entire cost model: <strong>narrow</strong> ones (<code>flatMap</code>, <code>map</code>,
 <code>filter</code>) stay inside each partition: free to chain, and Spark fuses them into
 one pass. <strong>Wide</strong> ones (<code>reduceByKey</code>, <code>join</code>,
-<code>groupBy</code>) need matching keys together, so they trigger the shuffle<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup>. Count the
-wide transformations in a Spark job and you've counted its
-<span class="gloss" data-gloss="stage">stages</span>.</p>
+<code>groupBy</code>) need matching keys together, so they trigger the shuffle<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup>. Shuffle dependencies separate <span class="gloss" data-gloss="stage">stages</span>. The DAG determines the stage count; it is not simply the number of wide transformations.</p>
 
 <table>
   <thead><tr><th></th><th>Narrow</th><th>Wide</th></tr></thead>
@@ -315,7 +313,7 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
 
 <p class="keep-in-present">The measured run, Thursday's Part C. The classic mistake is calling
 <code>ray.get()</code> inside the launch loop: each task is then launched and waited on before the next is launched, so the tasks run one at a time exactly as the serial version did, with the cost of shipping each call to a worker added on top, and<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup>
-the lab's timing test catches it.</p>
+the lab’s launch-order check catches it.</p>
 
 <h3 class="new-slide" data-kicker="Ray">Actors hold state on a worker: @ray.remote on a class</h3>
 
@@ -346,7 +344,7 @@ products:</p>
   and that the answer is independent of partition count.</li>
   <li>☐ <strong>Part B (pyspark):</strong> the same word count in three chained calls;
   print the DAG (the directed acyclic graph of steps Spark plans to run, the plan shown above) and point at the shuffle in it.</li>
-  <li>☐ <strong>Part C (ray):</strong> parallelize an embedding job; measure the speedup
+  <li>☐ <strong>Part C (ray):</strong> parallelize nearest-neighbor searches over precomputed embeddings; measure the speedup
   and the launch-then-wait discipline.</li>
   <li>☐ Install ahead of class: <code>pip install pyspark ray</code>; pyspark needs Java
   (<code>java -version</code> must work). Parts B/C run locally; the autograder grades
