@@ -5,49 +5,35 @@
   const GLOSSARY = {
     'occupancy': {
       title: 'Occupancy',
-      body: '<p>How full a node is: the number of keys it holds divided by the maximum it could hold. Splitting at the middle leaves two nodes at about 50%, and inserts then fill them back up, so on average nodes run around two thirds full. Occupancy matters because it decides how many nodes the same keys need, and therefore how tall the tree is and how many blocks a lookup reads. A skewed split that leaves one node nearly empty drives occupancy down: the tree is still correct, but it is bigger and taller than it has to be.</p>',
+      body: "<p>The fraction of a node’s key capacity currently in use. A middle split produces nodes that are roughly half full; later inserts may fill them further. Lower occupancy requires more nodes for the same keys and can increase tree height. The root is allowed to have fewer keys than the usual non-root minimum.</p>",
     },
     'routing-key': {
       title: 'Routing key',
-      body: '<p>A key stored in an internal node purely to steer a search. An internal node with keys [k1, k2, ..., kn] has n+1 children, and the rule is: everything less than k1 is in the first child, everything from k1 up to (but not including) k2 is in the second, and so on. A routing key carries no RID and points at no row; it is a signpost, not data. That is why an internal split can move its middle key up and out of the node, while a leaf split must leave a copy behind: the leaf key is the real entry, the routing key is only a guide to it.</p>',
+      body: "<p>An internal-node key that separates child ranges. For keys [k1, k2, ..., kn], the node has n+1 children: keys below k1 go to the first child, keys from k1 up to but not including k2 go to the second, and so on. Routing keys do not carry RIDs. An internal split moves a separator to the parent; a leaf split copies a separator upward while preserving the leaf entry.</p>",
     },
     'invariant': {
       title: 'Invariant',
-      body: '<p>A property that must be true of the structure after every operation, no matter what order the operations came in. For the B+ tree the key invariants are: every leaf is the same distance from the root, keys inside a node are sorted, every node except the root is at least half full, and every (key, RID) entry lives in a leaf. An operation is correct if the invariants held before it and still hold after it; that is what Thursday&#39;s harness checks after each batch of inserts. The split is designed so that it never breaks any of them, which is why the tree needs no separate rebalancing step.</p>',
+      body: "<p>A property that must hold after every completed operation. For this B+ tree, keys are sorted, leaves have equal depth, non-root nodes meet minimum occupancy, and all (key, RID) entries remain in leaves. The lab tests these properties after insertions and splits.</p>",
     },
     'rid-recall': {
       title: 'RID (record id) — recall',
-      body: '<p>A row’s stable physical address from Lab 3: (block number, slot number). ' +
-        'Stability was the whole point: because slotted storage never moves records, a ' +
-        'structure built today that says “gpa 39 lives at (0, 0)” is still right next month. ' +
-        'The B+ tree is exactly such a structure — its leaves are full of RIDs.</p>',
+      body: "<p>A record identifier from Lab 3: (block number, slot number). It stays valid while the record occupies that slot. If the record is deleted or the slot is reused, index entries referring to it must be removed or updated. B+ tree leaves store RIDs so an index lookup can locate the matching heap rows.</p>",
     },
     'fanout': {
       title: 'Fan-out',
-      body: '<p>How many children an internal node has — the branching factor. A binary tree ' +
-        'has fan-out 2; a B+ tree node sized to a 4–8 KB disk block holds ~200 keys, so ' +
-        'fan-out ≈ 200. Height shrinks with the logarithm’s base: log₂(10⁸) ≈ 27 levels, ' +
-        'log₂₀₀(10⁸) ≈ 4. Fan-out is why databases feel instant.</p>',
+      body: "<p>The number of children an internal node has. A binary tree has at most two; a page-sized B+ tree node can have hundreds, depending on key size and page layout. More children per node usually means fewer levels and fewer page accesses per lookup. The lecture uses about 200 as an illustrative value.</p>",
     },
     'selectivity': {
       title: 'Selectivity',
-      body: '<p>The fraction of rows a predicate keeps: <code>uid = 77777</code> keeps 1 in a ' +
-        'million (highly selective); <code>gpa &gt; 0</code> keeps everything (not selective ' +
-        'at all). Indexes shine on selective predicates and actively hurt on unselective ones ' +
-        '— week 9’s optimizer estimates selectivity to decide which tool to use.</p>',
+      body: "<p>The fraction of rows that a predicate keeps. A unique-ID lookup keeps one row and is highly selective; a condition matching almost every row is not selective. An index is often useful when few rows match. For many matches, a sequential scan may be cheaper. The optimizer estimates selectivity when comparing plans.</p>",
     },
     'covering-index': {
       title: 'Covering index',
-      body: '<p>An index that contains every column a query needs, so the engine answers from ' +
-        'the index alone and never visits the heap rows — no RID jumps at all. Postgres calls ' +
-        'the trick an index-only scan; DBAs design for it deliberately on hot queries.</p>',
+      body: "<p>An index containing all columns needed by a query. This can let the engine answer from index entries without fetching the heap rows. PostgreSQL calls the corresponding plan an index-only scan, though visibility checks may still require heap access. Adding included columns increases index size.</p>",
     },
     'write-amplification': {
       title: 'Write amplification',
-      body: '<p>When one logical write becomes several physical ones: insert a row into a ' +
-        'table with five indexes and six structures must be updated. Indexes trade write ' +
-        'amplification for read speed — a trade the LSM trees of week 14 make in the opposite ' +
-        'direction.</p>',
+      body: "<p>Additional physical writes needed to perform a logical change. Inserting into a table with five indexes updates six structures, but that does not imply exactly six disk writes: buffering, page splits, and logging affect the total. Index maintenance trades additional write work and storage for faster reads.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -68,7 +54,7 @@
 
   function reset() {
     root = newNode(true); height = 1; splits = 0; count = 0;
-    msg.textContent = 'Insert keys and watch for the first split — it changes the tree’s whole shape.';
+    msg.textContent = 'Insert keys until the root splits. Compare the height before and after.';
     render();
   }
 
@@ -91,7 +77,7 @@
     const path = descend(key);
     const leaf = path[path.length - 1];
     if (leaf.keys.includes(key)) {
-      msg.innerHTML = `${key} already present — the lab shares the slot (duplicate RIDs); the demo just shrugs.`;
+      msg.innerHTML = `${key} is already present. The lab adds another RID for a duplicate key; this key-only demonstration leaves the tree unchanged.`;
       return;
     }
     let i = 0;
@@ -124,17 +110,17 @@
         nr.keys = [hoisted];
         nr.children = [node, sib];
         root = nr; height += 1;
-        msg.innerHTML = `Insert ${key}: node full → <strong>split</strong>, and no parent existed — ` +
-          `a new root [${hoisted}] appears. <strong>Height is now ${height}</strong>; every leaf sank one level together.`;
+        msg.innerHTML = `Insert ${key}: node over capacity → <strong>split</strong>, and no parent existed — ` +
+          `a new root [${hoisted}] appears. <strong>Height is now ${height}</strong>; every leaf is one level farther from the root.`;
       } else {
         const j = childIndex(parent, hoisted);
         parent.keys.splice(j, 0, hoisted);
         parent.children.splice(j + 1, 0, sib);
-        msg.innerHTML = `Insert ${key}: leaf full → <strong>split</strong> at the middle, ` +
+        msg.innerHTML = `Insert ${key}: node over capacity → <strong>split</strong> at the middle, ` +
           `${hoisted} ${node.leaf ? 'copied' : 'moved'} up into the parent.`;
       }
     }
-    if (!didSplit) msg.innerHTML = `Insert ${key}: room in the leaf — sorted in, nothing else moves.`;
+    if (!didSplit) msg.innerHTML = `Insert ${key}: the key fits in the leaf. It is inserted in sorted order; no split is needed.`;
     render(didSplit ? key : null);
   }
 
@@ -168,7 +154,7 @@
         return `<div class="${cls.join(' ')}">` + n.keys.map(k =>
           `<span class="bt-key${k === foundKey ? ' found' : ''}">${k}</span>`).join('') + '</div>';
       }).join('') + `</div>`
-    ).join('') + (height > 1 ? `<div class="bt-chain">leaves are chained left → right (the range-scan road)</div>` : '');
+    ).join('') + (height > 1 ? `<div class="bt-chain">leaves link left → right for range scans</div>` : '');
     stats.textContent = `keys: ${count}    height: ${height}    splits so far: ${splits}`;
   }
 
@@ -183,10 +169,10 @@
 
   $('bt-script').addEventListener('click', () =>
     runScript([39, 31, 37, 28, 36, 34],
-      'The six pinned gpas: one split, height 2, root [36] — the tree from the lecture’s traced search.'));
+      'The six example gpas: one split, height 2, root [36] — the tree from the lecture’s traced search.'));
   $('bt-many').addEventListener('click', () =>
     runScript(Array.from({ length: 20 }, (_, k) => k + 1),
-      'Sequential inserts: splits march rightward, the root grows twice. Note every leaf is STILL the same depth.'));
+      'Sequential inserts split the rightmost leaf as it fills. Root splits increased the height twice; all leaves remain at the same depth.'));
   $('bt-one').addEventListener('click', () => insert(Number($('bt-key').value)));
   $('bt-search').addEventListener('click', () => search(Number($('bt-skey').value)));
   $('bt-reset').addEventListener('click', reset);
@@ -226,7 +212,7 @@
       `<div class="fo-verdict">height = <strong>${height}</strong> level${height === 1 ? '' : 's'} ` +
       `for ${fmt(n)} rows at fan-out ${f} — a point lookup touches ${height} node${height === 1 ? '' : 's'}</div>` +
       (height > maxShow
-        ? `<div class="fo-too-tall">${height} levels — too tall to draw. This is the binary-tree tax.</div>`
+        ? `<div class="fo-too-tall">${height} levels — too tall to draw. Lower fan-out requires more levels.</div>`
         : shown.map((c, i) => {
             const w = Math.max(3, 100 * (Math.log10(c) + 0.3) / (Math.log10(shown[shown.length - 1]) + 0.3));
             const label = i === 0 ? 'root' : (i === shown.length - 1 ? 'leaves' : `level ${i + 1}`);

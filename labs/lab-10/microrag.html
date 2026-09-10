@@ -13,13 +13,13 @@
 <aside class="toc">
   <div class="toc-title">Lab 10</div>
   <ul>
-    <li><a href="#try-it">Retrieval decides first</a></li>
-    <li><a href="#big-idea">Five stages, two yours</a></li>
-    <li><a href="#the-api">Format is the contract</a></li>
+    <li><a href="#try-it">Inspect the evidence selected for a question</a></li>
+    <li><a href="#big-idea">Read the provided stages and identify your two tasks</a></li>
+    <li><a href="#the-api">Follow the required chunk and prompt formats</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
-    <li><a href="#real">Part 4 · Real papers</a></li>
+    <li><a href="#real">Part 4 · The same pipeline on real papers</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -36,28 +36,17 @@
 
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 10 · Thursday November 12, 2026</div>
-  <h1>micro-rag · wire the pipeline</h1>
-  <div class="subtitle">An LLM answers fluently from whatever chunks it is handed, right or wrong: the two stages that choose those chunks are yours to write today, and only an eval set can tell you whether they work.</div>
+  <h1>micro-rag · build a retrieval pipeline</h1>
+  <div class="subtitle">Implement retrieval and prompt assembly, then test whether the pipeline selects the source passages needed to answer each question.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">
-Hand a language model the wrong three chunks and it answers from them anyway, fluently and
-wrong, and nothing in the answer tells you the retrieval failed. Tuesday's claim was that RAG
-is a database wearing an AI costume. Today you take the costume
-off: a complete retrieval-augmented pipeline over a corpus that summarizes <em>this course</em>,
-importing Lab 9's <code>microvector</code> unchanged as its index. The chunker and embedder
-ship; the LLM call ships (mocked offline in <span class="gloss" data-gloss="echo-mode">echo
-mode</span>, one env var away from real). You write the two stages that decide whether the
-right evidence ever reaches the model (the retriever and the context assembly), and then a
-12-question <span class="gloss" data-gloss="eval-set">eval set</span> grades your retrieval
-with reproducible measurements.
-</p>
+<p class="lede">A language model may produce a fluent answer even when the retrieved passages do not support it. In this lab, you will build the retrieval and prompt-assembly stages of a RAG pipeline, then test whether they supply the right evidence. The starter provides the chunker, embedder, Lab 9’s index implementation, and a generation function. Its default <span class="gloss" data-gloss="echo-mode">echo mode</span> prints the assembled prompt without calling a model. A 12-question <span class="gloss" data-gloss="eval-set">evaluation set</span> checks retrieval quality independently of generation.</p>
 
 <div class="cite">
   Builds on: <a href="../lab-09/microvector.html">Lab 9 · microvector</a> (shipped as a reference implementation in this starter) ·
   Lewis et&nbsp;al., <a href="https://arxiv.org/abs/2005.11401"><em>Retrieval-Augmented Generation</em></a> ·
-  the embedder is scikit-learn's <a href="https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.HashingVectorizer.html">HashingVectorizer</a> idea in 15 lines of stdlib.
+  the embedder is scikit-learn's <a href="https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.HashingVectorizer.html">HashingVectorizer</a> feature-hashing approach, implemented with the Python standard library.
 </div>
 
 <p class="glossary-hint">
@@ -70,16 +59,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">The retriever decides the answer before the model speaks</h2>
+<h2 id="try-it">Inspect the evidence selected for a question</h2>
 
-<p>This widget runs the finished pipeline's retrieval stage in your browser: the same
-hashing, the same stop-word list, scores identical to the Python you're about to write.
-Your job today is to make <code>python3 ask.py</code> produce exactly this.</p>
+<p>This widget runs the lab’s retrieval stage with the same hashing and <span class="gloss" data-gloss="stop-words">stop-word</span> list as the Python code. Inspect its results and assembled prompt, then use <code>python3 ask.py</code> to check your implementation against the same behavior.</p>
 
 <div class="viz" id="viz-ask">
   <div class="viz-title">micro-rag · 24 course-summary documents, 25 chunks, DIM = 2048</div>
-  <p class="viz-description">Ask a question about anything from weeks 1–11. Top-3 chunks by
-  cosine, then the assembled prompt, the string an LLM would receive.</p>
+  <p class="viz-description">Ask a question about weeks 1–11. The widget returns the three highest-scoring chunks by cosine similarity and shows the prompt that a language model would receive.</p>
   <div class="ask-row">
     <input type="text" id="ask-input" placeholder="e.g. what happens to a row's bytes when it is deleted?">
     <button type="button" class="btn primary" id="ask-go">Retrieve</button>
@@ -104,7 +90,7 @@ Your job today is to make <code>python3 ask.py</code> produce exactly this.</p>
     <a class="chat-dl-btn" href="starter/measure_rag.py" download>measure_rag.py</a>
     <a class="chat-dl-btn" href="starter/measure_real.py" download>measure_real.py</a>
   </div>
-  <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
+  <p class="viz-caption clone-label">Clone the course repository to download the starter and data files:</p>
 <pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
 <span class="cl-line">cd AdvanceDatabase/labs/lab-10/starter</span></pre>
 </div>
@@ -112,41 +98,34 @@ Your job today is to make <code>python3 ask.py</code> produce exactly this.</p>
 <p>Download the entire <code>starter/</code> directory, including <code>data/</code>. The individual Python links do not include the corpus and vector files. Cloning the repository is the simplest way to get everything.</p>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">Five stages fit in one file; two of them are yours</h2>
+<h2 id="big-idea">Read the provided stages and identify your two tasks</h2>
 
-<p class="keep-in-present"><code>micro_rag.py</code> is Tuesday's five-stage diagram as five
-callables, in reading order:</p>
+<p class="keep-in-present"><code>micro_rag.py</code> implements the five stages from Lecture 12 in the following order:</p>
 
-<pre class="equation"><code>chunk_corpus()   documents → chunks               provided   (record design, done for you)
-embed(text)      text → 2048-dim unit vector      provided   (the hashing trick, read it)
-Retriever        chunks → index → top-k           YOUR JOB   (Lab 9's index, wired to text)
-build_prompt()   question + chunks → prompt       YOUR JOB   (context assembly, exact format)
-answer()         prompt → text                    provided   (echo mode, or LLM_BASE_URL)</code></pre>
+<pre class="equation"><code>chunk_corpus()   documents → chunks               provided
+embed(text)      text → normalized vector         provided
+Retriever        chunks → index → top-k           implement retrieval
+build_prompt()   question + chunks → prompt       implement the required format
+answer()         prompt → output                  provided; echo mode or model call</code></pre>
 
-<p>The provided <code>embed</code> deserves two minutes of reading: it is the whole
-"embedding model" and it fits on a slide. Hover each line:</p>
+<p>Read the provided <code>embed</code> function before implementing retrieval. Hover over each line below to see how tokenization, hashing, weighting, and normalization work:</p>
 
 <div class="code-annotated" id="embed-code">
-<div class="code-step" data-step="tokenize" data-step-name="tokenize" data-explain="Lowercase, keep alphabetic runs only. 'B+ trees!' becomes ['b','trees']: crude, deterministic, done. Words on the STOPWORDS list ('the', 'of', 'and'…) are dropped: they appear in every chunk, so they carry zero signal and drown the words that matter.">for word in re.findall(r"[a-z]+", text.lower()):
+<div class="code-step" data-step="tokenize" data-step-name="tokenize" data-explain="Lowercase the text and keep alphabetic sequences: B+ trees! becomes b and trees. Skip words in STOPWORDS to reduce the influence of common terms. This simple tokenizer does not recognize stemming, phrases, or synonyms.">for word in re.findall(r"[a-z]+", text.lower()):
     if word in STOPWORDS:
         continue
     counts[word] = counts.get(word, 0) + 1</div>
-<div class="code-step" data-step="hash" data-step-name="hash to a dimension" data-explain="The hashing trick: a word's dimension is md5(word) mod 2048. No vocabulary to store or fit: any word, ever, maps somewhere instantly. The price: two unrelated words can collide onto the same dimension, and the measurement in Part 3 shows exactly what that costs as DIM shrinks.">dim = int(hashlib.md5(word.encode()).hexdigest(), 16) % DIM</div>
-<div class="code-step" data-step="weight" data-step-name="weight the count" data-explain="A word appearing 5 times matters more than once, but not 5× more. The 1/(1+log n) damping is tf-weighting's standard move: repeated words saturate instead of dominating.">v[dim] += 1.0 / (1.0 + math.log(count))</div>
-<div class="code-step" data-step="normalize" data-step-name="normalize" data-explain="Scale to unit length, exactly like Lab 9's vectors, so the dot product IS cosine similarity and BruteForceIndex needs no changes to work on text.">norm = math.sqrt(sum(x * x for x in v)) or 1.0
+<div class="code-step" data-step="hash" data-step-name="hash to a dimension" data-explain="Map each word to md5(word) mod DIM. This produces a fixed-width vector without storing a vocabulary table. Different words can share a dimension; Part 3 measures how those collisions affect retrieval as DIM changes.">dim = int(hashlib.md5(word.encode()).hexdigest(), 16) % DIM</div>
+<div class="code-step" data-step="weight" data-step-name="weight the count" data-explain="Add one contribution per distinct word, using 1/(1+log(count)). A word appearing once contributes 1; a word appearing five times contributes about 0.38. This lab’s weighting downweights repetition. It is not the usual count or logarithmic term-frequency weighting.">v[dim] += 1.0 / (1.0 + math.log(count))</div>
+<div class="code-step" data-step="normalize" data-step-name="normalize" data-explain="Divide by the vector’s length so nonzero vectors have unit length and their dot product is cosine similarity. The fallback denominator 1.0 leaves an all-zero vector unchanged.">norm = math.sqrt(sum(x * x for x in v)) or 1.0
 return [x / norm for x in v]</div>
 </div>
 <div class="code-explain-panel" id="embed-code-panel"></div>
 
-<p class="keep-in-present">That's a real embedder: the
-<span class="gloss" data-gloss="hashing-trick">hashing trick</span> with
-<span class="gloss" data-gloss="stop-words">stop-word</span> removal. Its real
-limitation: it matches <em>words</em>, not meaning. The lab measures the limitation
-instead of hiding it, and your project replaces this one function with a learned model
-while keeping every other line.</p>
+<p class="keep-in-present">This embedder uses <span class="gloss" data-gloss="hashing-trick">feature hashing</span> and stop-word removal. It can match shared words, but cannot reliably connect synonyms. A learned embedder can replace it while keeping the pipeline interfaces; rebuild the stored vectors and rerun evaluation when making that change.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">The formats are the contract; close is not a format</h2>
+<h2 id="the-api">Follow the required chunk and prompt formats</h2>
 
 <table>
   <thead><tr><th>File</th><th>Ships as</th><th>What's inside</th></tr></thead>
@@ -156,18 +135,13 @@ while keeping every other line.</p>
     <tr><td><code>microvector.py</code></td><td>reference implementation, do not edit</td><td>Lab 9, complete: <code>BruteForceIndex</code> is your index (25 chunks need no IVF)</td></tr>
     <tr><td><code>ask.py</code></td><td>provided</td><td>command-line front end: <code>python3 ask.py "your question"</code></td></tr>
     <tr><td><code>test_rag.py</code></td><td>provided</td><td>the harness: RETRIEVE · QUALITY · PROMPT groups, 7 tests</td></tr>
-    <tr><td><code>measure_rag.py</code></td><td>provided</td><td>Part 3: DIM sweep, eval table, the synonym wall</td></tr>
+    <tr><td><code>measure_rag.py</code></td><td>provided</td><td>Part 3: DIM sweep, eval table, vocabulary mismatch</td></tr>
   </tbody>
 </table>
 
 <div class="callout insight">
-  <span class="label">The shapes that matter</span>
-  <p>A chunk is <code>{"doc": "wal", "title": "Write-ahead logging", "text": "Before
-  changing a page…"}</code>. <code>Retriever.retrieve(question, k)</code> returns k of those,
-  each with a <code>"score"</code> added, best first. <code>build_prompt</code> turns them
-  into three blank-line-separated sections: header, one <code>[doc] Title: text</code> line
-  per chunk, then <code>Question: …</code>. The harness parses that format character by
-  character; "close" is not a format.</p>
+  <span class="label">Required chunk and prompt formats</span>
+  <p>A chunk contains <code>doc</code>, <code>title</code>, and <code>text</code> fields. <code>Retriever.retrieve(question, k)</code> returns the top k chunks in descending score order, adding a <code>score</code> to each returned copy. <code>build_prompt</code> creates three sections separated by blank lines: the required header, one <code>[doc] Title: text</code> line per chunk, and the final <code>Question: …</code> line. Match the module docstring’s format exactly; the prompt tests check these separators and labels.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -177,13 +151,8 @@ while keeping every other line.</p>
   <li><strong>Read the provided half</strong> (8 min): the module docstring's pipeline
   table, <code>chunk_corpus</code>, <code>embed</code> (annotated above), and
   <code>answer</code>'s echo mode.</li>
-  <li><strong><code>Retriever.__init__</code></strong>: embed every chunk's
-  <code>text</code>, build a <code>BruteForceIndex</code> over the vectors, store it as
-  <code>self.index</code>. Order aligned with <code>self.chunks</code>: that's the whole
-  design.</li>
-  <li><strong><code>Retriever.retrieve</code></strong>: embed the question,
-  <code>self.index.search(qv, k)</code>, then attach each score to a <em>copy</em> of its
-  chunk (<code>dict(chunk)</code>). The RETRIEVE group greens.</li>
+  <li><strong>Retriever.__init__:</strong> embed each chunk’s text in the order of <code>self.chunks</code>, build a <code>BruteForceIndex</code>, and store it as <code>self.index</code>. Index id i must identify <code>self.chunks[i]</code>.</li>
+  <li><strong>Retriever.retrieve:</strong> embed the question, call <code>self.index.search(qv, k)</code>, and attach each score to a copy of its matching chunk. Run the RETRIEVE tests to check the results.</li>
   <li><strong><code>build_prompt</code></strong>: the exact three-section format from the
   docstring. The PROMPT group parses it literally.</li>
   <li><strong><code>python3 ask.py "why does commit fsync the log?"</code></strong>: your
@@ -191,13 +160,8 @@ while keeping every other line.</p>
 </ol>
 
 <div class="callout note">
-  <span class="label">Gotchas that cost real debugging time</span>
-  <p>Attach scores to <em>copies</em>; mutating <code>self.chunks</code> passes one retrieval
-  and corrupts the next (there's a test for exactly this). Embed the chunk's
-  <code>text</code>, not title+text; the own-text test expects cosine 1.0. And keep
-  <code>build_prompt</code> boring: no extra newline at the end, no numbering, no
-  "creative" header. The format is an I/O protocol, like every autograder this
-  semester.</p>
+  <span class="label">Implementation details to check</span>
+  <p>Return copies of chunk dictionaries so one query’s scores do not modify the stored chunks. Embed only each chunk’s <code>text</code>; the own-text test expects a cosine score of 1.0 for that representation. Use the required prompt header and separators, with no extra trailing newline or numbering.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -219,24 +183,16 @@ while keeping every other line.</p>
 
 <div class="exercise">
   <span class="ex-label">Exercise · read the failure</span>
-  <p>A classmate passes everything except the two QUALITY tests: hit@3 comes out 0.08.
-  Their <code>retrieve</code> looks right, and the own-text test <em>passes</em>. What one
-  line in <code>__init__</code> produces exactly this pattern?</p>
+  <p>A classmate’s QUALITY tests fail with hit@3 near zero, even though the returned scores look plausible. One own-text check happens to pass. What mapping between the index and the chunks would you inspect first?</p>
   <details><summary>Show answer</summary>
-  <p>They built the index from a re-sorted list (e.g.
-  <code>sorted(chunks, key=...)</code> or a set-deduped copy) while <code>self.chunks</code>
-  kept the original order. Index id <code>i</code> now points at the wrong chunk. The
-  own-text test can still pass when the queried chunk happens to land at the same position;
-  the eval set, which checks <em>which doc</em> came back, collapses to near zero. Alignment
-  bugs are silent until something checks identity, not just scores; that's what eval sets
-  are for.</p>
+  <p>Check whether the vectors were built in a different order from <code>self.chunks</code>, for example after sorting or deduplicating the input. Then index id i would return the wrong chunk even when its similarity score is correct. An own-text example could pass by coincidence if that chunk kept its position. The symptoms do not prove this is the only possible bug, but checking ids and chunk order is a useful first step.</p>
   </details>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
-<p>The measurement is deterministic; yours must match:</p>
+<p>Run the measurement script with the supplied corpus and default settings, then compare your output with the reference values below:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_rag.py</span>
 1. Embedding width vs. retrieval quality (same corpus, same questions)
@@ -251,36 +207,23 @@ while keeping every other line.</p>
    What keeps the most popular pages sitting in memory?
       -> wal (0.10), selectivity (0.09), blocks (0.09)</code></pre>
 
-<p class="viz-description">(Exhibit 2, the per-question eval table, prints between these:
-one row per eval question with rank and retrieved docs. It has one MISS at DIM=2048:
-"What happens to a row's bytes when it is deleted?"; the corpus says
-"<em>Deleting</em> a record flips its flag." Same idea, different word form. Stemming,
-question 3's subject, exists for exactly this.)</p>
+<p class="viz-description">Exhibit 2, printed between these sections, lists each evaluation question, its relevant-source rank, and the retrieved document ids. At DIM=2048, one question is missed: “What happens to a row’s bytes when it is deleted?” The corpus uses “Deleting a record flips its flag.” The difference between “deleted” and “Deleting” motivates the stemming experiment in question 3.</p>
 
 <div class="viz" id="viz-dim">
-  <div class="viz-title">The DIM dial · measured on the reference solution</div>
-  <p class="viz-description">Drag to shrink the embedding. Collisions merge unrelated words
-  onto shared dimensions; the eval set watches quality fall. <span class="gloss" data-gloss="mrr">MRR</span>
-  falls first; collisions demote the right doc before they hide it.</p>
+  <div class="viz-title">Embedding width · measured on the reference solution</div>
+  <p class="viz-description">Reduce DIM with the slider. More words then share vector dimensions, which can change the ranking of relevant documents. Compare hit@3 with <span class="gloss" data-gloss="mrr">MRR</span> to see whether a relevant document moved lower in the results or fell outside the top three.</p>
   <div class="dl-wrap">
     <label class="dl-label">DIM = <span id="dim-val">2048</span></label>
     <input type="range" id="dim-slider" min="0" max="6" step="1" value="5">
   </div>
   <div id="dim-readout"></div>
-  <p class="viz-caption">4096 buys nothing over 2048; the remaining errors are vocabulary,
-  not collisions. Diagnosis before spending: know <em>which</em> failure you have.</p>
+  <p class="viz-caption">On this evaluation set, DIM=4096 does not improve on DIM=2048. Increasing vector width cannot directly fix word-form or synonym mismatches. Inspect the missed questions before deciding which change to try.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="real">Part 4 · The same pipeline on real papers <span class="part-time">~20 min · homework</span></h2>
 
-<p>The 24-document corpus is small enough to judge by eye, which is why the tests use it. Real
-corpora are not. <code>measure_real.py</code> points <em>your</em> <code>Retriever</code> at the
-4,000 arXiv abstracts Lab 9 indexed and compares two embedders on them: your hashed bag of words,
-and a real sentence-embedding model (all-MiniLM-L6-v2). The model's vectors for every abstract and
-every question ship precomputed in <code>data/</code>, so nothing downloads and no GPU is involved.
-Ten of the questions were written to paraphrase one specific paper without reusing its title words;
-that is the synonym wall from Part 3, but on real text and scored.</p>
+<p>The 24-document corpus is small enough to inspect closely. In this part, <code>measure_real.py</code> evaluates retrieval over the 4,000 arXiv abstracts from Lab 9. It compares hashed bag-of-words with <code>all-MiniLM-L6-v2</code> sentence embeddings. The document and question vectors are supplied in <code>data/</code>, so no model download or GPU is needed. Ten labeled questions paraphrase a specific paper without reusing its title words; use them to test vocabulary mismatch on a larger corpus.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_real.py</span>
 Embedding 4000 abstracts with your hashed embedder (DIM=2048)...
@@ -336,21 +279,11 @@ Embedding 4000 abstracts with your hashed embedder (DIM=2048)...
 
 <p class="key-fact keep-in-present"><strong>0.30 vs 0.90</strong> hit@3 on 4,000 real abstracts: the same <code>Retriever</code> with hashed words versus MiniLM, on ten questions that paraphrase a paper without its title words</p>
 
-<p class="keep-in-present">Read the mini-eval before the top-3 lists. The hashed embedder finds
-three of the ten papers, and in each of those the question happened to share an exact word with
-the abstract (<em>join tree</em>, <em>snapshot</em>, <em>transaction log</em>). Where the
-paraphrase used different words for the same idea, hashing has nothing to match and the paper does
-not appear in the top ten at all. The model finds nine of ten, five at rank one in this table. Its learned representation can place "pieces by meaning" and "semantic chunking" near each
-other. That difference is the entire case for a learned embedder, and it is measured, not asserted.
-It is also why your project's evaluation questions must be written by people who read the corpus,
-not generated from the titles.</p>
+<p class="keep-in-present">Read the mini-evaluation before inspecting the top-three results. Hashed retrieval finds three of the ten target papers; MiniLM finds nine, including five at rank 1. Shared words help explain some hashed matches, while the learned model can also match related phrasing. These results support using a learned embedder for this set of questions, but your project must evaluate its own corpus and information needs.</p>
 
-<h3 class="new-slide" data-kicker="Part 4 · Real papers">Now shrink DIM and measure what 700,000 words lose</h3>
+<h3 class="new-slide" data-kicker="Part 4 · Real papers">Measure the effect of smaller vectors on the larger corpus</h3>
 
-<p class="keep-in-present"><strong>Now change something.</strong> Set <code>DIM = 256</code> in <code>micro_rag.py</code>
-and re-run <code>measure_real.py</code>. The course corpus lost about nine percentage points of hit@3 at 256 in
-Part 3; report what the real corpus loses and explain why a corpus of about 700,000 word occurrences is more
-sensitive to hash collisions than one of 3,000.</p>
+<p class="keep-in-present">Set <code>DIM = 256</code> in <code>micro_rag.py</code> and rerun <code>measure_real.py</code>. Compare the change in hit@3 with Part 3’s smaller corpus. The larger corpus contains about 700,000 word occurrences, but collisions depend on the distinct terms and their distribution, not total word count alone. Use the results and retrieved examples to explain the difference.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
@@ -365,22 +298,14 @@ sensitive to hash collisions than one of 3,000.</p>
 <p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
-<p>The measurement and reflection questions are still the point of the later parts of the lab; they
-are just not turned in. Bring your numbers and your answers to class, where we compare them.</p>
+<p>Bring the measurement output and your answers to class for discussion. These experiments explain the behavior of your pipeline but are not submitted for the lab grade.</p>
 <p class="key-fact keep-in-present"><strong>0.30 vs 0.90</strong> hit@3, hashed versus MiniLM on the real corpus: the number to bring</p>
 <ul>
-  <li>The full <code>measure_rag.py</code> output plus
-  written answers: (1)&nbsp;Which eval questions fail at DIM=256 but pass at 2048, and what
-  does that isolate as the cause? (2)&nbsp;The synonym wall's best score is 0.10; propose a
-  <em>threshold rule</em> for <code>answer()</code> and defend the cutoff you'd pick.
-  (3)&nbsp;The MISS in exhibit 2 is "deleted" vs "Deleting"; one sentence on what a stemmer
-  would change, and one on what it still couldn't fix.</li>
+  <li>Bring <code>measure_rag.py</code> output and discuss: which questions fail at DIM=256 but pass at 2048; how you would evaluate a score threshold for declining unsupported answers; and how stemming might help “deleted” versus “Deleting” while leaving synonym mismatches unresolved.</li>
   <li>The <code>measure_real.py</code> output and its three questions: which shared words let the
   hashed embedder find a paper; what the model learned that hashing cannot; and which failure mode
   your own project corpus will show more.</li>
-  <li>Reflection (3–5 sentences): map each of your two functions to its microdb ancestor:
-  which week was <code>Retriever</code>, which week was <code>build_prompt</code>'s "exact
-  format or the parser breaks" discipline? Be specific.</li>
+  <li>Reflection (3–5 sentences): Connect retrieval to an earlier index or query operation, then explain why prompt assembly needs an exact output format. Use one concrete example from each function you wrote.</li>
 </ul>
 
 <h3>Grading</h3>
@@ -394,43 +319,22 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <!-- ============================================================ -->
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
-<p class="keep-in-present">Fast finishers: set <code>LLM_BASE_URL</code> /
-<code>LLM_API_KEY</code> / <code>LLM_MODEL</code> to any OpenAI-compatible endpoint and watch
-your retrieval feed a real model, then break it with the synonym wall and watch it answer
-confidently from the wrong chunks (grounding failure, live). Add a <strong>score
-threshold</strong> to <code>answer()</code> that refuses below your question-2 cutoff. Or
-implement <strong>Porter-lite stemming</strong> (strip <code>-ing</code>/<code>-ed</code>/<code>-s</code>
-before hashing, ~10 lines) and re-run the eval: exhibit 2's MISS should flip; measure
-whether anything else got <em>worse</em>, because that's the real lesson of retrieval
-tuning.</p>
+<p class="keep-in-present">Optional extensions: configure <code>LLM_BASE_URL</code>, <code>LLM_API_KEY</code>, and <code>LLM_MODEL</code> for an OpenAI-compatible endpoint, then check whether its answers are supported by the retrieved chunks. Evaluate a score threshold for declining unsupported questions. You can also try stemming before hashing; rerun the evaluation to identify both improvements and regressions.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Why brute force instead of the IVF index I built last week?</h3>
-<p class="keep-in-present">25 chunks. IVF's bookkeeping costs more than it saves below a few
-thousand vectors: Tuesday's "at small scale, brute force is the right answer," practiced.
-Switching to IVF also requires choosing cluster and probe settings when your project corpus crosses that line; that's why
-<code>microvector.py</code> ships whole.</p>
+<p class="keep-in-present">The default corpus produces only 25 chunks, so exact search is inexpensive and needs no clustering. The provided <code>microvector.py</code> also contains IVF. For a larger corpus, compare exact and approximate search with explicit cluster and probe settings rather than assuming a fixed size threshold.</p>
 
 <h3 class="keep-in-present">My hit@3 is 0.92, not 1.00. Is that a bug?</h3>
-<p class="keep-in-present">No, that's the reference behavior. One eval question fails on a
-word-form mismatch ("deleted" vs "Deleting"), and the bars (0.90 / 0.70) are set so the
-correct implementation passes with the honest miss included. If you're at 0.83 or below,
-suspect index/chunk misalignment, not the embedder.</p>
+<p class="keep-in-present">A hit@3 of about 0.92 is the reference result: one of the 12 questions is missed. The QUALITY thresholds, hit@3 ≥ 0.90 and MRR ≥ 0.70, allow that known limitation. If your score is lower, check chunk/index alignment, embedding inputs, result order, and configuration against the starter.</p>
 
 <h3 class="keep-in-present">Where does the LLM actually come from?</h3>
-<p class="keep-in-present">Any OpenAI-compatible chat endpoint. The course will post one for
-in-class use, or run a local server (Ollama and vLLM both speak the protocol). Nothing in the
-graded work needs it: the autograder runs entirely in echo mode, because what's graded is
-retrieval, and the prompt <em>is</em> retrieval made visible.</p>
+<p class="keep-in-present">The provided <code>answer()</code> function can call an OpenAI-compatible chat endpoint configured through environment variables. The course will provide details for in-class use. The graded tests use offline echo mode, so a model connection is not required to complete the lab.</p>
 
 <h3 class="keep-in-present">Can my project just use this file?</h3>
-<p class="keep-in-present">That's the intent; it's the reference architecture. Swap
-<code>embed</code> for a learned model, <code>corpus.py</code> for your documents,
-<code>BruteForceIndex</code> for IVF/pgvector when scale demands, and grow the eval set to
-your domain. The structure (five stages, one contract each, an eval set in the loop)
-is the graded part of the project too.</p>
+<p class="keep-in-present">Yes, this file provides a starting architecture. Replace the corpus, evaluate a learned embedder, choose an index for your scale, and create a domain-specific evaluation set. The project also requires evidence for those choices and evaluation of generated answers; passing this lab alone does not complete those requirements.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science

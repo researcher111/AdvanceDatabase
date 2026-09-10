@@ -5,62 +5,47 @@
   const GLOSSARY = {
     'rid': {
       title: 'RID (record id)',
-      body: '<p>The physical address of a row: which block of the table&#39;s file it lives in and which slot within that block. Every index in this course stores RIDs rather than row copies, so an index lookup returns a list of RIDs and the table then fetches those rows by address. An IVF list would store, for each vector, the centroid it belongs to and the RID of the row that owns the vector, which is why it fits the same IndexSelectScan pattern as a B+ tree index in Lab 6.</p>',
+      body: "<p>A record id identifies a row by its block number and slot number. The B+ tree index in microdb returns RIDs so the table can fetch matching rows. An IVF extension could use the same pattern to link candidate vectors back to table records.</p>",
     },
     'k-means': {
       title: 'k-means',
-      body: '<p>The clustering algorithm IVF uses to split the vector set into C groups. It starts with C guessed centroids, assigns every vector to its nearest centroid, moves each centroid to the average of the vectors assigned to it, and repeats until the assignments stop changing. The result is C centroids and, for each vector, the id of the cluster it belongs to. IVF runs this once at build time and files each vector in its cluster&#39;s list; at query time only the centroids are scored to decide which lists to search. Thursday&#39;s lab provides this step so you can concentrate on the scoring, bucketing, and probing around it.</p>',
+      body: "<p>A clustering algorithm that alternates between assigning vectors to the nearest centroid and replacing each centroid with the average of its assigned vectors. It stops when a convergence rule or iteration limit is reached. IVF uses the resulting centroids to choose which lists to search. The lab provides k-means so you can focus on scoring, assigning vectors to lists, and probing those lists.</p>",
     },
     'rag': {
       title: 'RAG (retrieval-augmented generation)',
-      body: '<p>A pipeline that answers a question by first retrieving relevant text and then handing that text to a language model to write the answer. The documents are cut into chunks, each chunk is embedded as a vector, and a question is embedded the same way; the k chunks whose vectors are most similar to the question&#39;s are retrieved and pasted into the model&#39;s prompt as evidence. That retrieval step is a nearest-neighbor query, which is why RAG systems sit on the indexes in this lecture. A missed neighbor here can mean the one passage that held the answer never reaches the model, which is why RAG cares about recall more than a recommender does. Next lecture treats the whole pipeline as a systems problem.</p>',
+      body: "<p>Retrieval-augmented generation first retrieves relevant evidence, then supplies it to a language model to help answer a question. In vector-based retrieval, documents are split into chunks and both chunks and questions are embedded. Nearest-neighbor search selects candidate evidence. Missing a useful passage can harm the answer, so the pipeline needs evaluation beyond index recall.</p>",
     },
     'recall': {
       title: 'Recall@k',
-      body: '<p>The fraction of the true k nearest neighbors that an approximate index actually returned. You compute it by running exact brute-force search to get the true top-k, running the index to get its top-k, and dividing the size of the overlap by k. Recall 1.0 means the index found everything; 0.75 means it missed a quarter of the real neighbors. It is the number that makes &ldquo;approximate&rdquo; honest: the index is allowed to miss, but you measure how much, and you set the index&#39;s dial (probe or ef_search) to reach the recall your application needs.</p>',
+      body: "<p>Recall@k is the fraction of the exact top-k neighbors that approximate search returns. Run both searches, count the overlapping ids, and divide by k. A score of 1.0 means all exact neighbors were returned; 0.75 means one quarter were missed. Use this measurement, together with query cost, to choose settings such as probe or ef_search.</p>",
     },
     'hnsw': {
       title: 'HNSW (Hierarchical Navigable Small World graph)',
-      body: '<p>A graph index for similarity search. Every vector is a node linked to a handful of its nearest neighbors, and a few nodes also appear on upper layers with long-range links, like highways above streets. A query starts at an entry node on the top layer and greedily hops to whichever neighbor is closest to the query; when no neighbor is closer it drops one layer and keeps walking, until it settles on the bottom layer. Because each hop roughly halves the remaining distance, the walk reaches the answer in a near-logarithmic number of hops while computing distances only along its path. Its dial is <code>ef_search</code>, the number of candidate nodes the walk keeps alive at once. The graph must live in RAM and inserts cost more than IVF&#39;s, but it usually wins the recall-at-speed benchmarks.</p>',
+      body: "<p>HNSW is a layered graph index for nearest-neighbor search. Queries navigate a sparse upper layer before exploring a candidate set in the bottom layer. This can find useful neighbors without comparing every vector, but it does not guarantee an exact result. The ef_search parameter controls the search candidate list. Larger settings usually improve recall and cost more work. Graph links also add storage and build overhead.</p>",
     },
     'ivf': {
       title: 'IVF (inverted file index)',
-      body: '<p>An index that splits the vector set into clusters ahead of time and searches only a few of them per query. At build time, k-means groups the n vectors into C clusters, each with a centroid (its average vector), and every vector is filed in the list of its nearest centroid. At query time the search scores the C centroids, picks the P closest (P is the &ldquo;probe&rdquo; setting), and runs brute force inside only those P lists. The cost falls from n comparisons to about C plus P times n/C. The risk is a true neighbor that sits in a list the query did not probe; raising P finds more of them and does more work.</p>',
+      body: "<p>IVF assigns vectors to cluster lists. A query scores the C centroids, selects the P closest lists, and searches the vectors in those lists. For similarly sized lists, the work is about C + P × n/C comparisons. A true neighbor in an unsearched list is missed. Increasing P searches more vectors and can recover those neighbors.</p>",
     },
     'ann': {
       title: 'ANN (approximate nearest neighbor)',
-      body: '<p>The index family for similarity search that accepts occasionally missing a ' +
-        'true neighbor in exchange for orders-of-magnitude less work — with the miss rate ' +
-        'measured (recall@k) and tunable (probe / ef_search). "Approximate" is a contract ' +
-        'term, not an apology: you choose the operating point.</p>',
+      body: "<p>Approximate nearest-neighbor search avoids some comparisons and may miss exact neighbors. Algorithms such as IVF and HNSW expose settings that adjust search effort. Measure recall and query cost to decide whether the resulting tradeoff meets your application’s needs.</p>",
     },
     'pgvector': {
       title: 'pgvector',
-      body: '<p>The Postgres extension adding a vector column type plus IVF and HNSW index ' +
-        'methods — CREATE INDEX ... USING hnsw. Vectors live beside their rows, so joins, ' +
-        'WHERE filters, and transactions come free. The default answer to "do we need a ' +
-        'vector database?" is usually "you need this extension."</p>',
+      body: "<p>A PostgreSQL extension that adds vector data types, distance operators, and IVF and HNSW indexes. Vectors can be stored with other table columns. SQL joins, filters, and transactions remain available, although approximate search and filtering have specific performance and result-count considerations.</p>",
     },
     'faiss': {
       title: 'FAISS',
-      body: '<p>Meta’s C++/Python library of vector indexes — the reference implementations ' +
-        'of IVF, HNSW, product quantization, and their combinations, with GPU support. A ' +
-        'library, not a server: you bring the storage, serving, and consistency story. ' +
-        'Thursday’s IVFIndex is FAISS’s IndexIVFFlat, readable.</p>',
+      body: "<p>A library for similarity search and vector clustering, with Python and C++ interfaces. It provides several index and compression methods, with GPU support for selected operations. Your application is responsible for loading, saving, serving, and updating the index. The lab’s IVF implementation demonstrates one of the underlying designs.</p>",
     },
     'embedding-recall': {
       title: 'Embedding',
-      body: '<p>A learned map from content (text, images) to vectors where geometric nearness ' +
-        'approximates semantic similarity — the DS-native part of this week. The database ' +
-        'question starts after the model: storing millions of them and answering nearest- ' +
-        'neighbor queries fast is pure systems, and that’s the lecture.</p>',
+      body: "<p>A numeric vector representing content such as text or an image. An embedding model is trained so that some geometric relationships reflect useful relationships between inputs. Similarity depends on the model and metric; nearby vectors are not guaranteed to be relevant evidence for every task.</p>",
     },
     'quantization': {
       title: 'Quantization (PQ)',
-      body: '<p>Compressing vectors themselves — product quantization splits each vector into ' +
-        'sub-vectors and replaces each with a small codebook id, shrinking 1536 floats to a ' +
-        'few dozen bytes. Distances are computed on codes, slightly lossy. Combined with IVF ' +
-        '(IVF-PQ), it’s how billion-vector indexes fit in RAM.</p>',
+      body: "<p>Quantization stores a compressed approximation of a vector. Product quantization splits a vector into parts and replaces each part with an entry from a learned codebook. This can reduce storage and distance-computation cost, while introducing approximation error. Measure the effect on search quality.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -161,11 +146,11 @@
         `    comparisons: ${comparisons}/${N}    recall@10: ${recall.toFixed(2)}`;
       if (mode !== 'exact' && recall < 1) {
         msg.innerHTML = `Recall ${recall.toFixed(2)} — the <strong>red-ringed points</strong> are true ` +
-          `neighbors living in clusters you didn't probe. More probe, fewer rings.`;
+          `neighbors in clusters that were not searched. Increase probe to search more clusters.`;
       } else if (mode !== 'exact') {
-        msg.innerHTML = `Recall 1.00 with ${comparisons} of ${N} comparisons — this query sat safely inside its probed clusters.`;
+        msg.innerHTML = `Recall 1.00 with ${comparisons} of ${N} comparisons — all exact top-10 neighbors were in the searched clusters.`;
       } else {
-        msg.innerHTML = `Exact: all ${N} points compared, the true top-10 in green. The baseline.`;
+        msg.innerHTML = `Exact search compared all ${N} points. Green points are the exact top-10 neighbors.`;
       }
     }
   }
@@ -227,10 +212,10 @@
         cur = best;
       }
       if (layer === 1) STEPS.push({ layer: 0, at: cur, drop: true,
-        note: `no top-layer neighbor of ${cur} is closer — drop to the street layer` });
+        note: `no top-layer neighbor of ${cur} is closer — move to layer 0` });
     }
     STEPS.push({ layer: 0, at: cur, done: true,
-      note: `no street neighbor improves — ${cur} is the answer (${comparisons} distance computations vs 12 for brute force)` });
+      note: `no layer-0 neighbor is closer — return ${cur} (${comparisons} distance computations vs 12 for brute force)` });
   })();
 
   let step = 0;
@@ -244,8 +229,8 @@
     visited.forEach(s => { if (s.from) pathEdges.add(s.layer + ':' + [s.from, s.at].sort().join('')); });
     const visitedNodes = new Set(visited.map(s => s.layer + ':' + s.at));
 
-    let out = `<text x="6" y="20" class="hn-band">highways (layer 1)</text>` +
-              `<text x="6" y="158" class="hn-band">streets (layer 0)</text>`;
+    let out = `<text x="6" y="20" class="hn-band">upper layer (1)</text>` +
+              `<text x="6" y="158" class="hn-band">bottom layer (0)</text>`;
     // layer-1 edges + nodes
     for (const [a, b] of L1.edges) {
       const hot = pathEdges.has('1:' + [a, b].sort().join(''));

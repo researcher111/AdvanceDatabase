@@ -5,38 +5,23 @@
   const GLOSSARY = {
     'rid-stability': {
       title: 'RID stability',
-      body: '<p>Lab 3’s quiet promise, cashed in today: because slotted storage never moves ' +
-        'records (updates overwrite in place, deletes flip a flag), a (block, slot) address ' +
-        'written into an index leaf stays correct indefinitely. Without stable RIDs an index ' +
-        'would be a map to moving targets — worthless the day after you built it.</p>',
+      body: "<p>In microdb’s fixed-slot heap, an existing row keeps the same block and slot address. Deletion can make that slot available to another row, so indexes must remove obsolete entries. Systems that move records need a way to update references or preserve a stable identifier.</p>",
     },
     'fanout': {
       title: 'Fan-out',
-      body: '<p>A node’s branching factor. The lab’s ORDER-4 nodes make tall-ish trees you can ' +
-        'watch split; a real node sized to a disk page holds ~200 keys, making a 100-million-row ' +
-        'tree just 4 levels tall. Same algorithm, different logarithm base — and the base comes ' +
-        'from Lab 1’s block size.</p>',
+      body: "<p>The number of children of an internal tree node. Larger nodes can hold more separators and child references, often reducing tree height. The lab uses a small node capacity to make splits visible. A disk index’s capacity depends on page size and entry size.</p>",
     },
     'occupancy': {
       title: 'Occupancy',
-      body: '<p>How full nodes actually are, on average. Mid-point splits guarantee at least ' +
-        'half-full nodes, which is what makes the height bound real. Skewed splits (see the ' +
-        'verify exercise) keep every invariant while quietly wrecking occupancy — and height ' +
-        'is where the damage shows up.</p>',
+      body: "<p>The fraction of a node’s capacity that is in use. Splitting near the middle distributes entries across both resulting nodes. Very uneven splits can preserve search order while leaving many nodes sparsely filled, increasing space use and tree height.</p>",
     },
     'covering-idea': {
       title: 'Covering index',
-      body: '<p>An index that carries extra column values alongside its RIDs so hot queries ' +
-        'can be answered from the index alone — zero heap visits. Postgres’s index-only scans ' +
-        'and its INCLUDE clause are this idea shipped; the Going Further has you build the ' +
-        'toy version and measure the saved jumps.</p>',
+      body: "<p>An index contains everything needed for a query when it includes all required keys and column values. This can avoid heap reads. Some engines still need to visit the heap for visibility checks; PostgreSQL can avoid those checks when its visibility information permits an index-only scan.</p>",
     },
     'stale-index': {
       title: 'Stale index',
-      body: '<p>An index that no longer reflects its table — the fate of any index the engine ' +
-        'doesn’t maintain on every write. Real engines update all of a table’s indexes inside ' +
-        'the same transaction as the row change (paying write amplification); your lab tree is ' +
-        'honest about being a snapshot, built by one scan, current until the next insert.</p>',
+      body: "<p>An index whose entries no longer agree with the table. The lab builds an index from a table snapshot, so later inserts, deletes, or indexed-field changes require corresponding index updates. Production engines coordinate these changes with the row operation.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -74,8 +59,8 @@
     answered = false;
     revealBtn.hidden = true;
     const kind = deal.leaf ? 'LEAF' : 'INTERNAL node';
-    msg.innerHTML = `This <strong>${kind}</strong> just went overfull (5 keys, ORDER 4). ` +
-      `Click the key that gets <strong>hoisted</strong> to the parent.`;
+    msg.innerHTML = `This <strong>${kind}</strong> exceeds its key capacity (5 keys, ORDER 4). ` +
+      `Select the key to send to the parent.`;
     area.innerHTML =
       `<div class="sd-node-label">overfull ${deal.leaf ? 'leaf' : 'internal node'}</div>` +
       renderNode(deal.keys, deal.leaf, true) +
@@ -99,9 +84,9 @@
       streak = 0;
       el.classList.add('wrong-answer');
       area.querySelectorAll('.sd-key')[mid].classList.add('right-answer');
-      msg.innerHTML = `The split hoists the <strong>middle</strong> key — ` +
+      msg.innerHTML = `The split sends the <strong>middle</strong> key — ` +
         `<code>len(keys) // 2</code> → index ${mid} → <strong>${deal.keys[mid]}</strong>. ` +
-        `(Any other pivot wrecks occupancy — see the verify exercise.) Reveal to see the halves.`;
+        `This lab splits at the middle to distribute entries evenly. Reveal the resulting nodes.`;
     }
     revealBtn.hidden = false;
     stats.textContent = `drills: ${dealt - 1} done · streak: ${streak}`;
@@ -118,7 +103,7 @@
     } else {
       left = deal.keys.slice(0, mid);
       right = deal.keys.slice(mid + 1);        // MOVED: guides don't need duplicates
-      verb = `<strong>moved</strong> up — internal keys are guides, so it leaves entirely`;
+      verb = `<strong>moved</strong> up — it is removed from both resulting internal nodes`;
     }
     document.getElementById('sd-result').innerHTML =
       `<div class="sd-parent-label">parent gains: ${hoist} (${deal.leaf ? 'copied' : 'moved'})</div>` +
@@ -126,7 +111,7 @@
       `<span>${renderNode(left, deal.leaf)}</span>` +
       `<span>${renderNode(right, deal.leaf)}</span></div>` +
       (deal.leaf ? `<div class="sd-parent-label">…and the chain now runs left → right → old next</div>` : '');
-    msg.innerHTML = `${hoist} is ${verb}. Deal again — three straight and _split is dictation.`;
+    msg.innerHTML = `${hoist} is ${verb}. Try another example, then apply these rules in _split.`;
     revealBtn.hidden = true;
   }
 

@@ -7,39 +7,19 @@
   const GLOSSARY = {
     'os-page-cache': {
       title: 'OS page cache',
-      body: '<p>The operating system keeps its own cache of recently used file data in ' +
-        'otherwise-free RAM: writes land there first and reads of recent blocks are served from ' +
-        'it without touching the disk. It helps every program automatically, but it offers no ' +
-        'pinning and no control over when or in what order bytes reach disk, which is why ' +
-        'databases build their own cache on top.</p>',
+      body: "<p>The operating system caches file data in RAM. A read may reuse cached bytes, and a buffered write can return before its data reaches durable storage. A database buffer pool adds its own active-use counts and replacement decisions. The database must also enforce the write ordering needed by its recovery protocol.</p>",
     },
     'mmap': {
       title: 'mmap',
-      body: '<p>A system call that maps a file directly into a program’s memory, so reading ' +
-        'the file looks like reading an array; the OS pages data in and out behind the scenes. ' +
-        'Tempting as a free buffer pool, but the database loses control of eviction and write ' +
-        'ordering, and any read can silently stall on a page fault. Several engines tried it; ' +
-        'most retreated.</p>',
+      body: "<p>A system call that maps a file into a process’s address space. The program accesses the file through memory addresses while the OS loads and writes pages as needed. This changes who controls page movement and can cause an access to wait for a page fault. Database designs using mmap must account for these behaviors and their recovery requirements.</p>",
     },
     'hash-table': {
       title: 'Hash table',
-      body: '<p>A dictionary that finds a value by its key in constant time, no matter how many entries ' +
-        'it holds. A hash function turns the key (here a <code>BlockId</code>) into a slot number; the ' +
-        'value (the frame holding that block) is stored at that slot, so a lookup is one computation and ' +
-        'one array access instead of a search. Python’s <code>dict</code> is one. That is why Lab 1 made ' +
-        '<code>BlockId</code> hashable: the pool asks “is block <em>b</em> here?” thousands of times a ' +
-        'second and cannot afford to scan the frames to answer.</p>',
+      body: "<p>A key-value structure, such as Python’s <code>dict</code>, with expected constant-time lookup under normal hashing assumptions. Collisions can require additional work, so a lookup is not guaranteed to be one array access. Production buffer pools commonly map block identifiers to frames this way. Lab 2 scans a small frame list for simplicity.</p>",
     },
     'pin-count': {
       title: 'Pin count',
-      body: '<p>A per-frame counter of how many callers are using the page right now. ' +
-        '<code>pin(block)</code> adds one and hands back the frame; <code>unpin(buffer)</code> subtracts ' +
-        'one when the caller is done. While the count is above zero the pool treats the frame as ' +
-        'off limits: it will never evict it, however old it is, because a caller still holds a ' +
-        'reference to that memory. At zero the frame is a candidate again. The count nests, so two ' +
-        'readers of one block make it 2 and the frame survives until both release. Forgetting an ' +
-        'unpin is the classic leak: the frame stays pinned forever, and a pool of pinned frames ' +
-        'raises <code>BufferAbortError</code> on the next miss.</p>',
+      body: "<p>The number of active pins on a frame. A successful <code>pin(block)</code> adds one; <code>unpin(buffer)</code> removes one. A positive count makes the frame ineligible for eviction. Multiple callers can pin the same block, so the count reaches zero only after all their pins are released. Leaked pins can leave the pool with no frame available for a miss.</p>",
     },
     'dirty': {
       title: 'Dirty flag',
@@ -52,33 +32,19 @@
     },
     'commit': {
       title: 'Commit',
-      body: '<p>The moment a transaction ends successfully and the database promises that its changes ' +
-        'are permanent. Before COMMIT, everything the transaction wrote is provisional and can be ' +
-        'rolled back; after it, the changes must survive a crash or a power cut, which is the D in ' +
-        'ACID. The promise is what costs money: something has to reach durable storage before the ' +
-        'database says “done.” The cheap way to keep it, covered in week 7, is to force a small log ' +
-        'record to disk at COMMIT and let the modified pages themselves be written later.</p>',
+      body: "<p>Successful completion of a transaction. With durable commit, the engine ensures enough information is safely stored to preserve the transaction after a crash. Lab 7 uses FORCE: changed data pages are durable before the commit record. A NO-FORCE design can make the log durable at commit and write the data pages later, using redo during recovery.</p>",
     },
     'working-set': {
       title: 'Working set',
-      body: '<p>The set of pages a workload actually re-touches over a window of time, not the ' +
-        'size of the whole database. If the working set fits in the buffer pool, hit rates soar; ' +
-        'if it doesn’t, no amount of tuning saves you. Most real databases are far larger than ' +
-        'RAM and still fast, precisely because their working set isn’t.</p>',
+      body: "<p>The pages a workload uses repeatedly during a period of time. It can be much smaller than the whole database. If these pages remain in the buffer pool between requests, they produce cache hits. Access order and replacement policy also affect whether they remain cached.</p>",
     },
     'thrashing': {
       title: 'Thrashing',
-      body: '<p>The failure mode where a system spends its time moving data in and out of a ' +
-        'too-small cache instead of doing work: each new page evicts one that’s needed again ' +
-        'moments later. The scan demo in this lecture is a controlled demonstration of it: ' +
-        'hit rate pinned at zero while the disk works flat out.</p>',
+      body: "<p>Repeatedly evicting pages that will soon be needed again, causing substantial I/O and few cache hits. The lecture’s sequential scan larger than the pool illustrates this pattern.</p>",
     },
     'checkpoint': {
       title: 'Checkpoint',
-      body: '<p>A periodic moment when the database flushes accumulated dirty pages to disk and ' +
-        'records “everything before this point is safely down.” Checkpoints bound how much ' +
-        'work crash recovery must replay; without them, a long-running database would need to ' +
-        're-run its entire log after a crash. You will implement them in week 7.</p>',
+      body: "<p>A recovery operation that records a point from which restart work can be limited. It typically coordinates page flushing with logging, but the details depend on the recovery design. Lab 7 offers a simple checkpoint as an optional extension and requires transactions to be finished first.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -173,7 +139,7 @@
   $('bs-scan').addEventListener('click', () =>
     runSequence(SCAN, 'Scan done: <strong>{rate} hits</strong>. Every block was evicted exactly one step before its second use. LRU + scan is the perfect anti-pattern.'));
   $('bs-hot').addEventListener('click', () =>
-    runSequence(HOT, 'Hot set done: <strong>{rate} hits</strong>. Blocks 0 and 1 never left the pool: the working set fit, so repeats were free.'));
+    runSequence(HOT, 'Hot set done: <strong>{rate} hits</strong>. Requests to the small hot set often reuse blocks still in memory.'));
   $('bs-reset').addEventListener('click', reset);
 
   reset();

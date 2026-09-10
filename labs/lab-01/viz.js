@@ -7,49 +7,27 @@
   const GLOSSARY = {
     'block': {
       title: 'Block',
-      body: '<p>The fixed-size unit a disk (and this lab) moves data in. microdb uses ' +
-        '4096 bytes. A file is treated as an array of blocks: block 0 is bytes 0–4095, block 1 ' +
-        'is 4096–8191, and so on. Databases never read or write less than a whole block, because ' +
-        'the trip to storage costs the same either way.</p>',
+      body: "<p>A fixed-size unit of file storage in microdb. The default block size is 4096 bytes: block 0 occupies bytes 0–4095, block 1 occupies 4096–8191, and so on. The file manager reads and writes complete blocks. Other storage systems may use different transfer units.</p>",
     },
     'page-mem': {
       title: 'Page',
-      body: '<p>A block’s worth of <em>memory</em>: same size, same bytes, different home. ' +
-        'The pair of words keeps the bookkeeping straight: blocks live on disk, pages live in RAM, ' +
-        'and the file manager’s whole job is copying one into the other. Your <code>Page</code> class ' +
-        'adds typed reads and writes (ints, strings) on top of the raw bytes.</p>',
+      body: "<p>An in-memory buffer containing one block’s worth of bytes. In this course, a block refers to stored file data and a page refers to its memory representation. The <code>Page</code> class reads and writes typed values within those bytes.</p>",
     },
     'fsync': {
       title: 'fsync',
-      body: '<p>The system call that turns “I wrote the file” into “the bytes are physically on ' +
-        'durable storage.” A normal <code>write()</code> just hands bytes to the OS’s in-memory cache ' +
-        'and returns in microseconds; <code>fsync</code> blocks until the device confirms, 10–1000× ' +
-        'slower. Databases ration fsyncs the way you’d ration anything that expensive.</p>',
+      body: "<p>A system call that requests synchronization of pending file changes to storage and waits for completion. It can take much longer than a buffered write. The exact guarantee depends on the operating system and storage stack; see the macOS FAQ for the distinction between <code>fsync</code> and <code>F_FULLFSYNC</code>.</p>",
     },
     'os-cache': {
       title: 'OS page cache',
-      body: '<p>The operating system keeps its own cache of recently used file data in otherwise-free ' +
-        'RAM. Writes land there first (fast, but lost in a power cut until flushed); re-reads of recent ' +
-        'blocks are served from it without touching the disk. It silently helps, and silently lies to, ' +
-        'anyone who benchmarks file I/O, which is why <code>measure_io.py</code> tests both modes.</p>',
+      body: "<p>The operating system’s cache of file data in RAM. Buffered reads may be served from it, and buffered writes may remain there before reaching storage. Cached writes can be lost in a crash if they have not been synchronized. <code>measure_io.py</code> compares buffered writes with writes that request synchronization.</p>",
     },
     'durability': {
       title: 'Durability',
-      body: '<p>Quick reminder of ACID: <strong>A</strong>tomicity (a transaction happens entirely ' +
-        'or not at all), <strong>C</strong>onsistency (every transaction moves the database from one ' +
-        'valid state to another), <strong>I</strong>solation (concurrent transactions behave as if they ' +
-        'ran one at a time), and <strong>D</strong>urability.</p>' +
-        '<p>The D: once the system says “saved,” the data survives anything short of ' +
-        'hardware destruction: crash, power cut, kernel panic. In this lab durability is just ' +
-        '“survives close and reopen”; by Lab 7 it becomes the real promise a <code>COMMIT</code> makes, ' +
-        'priced at one fsync per transaction.</p>',
+      body: "<p>The transaction property that committed changes remain available after the failures the system is designed to tolerate, under its configured guarantees. It is the D in ACID. A close-and-reopen test checks persistence across normal program restarts; it does not establish crash durability. Lab 7 introduces logging and recovery.</p>",
     },
     'hexdump': {
       title: 'hexdump',
-      body: '<p>A tool (and a habit) for looking at a file as raw bytes, shown in hexadecimal. ' +
-        '<code>hexdump -C students.tbl</code> prints offset, hex bytes, and printable characters per ' +
-        'row, exactly like this lab’s page widget. When your test fails mysteriously, hexdump the ' +
-        'file: the bytes never lie.</p>',
+      body: "<p>A tool for displaying file bytes in hexadecimal. For example, <code>hexdump -C students.tbl</code> shows offsets, byte values, and printable characters. Comparing this output with the expected byte layout can help locate encoding or offset errors.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -170,7 +148,7 @@
     `<span class="fs-track"><span class="fs-bar ${r.cls}" style="width:${(100 * r.v / max).toFixed(1)}%"></span></span>` +
     `<span class="fs-val">${r.v.toLocaleString()} blk/s</span></div>`).join('') +
     `<div class="fs-row"><span></span><span style="font-family:var(--sans);font-size:12px;color:var(--ink-mute)">` +
-    `ratio: 15.1× on this machine; yours may be far larger</span><span></span></div>`;
+    `ratio: 15.1× on this machine; your result may differ</span><span></span></div>`;
 })();
 
 /* ---------------- Widget: struct.pack_into ---------------- */
@@ -221,7 +199,7 @@
     if (clobbered.size) {
       msg += ' <strong class="pk-warn">It also overwrote part of the value you packed at offset ' +
              [...clobbered].sort((a, b) => a - b).join(' and ') +
-             ', which is now unreadable. Nothing raised an error.</strong>';
+             ', so reading that earlier value may now give a different result. Overlapping writes do not raise an error.</strong>';
     }
     noteEl.innerHTML = msg;
     render();
@@ -235,14 +213,14 @@
     read = [off, off + 1, off + 2, off + 3]; hot = [];
     callEl.textContent = "struct.unpack_from('" + fmtEl.value + "', buf, " + off + ")[0]";
     noteEl.innerHTML = 'Read those 4 bytes back as <code>' + got + '</code>. ' +
-      'The <code>[0]</code> is not decoration: <code>unpack_from</code> always returns a tuple, ' +
+      'The <code>[0]</code> selects the first value: <code>unpack_from</code> always returns a tuple, ' +
       'because a format string can describe several values.';
     render();
   }
   function reset() {
     buf = new Uint8Array(N); writtenAt = new Array(N).fill(null); hot = []; read = [];
     callEl.textContent = 'buf = bytearray(16)';
-    noteEl.innerHTML = 'A fresh page: 16 zero bytes. Nothing means anything yet.';
+    noteEl.innerHTML = 'A fresh buffer contains 16 zero bytes. Use pack_into to store a value.';
     render();
   }
   $('pk-pack').addEventListener('click', pack);
@@ -399,8 +377,8 @@
     glow = { kind: 'read', block: sel, page: true };
     let note = `Seek to byte ${sel * BS}, copy ${BS} bytes disk → memory. The disk did not ` +
       `change; the page now holds <em>a copy</em> of block ${sel}.`;
-    if (lost) note += ' <strong class="fp-warn">The copy landed on top of your unwritten edit, ' +
-      'which is now gone for good. No error, no warning: a Page is a bytearray, not a guardian.</strong>';
+    if (lost) note += ' <strong class="fp-warn">Loading the block overwrote your unsaved edit. ' +
+      'Page does not automatically save modified bytes before a read.</strong>';
     return { call: `fm.read(BlockId('students.tbl', ${sel}), page)`, note };
   }
 
@@ -411,11 +389,11 @@
     trips.w++;
     glow = { kind: 'write', block: sel, page: true };
     let note = `Seek to byte ${sel * BS}, copy ${BS} bytes memory → disk, then <code>fsync</code>. ` +
-      `<strong>This is the only call in the whole layer that changes what is on disk.</strong> ` +
-      `And it wrote the entire ${BS}-byte page, however little of it you edited.`;
+      `<strong>This call replaces the contents of the selected stored block.</strong> ` +
+      `It writes the entire ${BS}-byte page, however little of it you edited.`;
     if (wasFresh) note = `Seek to byte ${sel * BS}, copy ${BS} bytes memory → disk. The page was ` +
       `never read, so <strong class="fp-warn">you just wrote 4096 zeros over block ${sel}, ` +
-      `erasing it</strong>. The ferry moves whatever is on board.`;
+      `erasing it</strong>. FileManager writes the bytes currently in the page.`;
     return { call: `fm.write(BlockId('students.tbl', ${sel}), page, sync=True)`, note };
   }
 
@@ -423,7 +401,7 @@
     if (disk.length >= MAXBLK) {
       return { call: `blk = fm.append('students.tbl')`,
         note: `This widget stops at ${MAXBLK} blocks so the picture still fits. A real ` +
-          `<code>students.tbl</code> reaches millions; the arithmetic does not care.` };
+          `<code>students.tbl</code> can contain many more blocks; the same offset calculation applies.` };
     }
     disk.push({ rows: '', zero: true });
     sel = disk.length - 1;
@@ -431,9 +409,9 @@
     glow = { kind: 'write', block: sel, page: false };
     return { call: `blk = fm.append('students.tbl')   # → BlockId('students.tbl', ${sel})`,
       note: `The file grew by ${BS} zero bytes, from ${disk.length - 1} to ${disk.length} blocks, ` +
-        `and <code>append</code> handed back the <em>name</em> of the block it just made. ` +
-        `Nothing crossed to the memory side; the new block exists on disk and nowhere else. ` +
-        `Lab 3 depends on those bytes really being zeros.` };
+        `and <code>append</code> returned the <code>BlockId</code> of the new block. ` +
+        `The existing memory page is unchanged. ` +
+        `Lab 3 uses the new block’s zero bytes as EMPTY slot flags.` };
   }
 
   function doEdit(forced) {
@@ -448,9 +426,8 @@
     glow = { kind: 'write', block: null, page: true };
     return { call: `page.set_string(4, "${name}")`,
       note: `The bytes at offset 4 <em>of the page</em> changed. Look left: the disk is exactly ` +
-        `as it was. Every <code>set_int</code> and <code>set_string</code> you write on Thursday ` +
-        `is memory-only; <code>Page</code> never opens a file. The page and its block have ` +
-        `<strong>diverged</strong>, and only <code>fm.write</code> can end that.` };
+        `as it was. <code>set_int</code> and <code>set_string</code> modify memory only. ` +
+        `Call <code>fm.write</code> to store those changes in a file block.` };
   }
 
   function baseState() {
@@ -462,29 +439,29 @@
   /* ---- the guided story: six calls, replayed deterministically ----
      Back/Next rebuild the state from scratch each time, so free-play detours
      never corrupt the story: pressing Next simply returns to the script. */
-  const SETUP_NOTE = 'Two blocks on disk hold the six pinned rows from lecture; the page in ' +
+  const SETUP_NOTE = 'Two blocks on disk hold the six example rows from the lecture; the page in ' +
     'memory is still all zeros. Press <strong>Next step</strong> to run the first call.';
   const STORY = [
     { run: () => { sel = 0; return doRead(); },
-      note: `<code>fm.read</code> ferries block 0 across: seek to byte 0, move 4096 bytes, ` +
+      note: `<code>fm.read</code> loads block 0: seek to byte 0, move 4096 bytes, ` +
         `disk → memory. The disk did not change; the page now holds <em>a copy</em> of ada's block.` },
     { run: () => doEdit('zoe'),
       note: `<code>set_string</code> edits <em>the copy</em>. Look left: the disk still says ada. ` +
-        `Memory and disk have diverged, and nothing is watching.` },
+        `The edit is still only in memory.` },
     { run: () => { sel = 1; return doRead(); },
       note: `The same page object is reused for block 1, and the zoe edit was never written, so ` +
-        `it is <strong class="fp-warn">gone for good</strong>. No error, no warning: a Page is a ` +
-        `bytearray, not a guardian.` },
+        `the edit is <strong class="fp-warn">lost</strong>. Loading another block replaces the page’s bytes ` +
+        `without automatically saving them.` },
     { run: () => { sel = 0; return doRead(); },
-      note: `Read block 0 back: still ada. The disk never heard about the edit, because disk ` +
-        `bytes change on exactly one call, and it has not run yet.` },
+      note: `Read block 0 again: it still contains ada. The edit was never passed to ` +
+        `<code>fm.write</code>, so it did not change this stored block.` },
     { run: () => doEdit('zoe'),
-      note: `Edit the copy again: zoe, take two. Same divergence as step 2, but this time we ` +
-        `finish the job before letting go of the page.` },
+      note: `Change the name to zoe again. The next step writes the modified page ` +
+        `back to block 0 before the page is reused.` },
     { run: () => { sel = 0; return doWrite(); },
-      note: `<code>fm.write</code> ferries the page back: memory → disk, all 4096 bytes, then ` +
-        `<code>fsync</code>. Block 0 finally says zoe. <strong>Six calls, one byte of lasting ` +
-        `change, and exactly one call touched the disk.</strong>` },
+      note: `<code>fm.write</code> writes all 4096 page bytes to block 0 and requests ` +
+        `<code>fsync</code>. The stored name is now zoe. The earlier read calls left ` +
+        `the file contents unchanged; this write saved the edit.` },
   ];
   let pos = 0; // 0 = setup, k = after story step k
 
@@ -500,7 +477,7 @@
       pillEl.textContent = `step ${pos} of ${STORY.length}`;
       callEl.textContent = last.call;
       noteEl.innerHTML = STORY[pos - 1].note +
-        (pos === STORY.length ? ' <em>Restart, or drive the ferry yourself below.</em>' : '');
+        (pos === STORY.length ? ' <em>Restart, or try the individual operations below.</em>' : '');
     }
     render();
   }

@@ -5,39 +5,23 @@
   const GLOSSARY = {
     'repl': {
       title: 'REPL',
-      body: '<p>Read–Eval–Print Loop: read a line, execute it, print the result, repeat. ' +
-        '<code>python3</code> is one, <code>psql</code> is Postgres’s, and ' +
-        '<code>microdb.py</code> (provided) is yours — fifty lines of loop around ' +
-        '<code>db.execute()</code>. The moment an engine gets a REPL it stops being a ' +
-        'library and starts being a tool.</p>',
+      body: "<p>Read–Eval–Print Loop: read an input, evaluate it, print the result, and repeat. The provided <code>microdb.py</code> reads SQL statements and passes them to <code>db.execute()</code>. The interactive Python prompt and PostgreSQL’s <code>psql</code> offer similar workflows.</p>",
     },
     'recursive-descent': {
       title: 'Recursive descent',
-      body: '<p>The parsing technique where each grammar rule becomes one function that ' +
-        'consumes exactly the tokens its rule owns, calling other rule-functions for its ' +
-        'sub-parts. Readable, debuggable (the call stack IS the parse tree), and how Lua, Go, ' +
-        'and most hand-written parsers work.</p>',
+      body: "<p>A parsing technique in which functions implement grammar rules. Each function consumes the tokens for its rule and calls other rule functions for nested parts. The provided <code>parse_insert</code> and <code>parse_create</code> methods illustrate this approach.</p>",
     },
     'ast': {
       title: 'AST (abstract syntax tree)',
-      body: '<p>The structured description a parser produces — meaning kept, spelling dropped. ' +
-        'microdb’s QueryData/InsertData/CreateData are a tiny AST: plain data between the ' +
-        'parser and the planner, which is exactly the seam where week 9’s optimizer will ' +
-        'plug in without touching your parser.</p>',
+      body: "<p>An abstract syntax tree represents the structure of parsed input without retaining every detail of its spelling. Microdb’s <code>QueryData</code>, <code>InsertData</code>, and <code>CreateData</code> are simple structured descriptions passed from the parser to later processing stages.</p>",
     },
     'token': {
       title: 'Token',
-      body: '<p>The lexer’s unit of output: a (kind, value) pair like (KEYWORD, select), ' +
-        '(ID, students), (NUM, 35), (STR, ada). Parsers read tokens, never characters — ' +
-        'which is why a quoted <code>\'from\'</code> can never be mistaken for the keyword: ' +
-        'the lexer already decided its kind.</p>',
+      body: "<p>A unit produced by the lexer, represented here as a kind and value, such as <code>(ID, students)</code> or <code>(NUM, 35)</code>. The parser reads these tokens. A quoted string such as <code>'from'</code> is a STR token, distinct from the FROM keyword.</p>",
     },
     'sql-injection': {
       title: 'SQL injection',
-      body: '<p>The classic attack where untrusted text is glued into a SQL string, arriving ' +
-        'at the parser as legitimate tokens the author never intended. The parser can’t help — ' +
-        'both intents are valid SQL by then. The fix, parameterized queries, sends values ' +
-        '<em>around</em> the parser. Now that you’ve built one, the attack is obvious.</p>',
+      body: "<p>An attack in which untrusted input changes the structure of a SQL statement. It can occur when an application concatenates input directly into query text. Parameterized queries keep values separate from SQL syntax so the database treats them as data.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);

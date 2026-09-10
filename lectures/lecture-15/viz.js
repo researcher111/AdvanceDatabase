@@ -5,46 +5,31 @@
   const GLOSSARY = {
     'self-join-chain': {
       title: 'Self-join chain',
-      body: '<p>A join of a table with itself, repeated once per hop. To find who ada follows, join <code>follows</code> to the students; to find who those people follow, join <code>follows</code> to that result again, and so on, one extra join per hop. Each join matches keys across every row of the previous result, and it produces one row per path rather than one per node, so a person reachable by several routes appears several times until a final <code>DISTINCT</code>. That is the relational way to answer ‘within k hops’, and it is what the counter in the widget compares the traversal against.</p>',
+      body: "<p>A sequence of joins that repeatedly matches a relationship table to the previous result. Each step adds one hop. Without intermediate deduplication, multiple paths to the same node can produce multiple rows. The widget compares that path enumeration with a traversal that records each visited node.</p>",
     },
     'recursive-cte': {
       title: 'Recursive CTE',
-      body: '<p>A common table expression (the <code>WITH name AS (...)</code> form) that refers to itself. It has two parts joined by <code>UNION ALL</code>: a base query that produces the starting rows, and a step query that reads the rows produced so far and produces the next batch. The engine runs the step again and again, feeding each batch back in, until a step returns no new rows or a condition such as <code>depth &lt; 3</code> stops it. That is a loop expressed in relational algebra, and it is how plain SQL walks a graph one hop per iteration. It works well for a few hops; row counts grow with every level, and there is no built-in notion of a path or a visited set.</p>',
+      body: "<p>A common table expression that refers to its own intermediate results. A base query supplies starting rows, and a recursive term produces the next iteration. UNION can remove duplicates, while UNION ALL retains them. Depth bounds, cycle handling, or the absence of further results can stop the recursion. The exact query determines whether it enumerates paths or computes reachability.</p>",
     },
     'bfs': {
       title: 'Breadth-first search (BFS)',
-      body: '<p>Breadth-first search, the standard way to find a shortest path in a graph where every edge counts the same. Starting from one node it visits every neighbor one hop away, then everything two hops away, and so on, keeping a queue of nodes to expand next and a set of nodes already seen so a cycle is never walked twice. Because it works outward in rings, the first time it reaches the target it has found a shortest path. Kuzu&#39;s <code>SHORTEST</code> runs a search of this shape for you; in SQL you would have to build the queue, the visited set, and the stopping rule yourself inside a recursive CTE. Dijkstra&#39;s algorithm is the cousin for graphs whose edges carry different costs.</p>',
+      body: "<p>Breadth-first search expands nodes in increasing hop distance from a start node. A visited set avoids repeatedly expanding the same node. With equal edge costs, the first visit to a target finds a shortest path to it. Kuzu provides a shortest-path operator; SQL can express a search with recursive queries and appropriate stopping rules. Weighted paths require an algorithm suited to their costs.</p>",
     },
     'adjacency-list': {
       title: 'Adjacency list',
-      body: '<p>A node’s own list of its neighbors — "ada follows: [ben, cyd]" stored with ' +
-        'ada, not in a separate table. The graph equivalent of denormalizing the join: ' +
-        'finding neighbors becomes reading a field instead of probing an index. Kept in ' +
-        'both directions (follows-out and followed-by-in) so traversal works either way.</p>',
+      body: "<p>A stored list of a node’s neighbors or incident edges. For example, ada’s outgoing list might contain ben and cyd. The list may be stored alongside node data or in a separate adjacency structure. Traversal reads that structure rather than repeatedly matching endpoint keys across tables.</p>",
     },
     'ifa': {
       title: 'Index-free adjacency',
-      body: '<p>The graph-database storage promise: getting from a node to its neighbors ' +
-        'costs one pointer-follow, independent of how big the graph is — no index probe, no ' +
-        'key matching. A relational join costs per-lookup even with a perfect index; ' +
-        'traversal under index-free adjacency costs per-neighbor. That constant-factor gap, ' +
-        'compounded over k hops, is the product’s entire pitch.</p>',
+      body: "<p>Index-free adjacency stores direct references between connected nodes, avoiding an index lookup for each traversal step. It reduces neighbor-lookup work, but visiting many neighbors still costs time and may require storage reads. Graph engines differ in their physical representation; not every graph product uses the same pointer layout.</p>",
     },
     'supernode': {
       title: 'Supernode',
-      body: '<p>A node with a vastly outsized neighbor list — the celebrity with 50M ' +
-        'followers. Any traversal touching it explodes; storage for its adjacency list ' +
-        'becomes its own problem. It’s Lecture 13’s skew wearing a graph costume, and the ' +
-        'mitigations rhyme too: split the list, cap expansions, special-case the ' +
-        'celebrities.</p>',
+      body: "<p>A node with far more edges than most other nodes. Expanding its adjacency list can dominate a traversal’s cost. This is the graph form of skew. Splitting storage or limiting expansions may help, but any limit must still satisfy the query’s required results.</p>",
     },
     'knowledge-graph': {
       title: 'Knowledge graph',
-      body: '<p>A graph whose nodes are real-world entities (people, systems, concepts) and ' +
-        'whose edges are typed facts between them — "WAL —protects→ page writes." Built by ' +
-        'extraction from text or curated by hand; queried by traversal. GraphRAG builds a ' +
-        'small one from your corpus so retrieval can follow relationships instead of only ' +
-        'similarity.</p>',
+      body: "<p>A graph of entities and typed relationships, such as a WAL record that must precede a page flush. The graph may be curated or extracted from text. Linking entities and edges to source passages lets retrieval use relationships while preserving a trail back to the evidence.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -143,7 +128,7 @@
                   : `depth ${depth} from ${start}: {${reachedNames.join(', ') || 'nobody'}}`;
     document.getElementById('walk-stats').innerHTML = depth === 0 ? '' :
       `<span><strong>${st.edgeVisits}</strong> edge visits (traversal — each node expanded once)</span> · ` +
-      `<span><strong>${st.joinRows}</strong> rows matched (SQL self-join chain — one per path, duplicates included)</span>`;
+      `<span><strong>${st.joinRows}</strong> rows matched (path-enumerating join chain — duplicates included)</span>`;
   }
 
   document.getElementById('walk-step').addEventListener('click', () => {

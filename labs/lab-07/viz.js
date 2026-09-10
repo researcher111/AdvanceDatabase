@@ -4,37 +4,24 @@
 (function () {
   const GLOSSARY = {
     'the-fsync': {
-      title: 'The fsync that matters',
-      body: '<p>Lab 7 uses FORCE/STEAL. LogManager syncs records by default, so the old value is durable before a page can be flushed. Commit flushes data pages before syncing COMMIT. Rollback and recovery flush restored data before syncing their receipts. This costs multiple syncs; production engines use LSNs and redo logging to batch work safely.</p>',
+      title: "Durable write ordering",
+      body: "<p>Lab 7 uses FORCE/STEAL. LogManager syncs old values before changed pages can be flushed. Commit flushes data pages before syncing COMMIT. Rollback and recovery flush restored values before syncing ROLLBACK. These operations perform multiple syncs; production designs can batch work using log sequence numbers and redo information.</p>",
     },
     'idempotent-recall': {
-      title: 'Idempotence — recall',
-      body: '<p>Safe to run twice. Recovery must be, because a crash can interrupt recovery ' +
-        'itself: restoring old values is naturally idempotent, and the ROLLBACK receipts make ' +
-        'the second pass skip cleanly. The harness runs recover() twice and expects the second ' +
-        'return to be empty — bookkeeping idempotence, not just data idempotence.</p>',
+      title: "Idempotence",
+      body: "<p>Repeating an idempotent operation has the same effect as applying it once. Restoring a logged old value is idempotent. After recovery flushes its repairs and syncs ROLLBACK records, another pass skips those completed repairs. The harness checks both unchanged balances and an empty list of newly undone transactions on the second run.</p>",
     },
     'stolen-page': {
-      title: 'Stolen page',
-      body: '<p>A dirty page holding UNCOMMITTED data that the buffer pool flushed to disk ' +
-        'anyway (its right, under the STEAL policy — eviction can’t wait for commits). Safe ' +
-        'only because the WAL rule guarantees the old value reached the log first, making the ' +
-        'stolen write reversible. The crash demo stages exactly this and lets recovery prove ' +
-        'the point.</p>',
+      title: "Page flushed before commit",
+      body: "<p>A dirty page containing uncommitted data that the buffer pool writes to disk under the STEAL policy. This frees a frame before the transaction finishes. The undo log must already contain durable old values so recovery can reverse the changes if the transaction does not commit.</p>",
     },
     'strict-2pl': {
-      title: 'Strict two-phase locking',
-      body: '<p>Locks are acquired as needed (S to read, X to write) and ALL released only at ' +
-        'commit/rollback. The two-phase shape guarantees serializability; the “strict” ending ' +
-        'also kills dirty reads, since nobody can touch your writes until your fate is sealed. ' +
-        'Your LockTable implements it in 40 readable lines.</p>',
+      title: "Two-phase locking in the lab",
+      body: "<p>The lock table provides shared locks for reads and exclusive locks for writes. The lab retains both kinds until commit or rollback, which is also called rigorous two-phase locking. Conflicting requests raise an error immediately. The caller must roll back the transaction rather than continue without the lock.</p>",
     },
     'undo-log': {
-      title: 'Undo logging',
-      body: '<p>Logging OLD values so unfinished work can be reversed — sufficient alone under ' +
-        'FORCE (data flushed at commit). Real engines also log new values (redo) so commits ' +
-        'don’t have to wait for data flushes; ARIES is the canonical both-ways design. ' +
-        'microdb does undo-only: simplest correct thing, and half of ARIES for free.</p>',
+      title: "Undo logging",
+      body: "<p>Recording old values so incomplete changes can be reversed. microdb flushes all changed data pages at commit, so it does not need redo for committed work. A NO-FORCE design can defer those page writes, but must log enough information to reconstruct them after a crash.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -54,15 +41,15 @@
     { recs: [
         'START tx1', 'SET A old=100 tx1', 'SET B old=50 tx1', 'COMMIT tx1',
         'START tx2', 'SET A old=60 tx2'],
-      note: 'the crash-demo log: one committed, one caught mid-write' },
+      note: 'the crash-demo log: one committed transaction and one interrupted change' },
     { recs: [
         'START tx1', 'SET A old=100 tx1',
         'START tx2', 'SET B old=50 tx2', 'COMMIT tx2', 'SET A old=80 tx1'],
-      note: 'interleaved: the committed tx2 sits BETWEEN tx1’s writes' },
+      note: 'interleaved: tx2 commits between two changes by tx1' },
     { recs: [
         'START tx1', 'SET A old=100 tx1', 'ROLLBACK tx1',
         'START tx2', 'SET A old=100 tx2', 'COMMIT tx2', 'START tx3', 'SET B old=50 tx3'],
-      note: 'a rollback is a fate too — tx1 needs nothing from you' },
+      note: 'tx1 has completed rollback; recovery can skip its changes' },
   ];
   let scen = null, dealt = 0, cursor = -1, score, total;
 
@@ -89,7 +76,7 @@
     score = 0; total = 0;
     autoBtn.hidden = true;
     msg.innerHTML = `Scenario: <em>${scen.note}</em>. Start at the <strong>bottom</strong> — ` +
-      `click the newest record and judge it: fate, undo, or skip.`;
+      `predict the action for the newest record, then click to reveal it: mark complete, undo, or skip.`;
     render();
   }
 
@@ -100,7 +87,7 @@
       if (i > cursor) {
         const v = verdictOf(i);
         cls.push('judged-' + v);
-        verdict = v === 'undo' ? 'UNDO ← restore old' : v === 'fate' ? 'FATE noted' : 'skip';
+        verdict = v === 'undo' ? 'UNDO ← restore old' : v === 'fate' ? 'completion recorded' : 'skip';
       }
       return `<div class="${cls.join(' ')}" data-i="${i}">` +
         `<span class="jd-idx">${i}</span><span style="flex:1">${r}</span>` +
@@ -110,7 +97,7 @@
       const i = +el.dataset.i;
       if (i === cursor) el.addEventListener('click', () => judge(i, el));
     });
-    stats.textContent = `records judged: ${total}    correct first-click: ${score}`;
+    stats.textContent = `records inspected: ${total}`;
   }
 
   function judge(i, el) {
@@ -119,11 +106,11 @@
     // First click reveals the verdict; the drill is self-scored pacing.
     score += 1;
     cursor -= 1;
-    const label = v === 'undo' ? 'an UNDO instruction — its tx has no fate above (below in time), so restore old'
-                : v === 'fate' ? 'a FATE — note this tx as finished; skip its writes when you reach them'
-                : 'skippable — a START, or a SET whose tx you already know committed/rolled back';
+    const label = v === 'undo' ? 'an undo action: no later completion record exists for this transaction, so restore the old value'
+                : v === 'fate' ? 'a completion record: mark this transaction finished and skip its earlier SET records'
+                : 'skippable: it is a START record or a SET from a transaction whose completion was already found';
     msg.innerHTML = `Record ${i} (<code>${scen.recs[i]}</code>) is ${label}.` +
-      (cursor < 0 ? ' <strong>Log fully judged — that pass IS recover(). Deal another.</strong>' : '');
+      (cursor < 0 ? ' <strong>The backward scan is complete. Recovery must now flush restored values and record completed undo. Load another scenario to practice.</strong>' : '');
     if (cursor < 0) autoBtn.hidden = true;
     render();
   }

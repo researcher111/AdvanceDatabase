@@ -15,12 +15,12 @@
   <p><a href="../../slides/lecture-08.html">Visual slide deck ↗</a></p>
   <ul>
     <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#anomalies">Correct alone, wrong together</a></li>
-    <li><a href="#try-it">Build the lost update</a></li>
-    <li><a href="#locking">2PL buys serializability</a></li>
-    <li><a href="#levels">Levels are priced trades</a></li>
-    <li><a href="#mvcc">MVCC: keep every version</a></li>
-    <li><a href="#thursday">On Thursday you build it</a></li>
+    <li><a href="#anomalies">Correct alone is not correct together</a></li>
+    <li><a href="#try-it">Create a lost update, then enable locks</a></li>
+    <li><a href="#locking">Two-phase locking orders conflicting operations</a></li>
+    <li><a href="#levels">Isolation levels provide different guarantees</a></li>
+    <li><a href="#mvcc">Postgres keeps row versions for snapshot reads</a></li>
+    <li><a href="#thursday">Prepare for Thursday’s transaction lab</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
@@ -38,23 +38,15 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 8 · Tuesday October 13, 2026</div>
   <h1>Concurrency: Locks, Isolation &amp; MVCC</h1>
-  <div class="subtitle">How do two individually correct transactions share one row and lose money with no crash anywhere, and what does each way of stopping it cost?</div>
+  <div class="subtitle">Two transactions can each be correct when run alone but lose an update when run together. How do locks and row versions prevent these conflicts?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">
-Two cashiers each add $10 to the same $100 account, both commit cleanly, and the balance
-reads $110: no crash, no error, and one deposit gone. Last lecture explained crash recovery; today two transactions meet, and interleaving a pair of correct transactions
-carelessly is all it takes to lose money with no failure anywhere. The anomalies have
-names, the fixes have prices, and every engine picks its trade. We build up from
-two-phase locking (the classic textbook algorithm, and the one you build in lab) to
-<span class="gloss" data-gloss="mvcc-intro">MVCC</span>, the keep-every-version trick that
-lets Postgres run reports and updates through the same rows without either waiting<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: 13.1. Introduction (Concurrency Control)">1</a></sup>.
-</p>
+<p class="lede">Two cashiers each add $10 to a $100 account. If both read $100 before either writes, both store $110, leaving one deposit unrecorded. Crash recovery does not prevent this: the problem is the order of concurrent operations. Today we will examine common concurrency anomalies, then compare two-phase locking with <span class="gloss" data-gloss="mvcc-intro">MVCC</span>. MVCC keeps row versions so ordinary snapshot reads can proceed without conflicting with row updates.<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: 13.1. Introduction (Concurrency Control)">1</a></sup></p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 5 ·
-  the anomaly zoo: Berenson et&nbsp;al., <a href="https://dl.acm.org/doi/10.1145/223784.223785"><em>A Critique of ANSI SQL Isolation Levels<sup class="src"><a href="#src-2" title="A Critique of ANSI SQL Isolation Levels (Berenson et al., SIGMOD 1995)">2</a></sup></em></a> ·
+  a detailed analysis of isolation levels: Berenson et&nbsp;al., <a href="https://dl.acm.org/doi/10.1145/223784.223785"><em>A Critique of ANSI SQL Isolation Levels<sup class="src"><a href="#src-2" title="A Critique of ANSI SQL Isolation Levels (Berenson et al., SIGMOD 1995)">2</a></sup></em></a> ·
   Postgres's <a href="https://www.postgresql.org/docs/current/transaction-iso.html">isolation docs</a>.
 </div>
 
@@ -72,82 +64,68 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p class="keep-in-present"><strong>Quiz 6</strong> first (B+ trees, 10 min), then the I in ACID.</p>
 
-<p class="keep-in-present">Account A holds $100. Two cashiers each add $10: each reads 100,
-each writes 110, both commit. The balance is $110, one deposit has vanished, and no crash,
-no error, and no log entry will ever say so.</p>
+<p class="keep-in-present">Account A holds $100. Both cashiers read 100 before either writes, then each adds 10 and stores 110. Both transactions commit, but the balance should be $120. This is a lost update.</p>
 
 
-<p class="keep-in-present">Today's claim: <strong>isolation is purchased</strong>: every level pays for its safety with one of three things: transactions waiting on locks, transactions aborted and retried, or old row versions kept on disk. There is no free level.</p>
+<p class="keep-in-present"><strong>Isolation controls how concurrent transactions interact.</strong> Stronger guarantees can require lock waits, aborts and retries, or storage for older row versions. We will compare those costs with the anomalies each design prevents.</p>
 
 <!-- ============================================================ -->
 <h2 id="anomalies">Correct alone is not correct together</h2>
 
-<p class="keep-in-present">The gold standard is
-<span class="gloss" data-gloss="serializable">serializability</span>: the result equals
-<em>some</em> serial order. Everything else on today's menu is a named, priced deviation
-from it.</p>
+<p class="keep-in-present"><span class="gloss" data-gloss="serializable">Serializability</span> means that concurrent execution has the same effect as running the transactions one at a time in some order. Weaker isolation levels permit specific results that no serial execution would produce.</p>
 
-<h3 class="new-slide" data-kicker="Wrong together">Five anomalies, each with a name and a recipe</h3>
+<h3 class="new-slide" data-kicker="Wrong together">Five concurrency anomalies and how they arise</h3>
 
 <table>
-  <thead><tr><th>Anomaly</th><th>The story in one line</th><th>Needs</th></tr></thead>
+  <thead><tr><th>Anomaly</th><th>What happens</th><th>Needs</th></tr></thead>
   <tbody>
-    <tr><td><strong>Lost update</strong></td><td>two transactions each read the same row, compute a new value, and write it back; the second write overwrites the first without ever having seen it, so one change silently disappears</td><td>two transactions that both write the same row, where the second writer read the row before the first writer's change landed</td></tr>
-    <tr><td><strong>Dirty read</strong></td><td>you read a value that another transaction has written but not yet committed; that transaction later rolls back, so you acted on data that never officially existed</td><td>a transaction that is allowed to read another transaction's uncommitted write</td></tr>
+    <tr><td><strong>Lost update</strong></td><td>two transactions each read the same row, compute a new value, and write it back; the second write overwrites the first without ever having seen it, so one change silently disappears</td><td>two transactions that both write the same row, where the second writer read the row before the first writer’s change was visible</td></tr>
+    <tr><td><strong>Dirty read</strong></td><td>you read a value that another transaction has written but not yet committed; that transaction later rolls back, so you acted on a change that was later undone</td><td>a transaction that is allowed to read another transaction's uncommitted write</td></tr>
     <tr><td><strong>Non-repeatable read</strong></td><td>read a row twice in one transaction (tx) and get two different answers, because someone else updated the row and committed between your two reads</td><td>one transaction reads a row; a second transaction updates that row and commits; the first transaction reads the row again</td></tr>
     <tr><td><strong>Phantom</strong></td><td>run <code>WHERE gpa &gt; 35</code> twice in one transaction; the second run finds a row that another transaction inserted in between. Row locks cannot stop this, because a lock can only be placed on a row that already exists, and the new row did not exist when the first query ran</td><td>one transaction runs the same WHERE condition twice while another transaction inserts a row that matches it</td></tr>
     <tr><td><strong>Write skew</strong></td><td>two transactions each check a condition, then write different rows; both checks pass, the combined result violates the rule</td><td>two transactions that read overlapping rows but write different rows, so no write-write conflict is ever detected; the full example is in the FAQ</td></tr>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="Wrong together">One lost update closed an exchange</h3>
+<h3 class="new-slide" data-kicker="Wrong together">Concurrent transfers caused an exchange to lose funds</h3>
 
 <div class="callout note">
-  <span class="label">War story · the lost update that closed a bank, 2014</span>
-  <p class="keep-in-present">The anomaly zoo is not academic. In 2014 the Bitcoin exchange
-  Flexcoin was destroyed by the first row of that table: attackers fired thousands of
-  simultaneous transfers between accounts they controlled, and the transfer code did
-  read-balance → check → write-balance with no isolation<sup class="src"><a href="#src-3" title="Bitcoin bank Flexcoin shuts down after attackers loot $570,000 from hot wallet (reproducing Flexcoin's statement)">3</a></sup>. Concurrent reads saw the same
-  balance, the debits overwrote each other (a textbook lost update), and the attackers
-  withdrew about 896 BTC the exchange didn't have<sup class="src"><a href="#src-3" title="Bitcoin bank Flexcoin shuts down after attackers loot $570,000 from hot wallet (reproducing Flexcoin's statement)">3</a></sup>. Flexcoin announced its closure within
-  days. The two-cashier demo in the next section is the same exploit with smaller numbers. Preventing it is what the rest of today's lecture is about.</p>
+  <span class="label">Case study · Flexcoin’s concurrent-transfer failure, 2014</span>
+  <p class="keep-in-present">In 2014, the Bitcoin exchange Flexcoin reported that attackers submitted thousands of simultaneous transfers and overdrew an account before its balance was updated. About 896 BTC was lost, and the exchange closed. Its statement documents a concurrency failure, though it does not establish the exact implementation. A read-check-write sequence without adequate isolation, like the next demonstration, illustrates how overlapping transfers can use the same balance more than once.<sup class="src"><a href="#src-3" title="Bitcoin bank Flexcoin shuts down after attackers loot $570,000 from hot wallet (reproducing Flexcoin's statement)">3</a></sup></p>
 </div>
 
-<p class="key-fact keep-in-present"><strong>About 896 BTC</strong> withdrawn from Flexcoin in 2014 by one lost update, with no crash anywhere</p>
+<p class="key-fact keep-in-present"><strong>About 896 BTC</strong> lost in Flexcoin’s 2014 concurrent-transfer attack</p>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Build the lost update by hand, then let locks refuse it</h2>
+<h2 id="try-it">Create a lost update, then enable locks</h2>
 
-<p>Two cashiers, one account, and you as the scheduler. Build the disaster by hand, then flip
-the locks on and watch the same schedule get refused.</p>
+<p>Choose the order in which two cashiers read, calculate, write, and commit. First produce a lost update. Then enable locks and repeat that order to find the conflicting request.</p>
 
 <div class="viz" id="viz-ilv">
-  <div class="viz-title">The scheduler's console · A = $100, two "+$10" transactions</div>
+  <div class="viz-title">Choose the execution order · A = $100, two "+$10" transactions</div>
   <p class="viz-description">Click a transaction's next step to run it. Each is
-  <code>read → compute → write → commit</code>. Try to lose an update; then enable <span class="gloss" data-gloss="strict-2pl">strict 2PL</span> and try the same clicks.</p>
+  <code>read → compute → write → commit</code>. Make both transactions read before either writes; then enable <span class="gloss" data-gloss="strict-2pl">strict 2PL</span> and try the same clicks.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="il-t1">run tx1's next step</button>
     <button type="button" class="btn primary" id="il-t2">run tx2's next step</button>
     <label class="il-lock"><input type="checkbox" id="il-locks"> strict 2PL on</label>
     <button type="button" class="btn" id="il-reset">Reset</button>
   </div>
-  <div class="qj-msg" id="il-msg">A = $100. Both cashiers ready. You are the interleaving.</div>
+  <div class="qj-msg" id="il-msg">A = $100. Choose which transaction runs each next step.</div>
   <div class="il-grid">
     <div class="il-col"><div class="il-title">tx1</div><div id="il-s1" class="il-steps"></div></div>
     <div class="il-col"><div class="il-title">tx2</div><div id="il-s2" class="il-steps"></div></div>
     <div class="il-col"><div class="il-title">account A</div><div id="il-acct" class="il-acct"></div></div>
   </div>
   <div class="bs-stats" id="il-stats"></div>
-  <p class="viz-caption">With locks on, the "disaster schedule" hits a LockAbortError at the
+  <p class="viz-caption">With locks on, the read-read-write schedule hits a LockAbortError at the
   first attempted write after both transactions have read. Both S locks succeed; the X-lock upgrade conflicts, just as in Lab 7.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="locking">2PL buys serializability with waiting</h2>
+<h2 id="locking">Two-phase locking orders conflicting operations</h2>
 
-<p class="keep-in-present">The classic prevention: make conflicting access <em>impossible</em>
-by fencing rows with locks. Every serious engine shipped it for decades; yours ships it
-Thursday in 40 lines.</p>
+<p class="keep-in-present">A lock table prevents transactions from taking incompatible locks on the same item. Two-phase locking adds a rule about when those locks may be released. The provided Lab 7 lock table applies this approach to blocks.</p>
 
 <pre class="equation"><code>S lock (shared / read):     many holders welcome, readers coexist
 X lock (exclusive / write): one holder, no readers, no exceptions
@@ -156,81 +134,74 @@ conflict table:        S      X
                  S    ok    WAIT
                  X   WAIT   WAIT        ← conflicting accesses cannot proceed together; range predicates also need protection<sup class="src"><a href="#src-4" title="Sciore, Database Design and Implementation, 2nd ed., Chapter 5 Transaction Management">4</a></sup></code></pre>
 
-<h3 class="new-slide" data-kicker="Two-phase locking">Lock first, grow then shrink, hold to commit</h3>
+<h3 class="new-slide" data-kicker="Two-phase locking">Acquire locks before access and keep them until completion</h3>
 
 <table>
   <thead><tr><th>Rule</th><th>Statement</th><th>Why</th></tr></thead>
   <tbody>
     <tr><td>Lock before touching</td><td>S (shared) lock to read, many holders; X (exclusive) to write, one holder, no readers</td><td>two transactions can never both write the same row at the same time, and no transaction can read a row while another is writing it, because the lock table refuses the second request; that removes every write-write and read-write overlap</td></tr>
     <tr><td>Two phases</td><td>a transaction acquires locks in a growing phase, then releases them in a shrinking phase; once it has released any lock, it never acquires another<sup class="src"><a href="#src-5" title="The Notions of Consistency and Predicate Locks in a Database System (Eswaran, Gray, Lorie, Traiger, CACM 1976)">5</a></sup></td><td>at the instant a transaction holds its full set of locks, every other transaction that conflicts with it has either already released its conflicting locks or must wait until this one releases them; that ordering is what makes the schedule <em>provably</em> equivalent to some serial order</td></tr>
-    <tr><td>Strict variant</td><td>hold every lock until commit or rollback</td><td>no other transaction can read or write a row you changed until your change is final, so a dirty read of an uncommitted write becomes impossible as well; this is the variant your lab (and most engines) implement<sup class="src"><a href="#src-4" title="Sciore, Database Design and Implementation, 2nd ed., Chapter 5 Transaction Management">4</a></sup></td></tr>
+    <tr><td>Strict variant</td><td>hold every lock until commit or rollback</td><td>no other transaction can read or write a row you changed until your change is final, so a dirty read of an uncommitted write becomes impossible as well; the lab holds both shared and exclusive locks until completion; this stronger variant is also called rigorous two-phase locking<sup class="src"><a href="#src-4" title="Sciore, Database Design and Implementation, 2nd ed., Chapter 5 Transaction Management">4</a></sup></td></tr>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="Two-phase locking">The bill is waiting, and sometimes deadlock</h3>
+<h3 class="new-slide" data-kicker="Two-phase locking">Lock conflicts cause waits or aborts</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Waiting</span><span>a conflicting lock means someone sits idle: a long report holding shared locks makes an update wait for its exclusive lock, and the next report then waits behind that update. Every transaction that is waiting is one that could have been doing work, so throughput falls even though nothing has gone wrong.</span></div>
-  <div class="lc-row"><span class="lc-k"><span class="gloss" data-gloss="deadlock">Deadlock</span></span><span>tx1 holds A wants B; tx2 holds B wants A, forever. Engines detect the cycle and shoot one participant (your app must retry)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3.4. Deadlocks">6</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">microdb's version</span><span>microdb runs one transaction at a time on a single thread, so a transaction that waited for a lock would be waiting for a holder that cannot run to release it. Instead, a conflicting request raises <code>LockAbortError</code> immediately and the caller must roll that transaction back. The lock rules are the same as a real engine's; only the response to a conflict differs.</span></div>
-  <div class="lc-row"><span class="lc-k">The open question</span><span>most conflicts involve a <em>reader</em>, and readers don't change anything. Must a report really block a deposit? The MVCC section below answers no.</span></div>
+  <div class="lc-row"><span class="lc-k">Waiting</span><span>a transaction requesting an incompatible lock must wait or abort. For example, a report holding a shared lock can delay an update that needs an exclusive lock. Long waits can reduce throughput.</span></div>
+  <div class="lc-row"><span class="lc-k"><span class="gloss" data-gloss="deadlock">Deadlock</span></span><span>tx1 holds A and waits for B, while tx2 holds B and waits for A. Neither can proceed. An engine can detect this cycle and abort one transaction; the application must retry it<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3.4. Deadlocks">6</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">microdb's version</span><span>the lab interleaves transaction operations on one thread. Blocking that thread on a lock would prevent the other transaction from running and releasing it. Instead, a conflicting request raises <code>LockAbortError</code> immediately and the caller must roll that transaction back. The lock rules are the same as a real engine's; only the response to a conflict differs.</span></div>
+  <div class="lc-row"><span class="lc-k">The open question</span><span>can a report read a consistent version of a row while another transaction updates it? MVCC provides this capability without requiring ordinary reads to hold conflicting row locks.</span></div>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="levels">Every isolation level is a priced trade</h2>
+<h2 id="levels">Isolation levels provide different guarantees</h2>
 
 <div class="viz" id="viz-iso">
-  <div class="viz-title">four levels, three anomalies · click a level, watch what it buys</div>
-  <p class="viz-description">Each card is one anomaly's two-transaction story. Climbing the
-  ladder turns warm cards (can happen) green (prevented), and raises the price at the
-  bottom. Every level is a different point on the safety-for-throughput trade, not a
-  different degree of broken.</p>
+  <div class="viz-title">four levels, three anomalies · compare the guarantees</div>
+  <p class="viz-description">Each card shows one concurrency anomaly. Select an isolation level to see which of the listed anomalies the SQL standard permits and which it forbids. The cost summary describes common implementation tradeoffs; details vary by engine.</p>
   <div class="iso-ladder" id="iso-ladder"></div>
   <div class="iso-cards" id="iso-cards"></div>
   <div class="iso-price" id="iso-price"></div>
-  <p class="viz-caption">Climb from bottom to top and watch the order the anomalies die in;
-  that order IS the standard's definition of the levels<sup class="src"><a href="#src-7" title="ISO/IEC 9075:1992 (SQL-92) draft text, section 4.28 SQL-transactions">7</a></sup>.</p>
+  <p class="viz-caption">Compare the permitted anomalies as you move toward SERIALIZABLE. The standard’s list does not describe every possible concurrency anomaly, so an engine’s documentation is also important.<sup class="src"><a href="#src-7" title="ISO/IEC 9075:1992 (SQL-92) draft text, section 4.28 SQL-transactions">7</a></sup></p>
 </div>
 
-<h3 class="new-slide" data-kicker="Isolation levels">REPEATABLE READ has a gray zone the standard never named</h3>
+<h3 class="new-slide" data-kicker="Isolation levels">Snapshot isolation can still allow write skew</h3>
 
-<p class="keep-in-present">Set it per transaction:
-<code>SET TRANSACTION ISOLATION LEVEL SERIALIZABLE<sup class="src"><a href="#src-8" title="PostgreSQL Documentation: SET TRANSACTION">8</a></sup></code>. The gray zone the explorer shows at REPEATABLE READ is why the Berenson paper in the citations exists. The ANSI standard defines each level only by which of the anomalies above it forbids, and those definitions were written before snapshot isolation existed. Snapshot isolation forbids everything the standard lists for REPEATABLE READ, yet still allows write skew (see the FAQ), an anomaly the standard never names<sup class="src"><a href="#src-2" title="A Critique of ANSI SQL Isolation Levels (Berenson et al., SIGMOD 1995)">2</a></sup>.</p>
+<p class="keep-in-present">Choose a level with <code>SET TRANSACTION ISOLATION LEVEL SERIALIZABLE</code>. The SQL-92 definitions classify levels using a limited set of anomalies. Snapshot isolation prevents the dirty and non-repeatable reads forbidden by REPEATABLE READ, but can still allow write skew. PostgreSQL uses snapshot isolation for REPEATABLE READ; its SERIALIZABLE level adds checks for outcomes that are not serializable.<sup class="src"><a href="#src-8" title="PostgreSQL Documentation: SET TRANSACTION">8</a></sup><sup class="src"><a href="#src-2" title="A Critique of ANSI SQL Isolation Levels (Berenson et al., SIGMOD 1995)">2</a></sup></p>
 
 <!-- ============================================================ -->
 <h2 id="mvcc">Postgres keeps row versions for snapshot reads</h2>
 
 <table>
-  <thead><tr><th>Piece</th><th>Mechanism</th><th>You already built the bones</th></tr></thead>
+  <thead><tr><th>Piece</th><th>Mechanism</th><th>Connection to earlier labs</th></tr></thead>
   <tbody>
-    <tr><td>Versions</td><td>UPDATE = insert a new row version; the old one stays. Every version carries two stamps, xmin and xmax: the id of the transaction that created it, and the id of the transaction that later deleted or replaced it (empty while the version is still current)<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 5.6. System Columns">9</a></sup></td><td>Lab 3 introduced reusable record slots: a new row went into a free slot, and a deleted row's slot kept its bytes, marked with a tombstone, until something reused it</td></tr>
+    <tr><td>Versions</td><td>UPDATE = insert a new row version; the old one stays. Version metadata includes xmin and xmax: the id of the transaction that created it, and the id of the transaction that later deleted or replaced it (empty while the version is still current)<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 5.6. System Columns">9</a></sup></td><td>Lab 3 introduced reusable record slots: a new row went into a free slot, and a deleted row's slot kept its bytes, marked with a tombstone, until something reused it</td></tr>
     <tr><td><span class="gloss" data-gloss="snapshot">Snapshots</span></td><td>at PostgreSQL REPEATABLE READ, queries share a transaction snapshot; at the default READ COMMITTED level, each statement takes a fresh snapshot<sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 13.2. Transaction Isolation">10</a></sup></td><td>&nbsp;</td></tr>
     <tr><td>Visibility check</td><td>per row version: visible if the transaction in xmin had committed before my snapshot was taken AND the transaction in xmax had not (or xmax is empty). This is a simplified visibility rule; real checks also use transaction status, snapshot membership, and the transaction’s own writes<sup class="src"><a href="#src-11" title="Serializable Snapshot Isolation in PostgreSQL (Ports and Grittner, VLDB 2012)">11</a></sup></td><td>the same shape as a Lab 4 Predicate: a boolean test evaluated against a row's fields, here the two stamps</td></tr>
-    <tr><td>The trash</td><td><span class="gloss" data-gloss="vacuum">VACUUM</span> reclaims versions no living snapshot can see<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 24.1. Routine Vacuuming">12</a></sup></td><td>unlike Lab 3's immediate slot reuse, reclamation must wait until no snapshot needs the old version</td></tr>
+    <tr><td>Reclaiming storage</td><td><span class="gloss" data-gloss="vacuum">VACUUM</span> reclaims versions no active snapshot needs<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 24.1. Routine Vacuuming">12</a></sup></td><td>unlike Lab 3's immediate slot reuse, reclamation must wait until no snapshot needs the old version</td></tr>
   </tbody>
 </table>
 
 <p class="key-fact keep-in-present"><strong>2 stamps</strong> per row version, xmin and xmax: important inputs to visibility; transaction status and snapshot membership matter too</p>
 
-<h3 class="new-slide" data-kicker="MVCC">MVCC moved the cost, it didn't erase it</h3>
+<h3 class="new-slide" data-kicker="MVCC">MVCC trades read-write lock conflicts for version storage</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The payoff</span><span><strong>ordinary snapshot reads avoid row-level conflicts with writes</strong>: a report and an update pass through the same rows without waiting on each other.</span></div>
   <div class="lc-row"><span class="lc-k">Writers still wait</span><span>writers still block writers; locks live on for write-write conflicts<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3. Explicit Locking">6</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">The new bill</span><span>a transaction that holds its snapshot open for a long time forces the engine to keep every old version that snapshot might still read, so vacuum cannot reclaim them and the table grows<sup class="src"><a href="#src-13" title="PostgreSQL Documentation: 19.11. Client Connection Defaults (idle_in_transaction_session_timeout)">13</a></sup>. MVCC moved the cost, it didn't erase it. No free level, ever.</span></div>
+  <div class="lc-row"><span class="lc-k">Storage cost</span><span>a transaction that holds its snapshot open for a long time forces the engine to keep every old version that snapshot might still read, so vacuum cannot reclaim them and the table grows<sup class="src"><a href="#src-13" title="PostgreSQL Documentation: 19.11. Client Connection Defaults (idle_in_transaction_session_timeout)">13</a></sup>. This reduces read-write lock conflicts but adds storage and cleanup work.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="MVCC">Visibility depends on row versions and the snapshot</h3>
 
-<p>One account, three updates, four possible readers. The two-field visibility test from the
-table above, run live; drag the slider to move the reader's snapshot through time:</p>
+<p>One account has three row versions. Move the slider to change the reader’s snapshot and see which version passes the simplified visibility test:</p>
 
 <div class="viz" id="viz-chain">
   <div class="viz-title">ada's balance · one row, three versions, stamped (xmin, xmax)</div>
   <p class="viz-description">History: tx&nbsp;100 inserted the row at 120, tx&nbsp;103
   updated it to 70, tx&nbsp;107 updated it to 50. Each version's test:
-  <em>visible if xmin committed before my snapshot AND xmax was not</em>. Green = the
-  version this reader sees; every other reader, concurrently, sees its own.</p>
+  <em>visible if xmin committed before my snapshot AND xmax was not</em>. Green marks the version visible to this reader. Concurrent readers with different snapshots may see different versions.</p>
   <div class="chain-controls">
     <label>reader's snapshot: <span id="chain-when">after tx 107 committed</span></label>
     <input type="range" id="chain-slider" min="0" max="2" step="1" value="2">
@@ -240,37 +211,30 @@ table above, run live; drag the slider to move the reader's snapshot through tim
 </div>
 
 <!-- ============================================================ -->
-<h2 id="thursday">On Thursday you build it</h2>
+<h2 id="thursday">Prepare for Thursday’s transaction lab</h2>
 
-<p>Lab 7 caps microdb: WAL, commit, rollback, recovery, and the strict-2PL lock table from
-today guarding every read and write. Then you kill the process partway through a transaction and confirm that recovery brings the database back intact.</p>
+<p>Lab 7 completes microdb with WAL, commit, rollback, recovery, and the provided lock table controlling reads and writes at block granularity. Then you kill the process partway through a transaction and confirm that recovery brings the database back intact.</p>
 
 <ul class="checklist">
   <li>☐ Lab 6 submitted; download the eight Lab 7 starter files.</li>
   <li>☐ Harness prints <strong>0/9</strong>; two tests start microdb as a subprocess and kill it partway through a transaction on purpose, to check that recovery works.</li>
-  <li>☐ From today: be able to run the lost-update interleaving on paper and say where strict
-  2PL refuses it; the LOCKS test group is that story in code.</li>
-  <li>☐ From Thursday: say the WAL rule aloud once more. Old value to the log, before the
-  page.</li>
+  <li>☐ From today: be able to run the lost-update interleaving on paper and say which request conflicts when locks are enabled; the LOCKS test group checks this behavior.</li>
+  <li>☐ From the previous lecture: explain why the old value must be logged and synced before the changed page can be flushed.</li>
 </ul>
 
 <!-- ============================================================ -->
 <h2 id="recap">Recap &amp; next time</h2>
 
 <ul class="recap-list">
-  <li><strong>Correct alone ≠ correct together.</strong> The anomalies have names; learn them
-  and you can read any engine's isolation docs fluently.</li>
-  <li><strong>2PL buys serializability with waiting</strong> (and deadlocks); strict 2PL is
-  your lab's lock table holding everything to commit.</li>
-  <li><strong>MVCC buys reader-writer peace with versions</strong>: old rows linger, stamped
-  and vacuumed, exactly the storage moves Lab 3 taught, aimed at isolation.</li>
+  <li><strong>Correct alone ≠ correct together.</strong> Recognizing these anomalies helps you interpret an engine’s isolation guarantees.</li>
+  <li><strong>Two-phase locking orders conflicting operations.</strong> The lab holds all locks until commit or rollback and aborts conflicting requests. Engines that wait for locks must also handle deadlocks.</li>
+  <li><strong>MVCC lets snapshot readers use older row versions</strong>: updates create versions, snapshots determine visibility, and cleanup waits until the old versions are no longer needed.</li>
 </ul>
 
-<p class="key-fact keep-in-present"><strong>About 896 BTC</strong> lost to one unguarded read-check-write · <strong>2 stamps</strong> xmin and xmax: inputs to MVCC visibility, alongside the snapshot</p>
+<p class="key-fact keep-in-present"><strong>About 896 BTC</strong> lost in the Flexcoin concurrency failure · <strong>2 stamps</strong> xmin and xmax: inputs to MVCC visibility, alongside the snapshot</p>
 
 <p class="keep-in-present"><strong>Thursday:</strong> Lab 7, the kill -9 lab.
-<strong>Next Tuesday:</strong> the optimizer: statistics, selectivity, and why the planner
-finally gets to be smart, plus midterm review. Quiz 7 (transactions &amp; MVCC) lands
+<strong>Next Tuesday:</strong> the optimizer: statistics, selectivity, and how a planner chooses among equivalent execution plans, plus midterm review. Quiz 7 (transactions &amp; MVCC) lands
 Tuesday Oct 27, after the exam.</p>
 
 <p class="keep-in-present"><strong>Before Thursday:</strong></p>
@@ -287,14 +251,10 @@ Tuesday Oct 27, after the exam.</p>
 <p class="keep-in-present">The on-call rule: at least one doctor rostered. Two doctors each run "if the OTHER is on call, I can leave". Under <span class="gloss" data-gloss="snapshot-isolation">snapshot isolation</span> both transactions read the old roster, in which both doctors are on call, so both checks pass; each then updates only its own row, both commit, and zero doctors remain<sup class="src"><a href="#src-11" title="Serializable Snapshot Isolation in PostgreSQL (Ports and Grittner, VLDB 2012)">11</a></sup>. No row was written by both transactions, so no write-write conflict fired and neither was blocked or aborted. Only true serializability catches it. Postgres implements that as SSI, Serializable Snapshot Isolation, which tracks which transactions read rows that other transactions then wrote, and aborts one of them when that pattern could produce a result no serial order would give. Write skew is the reason SERIALIZABLE still exists as a level above snapshot isolation.</p>
 
 <h3 class="keep-in-present">Why doesn't microdb's Lab 7 implement MVCC?</h3>
-<p class="keep-in-present">Locks are 40 lines and teach the protocol; MVCC is version chains, snapshot bookkeeping, and vacuum: several weeks of work, not one lab session. You now know both
-designs and, more importantly, the trade they're making. Sciore's SimpleDB stops at locks too, though his chapter 5 does sketch multiversion locking<sup class="src"><a href="#src-15" title="Sciore, Database Design and Implementation, ch. 5 Transaction Management (includes 5.4.6 Multiversion Locking)">15</a></sup>.</p>
+<p class="keep-in-present">The provided lock table is small enough to inspect in one lab. MVCC would also require row-version storage, snapshot tracking, visibility checks, and safe cleanup. The lecture compares those designs, while the lab focuses on locking and recovery. Sciore’s chapter 5 also discusses multiversion locking.<sup class="src"><a href="#src-15" title="Sciore, Database Design and Implementation, ch. 5 Transaction Management (includes 5.4.6 Multiversion Locking)">15</a></sup></p>
 
 <h3 class="keep-in-present">How often do real deadlocks happen?</h3>
-<p class="keep-in-present">Constantly, at scale: check <code>pg_stat_database.deadlocks<sup class="src"><a href="#src-14" title="PostgreSQL Documentation: 27.2. The Cumulative Statistics System (pg_stat_database)">14</a></sup></code>
-on any busy system. The standard defenses are ordering (all code touches accounts in id
-order, no cycles possible) and retry loops<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3.4. Deadlocks">6</a></sup>. "Transactions may be shot; write retryable
-code" is professional-grade advice you now understand.</p>
+<p class="keep-in-present">Deadlock frequency depends on the workload and access order. PostgreSQL exposes a count in <code>pg_stat_database.deadlocks</code>. Acquiring locks in a consistent order, such as account ID order, helps avoid cycles. Applications should also be able to retry transactions the database aborts.<sup class="src"><a href="#src-14" title="PostgreSQL Documentation: 27.2. The Cumulative Statistics System (pg_stat_database)">14</a></sup><sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 13.3.4. Deadlocks">6</a></sup></p>
 
 <h3 class="keep-in-present">Does the buffer pool's pin count relate to these locks?</h3>
 <p class="keep-in-present">A pin prevents a buffer frame from being evicted. A latch protects a shared in-memory structure during a short operation. A transaction lock protects logical access to a row, block, or key range. These are separate mechanisms; a pin alone does not stop another client from changing a page.</p>

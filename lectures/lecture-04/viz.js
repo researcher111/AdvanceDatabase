@@ -5,50 +5,31 @@
   const GLOSSARY = {
     'relational-algebra': {
       title: 'Relational algebra',
-      body: '<p>The small set of operations on tables that SQL is defined in terms of: select (keep the rows that pass a test), project (keep some columns), product (pair every row with every row), plus union, difference, and rename. Each takes tables in and gives a table out, so operations compose into a tree, which is exactly what a query plan is. The operations obey algebraic laws, for example filtering each input before a product yields the same rows as filtering the pairs after it, and those laws are what let an optimizer rearrange a plan without changing its answer. When this lecture says the same answer is guaranteed, that guarantee is a theorem of relational algebra, not a property of the code.</p>',
+      body: "<p>Operations on relations, including selection, projection, product, union, difference, and rename. Algebraic identities establish when two operator expressions return the same result. For example, a filter referring only to one input of a product can be applied to that input first. An optimizer uses such valid rewrites to compare plans without changing the query’s meaning.</p>",
     },
     'tombstone': {
       title: 'Tombstone',
-      body: '<p>A deleted record that still physically occupies its slot in the page; only its in-use flag has changed. The bytes stay put until a later insert reuses the slot, so a scan that walked every slot blindly would hand back ghosts. That is why Lab 3&#39;s TableScan.next() checks the flag and skips over tombstones on its way to the next live row. Marking instead of moving makes deletion O(1), and it is also why databases need vacuum or compaction processes to reclaim the space for real.</p>',
+      body: "<p>In microdb, a deleted slot whose flag is EMPTY while its former field bytes may remain. TableScan skips EMPTY slots when looking for the next live row. A later insertion can reuse the slot without moving neighboring records.</p>",
     },
     'materialization': {
       title: 'Materialization',
-      body: '<p>Computing and storing a stage’s <em>entire</em> result (in memory or on disk) ' +
-        'before the next stage starts — the opposite of streaming rows through one at a time. ' +
-        'Sometimes unavoidable (sorting must see everything), always a memory-and-latency cost, ' +
-        'and the iterator model exists to avoid it wherever possible.</p>',
+      body: "<p>Computing and storing an intermediate result in memory or on disk so it can be used later. This can consume substantial space and delay the first output, but it can also avoid recomputing an input that will be scanned repeatedly. Streaming operators instead produce results as their callers request them.</p>",
     },
     'duck-typing': {
       title: 'Duck typing',
-      body: '<p>Python’s rule that what an object can <em>do</em> decides what it is. There is no ' +
-        '“implements Scan” step: if an object has before_first, next, get_val, has_field, and ' +
-        'close, every operator accepts it as a scan, because operators only ever call those five ' +
-        'methods. The name comes from the saying “if it walks like a duck and quacks like a duck, ' +
-        'it is a duck.” It is what lets a SelectScan wrap a TableScan today and a ProductScan next ' +
-        'week without a line of it changing. The price: a missing method is discovered only when ' +
-        'it is called, not when the object is created.</p>',
+      body: "<p>Using an object through the methods it provides, without requiring it to inherit from a particular class. microdb operators expect the scan methods <code>before_first</code>, <code>next</code>, <code>get_val</code>, <code>has_field</code>, and <code>close</code>. This permits small in-memory test scans. Missing methods are discovered when called unless separate validation is added.</p>",
     },
     'cartesian-product': {
       title: 'Cartesian product',
-      body: '<p>Every row of one table paired with every row of another: |A| × |B| pairs, no ' +
-        'matching condition. Rarely wanted by itself (it’s huge), but it’s the raw material of ' +
-        'joins: a join is the cartesian product filtered down to the pairs where the join ' +
-        'condition holds. SQL’s <code>CROSS JOIN</code> is this, undisguised.</p>',
+      body: "<p>Every row from one input paired with every row from another. Inputs of sizes |A| and |B| produce |A| × |B| pairs. SQL’s <code>CROSS JOIN</code> expresses this operation. Our first inner join filters a product to keep pairs satisfying the join condition.</p>",
     },
     'predicate-pushdown': {
       title: 'Predicate pushdown',
-      body: '<p>Moving a filter as far down the plan as it can legally go — filtering each ' +
-        'table <em>before</em> a join instead of filtering the joined pairs after. Fewer rows ' +
-        'flow through every operator above the filter, often by orders of magnitude. The first ' +
-        'rewrite in every optimizer’s playbook, and it works on Parquet files and data lakes ' +
-        'too (week 10).</p>',
+      body: "<p>Moving a filter closer to its input data when that preserves the query’s result. A condition on students alone can filter students before an inner join. Reducing input rows can reduce work in later operators. Which filters can move depends on their field references and the operators involved.</p>",
     },
     'cursor': {
       title: 'Cursor',
-      body: '<p>A position within a sequence of rows — “I am on row 4.” Every scan in the ' +
-        'iterator model maintains one implicitly (TableScan’s is block + slot). SQL exposes the ' +
-        'same idea to applications as, literally, <code>CURSOR</code>s: fetch a few rows now, ' +
-        'more later, without materializing the result.</p>',
+      body: "<p>A position used to continue reading a sequence of rows. TableScan records a block number and slot number. SQL cursors expose related incremental-fetch behavior to applications, although the engine may still materialize data internally.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -169,7 +150,7 @@
     li = 0; ri = -1;
     leftDelivered = 1; rightDelivered = 0;
     pairs = []; done = false;
-    pathEl.textContent = 'setup: left rewound AND advanced to ada; right parked before cs';
+    pathEl.textContent = 'Setup: left is at ada; right is before its first row, cs.';
     render();
   }
 
@@ -177,11 +158,11 @@
     if (done) { pathEl.textContent = 'exhausted — before_first() to run it again'; return; }
     if (ri + 1 < RIGHT.length) {
       ri++; rightDelivered++;
-      pathEl.textContent = 'fast path: right.next() had a row — no rewind needed';
+      pathEl.textContent = 'right.next() found another row for the current left row.';
     } else if (li + 1 < LEFT.length) {
       li++; ri = 0;
       leftDelivered++; rightDelivered++;
-      pathEl.textContent = 'ROLLOVER: right exhausted — rewind right, left.next(), right.next()';
+      pathEl.textContent = 'Right exhausted: rewind it, advance the left, then read the first right row.';
     } else {
       done = true;
       pathEl.textContent = 'rollover attempted, but left.next() was false too — product complete, return False';

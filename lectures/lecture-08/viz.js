@@ -5,46 +5,31 @@
   const GLOSSARY = {
     'snapshot-isolation': {
       title: 'Snapshot isolation',
-      body: '<p>An isolation level where each transaction works from a snapshot: the set of transactions that had committed at the moment it began. Every read returns the row versions those transactions produced and nothing committed later, so a transaction sees one consistent state for its whole run, and ordinary snapshot reads avoid conflicting row locks. Two transactions that try to write the same row still conflict, and the second one to commit is aborted. What it does not catch is two transactions that read overlapping rows and then write <em>different</em> rows, which is write skew. Postgres&#39;s REPEATABLE READ level is snapshot isolation; its SERIALIZABLE level adds the extra checks needed to catch write skew.</p>',
+      body: "<p>A transaction reads from a consistent snapshot of committed data, while also seeing its own changes. Concurrent transactions that write the same row cannot both commit under snapshot isolation. Transactions that read overlapping data but write different rows can still exhibit write skew. PostgreSQL REPEATABLE READ provides snapshot isolation; SERIALIZABLE adds checks for nonserializable outcomes.</p>",
     },
     'strict-2pl': {
       title: 'Strict 2PL (strict two-phase locking)',
-      body: '<p>Two-phase locking (2PL) is the rule that a transaction takes a lock before it touches data: a shared (S) lock to read a row, which many transactions may hold at once, and an exclusive (X) lock to write it, which only one may hold and which shuts out readers too. The two phases are growing and shrinking: a transaction may keep acquiring locks until the moment it releases its first one, and after that it may only release. That single rule is enough to guarantee the interleaving is equivalent to running the transactions one at a time in some order. The <em>strict</em> variant holds every lock until the transaction commits or rolls back, so nothing a transaction wrote can be read by anyone else until that write is final, which also rules out dirty reads. It is what Lab 7&#39;s lock table implements and what most engines run.</p>',
+      body: "<p>Two-phase locking requires a transaction to acquire appropriate locks before access and forbids acquiring new locks after it starts releasing them. Shared locks permit concurrent readers; exclusive locks conflict with other holders. Strict 2PL holds exclusive locks until completion. The lab holds both shared and exclusive locks until completion, a stronger variant also called rigorous 2PL. Predicate or range protection is needed when a query’s matching set must be protected.</p>",
     },
     'mvcc-intro': {
       title: 'MVCC (multi-version concurrency control)',
-      body: '<p>Instead of overwriting a row, UPDATE creates a new <em>version</em> and the old ' +
-        'one lingers, stamped with which transactions created and superseded it. Each reader ' +
-        'sees a consistent snapshot — the versions current when it began — so ordinary snapshot reads avoid conflicting row ' +
-        'locks. Postgres, Oracle, and most modern engines run on it.</p>',
+      body: "<p>An update creates a new row version while retaining older versions that readers may need. Each read uses its snapshot and version metadata to determine visibility. Ordinary snapshot reads avoid conflicting row locks, but writes can still conflict. At PostgreSQL READ COMMITTED, each statement takes a fresh snapshot; REPEATABLE READ uses one transaction snapshot.</p>",
     },
     'serializable': {
       title: 'Serializability',
-      body: '<p>The gold standard for concurrent correctness: the interleaved execution ' +
-        'produces the same result as running the transactions one at a time in <em>some</em> ' +
-        'order. Not necessarily the arrival order — just some order a lawyer could point to. ' +
-        'Anything weaker admits at least one named anomaly.</p>',
+      body: "<p>Concurrent execution is serializable if it has the same effect as some execution of those transactions one at a time. The equivalent serial order need not be arrival order. Serializable isolation prevents results, such as write skew, that no serial order could produce.</p>",
     },
     'deadlock': {
       title: 'Deadlock',
-      body: '<p>A cycle of waiting: tx1 holds lock A and wants B; tx2 holds B and wants A; ' +
-        'neither can ever proceed. Engines detect the cycle and abort a victim (your app must ' +
-        'retry). Standard prevention: every piece of code acquires locks in the same global ' +
-        'order — no order cycles, no deadlocks.</p>',
+      body: "<p>A cycle of lock waits. For example, tx1 holds A and waits for B while tx2 holds B and waits for A. Neither can proceed until the cycle is broken. Engines can detect the cycle and abort one transaction. Consistent lock-acquisition order helps prevent deadlocks; applications should be prepared to retry aborted transactions.</p>",
     },
     'vacuum': {
       title: 'VACUUM',
-      body: '<p>Postgres’s garbage collector: old row versions that no living snapshot could ' +
-        'ever see are reclaimed for reuse — Lab 3’s tombstone recycling, industrialized and ' +
-        'automated (autovacuum). A long-running transaction pins its snapshot, blocking vacuum ' +
-        'from cleaning anything newer: the classic cause of table bloat in production.</p>',
+      body: "<p>PostgreSQL maintenance that reclaims storage from row versions no active snapshot still needs, among other tasks. Autovacuum schedules this work automatically. A long-lived snapshot can delay reclamation of versions it might read, increasing storage use. This differs from microdb’s immediate reuse of deleted slots.</p>",
     },
     'snapshot': {
       title: 'Snapshot',
-      body: '<p>A transaction’s frozen view of which other transactions had committed at its ' +
-        'start. Row-version visibility is decided against it: created-by-a-committed-tx and ' +
-        'not-yet-superseded means visible. Cheap to take (a list of tx ids), and the heart of ' +
-        'both MVCC reads and “repeatable read” isolation.</p>',
+      body: "<p>Information defining which committed changes a read can see, including transaction boundaries and active transaction IDs. Visibility checks combine that information with row-version metadata and transaction status. A statement snapshot can differ from the next statement’s snapshot; under REPEATABLE READ, statements share a transaction snapshot.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -70,7 +55,7 @@
     ];
     xlockHolder = null;
     refusedNote = '';
-    msg.textContent = 'A = $100. Both cashiers ready. You are the interleaving.';
+    msg.textContent = 'A = $100. Choose which transaction runs each next step.';
     render();
   }
 
@@ -192,7 +177,7 @@
         `</div>`;
     }).join('<div class="chain-link">→</div>') + '</div>' +
     `<div class="chain-msg">This reader computes <strong>balance = ${seen.balance}</strong> — ` +
-    `and keeps computing it for its whole run, no matter who commits meanwhile.</div>`;
+    `A REPEATABLE READ transaction keeps this snapshot for later statements, while still seeing its own changes.</div>`;
   }
   slider.addEventListener('input', render);
   render();
@@ -208,27 +193,27 @@
   const ANOMALIES = [
     { key: 'dirty', name: 'Dirty read',
       story: 'T1 writes x=70, has not committed · T2 reads x and sees 70 · T1 rolls back',
-      consequence: 'T2 acted on a value that never existed' },
+      consequence: 'T2 used a change that T1 later rolled back' },
     { key: 'nonrep', name: 'Non-repeatable read',
       story: 'T2 reads x=100 · T1 updates x=70 and commits · T2 re-reads x and sees 70',
       consequence: 'one transaction, two answers for the same row' },
     { key: 'phantom', name: 'Phantom',
       story: 'T2 runs WHERE gpa > 35, gets 3 rows · T1 inserts a qualifying row, commits · T2 re-runs, gets 4',
-      consequence: 'the SET of matching rows changed under a repeated predicate' },
+      consequence: 'the same predicate returned a different set of rows' },
   ];
   const LEVELS = [
     { name: 'READ UNCOMMITTED', blocks: [],
-      who: 'almost nobody, honestly',
-      price: 'Price: none — and correctness to match. You can read other people’s rolled-back mistakes.' },
+      who: 'the weakest standard isolation level',
+      price: 'Allows dirty reads in the standard. Some engines provide stronger behavior; PostgreSQL treats this level as READ COMMITTED.' },
     { name: 'READ COMMITTED', blocks: ['dirty'],
       who: 'Postgres’s default',
-      price: 'Price: cheap — each statement just reads only committed state. The workhorse default.' },
+      price: 'Each statement sees committed data. In PostgreSQL it uses a fresh snapshot, so two statements in one transaction may see different committed values.' },
     { name: 'REPEATABLE READ', blocks: ['dirty', 'nonrep'],
       who: 'MySQL’s default; in Postgres this level = a full snapshot',
-      price: 'Price: hold read locks (2PL) or pin a snapshot (MVCC) for the whole transaction. Phantoms are the gray zone: row locks can’t lock rows that don’t exist yet.' },
+      price: 'Implementations can retain read locks or a transaction snapshot. The standard permits phantoms at this level; PostgreSQL snapshot reads prevent them but can still allow write skew.' },
     { name: 'SERIALIZABLE', blocks: ['dirty', 'nonrep', 'phantom'],
-      who: 'the correct-by-default crowd',
-      price: 'Price: predicate/range locking, or optimistic detection with retries — your code must be ready to re-run a transaction that loses a conflict.' },
+      who: 'equivalent to a serial execution',
+      price: 'Implementations use techniques such as predicate/range locking or conflict detection. Applications must be prepared to retry transactions aborted to preserve serializability.' },
   ];
 
   let current = 1;   // start at READ COMMITTED, the default people actually run
@@ -243,9 +228,9 @@
       const blocked = lv.blocks.includes(a.key);
       const gray = a.key === 'phantom' && lv.name === 'REPEATABLE READ';
       return `<div class="iso-card${blocked ? ' safe' : ''}">` +
-        `<div class="iso-card-head">${a.name} · ${blocked ? 'PREVENTED ✓' : (gray ? 'gray zone' : 'can happen ✗')}</div>` +
+        `<div class="iso-card-head">${a.name} · ${blocked ? 'PREVENTED ✓' : (gray ? 'permitted by standard' : 'can happen ✗')}</div>` +
         `<div class="iso-card-story">${a.story}</div>` +
-        `<div class="iso-card-why">${blocked ? 'this level’s machinery refuses the schedule' : a.consequence}</div>` +
+        `<div class="iso-card-why">${blocked ? 'this level must prevent this anomaly' : a.consequence}</div>` +
         `</div>`;
     }).join('');
     price.textContent = lv.price;

@@ -13,9 +13,9 @@
 <aside class="toc">
   <div class="toc-title">Lab 2 · microdb 2</div>
   <ul>
-    <li><a href="#try-it">Pin, poke, evict</a></li>
+    <li><a href="#try-it">Explore the buffer pool</a></li>
     <li><a href="#big-idea">Why pin/unpin exists</a></li>
-    <li><a href="#the-api">The contract</a></li>
+    <li><a href="#the-api">Implementation requirements</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
@@ -36,49 +36,33 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 2 · Thursday September 3, 2026 · microdb part 2 of 7</div>
   <h1>Buffer Manager</h1>
-  <div class="subtitle">Your microdb reads the disk for every page it touches; a cache fixes that only when its hit rate wins, and today you will watch a 49-frame pool win 0.0% of the time.</div>
+  <div class="subtitle">Build a buffer pool and measure why some access patterns benefit from caching while repeated full scans may not.</div>
   <div class="byline">Follows Lecture 2 (Memory &amp; the Buffer Pool) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 10 at class start</div>
 </header>
 
-<p class="lede">
-Today microdb stops touching the disk directly. Every page access from this lab forward goes
-through the buffer manager you build: a fixed set of memory frames, a pin/unpin protocol, LRU
-eviction, and <span class="gloss" data-gloss="write-back">write-back</span> of dirty pages.
-Four methods, ten tests, and at the end, a measurement with a cliff in it that most
-professional engineers have never seen drawn.
-</p>
+<p class="lede">In this lab, you will build a buffer manager that keeps a fixed number of database blocks in memory. It tracks which frames are in use, chooses a frame to evict with an LRU policy, and writes modified pages back before reusing their frames. You will implement four methods, run ten tests, and measure how access patterns affect the cache hit rate.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 4 ·
   Lecture 2's <a href="../../lectures/lecture-02/bufferpool.html">slides &amp; simulator</a> ·
-  the same machinery grown up: PostgreSQL's
+  a production example: PostgreSQL's
   <a href="https://github.com/postgres/postgres/blob/master/src/backend/storage/buffer/README">buffer manager README</a>.
 </div>
 
-<p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
-</p>
+<p class="glossary-hint">Terms with a dotted underline have definitions. Hover or tap a term to read its explanation.</p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
   <div id="glossary-content" class="glossary-content"></div>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Every rule you'll code fits in three frames</h2>
+<h2 id="try-it">Explore a three-frame buffer pool</h2>
 
-<p>This is the exact machine you're about to build: 3 frames, 6 disk blocks, every rule
-live. Select a block, then drive the protocol by hand: pin it, modify it, unpin it, and watch
-what eviction does to a dirty page. Try to trigger all three failure flashes before you read
-another word.</p>
+<p>The widget models a buffer pool with three frames and six disk blocks. Select a block, pin it, modify it, and unpin it. Then load other blocks to see when the modified page is written back. Try pinning when all frames are in use, modifying an unpinned block, and unpinning a block that is not pinned.</p>
 
 <div class="viz" id="viz-pool">
-  <div class="viz-title">The protocol playground · 3 frames, LRU, write-back</div>
-  <p class="viz-description">Each disk block stores one number. <strong>Pin</strong> brings a
-  block into a frame and locks it there; <strong>modify</strong> writes <code>value+1</code>
-  through the buffer (memory only; the frame turns <span class="hexlegend miss">dirty</span>);
-  <strong>unpin</strong> releases; eviction writes
-  back dirty pages before reuse. Disk chips show what's actually on disk.</p>
+  <div class="viz-title">The protocol playground · 3 frames, LRU, <span class="gloss" data-gloss="write-back">write-back</span></div>
+  <p class="viz-description">Each disk block stores one number. Pinning loads or finds that block in memory and prevents its frame from being evicted. Modify adds one to its value in memory and marks the frame dirty. Unpinning reduces the pin count; the frame becomes eligible for eviction when the count reaches zero. Evicting a dirty frame first writes its changes to disk. The disk display shows the stored values.</p>
   <div class="qj-controls">
     <span class="pp-sel-label">selected block:</span><span class="pp-sel" id="pp-sel">B0</span>
     <button type="button" class="btn primary" id="pp-pin">pin</button>
@@ -98,51 +82,41 @@ another word.</p>
     <a class="chat-dl-btn" href="starter/test_buffermanager.py" download>test_buffermanager.py</a>
     <a class="chat-dl-btn" href="starter/measure_hits.py" download>measure_hits.py</a>
   </div>
-  <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
+  <p class="viz-caption clone-label">Or clone the course repository:</p>
 <pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
 <span class="cl-line">cd AdvanceDatabase/labs/lab-02/starter</span></pre>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">One hazard explains every rule: never evict a pinned frame</h2>
+<h2 id="big-idea">Why pinned frames cannot be evicted</h2>
 
-<p>Before the code, the protocol. It exists because of one hazard, and once you can name
-it, every rule in this lab follows.</p>
+<p>A buffer frame can hold different blocks over time. Pinning keeps the current block in its frame while a caller uses it.</p>
 
-<p class="keep-in-present">The hazard: between your <code>get_page</code> and your read, <em>someone else's miss</em>
-evicts your frame and loads a different block into the same memory. Your reference still
-points at the frame; the frame no longer holds your data. No exception, no warning, just
-wrong answers. The fix is a lease: <strong>pin</strong> marks the frame in-use (eviction must
-skip it), <strong>unpin</strong> ends the lease. That single
-<span class="gloss" data-gloss="invariant">invariant</span> (<em>never evict a pinned
-frame</em>) is what the tests enforce most fiercely, because it's the one whose violation
-corrupts data silently.</p>
+<p class="keep-in-present">Suppose you obtain a reference to a page, but its frame is evicted before you read from it. The reference still points to the same memory, which now contains a different block. Pinning prevents this: a frame with a positive pin count cannot be evicted. Each caller must unpin the frame when finished. The frame can be reused only after every caller has released its pin.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">You write four methods; the tests check five rules literally</h2>
+<h2 id="the-api">Four methods and five buffer-management rules</h2>
 
-<p>You implement four methods; the frame class (<code>Buffer</code>) and its flush/load
-machinery ship complete. Hover each line, then keep the LRU spec table beside you while
-coding; the tests check it literally.</p>
+<p>The <code>Buffer</code> class already implements loading and flushing pages. You will implement the four buffer-manager methods below. Hover or tap a method for details, and use the <span class="gloss" data-gloss="invariant">rule</span> table to check your implementation.</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="find" data-step-name="_find_existing" data-explain="The lookup: scan self.pool for a frame whose .block equals the requested BlockId (BlockId defines ==, so == just works). Return the Buffer or None.">def _find_existing(block) -> Buffer | None      # already resident?</div>
-  <div class="code-step" data-step="victim" data-step-name="_choose_victim" data-explain="The policy: among frames with pins == 0, return the one with the smallest last_used; None if all are pinned. min(candidates, key=...) is the whole job.">def _choose_victim() -> Buffer | None           # LRU among unpinned</div>
-  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Tick first (self._tick += 1). Existing frame -> hits += 1. Otherwise victim or raise BufferAbortError; misses += 1; victim.assign_to_block(block), which flushes the victim if dirty, then reads. Both paths: pins += 1, last_used = tick.">def pin(block) -> Buffer                        # hit, or evict + load</div>
-  <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="pins -= 1, but first: if pins is already 0, raise ValueError. A double-unpin is always a caller bug, and silent pin-count corruption is the nastiest bug family in this lab.">def unpin(buf)                                  # release the lease</div>
+  <div class="code-step" data-step="find" data-step-name="_find_existing" data-explain="Search self.pool for a frame whose block equals the requested BlockId. Return that Buffer, or None if the block is not cached.">def _find_existing(block) -> Buffer | None      # already resident?</div>
+  <div class="code-step" data-step="victim" data-step-name="_choose_victim" data-explain="Among frames with pins == 0, select the frame with the smallest last_used value. Return None if every frame is pinned.">def _choose_victim() -> Buffer | None           # LRU among unpinned</div>
+  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Increment self._tick. If the block is cached, count a hit. Otherwise choose an unpinned victim, or raise BufferAbortError if none exists; count the miss and call assign_to_block to flush and load it. On either successful path, increment pins and set last_used to the new tick.">def pin(block) -> Buffer                        # hit, or evict + load</div>
+  <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="If pins is already zero, raise ValueError. Otherwise decrement it by one. Each successful pin must have one matching unpin.">def unpin(buf)                                  # release one pin</div>
   <div class="code-explain-panel">Hover a line for its spec and the tool that implements it.</div>
 </div>
 
-<p>The LRU spec, exactly as the tests measure it:</p>
+<p>The tests check these LRU and pin-count rules:</p>
 
 <table>
   <thead><tr><th>Rule</th><th>Statement</th><th>Test that checks it</th></tr></thead>
   <tbody>
     <tr><td><strong>Stamp on every pin</strong></td><td>each successful <code>pin</code> sets <code>last_used</code> to a fresh tick, <em>hits included</em></td><td><code>recency order, not insertion order</code></td></tr>
     <tr><td><strong>Victim = oldest unpinned</strong></td><td>smallest <code>last_used</code> among frames with <code>pins == 0</code></td><td><code>full pool evicts least recently used</code></td></tr>
-    <tr><td><strong>Pinned is untouchable</strong></td><td>a frame with <code>pins &gt; 0</code> is never a victim, no matter how old</td><td><code>pinned frames are never evicted</code></td></tr>
-    <tr><td><strong>No frame? Abort</strong></td><td>all pinned → <code>BufferAbortError</code>, not a wait, not a crash</td><td><code>all-pinned pool raises</code></td></tr>
-    <tr><td><strong>Dirty leaves clean</strong></td><td>the victim is flushed before reuse; <code>assign_to_block</code> does this if you call it</td><td><code>dirty page written back</code></td></tr>
+    <tr><td><strong>Never evict pinned frames</strong></td><td>a frame with <code>pins &gt; 0</code> is never a victim, no matter how old</td><td><code>pinned frames are never evicted</code></td></tr>
+    <tr><td><strong>Abort when all frames are pinned</strong></td><td>all pinned → <code>BufferAbortError</code>, not a wait, not a crash</td><td><code>all-pinned pool raises</code></td></tr>
+    <tr><td><strong>Flush dirty frames before reuse</strong></td><td>the victim is flushed before reuse; <code>assign_to_block</code> does this if you call it</td><td><code>dirty page written back</code></td></tr>
   </tbody>
 </table>
 
@@ -155,20 +129,17 @@ other, so most of the test cases may not pass until all four functions are prope
 implemented. Build in this order:</p>
 
 <ol>
-  <li><strong>Read <code>buffer_manager.py</code> top to bottom</strong> (5 min). The
-  <code>Buffer</code> class is complete; notice that <code>assign_to_block</code> already
-  flushes-if-dirty before loading. Your four methods orchestrate; they never touch bytes.</li>
+  <li>Read <code>buffer_manager.py</code> (5 min). The <code>Buffer</code> class is complete. Its <code>assign_to_block</code> method flushes a dirty page before loading another block. Your four methods manage frames and pin counts; they use the provided methods to move bytes.</li>
   <li><strong><code>_find_existing</code></strong>: a loop and an <code>==</code>.</li>
   <li><strong><code>_choose_victim</code></strong>: filter unpinned, <code>min</code> by
   <code>last_used</code>, or <code>None</code>.</li>
   <li><strong><code>pin</code></strong>: follow the docstring's spec exactly: tick, lookup,
   hit-count or victim/abort/load/miss-count, then <code>pins += 1</code> and the stamp.</li>
-  <li><strong><code>unpin</code></strong>: two lines plus the <code>ValueError</code> guard.
-  All ten tests green.</li>
+  <li><code>unpin</code>: reject a zero pin count with <code>ValueError</code>, then decrement the count. Run all ten tests.</li>
 </ol>
 
 <div class="callout note">
-  <span class="label">Gotchas that cost real debugging time</span>
+  <span class="label">Common implementation mistakes</span>
   <p>Stamp <code>last_used</code> on <em>hits</em>, not just misses; the LRU-order test is
   built to catch exactly that omission. Increment <code>self._tick</code> <em>before</em> using
   it, or two pins can share a tick. And don't reset <code>pins</code> in <code>pin()</code>:
@@ -179,12 +150,7 @@ implemented. Build in this order:</p>
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
 
-<p>Ten tests in three groups, and each failure message names its usual cause. The PIN group
-checks the protocol: data actually loads, re-pins are hits on the same frame, pin counts nest,
-and a double-unpin raises ValueError. The LRU group checks the policy: victim choice, recency updates, pinned
-immunity, and the all-pinned abort. The DIRTY group checks
-write-back: a modified page must survive
-its own eviction, and <code>flush_all</code> must push everything down before shutdown.</p>
+<p>The ten tests cover three areas. PIN checks that pages load, repeated pins reuse a frame, pin counts increase correctly, and a double-unpin raises <code>ValueError</code>. LRU checks victim selection, recency updates, protection of pinned frames, and the all-pinned error. DIRTY checks that changes survive eviction and that <code>flush_all</code> writes modified pages back.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_buffermanager.py</span>
 <span class="t-head">PIN group</span>
@@ -206,20 +172,14 @@ its own eviction, and <code>flush_all</code> must push everything down before sh
   fields themselves instead of calling <code>assign_to_block</code>. All the LRU tests still
   pass. What exactly is being lost, and why do only the DIRTY tests notice?</p>
   <details><summary>Show answer</summary>
-  <p>By setting <code>victim.block</code> and reading directly, they skipped
-  <code>assign_to_block</code>'s first step: <code>self.flush()</code>, the write-back of the
-  victim's modified page. The old page's changes are silently overwritten in memory and never
-  reach disk. LRU tests don't notice because they only read; the modification is only missed
-  when the DIRTY test evicts a modified block and then checks the <em>disk</em>. Moral: the
-  provided helpers encode invariants; bypassing them compiles fine and corrupts quietly.</p>
+  <p>The code skips the initial <code>self.flush()</code> call in <code>assign_to_block</code>. Loading the new block then overwrites the old page’s changes before they reach disk. The LRU tests use unmodified pages, so they do not detect the loss. The DIRTY test modifies a page, evicts it, and checks its stored value. Calling <code>assign_to_block</code> preserves the required flush-before-load order.</p>
   </details>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
-<p>Your buffer manager now has a hit-rate counter. Time to see the number every database
-engineer carries around.</p>
+<p>Use the hit and miss counters to compare a repeated full scan with a workload that frequently revisits a small set of blocks.</p>
 
 <p>The reference solution's output (yours should match it exactly, since the workloads are
 seeded):</p>
@@ -238,30 +198,25 @@ seeded):</p>
 <p class="key-fact keep-in-present"><strong>0.0%</strong> scan hit rate with 49 of the file's 50 blocks cached; one more frame and it jumps to 50%</p>
 
 <p class="keep-in-present"><strong>Now change something.</strong> <code>hotset_workload</code> in
-<code>measure_hits.py</code> builds its hot set with <code>hot = list(range(5))</code>. Change it to
+<code>measure_hits.py</code> builds its <span class="gloss" data-gloss="working-set">hot set</span> with <code>hot = list(range(5))</code>. Change it to
 <code>list(range(10))</code>, then add pool sizes to <code>POOL_SIZES</code> until you find the
 smallest pool where the hot-set rate first crosses 95%. Report that pool size, the 5-block rate at
 the same size from the reference table, and whether the scan column changed at all.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · Measure">Caching 98% of the file bought exactly nothing</h3>
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Why repeated scans can have a zero hit rate</h3>
 
-<p class="keep-in-present">Read the scan column slowly: <strong>0.0% at 49 frames, 50% at
-50</strong>. Caching 98% of the file bought exactly nothing, because LRU evicts each block one
-step before the scan returns to it. Meanwhile the hot set, whose
-<span class="gloss" data-gloss="working-set">working set</span> is 5 blocks, cruises at 90%+
-with a pool a tenth the size. Which column your workload resembles matters more than any
-tuning parameter you will ever set.</p>
+<p class="keep-in-present">With 49 frames, the repeated scan has a 0% hit rate: LRU evicts each block before the next scan reaches it. With 50 frames, the first scan loads the file and the second scan hits every block, producing a 50% overall hit rate. The hot-set workload reuses a small group of blocks often enough to get a high hit rate with a smaller pool. Cache effectiveness depends on the sequence of requests as well as pool size.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · Measure">Every tool in your pipeline has this pool, cliff included</h3>
+<h3 class="new-slide" data-kicker="Part 3 · Measure">Caching in data workflows</h3>
 
 <table>
   <thead><tr><th>Where you meet it</th><th>In buffer-pool terms</th></tr></thead>
   <tbody>
-    <tr><td><code>pd.read_parquet</code> on a file larger than RAM</td><td>pandas asks for every block and keeps all of them (<code>MemoryError</code>); DuckDB pulls blocks through a small pool and releases each one, so it finishes</td></tr>
+    <tr><td><code>pd.read_parquet</code> on a file larger than RAM</td><td>A pandas read materializes its result in memory and can fail if that result is too large. A query engine can often process a larger input incrementally, depending on the query.</td></tr>
     <tr><td>Spark <code>.cache()</code> / <code>.persist()</code></td><td>requests caching; evicted partitions may be recomputed or read from disk, depending on storage level</td></tr>
-    <tr><td>Second run of a notebook cell that reads a large file</td><td>the OS page cache is a buffer pool, and the blocks are still in it from the first run</td></tr>
-    <tr><td>Feature store serving online predictions</td><td>a hot-set workload by design: a few thousand active users get almost every read from a pool that is a small fraction of the table</td></tr>
-    <tr><td>Nightly backfill scanning the whole table through the same pool</td><td>the scan cliff in production: it evicts the hot rows, and online lookups miss until they are read back in; Postgres routes large scans through a small ring of frames for exactly this reason</td></tr>
+    <tr><td>Second run of a notebook cell that reads a large file</td><td>The operating system may still hold file data from the first read in its <span class="gloss" data-gloss="os-page-cache">page cache</span>, making a repeated read faster.</td></tr>
+    <tr><td>Feature store serving online predictions</td><td>Frequently accessed users or features can form a hot set that benefits from caching. The benefit depends on how requests are distributed.</td></tr>
+    <tr><td>Nightly backfill scanning the whole table through the same pool</td><td>A large scan can evict frequently accessed pages. PostgreSQL can use a limited buffer ring for large sequential scans to reduce their effect on the rest of its buffer pool.</td></tr>
   </tbody>
 </table>
 
@@ -280,8 +235,7 @@ instructions, by Thursday Sep 10 at class start.</strong> One file; the harness 
 <p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
-<p>The measurement and reflection questions are still the point of the later parts of the lab; they
-are just not turned in. Bring your numbers and your answers to class, where we compare them.</p>
+<p>Use the measurement and reflection questions to explain your results. They are not graded, but bring your measurements and answers to class for discussion.</p>
 <ul>
   <li>The full hit-rate table, plus your answers to the three
   questions <code>measure_hits.py</code> prints (why the scan gets 0%, why the hot set doesn't
@@ -291,7 +245,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
   of ignoring it?</li>
 </ul>
 
-<h3>What's provided vs what you write</h3>
+<h3>Provided code and required work</h3>
 <table>
   <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
   <tbody>
@@ -313,14 +267,7 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <!-- ============================================================ -->
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
-<p class="keep-in-present">Fast finishers, in rough order of payoff: give <code>pin()</code> a
-<strong>scan-resistant mode</strong>: a boolean <code>sequential=True</code> that makes the block a preferred victim after it is unpinned (a one-frame "ring buffer", exactly Postgres's
-trick) and re-run <code>measure_hits.py</code> to show the hot set is now protected from the
-scan; or implement <strong>clock</strong> eviction (a rotating hand and one reference bit per
-frame, LRU's cheap approximation) and compare its behavior with LRU; the LRU-specific victim-order tests need not pass; or replace
-<code>_find_existing</code>'s linear scan with a <strong>dict <span class="gloss" data-gloss="page-table">page table</span></strong>
-(<code>{BlockId: Buffer}</code>; BlockId is hashable for exactly this reason) and keep it
-consistent through evictions.</p>
+<p class="keep-in-present">If you finish early, try one of these extensions. Add a <code>sequential=True</code> option to <code>pin()</code> that makes an unpinned scan page a preferred eviction candidate. Measure whether this reduces interference with hot-set requests; PostgreSQL uses a related buffer-ring strategy. Alternatively, implement clock eviction and compare its behavior with LRU; the LRU-specific victim-order tests need not pass. A third option is to replace the linear search in <code>_find_existing</code> with a <span class="gloss" data-gloss="page-table">dictionary</span> from <code>BlockId</code> to <code>Buffer</code>, updating it on every eviction.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
@@ -331,20 +278,13 @@ mismatch almost always means <code>last_used</code> isn't stamped per the spec (
 pin) or eviction is choosing a different victim than smallest-<code>last_used</code>.</p>
 
 <h3>Why does pin() abort instead of waiting for a frame?</h3>
-<p class="keep-in-present">In a single-threaded microdb, waiting would wait forever: nobody else is running to do
-the unpinning. Real engines block the requesting thread and get woken by an unpin; the abort
-is the honest single-threaded translation, and it still catches the same bug (leaked pins).</p>
+<p class="keep-in-present">Microdb runs one thread. If every frame is pinned, waiting inside <code>pin()</code> would prevent the same thread from reaching the code that unpins a frame. Raising <code>BufferAbortError</code> reports the problem immediately. A concurrent engine can instead wait for another thread to release a frame, often with a timeout.</p>
 
 <h3>Is my pool's memory really fixed? Python doesn't work that way…</h3>
-<p class="keep-in-present">The <em>pages</em> are: each frame allocates its bytearray once, and blocks are copied into
-it. Python objects around them churn, but the design mirrors the real thing: a real engine
-allocates <code>shared_buffers</code> once at boot and never grows it.</p>
+<p class="keep-in-present">The page storage is fixed: each frame allocates its bytearray once and reuses it for different blocks. Other Python objects may still be allocated while the program runs. Production engines also manage a bounded pool of page memory, although whether that pool can resize depends on the engine.</p>
 
 <h3>Does the OS page cache mess up my measurement?</h3>
-<p class="keep-in-present">It sits underneath, making <em>misses cheaper</em> than real disk, but hit <em>rates</em>
-are computed by your counters, not by timing, so the
-<span class="gloss" data-gloss="os-page-cache">OS cache</span> can't touch them. That's why
-this lab measures rates, not milliseconds.</p>
+<p class="keep-in-present">The operating system’s page cache can make a buffer-pool miss faster by serving it from RAM. It does not change whether the requested block was in your buffer pool. This lab measures your manager’s hit and miss counters rather than elapsed time, so those rates do not depend on the OS cache.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science

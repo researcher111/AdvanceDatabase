@@ -14,13 +14,13 @@
 <aside class="toc">
   <div class="toc-title">Lab 11</div>
   <ul>
-    <li><a href="#try-it">One line routes every pair</a></li>
-    <li><a href="#big-idea">Pattern yours, plumbing rented</a></li>
-    <li><a href="#the-api">One graded file</a></li>
+    <li><a href="#try-it">Trace how keys select a partition</a></li>
+    <li><a href="#big-idea">Separate computation from scheduling and data transfer</a></li>
+    <li><a href="#the-api">One file is graded; two more you run and read</a></li>
     <li><a href="#build">Part 1 · micro-mapreduce</a></li>
     <li><a href="#spark">Part 2 · Spark</a></li>
     <li><a href="#ray">Part 3 · Ray</a></li>
-    <li><a href="#verify">Bugs hide at n=1</a></li>
+    <li><a href="#verify">Routing bugs hide at n=1, so the harness varies n</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -37,8 +37,8 @@
 
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 11 · Thursday November 19, 2026</div>
-  <h1>Spark &amp; Ray · the pattern and the products</h1>
-  <div class="subtitle">A framework coordinates a thousand machines counting words, yet every word must end with exactly one total: build that guarantee in 60 lines, then find it inside Spark and Ray.</div>
+  <h1>Spark &amp; Ray · distributed processing</h1>
+  <div class="subtitle">Implement the key-grouping rule for MapReduce, then compare local Spark and Ray executions.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
@@ -61,15 +61,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">One line of arithmetic routes every pair</h2>
+<h2 id="try-it">Trace how keys select a partition</h2>
 
-<p>The lecture's step-through, here for reference while you code: four documents, two
-partitions, every chip colored by the arithmetic your <code>partition_for</code> will do.</p>
+<p>This widget shows the grouping rule you will implement: four documents produce word-count pairs, and each key determines a partition. The colors show the destination selected by the widget’s simple hash.</p>
 
 <div class="viz" id="viz-mr">
   <div class="viz-title">map → shuffle → reduce · word count, 4 documents, 2 partitions</div>
-  <p class="viz-description">Step through the phases; hover any pair for its routing
-  arithmetic. Part 1 is this widget, as Python, over 4,000 real abstracts.</p>
+  <p class="viz-description">Step through the phases and hover over a pair to inspect its destination. Part 1 implements the same grouping pattern in Python over 4,000 abstracts. The lab uses Python’s <code>hash()</code>, so its partition numbers can differ from this illustration.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="mr-step">Step ▸</button>
     <button type="button" class="btn" id="mr-back">◂ Back</button>
@@ -86,7 +84,7 @@ partitions, every chip colored by the arithmetic your <code>partition_for</code>
     <a class="chat-dl-btn" href="starter/embeddings.py" download>embeddings.py</a>
     <a class="chat-dl-btn" href="starter/test_sparkray.py" download>test_sparkray.py</a>
   </div>
-  <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
+  <p class="viz-caption clone-label">Clone the course repository to download the starter and data files:</p>
 <pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
 <span class="cl-line">cd AdvanceDatabase/labs/lab-11/starter</span></pre>
 </div>
@@ -94,22 +92,17 @@ partitions, every chip colored by the arithmetic your <code>partition_for</code>
 <p>Download the entire <code>starter/</code> directory, including <code>data/</code>. The individual Python links do not include the corpus and vector files. Cloning the repository is the simplest way to get everything.</p>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">The pattern is yours; the plumbing is rented</h2>
+<h2 id="big-idea">Separate computation from scheduling and data transfer</h2>
 
-<p class="keep-in-present">Parts 1 and 2 run map → shuffle → reduce on the same 4,000 abstracts; Part 3
-runs a different job, one task per abstract, on the same machine. What changes is who owns the
-plumbing:</p>
+<p class="keep-in-present">Parts 1 and 2 count words in the same 4,000 abstracts. Part 3 runs independent nearest-neighbor searches on their vectors. Compare the code that computes results with the code or framework that schedules work and transfers data:</p>
 
-<pre class="equation"><code>Part 1  mapreduce.py        you own everything    map_words · partition_for · shuffle · reduce_counts
-Part 2  spark_wordcount.py  Spark owns placement  .flatMap → .map → .reduceByKey   (shuffle inside)
-Part 3  ray_speedup.py      Ray owns scheduling   @ray.remote + launch-all-then-ray.get
+<pre class="equation"><code>Part 1  mapreduce.py        implement map, partition, shuffle, and reduce
+Part 2  spark_wordcount.py  express word count with Spark transformations
+Part 3  ray_speedup.py      submit independent searches as Ray tasks
 
-same corpus, same answers, different plumbing landlords</code></pre>
+Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vectors.</code></pre>
 
-<p class="keep-in-present">Part 1 runs sequentially in one process, on purpose: the functions
-you write are <em>exactly</em> what would run on 1,000 machines; placement and retry are the
-part you'd rent. That separation is the pattern's whole design, and writing the rented part's
-contract yourself is how you'll know what you're renting.</p>
+<p class="keep-in-present">Part 1 executes each phase sequentially in one process. This lets you inspect how map output is routed and grouped before reducing it. Spark handles distributed scheduling and data transfer in Part 2. The map and reduce logic is similar, but running across machines also requires serialization, retry, and resource management.</p>
 
 <!-- ============================================================ -->
 <h2 id="the-api">One file is graded; two more you run and read</h2>
@@ -126,27 +119,19 @@ contract yourself is how you'll know what you're renting.</p>
 </table>
 
 <div class="callout note">
-  <span class="label">Install before you need it</span>
-  <p><code>pip install pyspark ray</code>. pyspark requires a working
-  <span class="gloss" data-gloss="jvm">JVM</span>: <code>java -version</code> must print
-  something; if it doesn't, install a JDK (Temurin or Zulu, 17+) first. Both engines run
-  in <span class="gloss" data-gloss="local-mode">local mode</span> for this lab: a full
-  cluster runtime, all machines played by your laptop. Part 1 needs neither; start there
-  while pip downloads Spark's 400 MB.</p>
+  <span class="label">Prepare the optional dependencies</span>
+  <p>Install the optional engines with <code>pip install pyspark ray</code>. Spark runs on the <span class="gloss" data-gloss="jvm">JVM</span> and needs a JDK supported by the installed PySpark version; check it with <code>java -version</code>. Both examples run in <span class="gloss" data-gloss="local-mode">local mode</span> on your machine. Part 1 requires neither package, so you can begin it while preparing the optional dependencies.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · micro-mapreduce <span class="part-time">~35 min in class · graded</span></h2>
 
 <ol>
-  <li><strong>Read <code>run_mapreduce</code></strong> (5 min, provided): three phases,
-  three lines each; the phase boundaries are where data would cross machines.</li>
+  <li><strong>Read run_mapreduce (5 min):</strong> identify where it maps records, calls the shuffle, and reduces each grouped key. In a distributed implementation, the shuffle transfers records to the workers responsible for their keys.</li>
   <li><strong><code>map_words</code></strong>: one <code>(word, 1)</code> per occurrence,
   tokenized exactly like Lab 10. No counting in map: raw pairs out.</li>
-  <li><strong><code>partition_for</code></strong>: <code>hash(key) % n_partitions</code>.
-  One line; the whole coordination-free routing idea lives in it.</li>
-  <li><strong><code>shuffle</code></strong>: n empty dicts; route every pair with
-  <code>partition_for</code>; group values per key. This is the graded heart.</li>
+  <li><strong>partition_for:</strong> return <code>hash(key) % n_partitions</code>. Within a run, equal keys must always select the same partition.</li>
+  <li><strong>shuffle:</strong> create one dictionary per partition. Route each pair using <code>partition_for</code>, then append its value to that partition’s list for the key.</li>
   <li><strong><code>reduce_counts</code></strong>: <code>sum(values)</code>. Run
   <code>python3 mapreduce.py</code>:</li>
 </ol>
@@ -159,10 +144,7 @@ contract yourself is how you'll know what you're renting.</p>
 14747  to
 <span class="t-mute">   ...</span></code></pre>
 
-<p class="keep-in-present">The top of a raw word count is always stop words: Lab 10's
-stop-word lesson, seen from the producing side this time. Real pipelines put a filter in map
-or a <span class="gloss" data-gloss="combiner">combiner</span> before the shuffle; the
-harness grades the raw contract.</p>
+<p class="keep-in-present">Common words often dominate an unfiltered word count. Removing stop words changes which words are counted; a <span class="gloss" data-gloss="combiner">combiner</span> preserves the counts while reducing intermediate pairs. This lab’s graded map function emits one raw pair per occurrence without either optimization.</p>
 
 <!-- ============================================================ -->
 <h2 id="spark">Part 2 · Spark <span class="part-time">~15 min in class</span></h2>
@@ -178,11 +160,7 @@ harness grades the raw contract.</p>
     |  PythonRDD[1] at reduceByKey at spark_wordcount.py:37 []
     |  ParallelCollectionRDD[0] at readRDDFromFile at PythonRDD.scala:326 []</code></pre>
 
-<p class="keep-in-present">Read bottom-up like an <code>EXPLAIN</code>: the bottom block is
-the map-side stage (your flatMap and map, fused into one pass per partition), the
-<code>ShuffledRDD</code> line is Tuesday's stage boundary (your Part 1
-<code>shuffle</code>, industrialized), and the <code>(4)</code>s are the four partitions.
-The top-15 it prints must match Part 1's exactly; the harness checks the full dict.</p>
+<p class="keep-in-present">Read the printed plan from its input upward. The map-side work includes <code>flatMap</code> and <code>map</code>; <code>ShuffledRDD</code> marks redistribution before the reduce-side work. The <code>(4)</code> labels indicate four partitions. Compare the final top-15 list with Part 1; the optional Spark test checks the complete result dictionary.</p>
 
 <!-- ============================================================ -->
 <h2 id="ray">Part 3 · Ray <span class="part-time">~15 min in class</span></h2>
@@ -202,14 +180,9 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
 
 <p class="key-fact keep-in-present"><strong>3.5×</strong> faster on 10 cores, identical results, from two lines of Ray</p>
 
-<p class="keep-in-present">Not 10× on 10 cores: Ray pays startup, ships the 4,000 vectors to each
-worker once, and a two-second job is small. The overhead is fixed, the win scales with the work;
-the full graph over all 4,000 abstracts costs 45 seconds serially and the fixed cost disappears.
-The neighbors it prints are the payoff: a paper about table retrieval sits next to papers about
-multi-table retrieval and table search, found by arithmetic over vectors you built an index for
-last week.</p>
+<p class="keep-in-present">The reference run was faster in parallel but did not scale in direct proportion to core count. Worker setup, scheduling, and data transfer add work, and some resources are shared. Increasing the number of searches may amortize some setup cost, while other overheads also grow. Measure the behavior on your machine rather than assuming a fixed speedup.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · Ray">The overhead is fixed; the win grows with the work</h3>
+<h3 class="new-slide" data-kicker="Part 3 · Ray">Measure how workload size and worker count affect speedup</h3>
 
 <p class="keep-in-present"><strong>Now change something.</strong> Set <code>N_DOCS = 1000</code> and run again; then leave
 it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the three speedups
@@ -218,10 +191,7 @@ it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the
 <!-- ============================================================ -->
 <h2 id="verify">Routing bugs hide at n=1, so the harness varies n</h2>
 
-<p>With everything installed, all three groups run; without pyspark or ray the harness
-skips those groups and scores what ran; the
-<span class="gloss" data-gloss="driver">driver</span>-side OFFLINE group is the graded
-part either way:</p>
+<p>The OFFLINE tests check the graded Part 1 implementation. The optional SPARK and RAY groups run when their dependencies are available and otherwise report a skip. The combined local score counts whichever tests ran; Gradescope uses the seven OFFLINE tests only.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_sparkray.py</span>
 <span class="t-head">OFFLINE group (Part A)</span>
@@ -242,28 +212,16 @@ part either way:</p>
 
 <div class="exercise">
   <span class="ex-label">Exercise · read the failure</span>
-  <p>A classmate passes everything except <code>answer independent of partition count</code>:
-  with <code>n=1</code> their counts are right, with <code>n=7</code> the word
-  <code>"the"</code> appears in the results <em>three times</em> with three partial counts.
-  Their <code>partition_for</code> passes its determinism test. What must their
-  <code>shuffle</code> be doing?</p>
+  <p>A classmate’s counts are correct with one partition, but with seven partitions the output contains three partial totals for the word “the.” Their <code>partition_for</code> function is deterministic. How could <code>shuffle</code> still send equal keys to different partitions?</p>
   <details><summary>Show answer</summary>
-  <p>Routing by something other than <code>partition_for(key, n)</code>, most commonly
-  round-robin over the pairs or hashing the whole <code>(key, value)</code> tuple. Each
-  partition then groups its own "the" pairs locally and reduces them separately, producing
-  one partial total per partition that saw the word. With <code>n=1</code> the bug is
-  invisible (everything is in the one partition, which is why the harness varies n). The
-  grouping guarantee isn't "values get grouped"; it's "grouped <em>globally</em>, because
-  routing sent them all to one place."</p>
+  <p>The shuffle may be assigning pairs round-robin or using a varying property, such as the source document, instead of <code>partition_for(key, n)</code>. Each destination then produces a partial total for the same word. With one partition, that routing error is hidden. Hashing <code>(word, 1)</code> would violate the required routing rule but would still keep identical word-count pairs together, so it would not explain this particular split.</p>
   </details>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
 
-<p class="keep-in-present"><strong>Submit <code>mapreduce.py</code> to Gradescope, per the course
-submission instructions, by Tuesday Dec 1 at class start.</strong> One file; the harness score you
-see locally is the grade.</p>
+<p class="keep-in-present">Submit <code>mapreduce.py</code> to Gradescope by Tuesday Dec 1 at class start, following the course submission instructions. The seven OFFLINE tests determine the lab grade.</p>
 <p>Thursday Nov 26 is Thanksgiving, so there is no Thursday class that week; the lab is due the Tuesday after the break, Dec 1. The autograder runs the
 OFFLINE group, and that is the whole grade; Parts 2 and 3 are for class discussion.</p>
 
@@ -274,17 +232,14 @@ OFFLINE group, and that is the whole grade; Parts 2 and 3 are for class discussi
 <p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
-<p>The measurement and reflection questions are still the point of the later parts of the lab; they
-are just not turned in. Bring your numbers and your answers to class, where we compare them.</p>
+<p>Bring the measurement output and your answers to class for discussion. The Spark and Ray experiments help explain distributed execution but are not submitted for the lab grade.</p>
 <ul>
   <li>Three blocks of output with one-paragraph answers:
   (1)&nbsp;your Spark DAG, with the shuffle line marked and one sentence on why the stage
   boundary sits exactly there; (2)&nbsp;your Ray timings from the three runs, plus the time you'd predict for the
   full 4,000-document graph on your core count, show the arithmetic; (3)&nbsp;the top-15
   word list, and one sentence connecting it to Lab 10's stop-word list.</li>
-  <li>Reflection (3–5 sentences): Tuesday claimed the shuffle is Lab 4's join cost wearing
-  a network costume. Defend or attack, citing one concrete thing from your
-  <code>shuffle</code> implementation and one from <code>ProductScan</code>.</li>
+  <li>Reflection (3–5 sentences): Compare how your shuffle groups matching keys with how Lab 4’s <code>ProductScan</code> generates candidate row pairs. What data must each operation inspect or move, and what would change if that data were spread across machines?</li>
 </ul>
 
 <h3>Grading</h3>
@@ -298,41 +253,22 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <!-- ============================================================ -->
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
-<p class="keep-in-present">Fast finishers: add a <strong>combiner</strong> to
-<code>run_mapreduce</code>: pre-sum duplicate keys per input <em>before</em> the shuffle
-and count how many pairs cross the phase boundary (it drops ~6×; that ratio is why every
-engine combines). Implement <strong>skew salting</strong>: make one word 50% of a synthetic
-corpus, watch one partition bloat, then split the hot key across
-<code>the#0…the#3</code> and aggregate twice. Or convert Part 3 to an
-<strong>actor</strong>: <code>@ray.remote class Searcher</code> that loads the 4,000 vectors in
-<code>__init__</code> (once per worker) and answers <code>neighbors(doc)</code> calls; re-measure
-and explain what a task pays per call that an actor pays once.</p>
+<p class="keep-in-present">Optional extensions: add a combiner that sums repeated keys within each mapper’s output, then measure the reduction in shuffled pairs. Create a skewed input where one word accounts for 50% of occurrences; split that key across suffixes and combine the partial totals afterward. Or use a Ray actor that loads the vectors once and serves repeated searches, then compare data transfer and timings with the task implementation.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Python's built-in <code>hash()</code> gives different values each run. Is that OK?</h3>
-<p class="keep-in-present">Yes, and it's worth knowing why: Python salts string hashes per
-process (a security measure), so partition assignments differ <em>between</em> runs but
-never <em>within</em> one, which is all the shuffle's guarantee needs. Real engines use a
-fixed hash (murmur3) so that independent machines, and re-runs, agree. If you set
-<code>PYTHONHASHSEED=0</code> you get reproducible routing too.</p>
+<p class="keep-in-present">Yes, for this single-process implementation. Python normally randomizes string hashes between processes, while repeated hashes of the same string remain stable within one process. A distributed routing scheme needs all workers to use a compatible hash and seed. Setting <code>PYTHONHASHSEED=0</code> makes the lab’s string hashes reproducible across runs using the same Python environment.</p>
 
 <h3 class="keep-in-present">Spark printed a wall of WARN messages. Is it broken?</h3>
-<p class="keep-in-present">No; Spark in local mode is chatty (native-library warnings,
-psutil suggestions). <code>sc.setLogLevel("ERROR")</code> (already in the starter) quiets
-runtime noise; the startup warnings are cosmetic. If the run <em>hangs</em>, the usual
-culprit is Java missing or a JDK too old (need 17+): check <code>java -version</code>.</p>
+<p class="keep-in-present">Warnings do not necessarily mean the job failed. Check whether it completes and returns the expected counts. The starter sets <code>sc.setLogLevel("ERROR")</code> for runtime logging, but startup messages may still appear. If startup fails or hangs, check the reported error, <code>java -version</code>, and the Java versions supported by your PySpark installation.</p>
 
 <h3 class="keep-in-present">My Ray speedup is only ~3× on 8 cores. Did I do it wrong?</h3>
 <p class="keep-in-present">Probably not. A small job may spend much of its time starting workers and moving data. The harness checks result equality and that all tasks launch before the wait; it does not impose a hardware-dependent speedup threshold. Use the timing script to investigate overhead and increase the workload before drawing conclusions.</p>
 
-<h3 class="keep-in-present">When would I genuinely choose Spark over DuckDB + Ray?</h3>
-<p class="keep-in-present">When the data doesn't fit one machine AND the workload is
-relational: multi-TB joins and aggregations on a shared cluster with other teams. DuckDB
-owns the fits-on-one-box case (most of them); Ray owns arbitrary-Python fan-out. Spark's
-moat is the optimizer + shuffle machinery over cluster-scale <em>tables</em>: if your
-mental model of the job is SQL, and it can't fit locally, it's Spark's job.</p>
+<h3 class="keep-in-present">When would I choose Spark instead of DuckDB and Ray?</h3>
+<p class="keep-in-present">Spark is useful when a relational dataflow needs distributed resources, such as large joins and aggregations on a cluster. DuckDB is worth evaluating for a single-machine SQL workload, including work that spills to disk. Ray is useful for independent Python tasks and stateful workers. Choose from measured memory, latency, and throughput needs rather than dataset size alone.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science

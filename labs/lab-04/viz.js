@@ -5,39 +5,23 @@
   const GLOSSARY = {
     'predicate': {
       title: 'Predicate',
-      body: '<p>A yes/no test applied to a row — <code>gpa &gt; 35</code>, ' +
-        '<code>name = "ada"</code>, or a conjunction of such terms. The WHERE clause is a ' +
-        'predicate; a SelectScan is a predicate given a job. When a term compares two ' +
-        '<em>fields</em> instead of a field and a literal, the same machinery expresses a ' +
-        'join condition.</p>',
+      body: "<p>A condition evaluated for a row, such as <code>gpa &gt; 35</code> or <code>name = \"ada\"</code>. <code>SelectScan</code> returns rows that satisfy its predicate. A term comparing fields from two tables can express a join condition.</p>",
     },
     'delegation': {
       title: 'Delegation',
-      body: '<p>Answering a method call by forwarding it to the object you wrap — SelectScan’s ' +
-        '<code>get_val</code> is one line: <code>return self.scan.get_val(fld)</code>. The ' +
-        'iterator model is delegation with taste: each operator intercepts only the methods its ' +
-        'concept changes and forwards the rest untouched.</p>',
+      body: "<p>Implementing a method by forwarding its work to another object. For example, <code>SelectScan.get_val</code> calls <code>self.scan.get_val(fld)</code>. The selection changes which rows are returned while using its input scan to read their field values.</p>",
     },
     'cartesian-product': {
       title: 'Cartesian product',
-      body: '<p>Every row of one table paired with every row of another — |A| × |B| pairs, no ' +
-        'condition. The raw material of joins: filter the product down to pairs where the join ' +
-        'condition holds and you have joined the tables. Affordable only when its inputs are ' +
-        'small, which is why so much of database engineering is about shrinking them first.</p>',
+      body: "<p>Every row from one input paired with every row from another. Inputs with |A| and |B| rows produce |A| × |B| pairs. Filtering these pairs by a join condition gives an inner join. More efficient join algorithms can find matching pairs without enumerating the full product.</p>",
     },
     'predicate-pushdown': {
       title: 'Predicate pushdown',
-      body: '<p>Moving a filter as far down the plan as it can legally go — filtering each table ' +
-        '<em>before</em> a product instead of filtering pairs after. Your measurement shows it ' +
-        'buying 15× on toy data; on real warehouses it’s routinely thousands-fold, and it works ' +
-        'on Parquet files too (week 10).</p>',
+      body: "<p>Moving a filter earlier in a query plan when the transformation preserves the result. For example, a filter that refers only to the left input of a product can run before that product. The lab’s measurement shows 15 times fewer candidate pairs with this change.</p>",
     },
     'materialization': {
       title: 'Materialization',
-      body: '<p>Computing and storing a stage’s entire result before the next stage reads it — ' +
-        'the thing the iterator model avoids. Your Going Further CachingScan materializes on ' +
-        'purpose, trading memory for the right side’s repeated re-execution: the first step ' +
-        'toward week 9’s hash join.</p>',
+      body: "<p>Storing intermediate results so another operator can read or reuse them. The optional <code>CachingScan</code> stores its input rows on the first pass and reuses them on later passes. This reduces repeated input reads but requires memory for the cached rows.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -69,9 +53,9 @@
     const kept = STUDENTS.filter(r => r.gpa > 35);
     tree.innerHTML =
       node('Project', 'name', `${kept.length} rows out: ${kept.map(r => r.name).join(', ')}`) + arrow +
-      node('Select', 'gpa > 3.5', `${scanned} in → ${kept.length} out`) + arrow +
+      node('Select', 'gpa > 35', `${scanned} in → ${kept.length} out`) + arrow +
       node('Scan', 'students', `${scanned} rows`);
-    msg.innerHTML = 'The Lecture 1 demo, as an operator stack — six rows examined, three delivered.';
+    msg.innerHTML = 'This plan examines six rows and returns the three that satisfy the filter.';
     stats.textContent = 'rows examined: 6    rows delivered: 3';
   }
 
@@ -81,13 +65,13 @@
     const kept = pairs.filter(p => p.mid === p.mid2 && p.gpa > 35);
     tree.innerHTML =
       node('Project', 'name, dept', kept.map(p => `(${p.name}, ${p.dept})`).join(' ')) + arrow +
-      node('Select', 'mid = mid2 AND gpa > 3.5', `${pairs.length} pairs in → ${kept.length} out`) + arrow +
+      node('Select', 'mid = mid2 AND gpa > 35', `${pairs.length} pairs in → ${kept.length} out`) + arrow +
       node('Product', 'students × majors', `${pairs.length} pairs built`) +
       `<div class="pl-pair">` +
       `<div class="pl-node">Scan<span>students</span><span class="traffic">6 rows, read once</span></div>` +
       `<div class="pl-node">Scan<span>majors</span><span class="traffic">3 rows × 6 rewinds = 18</span></div>` +
       `</div>`;
-    msg.innerHTML = 'The course’s first join: product + predicate. Note the majors scan’s traffic — rewound per student.';
+    msg.innerHTML = 'The selection keeps matching pairs from the product. The majors scan restarts for each student.';
     stats.textContent = 'pairs built: 18    rows delivered: 3';
   }
 
@@ -98,7 +82,7 @@
       `<div class="pl-node">Scan<span>students</span><span class="traffic">6 rows</span></div>` +
       `<div class="pl-node">Scan<span>majors</span><span class="traffic">3 rows × 6 rewinds</span></div>` +
       `</div>`;
-    msg.innerHTML = 'The bare <strong>cartesian product</strong> — every student paired with every major, meaningful or not.';
+    msg.innerHTML = 'The <strong>Cartesian product</strong> pairs every student with every major, without applying a join condition.';
     stats.textContent = 'pairs built: 18    rows delivered: 18';
   }
 

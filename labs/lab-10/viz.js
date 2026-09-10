@@ -5,42 +5,23 @@
   const GLOSSARY = {
     'echo-mode': {
       title: 'Echo mode',
-      body: '<p>The lab\u2019s offline stand-in for the LLM call: instead of generating an ' +
-        'answer, answer() returns the assembled prompt plus a note. Nothing is faked \u2014 ' +
-        'the prompt is the pipeline\u2019s real output, and grading it grades retrieval. Set ' +
-        'LLM_BASE_URL and the same code calls a real model; the graded work never needs ' +
-        'one.</p>',
+      body: "<p>The offline mode in which answer() returns the assembled prompt instead of requesting generated text. This lets you inspect the selected evidence and prompt format. The graded tests need no model connection. Configuring LLM_BASE_URL enables the provided model-call path.</p>",
     },
     'eval-set': {
       title: 'Eval set',
-      body: '<p>A hand-labeled list of (question, relevant doc ids) pairs \u2014 12 of them in ' +
-        'corpus.py. Label once, then every change to the pipeline (chunk size, DIM, k, a new ' +
-        'embedder) gets graded in milliseconds by hit@k and MRR instead of by someone reading ' +
-        'answers. The single highest-leverage artifact in a RAG project, which is why your ' +
-        'project must ship its own.</p>',
+      body: "<p>Questions paired with labels identifying relevant documents or passages. The lab supplies 12 questions in corpus.py. Run each configuration against the same labels to compare hit@k and MRR. Generated answers need separate evaluation; retrieval metrics alone do not measure answer correctness.</p>",
     },
     'hashing-trick': {
       title: 'The hashing trick',
-      body: '<p>Map each word to a dimension by hashing it (md5(word) mod DIM) instead of ' +
-        'keeping a vocabulary table. Any word ever seen or not maps somewhere instantly, no ' +
-        'fitting step, fixed memory. The cost is collisions \u2014 unrelated words sharing a ' +
-        'dimension \u2014 which is why the DIM dial below moves retrieval quality. ' +
-        'scikit-learn ships this as HashingVectorizer.</p>',
+      body: "<p>Map each word to a vector position with md5(word) mod DIM. This uses a fixed vector width without a vocabulary table or fitting step. Different words can collide at the same position. Changing DIM affects those collisions, which can change retrieval scores and ranking.</p>",
     },
     'stop-words': {
       title: 'Stop words',
-      body: '<p>Words too common to carry signal \u2014 "the", "of", "and", "is". Every chunk ' +
-        'contains them, so under bag-of-words they make everything look similar to ' +
-        'everything. Dropping them before embedding is the oldest trick in information ' +
-        'retrieval; without it this lab\u2019s hit@3 falls apart regardless of DIM.</p>',
+      body: "<p>Words removed before embedding, often because they are frequent and provide little discrimination between documents. The lab uses a fixed list including the, of, and and. Such lists depend on the task: removing a word can also remove useful meaning, so evaluate the choice.</p>",
     },
     'mrr': {
       title: 'MRR (mean reciprocal rank)',
-      body: '<p>For each eval question, take 1/rank of the first relevant doc retrieved ' +
-        '(rank 1 \u2192 1.0, rank 3 \u2192 0.33, absent \u2192 0), then average over questions. ' +
-        'Stricter than hit@k: it notices when the right doc slides from first to third even ' +
-        'though it still "came back." Retrieval order is prompt order, so rank is what the ' +
-        'model experiences.</p>',
+      body: "<p>For each question, take the reciprocal of the first relevant result’s rank: 1 for rank 1, 0.5 for rank 2, and zero if no relevant result is returned. MRR is the average across questions. It distinguishes early and late relevant results even when both count as a hit@k.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);

@@ -7,38 +7,23 @@
   const GLOSSARY = {
     'heap-file': {
       title: 'Heap file',
-      body: '<p>The default storage shape for a table: a file of blocks holding records in no ' +
-        'particular order — rows land wherever a free slot exists. Fast to insert into, fair to ' +
-        'scan, completely unordered. Nearly every engine’s base tables are heap files; ordered ' +
-        'access is what indexes add in week 6.</p>',
+      body: "<p>A file that stores table records without sorting them by a key. A row can occupy any available slot. A scan visits the blocks in sequence; an index can locate rows by a field value.</p>",
     },
     'tombstone': {
       title: 'Tombstone',
-      body: '<p>A deleted record that still physically occupies its slot — only the in-use flag ' +
-        'changed. The bytes remain until a future insert reuses the slot. Deletion becomes O(1), ' +
-        '“deleted” data stays forensically recoverable, and space comes back lazily rather than ' +
-        'by compaction.</p>',
+      body: "<p>In this lab, deleting a record changes its slot flag from USED to EMPTY, making the slot available for reuse. The old field bytes remain until overwritten. Other database systems use the term tombstone for different kinds of deletion markers.</p>",
     },
     'rid': {
       title: 'RID (record id)',
-      body: '<p>A row’s physical address: (block number, slot number). Stable because slotted ' +
-        'storage never moves records — updates overwrite in place and deletes flip a flag. ' +
-        'Stability is the whole point: an index (week 6) is a map from field values to RIDs, ' +
-        'and a map to moving targets would be worthless.</p>',
+      body: "<p>A row’s physical address in microdb: its block number and slot number. The address stays the same while the row exists. After deletion, another row may reuse the slot, so an index must remove entries for deleted rows.</p>",
     },
     'internal-fragmentation': {
       title: 'Internal fragmentation',
-      body: '<p>Wasted space <em>inside</em> an allocation: a 40-char bio in a 200-char ' +
-        'reservation leaves 160 bytes of air no one else can use. The deliberate rent paid for ' +
-        'fixed-size slots and O(1) addressing — and the thing your measurement quantifies ' +
-        'schema by schema.</p>',
+      body: "<p>Unused space within an allocated region. A 40-byte value in a field with a 200-byte capacity leaves 160 reserved bytes unused. Fixed-size slots simplify addressing but can waste space when values are much shorter than the field capacity.</p>",
     },
     'latch': {
       title: 'Latch',
-      body: '<p>A short-lived low-level lock protecting an in-memory structure (a page, a frame) ' +
-        'for the microseconds a thread needs to read or modify it — distinct from the ' +
-        'transaction-level locks of week 7, which can be held for seconds. Single-threaded ' +
-        'microdb needs neither; multi-threaded engines need both, at different timescales.</p>',
+      body: "<p>A short-lived lock that protects an in-memory structure while a thread accesses or modifies it. It differs from a transaction lock, which protects logical database operations across a transaction. This lab runs on one thread and does not implement latches.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -64,7 +49,7 @@
       }));
     cur = { b: 0, s: -1 };
     pinned = 0; rowsSeen = 0; pinsCount = 1; nextId = 12; done = false;
-    msg.textContent = 'Press next() to find the first row. Watch the pin indicator as you cross block 0 → 1.';
+    msg.textContent = 'Press next() to find the first row. Watch the pin move from block 0 to block 1.';
     render();
   }
 
@@ -94,7 +79,7 @@
   }
 
   function next() {
-    if (done) { msg.innerHTML = 'The scan already returned <strong>False</strong> — before_first() to rewind.'; return; }
+    if (done) { msg.innerHTML = 'The scan has ended. Call before_first() to restart it.'; return; }
     let b = cur.b, s = cur.s;
     let crossings = 0;
     while (true) {
@@ -105,14 +90,14 @@
         pinned = b;
         rowsSeen += 1;
         msg.innerHTML = `next() → row <strong>id ${blocks[b][found].id}</strong> at RID (${b}, ${found})` +
-          (crossings ? ` — crossed ${crossings} block boundar${crossings > 1 ? 'ies' : 'y'}: unpin, pin, ask again.` : '.');
+          (crossings ? ` — crossed ${crossings} block boundar${crossings > 1 ? 'ies' : 'y'}, unpinning each block before pinning and searching the next.` : '.');
         render();
         return;
       }
       if (b === blocks.length - 1) {
         done = true;
-        msg.innerHTML = `next() → <strong>False</strong>. Block ${b} exhausted and it's the last — the scan is over. ` +
-          `${rowsSeen} rows total.`;
+        msg.innerHTML = `next() → <strong>False</strong>. No occupied slots remain in the last block (${b}). ` +
+          `The scan returned ${rowsSeen} rows.`;
         render();
         return;
       }
@@ -123,17 +108,17 @@
   function beforeFirst() {
     done = false; rowsSeen = 0;
     moveTo(0);
-    msg.innerHTML = 'before_first() → back to block 0, slot -1. The cursor is before the first row.';
+    msg.innerHTML = 'before_first() → block 0, slot -1. The cursor is before the first row.';
     render();
   }
 
   function delCurrent() {
-    if (done || cur.s < 0) { msg.innerHTML = 'delete() needs the cursor on a row — call next() first.'; return; }
+    if (done || cur.s < 0) { msg.innerHTML = 'Call next() to move to a row before deleting it.'; return; }
     const sl = blocks[cur.b][cur.s];
-    if (!sl.used) { msg.innerHTML = 'Current slot is already a tombstone.'; return; }
+    if (!sl.used) { msg.innerHTML = 'The current slot is already marked EMPTY.'; return; }
     sl.used = false; sl.ghost = true;
-    msg.innerHTML = `delete() → RID (${cur.b}, ${cur.s}) is now a tombstone († = old bytes still there). ` +
-      `Future next() calls skip it; a future insert() may recycle it.`;
+    msg.innerHTML = `delete() → slot at RID (${cur.b}, ${cur.s}) is now EMPTY († marks the old field bytes). ` +
+      `next() skips it; insert() may reuse it.`;
     render();
   }
 
@@ -147,17 +132,17 @@
         const wasGhost = blocks[b][free].ghost;
         blocks[b][free] = { used: true, ghost: false, id: nextId };
         cur = { b, s: free }; pinned = b; done = false;
-        msg.innerHTML = `insert() → id ${nextId} lands at RID (${b}, ${free})` +
-          (wasGhost ? ' — <strong>a recycled tombstone</strong>; the file did not grow.' : '.');
+        msg.innerHTML = `insert() → id ${nextId} is stored at RID (${b}, ${free})` +
+          (wasGhost ? ' — <strong>reused a deleted slot</strong>; the file did not grow.' : '.');
         nextId += 1;
         render();
         return;
       }
       if (b === blocks.length - 1) {
-        if (blocks.length >= MAX_BLOCKS) { msg.innerHTML = 'Widget cap reached (4 blocks) — Reset to start over.'; return; }
+        if (blocks.length >= MAX_BLOCKS) { msg.innerHTML = 'This example is limited to 4 blocks. Press Reset to start over.'; return; }
         blocks.push(Array.from({ length: SLOTS }, () => ({ used: false, ghost: false, id: null })));
         b = blocks.length - 1; s = -1; pinsCount += 1;
-        msg.innerHTML = `Every slot full → fm.append(): a fresh <strong>zeroed</strong> block ${b} (five EMPTY slots by construction)…`;
+        msg.innerHTML = `No empty slots remain after the cursor. fm.append() adds <strong>zeroed</strong> block ${b} with five EMPTY slots in this example.`;
         // fall through: next loop iteration inserts into slot 0
       } else {
         b += 1; s = -1; pinsCount += 1;

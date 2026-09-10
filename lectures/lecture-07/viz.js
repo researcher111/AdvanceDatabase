@@ -5,54 +5,39 @@
   const GLOSSARY = {
     'steal': {
       title: 'STEAL',
-      body: '<p>A buffer-pool policy for what happens when memory is full. Under STEAL, the pool may evict, and therefore flush to disk, a dirty page that belongs to a transaction that has not committed yet; the frame is &#39;stolen&#39; from that transaction. This is what lets the pool manage memory freely, but it means a crash can leave uncommitted changes sitting on disk. Recovery must then undo them, which is only possible if the old value was logged before the page was written: the write-ahead rule. NO-STEAL avoids the undo pass by pinning every dirty page until its transaction commits, which is simple but means a large transaction can exhaust the pool.</p>',
+      body: "<p>A buffer policy that permits flushing a dirty page before the transaction that changed it commits. This frees memory but can put uncommitted changes on disk. In microdb, recovery must undo those changes using old values made durable in the log first. NO-STEAL keeps uncommitted dirty pages from reaching the database file, which can require more memory.</p>",
     },
     'force': {
       title: 'FORCE',
-      body: '<p>A buffer-pool policy for what happens at COMMIT. Under FORCE, the pool writes every dirty page the committing transaction touched to disk before the COMMIT record is appended to the log. The payoff is that recovery never has to redo a committed transaction, because its data is already on disk whenever its COMMIT record is. The cost is that each commit waits for those page writes, which are random I/O, and that is why production engines choose NO-FORCE and accept a redo pass instead. microdb uses FORCE because it keeps recovery to a single undo pass.</p>',
+      body: "<p>A commit policy that requires the transaction’s changed data pages to be durable before commit finishes. In microdb, those pages are flushed before the COMMIT record is appended and synced. Recovery therefore needs no redo for committed transactions. NO-FORCE defers data-page writes and requires durable information to reconstruct them after a crash.</p>",
     },
     'kill-9': {
       title: 'kill -9',
-      body: '<p>A Unix command that tells the operating system to terminate a process immediately, with no warning and no chance to run cleanup code. Anything the process held only in memory, including data pages it had not yet written and log records still sitting in its buffers, is gone the instant the command lands. The operating system&#39;s own cache survives, so bytes already handed to the OS but not yet fsync&#39;d are in a grey zone: they may reach disk, or may not. This tests an abrupt process exit, not a power cut: the OS cache survives process termination. Power-loss and torn-write testing require additional fault injection.</p>',
+      body: "<p>A Unix command that terminates a process without allowing cleanup. Data kept only in that process’s memory is lost. The operating system’s cache survives, so this tests an abrupt process exit rather than a power failure. Power-loss and partial-write testing require additional fault injection.</p>",
     },
     'mvcc': {
       title: 'MVCC',
-      body: '<p>Multi-version concurrency control. Instead of overwriting a row in place, the engine keeps several versions of it, each stamped with the transaction that wrote it, and every reader is shown the version that was current when its own transaction began. Writers therefore never block readers and readers never block writers, because they are looking at different copies. Old versions are cleaned up later, once no running transaction can still see them. It is how Postgres keeps the I in ACID; Tuesday&#39;s lecture covers it in full.</p>',
+      body: "<p>Multi-version concurrency control keeps multiple row versions and uses a snapshot to choose which version a read can see. Ordinary snapshot reads can avoid conflicting row locks while writers create new versions. Snapshot timing depends on the isolation level, and writers can still conflict with other writers. Old versions can be reclaimed after no active snapshot needs them.</p>",
     },
     'fsync-recall': {
       title: 'fsync — recall',
-      body: '<p>Lab 1’s expensive promise: the system call that blocks until bytes are ' +
-        'physically on durable storage. You measured it costing 10–1000× a buffered write. ' +
-        'Today’s design question is where a transaction system can afford to spend them — ' +
-        'and the answer is: one, on the COMMIT record, on a sequential file.</p>',
+      body: "<p>A system call that requests durable storage of a file’s buffered changes and waits for completion. Lab 1 compares its cost with a buffered write. Lab 7 syncs log records before changed pages can be flushed, flushes the transaction’s data pages, then syncs COMMIT. A NO-FORCE design can defer data writes and share log flushes across commits.</p>",
     },
     'idempotent': {
       title: 'Idempotent',
-      body: '<p>Safe to run twice: doing it again changes nothing more. Restoring an old value ' +
-        'is idempotent (restore twice, same result); “subtract $40” is not. Recovery must be ' +
-        'idempotent because a crash can interrupt recovery itself — the second pass must do no ' +
-        'new damage. A design property you’ll meet again in week 13’s exactly-once story.</p>',
+      body: "<p>An operation is idempotent when repeating it has the same effect as applying it once. Setting a balance to its logged old value is idempotent; subtracting $40 is not. Recovery must remain safe if interrupted and run again, including when a second crash occurs partway through repair.</p>",
     },
     'redo': {
       title: 'Redo',
-      body: '<p>Replaying a committed transaction’s writes from the log because its data pages ' +
-        'never reached disk — the price of NO-FORCE (commits don’t flush data). Requires ' +
-        'logging new values alongside old ones. microdb’s FORCE policy makes redo unnecessary; ' +
-        'ARIES does redo-then-undo and is the industry standard.</p>',
+      body: "<p>Reapplying logged changes that may be missing from data pages after a crash. NO-FORCE designs need redo information because commit can finish before data pages are written. microdb uses FORCE and does not need redo. ARIES replays logged history, then undoes transactions that were unfinished at the crash.</p>",
     },
     'checkpoint-recall': {
       title: 'Checkpoint — recall',
-      body: '<p>Week 2’s table promised this payoff: a periodic “everything before here is ' +
-        'safely on disk” note in the log. Recovery starts from the latest checkpoint instead ' +
-        'of the beginning of time, bounding restart to seconds instead of a replay of the ' +
-        'database’s whole life.</p>',
+      body: "<p>A log record or related metadata that describes durable progress and helps recovery find the information it needs. A checkpoint does not always mean that every earlier transaction is complete. In a simple undo-only design, stopping the scan at a checkpoint is safe only if no unfinished transaction needs earlier log records.</p>",
     },
     'torn-write': {
       title: 'Torn write',
-      body: '<p>A crash mid-way through writing a single page, leaving half old and half new ' +
-        'bytes — disks only promise atomicity per sector, not per 8&nbsp;KB page. Real engines ' +
-        'defend with page checksums and (in Postgres) full-page images in the WAL after each ' +
-        'checkpoint. microdb, at 128-byte blocks on a journaling filesystem, gets to ignore it.</p>',
+      body: "<p>A partial page write that leaves a mixture of old and new bytes after a failure. Page size, hardware guarantees, and filesystem behavior affect this risk. Production engines can use checksums to detect damage and logged page images to repair it. The lab’s process-crash tests do not test or repair arbitrary torn writes.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -77,9 +62,9 @@
       fx: st => st.log.push({ t: 'START tx1', c: 'synced' }) },
     { msg: 'tx1 sets A := 60. FIRST the old value (100) is logged and synced; THEN the page changes — in the buffer pool only. Disk still says 100.',
       fx: st => { st.log.push({ t: 'SET A old=100', c: 'synced' }); st.note = 'buffer: A=60'; } },
-    { msg: 'tx1 sets B := 90, same dance. Old value 50 logged and synced; data page not yet flushed.',
+    { msg: 'tx1 sets B := 90. The old value, 50, is logged and synced before the buffered page changes; the data page has not yet been flushed.',
       fx: st => { st.log.push({ t: 'SET B old=50', c: 'synced' }); st.note = 'buffer: A=60 B=90'; } },
-    { msg: 'tx1 COMMITS: data pages flush (FORCE)… disk now 60/90… then the COMMIT record is appended WITH FSYNC. When that returns, the promise is binding.',
+    { msg: 'tx1 commits: FORCE flushes the data pages, leaving disk balances of 60 and 90. The COMMIT record is then appended and synced before success is reported.',
       fx: st => { st.a = 60; st.b = 90; st.note = '';
                   st.log.forEach(e => e.c = 'synced');
                   st.log.push({ t: 'COMMIT tx1  «fsync»', c: 'synced' }); } },
@@ -87,15 +72,15 @@
       fx: st => { st.log.push({ t: 'START tx2', c: 'synced' });
                   st.log.push({ t: 'SET A old=60', c: 'synced' });
                   st.note = 'buffer: A=10'; } },
-    { msg: 'The pool STEALS the dirty page to disk (eviction pressure — its right, per week 2). Disk now says A=$10. B was never credited. And then—',
+    { msg: 'The pool flushes the uncommitted dirty page to free a frame. STEAL allows this. Disk now says A=$10, but B has not yet been credited.',
       fx: st => { st.a = 10; st.note = 'uncommitted data ON DISK';
                   st.log.forEach(e => { if (e.t.includes('old=60') || e.t.includes('tx2')) e.c = 'synced'; }); } },
-    { msg: 'KILL -9. The process is gone. No rollback ran. Disk: A=$10, B=$90 — $50 of the $150 has ceased to exist.',
+    { msg: 'KILL -9. The process is gone. No rollback ran. Disk: A=$10, B=$90 — the stored total is $50 short.',
       fx: st => { st.dead = true; st.note = ''; } },
-    { msg: 'Restart → recover() reads the log BACKWARDS: no COMMIT for tx2 → its SET record (old=60) is an undo instruction. A := 60 restored and flushed; then a ROLLBACK receipt is synced.',
+    { msg: 'Restart → recover() reads the log BACKWARDS: no COMMIT for tx2 → its SET record (old=60) is an undo instruction. A := 60 restored and flushed; then a ROLLBACK record is synced.',
       fx: st => { st.a = 60; st.undone = true; st.dead = false;
                   st.log.push({ t: 'ROLLBACK tx2  «fsync»', c: 'synced' }); } },
-    { msg: 'Consistent: A=$60, B=$90 — the committed transfer stands, the doomed one never happened. That is the whole promise, kept.',
+    { msg: 'Recovered: A=$60, B=$90. The committed transfer is preserved and the incomplete transfer is undone. The total is $150 again.',
       fx: st => {} },
   ];
 
@@ -156,16 +141,16 @@
       title: 'FORCE + NO-STEAL',
       onDisk: 'Committed changes are always on disk (force); uncommitted ones never are (no-steal).',
       undo: false, redo: false,
-      verdict: 'Recovery does NOTHING — the disk is always exactly right.',
-      price: 'The price is brutal: every commit waits for data I/O, and the pool must hold every dirty page of every live transaction in memory until it commits. Nobody ships this.',
+      verdict: 'This model requires neither undo nor redo for transaction changes.',
+      price: 'Commits wait for data-page I/O, and uncommitted dirty pages remain in memory. These restrictions simplify recovery but can limit throughput and transaction size.',
       who: 'a thought experiment',
     },
     fs: {
       title: 'FORCE + STEAL',
       onDisk: 'Committed changes are on disk (force) — but so, possibly, are changes of transactions that never finished (steal).',
       undo: true, redo: false,
-      verdict: 'UNDO only: erase the intruders by restoring logged old values.',
-      price: 'Commits still wait for data flushes, but the pool evicts freely. The simplest correct policy that a real buffer manager can live with.',
+      verdict: 'UNDO only: restore old values for unfinished transactions.',
+      price: 'Commits still wait for data flushes, but the pool evicts freely. This keeps the lab’s recovery to a backward undo pass.',
       who: 'microdb, Lab 7',
     },
     nn: {
@@ -173,16 +158,16 @@
       onDisk: 'Nothing uncommitted ever reaches disk (no-steal) — but committed work may exist only in the log (no-force).',
       undo: false, redo: true,
       verdict: 'REDO only: replay logged new values for committed transactions.',
-      price: 'Fast commits, but the no-steal constraint still shackles the buffer pool to transaction lifetimes.',
+      price: 'Commit can finish after the log is durable, but uncommitted dirty pages must remain in memory.',
       who: 'some in-memory engines approximate this',
     },
     ns: {
       title: 'NO-FORCE + STEAL',
       onDisk: 'Anything is possible: uncommitted changes may be on disk, committed ones may be missing.',
       undo: true, redo: true,
-      verdict: 'BOTH passes — redo the missing, undo the intruders.',
-      price: 'Total freedom for the pool and the fastest possible commit (one log fsync). The recovery complexity is ARIES — and every serious engine decided it was worth it.',
-      who: 'Postgres, MySQL, Oracle, SQL Server (ARIES family)',
+      verdict: 'Both are needed in this model: redo missing changes, then undo unfinished transactions.',
+      price: 'Data pages can flush before or after commit, provided the write-ahead rule holds. ARIES uses redo and undo for this policy. Other engines can use version visibility to handle unfinished work instead of a physical undo pass.',
+      who: 'common production policy; recovery designs differ',
     },
   };
 

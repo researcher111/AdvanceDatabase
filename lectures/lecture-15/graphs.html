@@ -16,15 +16,15 @@
   <p><a href="../../slides/lecture-15.html">Visual slide deck ↗</a></p>
   <ul>
     <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#joins">The join-depth problem</a></li>
-    <li><a href="#try-it">Walks expand each node once</a></li>
-    <li><a href="#model">The join, materialized</a></li>
-    <li><a href="#cypher">Cypher draws the shape</a></li>
-    <li><a href="#kuzu">Kuzu, the DuckDB of graphs</a></li>
-    <li><a href="#when">When graphs win</a></li>
-    <li><a href="#graphrag">Traversal finds connections</a></li>
-    <li><a href="#synthesis">Five ideas, fifteen times</a></li>
-    <li><a href="#endgame">Three dates left</a></li>
+    <li><a href="#joins">Compare repeated joins with graph traversal</a></li>
+    <li><a href="#try-it">Path enumeration and reachability do different work</a></li>
+    <li><a href="#model">Store nodes, edges, and their properties</a></li>
+    <li><a href="#cypher">Express paths with SQL or Cypher</a></li>
+    <li><a href="#kuzu">Run graph queries in an embedded Kuzu demo</a></li>
+    <li><a href="#when">Choose a system for the relationship queries you need</a></li>
+    <li><a href="#graphrag">Combine text similarity with entity relationships</a></li>
+    <li><a href="#synthesis">Five recurring database ideas</a></li>
+    <li><a href="#endgame">Three dates left: workshop Thursday, report Monday, presentations Tuesday</a></li>
     <li><a href="#recap">Final recap</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
@@ -41,24 +41,15 @@
 
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 15 · Tuesday December 1, 2026</div>
-  <h1>Graph Databases &amp; the Course, Closed</h1>
-  <div class="subtitle">Why does every extra hop of "who's within three hops of ada?" cost SQL another join and a worse plan, and what does a database that stores the relationship as a pointer give up to fix it?</div>
+  <h1>Graph Databases &amp; Course Synthesis</h1>
+  <div class="subtitle">How do graph databases store relationships, and when does traversal make a query easier to express or faster to run?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">
-One data shape has quietly resisted everything we've built: deep relationships.
-"Who follows ada?" is a join; "who's within three hops of ada?" is a join chained onto a
-join onto a join, with SQL getting longer and the plan getting worse at every depth. Graph
-databases store the relationships <em>as pointers on the data itself</em> and replace join
-chains with traversal; you'll watch it live in Kuzu, an embeddable graph engine that is to<sup class="src"><a href="#src-1" title="Kuzu documentation: Welcome to Kuzu (docs source, kuzudb/kuzu-docs)">1</a></sup>
-Neo4j what DuckDB is to Postgres. Then the real last act: the whole semester compressed to
-five ideas, and the argument that every system you'll meet for the rest of your career is a
-remix of them.
-</p>
+<p class="lede">Relationship queries can require repeated expansion: “Who follows ada?” asks for immediate neighbors, while “Who is within three hops of ada?” explores several levels. SQL can express these queries with joins or recursive CTEs. Graph databases provide adjacency-oriented storage and path operators designed for this work. We will compare the approaches using a small Kuzu demo, then review five database ideas that recur across the course.<sup class="src"><a href="#src-1" title="Kuzu documentation: Welcome to Kuzu (docs source, kuzudb/kuzu-docs)">1</a></sup></p>
 
 <div class="cite">
-  Companion reading: Kuzu's <a href="https://docs.kuzudb.com/">documentation</a> (install to Cypher in ten minutes) ·
+  Companion reading: Kuzu's <a href="https://docs.kuzudb.com/">documentation</a> (setup and Cypher examples) ·
   Robinson, Webber &amp; Eifrem, <a href="https://neo4j.com/graph-databases-book/"><em>Graph Databases</em></a> (free O'Reilly text) ·
   Microsoft's <a href="https://arxiv.org/abs/2404.16130"><em>From Local to Global: GraphRAG</em></a> paper.
 </div>
@@ -75,39 +66,32 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p class="keep-in-present"><strong>Quiz 12</strong> first (Bigtable, LSM &amp; NoSQL, 10 min, the last quiz), then the
-last new idea and the oldest ones.</p>
+<p class="keep-in-present"><strong>Quiz 12</strong> first (Bigtable, LSM &amp; NoSQL, 10 min, the last quiz), then graph storage, traversal queries, and the course review.</p>
 
-<p class="keep-in-present">"Who does ada follow?" is one join. "Who's within three hops of ada?"
-is three self-joins, about d<sup>3</sup> intermediate rows, and a planner guessing sizes at every
-step. "How does ada reach fay?" can be expressed with a recursive CTE; graph query languages provide more direct path syntax.</p>
+<p class="keep-in-present">A one-hop relationship query finds a node’s immediate neighbors. Repeating that operation finds longer paths. Joins, recursive CTEs, and graph query operators can all express these expansions, but may produce different intermediate results. We will distinguish finding reachable nodes from enumerating paths.<sup>3</sup></p>
 
 
-<p class="keep-in-present">Today's claim: <strong>a graph database is an index decision,
-not a new kind of database</strong>: it pre-joins your relationships at write time, exactly the way
-an index pre-sorts your rows.</p>
+<p class="keep-in-present">Today’s main idea: <strong>storing adjacency makes repeated neighbor lookup cheaper.</strong> Graph databases combine that storage choice with query operators for paths and relationships.</p>
 
 <!-- ============================================================ -->
-<h2 id="joins">Every extra hop costs SQL another join and a worse plan</h2>
+<h2 id="joins">Compare repeated joins with graph traversal</h2>
 
 <div class="math">
-<p>Relational: each hop is a JOIN, and neighbors are found by matching keys (a hash or index probe
-per row). Graph: each hop is a WALK, and neighbors are found by following pointers stored on the
-node. For <em>k</em> hops from one start node with average degree <em>d</em>:</p>
+<p>A relational join finds neighbors by matching keys, often through a hash table or index. An adjacency-oriented graph store finds them through stored neighbor references. With average degree <em>d</em>, enumerating paths of length <em>k</em> can generate roughly <em>d</em><sup>k</sup> rows before duplicate nodes are removed. A reachability traversal with a visited set has a different bound:</p>
 \[ \text{join chain: } k \text{ joins, about } d^{k} \text{ intermediate rows before dedup} \]
 \[ \text{visited-set traversal: } O(V_r + E_r) \text{ over reached vertices and examined edges} \]
 <p>Adjacency storage can reduce neighbor-lookup costs, but the algorithm and query semantics determine how many edges or paths must be explored. Benchmark the same result requirement in both engines.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="The join-depth problem">Same number of touches, far less paid per touch</h3>
+<h3 class="new-slide" data-kicker="The join-depth problem">Distinguish neighbor lookup from path enumeration</h3>
 
 <p class="keep-in-present">For reachability, a breadth-first traversal with a visited set expands each reached node once and examines its outgoing edges. A bounded path query may instead enumerate multiple paths to the same node. Those are different amounts of work, whether the query is written in SQL or Cypher.</p>
 
 <table>
   <thead><tr><th></th><th>Join chain</th><th>Traversal</th></tr></thead>
   <tbody>
-    <tr><td>how a row's neighbors are found</td><td>by matching keys: every hop is a hash or index probe for every row in the current set, and the planner must also choose a join order and estimate sizes at each step</td><td>by reading the list of pointers stored on the node itself: each hop is a memory read with no matching at all</td></tr>
-    <tr><td>a node reachable by several routes</td><td>one row per path, so it is counted several times until a final DISTINCT removes the duplicates</td><td>can be marked visited once in a reachability algorithm; path enumeration may revisit it</td></tr>
+    <tr><td>how a row's neighbors are found</td><td>by matching the frontier’s keys to relationship rows, using the join plan selected by the engine</td><td>by reading stored neighbor references. The physical access may still require cache or storage reads</td></tr>
+    <tr><td>a node reachable by several routes</td><td>a path-enumerating join chain can produce several rows for the same node; intermediate or final deduplication changes that work</td><td>can be marked visited once in a reachability algorithm; path enumeration may revisit it</td></tr>
   </tbody>
 </table>
 
@@ -118,16 +102,11 @@ node. For <em>k</em> hops from one start node with average degree <em>d</em>:</p
 <!-- ============================================================ -->
 <h2 id="try-it">Path enumeration and reachability do different work</h2>
 
-<p>The six students, nine follows edges, the same data the Kuzu demo loads. Pick a start
-and walk outward; the counter compares pointer-follows against what a SQL join chain
-touches.</p>
+<p>The widget uses the six students and nine follows edges loaded by the Kuzu demo. Choose a start node, then increase the depth. Compare the edge visits of a traversal that tracks visited nodes with the rows generated by a join chain that enumerates paths.</p>
 
 <div class="viz" id="viz-walk">
   <div class="viz-title">traversal · 6 students, 9 follows edges</div>
-  <p class="viz-description">Click a student to start there, then step the depth. Reached
-  nodes fill in per hop; the walked edges highlight. The tally under the graph counts
-  <em>edge visits</em> for the traversal vs <em>rows matched</em> by the equivalent
-  <span class="gloss" data-gloss="self-join-chain">self-join chain</span>.</p>
+  <p class="viz-description">Click a student and increase the depth one hop at a time. The graph shows reached nodes and examined edges. The counters compare two algorithms: a traversal with a visited set and a path-enumerating <span class="gloss" data-gloss="self-join-chain">self-join chain</span>. They are not a timing benchmark of SQL against a graph engine.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="walk-step">+1 hop</button>
     <button type="button" class="btn" id="walk-reset">Reset</button>
@@ -135,38 +114,35 @@ touches.</p>
   </div>
   <div class="walk-svg-wrap"><svg id="walk-svg" viewBox="0 0 640 340"></svg></div>
   <div class="bs-stats" id="walk-stats"></div>
-  <p class="viz-caption">Start at <strong>ada</strong> and step to depth 3: the reached set
-  matches query 3 of the Kuzu demo below. The fay→ada edge closes a loop (ada → cyd → eli → fay → ada), which is why "within 3 hops" needs cycle handling in either notation: a walk with no stopping rule would circle forever, so both the Cypher pattern and the recursive CTE carry an explicit depth bound, and both end with DISTINCT so a node reached by two routes is listed once<sup class="src"><a href="#src-2" title="DuckDB documentation: WITH Clause (recursive CTEs)">2</a></sup>.</p>
+  <p class="viz-caption">Start at ada and step to depth 3. The reached students match query 3 of the Kuzu demo. The cycle ada → cyd → eli → fay → ada shows why traversal needs a stopping rule. The example queries use a depth bound, and <code>DISTINCT</code> removes duplicate students from their final results.<sup class="src"><a href="#src-2" title="DuckDB documentation: WITH Clause (recursive CTEs)">2</a></sup></p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="model">A graph database materializes the join at write time</h2>
+<h2 id="model">Store nodes, edges, and their properties</h2>
 
 <p class="keep-in-present">The property-graph model used by many graph databases (Neo4j,
 Kuzu, Neptune, Memgraph):<sup class="src"><a href="#src-3" title="What Is Amazon Neptune? (AWS Neptune User Guide)">3</a></sup></p>
 
-<pre class="equation"><code>node   (:Student {name: 'ada', gpa: 39})          a record with a label + properties
-edge   (ada)-[:Follows {since: 2026}]->(ben)      ALSO a record: typed, directed, with properties
+<pre class="equation"><code>node   (:Student {name: 'ada', gpa: 39})       a labeled record with properties
+edge   (ada)-[:Follows {since: 2026}]-&gt;(ben)   a typed, directed relationship
 
-storage:  each node keeps its <span class="gloss" data-gloss="adjacency-list">adjacency lists</span>, Follows-out: [ben, cyd], Follows-in: [fay]
-          neighbors are reachable without consulting any index: <span class="gloss" data-gloss="ifa">index-free adjacency</span></code></pre>
+ada’s neighbors: outgoing [ben, cyd]; incoming [ben, fay]
+adjacency storage keeps references for locating these neighbors</code></pre>
 
-<h3 class="new-slide" data-kicker="Materialized join">Lab 6's index trade and Lecture 13's skew, in graph form</h3>
+<h3 class="new-slide" data-kicker="Adjacency storage">Adjacency speeds lookup but adds storage and update work</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The move</span><span>say it in this course's vocabulary: <strong>a graph database materializes the join at write time.</strong> Adding the edge does the key-matching once; every future traversal follows the stored pointer<sup class="src"><a href="#src-4" title="Native vs. Non-Native Graph Technology (Neo4j blog)">4</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">The trade</span><span>this should feel familiar by now: it's the index trade (Lab 6) with the cost moved to a different operation. Every write pays a little extra to store the pointer, and every read gets its neighbors without a lookup.</span></div>
-  <div class="lc-row"><span class="lc-k">The failure mode</span><span>also familiar: a <span class="gloss" data-gloss="supernode">supernode</span>, a node with far more edges than the rest, is the skew problem from Lecture 13 in graph form: one key that carries most of the work, so any traversal through it does far more work than the average node.</span></div>
+  <div class="lc-row"><span class="lc-k">Adjacency</span><span>Storing adjacency records the connection when an edge is added. A later traversal can use the stored neighbor reference instead of matching the endpoints’ keys again.<sup class="src"><a href="#src-4" title="Native vs. Non-Native Graph Technology (Neo4j blog)">4</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Update cost</span><span>As with an index, writes maintain extra structure so reads can do less lookup work. The benefit depends on how often the application traverses those relationships.</span></div>
+  <div class="lc-row"><span class="lc-k">The failure mode</span><span>A <span class="gloss" data-gloss="supernode">supernode</span> has far more edges than other nodes. Traversing it may require inspecting a large neighbor list. This is a form of skew: a small part of the graph accounts for much of the work.</span></div>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="cypher">SQL can traverse; Cypher draws the question's shape</h2>
+<h2 id="cypher">Express paths with SQL or Cypher</h2>
 
-<p class="keep-in-present">SQL <em>can</em> traverse: <code>WITH RECURSIVE</code> defines a <span class="gloss" data-gloss="recursive-cte">recursive CTE</span>, a query that feeds its own output back in as input until no new rows appear, which is a loop written in the algebra, and it's genuinely how you should do shallow graph work in Postgres or<sup class="src"><a href="#src-5" title="PostgreSQL documentation: 7.8. WITH Queries (Common Table Expressions)">5</a></sup>
-DuckDB. The same question, both notations, both verified against their engines on the
-six-student data (both return <code>ben cyd dee eli fay</code>):</p>
+<p class="keep-in-present">SQL’s <code>WITH RECURSIVE</code> defines a query that repeatedly uses one iteration’s results to produce the next. A depth condition or cycle-handling rule bounds the traversal. Below, a recursive SQL query and a Cypher query answer the same question on the six-student dataset; both return <code>ben cyd dee eli fay</code>.<sup class="src"><a href="#src-5" title="PostgreSQL documentation: 7.8. WITH Queries (Common Table Expressions)">5</a></sup></p>
 
-<h3 class="new-slide" data-kicker="Cypher vs SQL">A star range, *1..3, replaces the whole recursive CTE</h3>
+<h3 class="new-slide" data-kicker="Cypher vs SQL">In Cypher, *1..3 means a path of one to three edges</h3>
 
 <pre><code class="language-sql">-- DuckDB / Postgres: a loop, spelled as algebra
 WITH RECURSIVE reach(name, depth) AS (
@@ -183,17 +159,12 @@ MATCH (a:Student {name: 'ada'})-[:Follows*1..3]->(b)
 WHERE b.name &lt;&gt; 'ada'
 RETURN DISTINCT b.name ORDER BY b.name</code></pre>
 
-<p class="keep-in-present">The Cypher pattern <code>( )-[ ]-&gt;( )</code> is ASCII art of
-the graph itself: nodes in parens, edges in brackets, direction as an arrow. Notation
-matters here the way it did in week 5: both compile to query plans, but the Cypher pattern shows the shape of the question on the page, while the recursive CTE hides it inside a loop over rows. <code>*1..3</code> (any path of one to three edges) replaced the entire recursive CTE, and
-<code>* SHORTEST</code> (in the demo) replaces a shortest-path algorithm that SQL has no direct way to express.</p>
+<p class="keep-in-present">The Cypher pattern <code>( )-[ ]-&gt;( )</code> represents nodes, a relationship, and its direction. The <code>*1..3</code> range specifies path lengths directly. Both SQL and Cypher compile to execution plans, but Cypher gives path queries dedicated syntax. Kuzu also provides <code>* SHORTEST</code> for the shortest-path query in the demo.</p>
 
 <!-- ============================================================ -->
-<h2 id="kuzu">Kuzu is the DuckDB of graph databases: no server</h2>
+<h2 id="kuzu">Run graph queries in an embedded Kuzu demo</h2>
 
-<p>Kuzu is the DuckDB of graph databases: <code>pip install kuzu</code>, embedded in your
-process, no server. The demo script loads the six students and runs four queries; outputs
-below are the real thing, so the demo survives a typo-prone instructor:</p>
+<p>Kuzu runs inside the Python process without a separate server. The demo loads six students and runs four queries. The recorded outputs below let you follow the example even if you do not run the script. The FAQ notes the project’s maintenance status.</p>
 
 <div class="chat-downloads">
   <span class="chat-downloads-label">Demo script:</span>
@@ -217,89 +188,71 @@ loaded 6 students, 9 follows edges
 --- 4 · shortest path: how does ada reach fay?
     [['ada', 'cyd', 'eli', 'fay']]</code></pre>
 
-<h3 class="new-slide" data-kicker="Kuzu demo">When the path itself is the answer, it is one MATCH</h3>
+<h3 class="new-slide" data-kicker="Kuzu demo">Use a shortest-path query to return the connecting route</h3>
 
-<p class="keep-in-present">Query 4 is the important one: <em>how does ada reach fay</em> is a
-shortest-path search (<span class="gloss" data-gloss="bfs">BFS</span>, breadth-first search, under the hood) expressed in one<sup class="src"><a href="#src-6" title="Kuzu 0.7.0 Release (Kuzu blog)">6</a></sup> <code>MATCH</code>. Ask it of
-the SQL version and you're writing a shortest-path algorithm such as breadth-first search by hand inside a recursive CTE; ask it of Kuzu and it's one ordinary query.
-When the <em>path itself</em> is the answer (recommendations, fraud rings, lineage,
-dependency chains) that's the graph database's home turf.</p>
+<p class="keep-in-present">Query 4 asks for a shortest path from ada to fay. Kuzu expresses it with a path operator in <code>MATCH</code>; a SQL implementation would need to express the search and stopping rules. Queries that return routes, dependency chains, or connections between entities are good candidates for a graph query language.<sup class="src"><a href="#src-6" title="Kuzu 0.7.0 Release (Kuzu blog)">6</a></sup></p>
 
 <!-- ============================================================ -->
-<h2 id="when">Graphs win when depth varies or the path is the answer</h2>
+<h2 id="when">Choose a system for the relationship queries you need</h2>
 
 <table>
   <thead><tr><th>Signal</th><th>Reach for</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>fixed, shallow relationships (1–2 hops)</td><td>SQL joins, even at scale</td><td>this is what the relational planner is built for: with one or two joins, a B+ tree probe or a hash join finds each row's partners in a step or two, and the optimizer has few enough options to choose a good plan</td></tr>
-    <tr><td>variable/unknown depth, path-shaped answers</td><td>graph DB (Kuzu, Neo4j)</td><td>Cypher has built-in syntax for exactly these: <code>*1..k</code> for any path of up to k edges, SHORTEST for the shortest path between two nodes, and cycle handling so a walk cannot loop forever. In SQL each of those has to be hand-built inside a recursive CTE<sup class="src"><a href="#src-7" title="Kuzu documentation: MATCH clause (docs source, kuzudb/kuzu-docs)">7</a></sup></td></tr>
-    <tr><td>whole-graph analytics (PageRank, communities)</td><td>graph <em>compute</em> (NetworkX, Spark GraphFrames)</td><td>PageRank and community detection visit every node and edge, usually many times over, so they are batch jobs of the kind Lecture 13 ran in Spark, not a query that starts at one node and returns a few rows. A graph database is built for the second; a graph compute framework is built for the first<sup class="src"><a href="#src-8" title="graphframes/graphframes (GitHub README)">8</a></sup></td></tr>
-    <tr><td>relationships that are really just foreign keys</td><td>stay relational</td><td>a schema with foreign keys is a graph on paper, but if every query follows one or two of them it is not a graph <em>workload</em>. Adding a graph database beside the relational one means a second copy of the data that must be kept in sync on every write, the same cost Lecture 11 warned about when adding a second store, and shallow queries never earn it back</td></tr>
+    <tr><td>fixed, shallow relationships (1–2 hops)</td><td>SQL joins, even at scale</td><td>indexed or hash joins are well suited to many shallow relationship queries; inspect the plan and measure the workload</td></tr>
+    <tr><td>variable/unknown depth, path-shaped answers</td><td>graph DB (Kuzu, Neo4j)</td><td>graph query languages provide path-length constraints and shortest-path operators. Syntax and cycle rules vary by engine; check that they match the result you need<sup class="src"><a href="#src-7" title="Kuzu documentation: MATCH clause (docs source, kuzudb/kuzu-docs)">7</a></sup></td></tr>
+    <tr><td>whole-graph analytics (PageRank, communities)</td><td>graph <em>compute</em> (NetworkX, Spark GraphFrames)</td><td>these algorithms repeatedly process large portions of the graph. Compare graph analytics tools and database analytics features for the dataset size and algorithm<sup class="src"><a href="#src-8" title="graphframes/graphframes (GitHub README)">8</a></sup></td></tr>
+    <tr><td>relationships that are really just foreign keys</td><td>stay relational</td><td>a foreign-key schema alone does not justify a second datastore. If SQL already meets the query requirements, duplicating relationships in a graph store adds synchronization and operations work</td></tr>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="When graphs win">Path-shaped questions through 11.5 million documents won a Pulitzer</h3>
+<h3 class="new-slide" data-kicker="Graph workloads">Case study: investigating relationships in the Panama Papers</h3>
 
 <div class="callout note">
-  <span class="label">War story · the Panama Papers, 2016</span>
-  <p class="keep-in-present">The second row of that table (variable depth, path-shaped answers) won a Pulitzer<sup class="src"><a href="#src-9" title="ICIJ: Panama Papers wins Pulitzer Prize">9</a></sup>. When 11.5 million
-  leaked documents from the law firm Mossack Fonseca reached the International Consortium of<sup class="src"><a href="#src-10" title="ICIJ: Panama Papers, About the Investigation">10</a></sup>
-  Investigative Journalists, the questions that mattered were pure traversal: which officers
-  connect to which shell companies, through which intermediaries, to which real owners:
-  paths of unknown depth through millions of entities. ICIJ loaded the extracted entities and
-  relationships into Neo4j and gave hundreds of reporters a visual graph-query front end<sup class="src"><a href="#src-11" title="How the ICIJ Used Neo4j to Unravel the Panama Papers (Neo4j blog)">11</a></sup>;
-  reporters with no database training followed edges to prime ministers<sup class="src"><a href="#src-11" title="How the ICIJ Used Neo4j to Unravel the Panama Papers (Neo4j blog)">11</a></sup>. The relational
-  version of that investigation is a self-join per hop with the hops unknown in advance;
-  possible, and the graph interface made exploration more accessible. Choosing the data model to match the question is the course's thesis, and this is the clearest real-world case of it.</p>
+  <span class="label">Case study · the Panama Papers, 2016</span>
+  <p class="keep-in-present">The Panama Papers investigation examined 11.5 million leaked documents from Mossack Fonseca. Investigators needed to connect people, companies, and intermediaries across records. ICIJ used Neo4j and a visual interface to help reporters explore those relationships. The investigation later won a Pulitzer Prize. The example shows the value of matching the query interface to the work: reporters needed to follow and inspect connections whose depth was not known in advance.<sup class="src"><a href="#src-9" title="ICIJ: Panama Papers wins Pulitzer Prize">9</a></sup><sup class="src"><a href="#src-10" title="ICIJ: Panama Papers, About the Investigation">10</a></sup><sup class="src"><a href="#src-11" title="How the ICIJ Used Neo4j to Unravel the Panama Papers (Neo4j blog)">11</a></sup></p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="graphrag">Vector retrieval finds sound-alikes; graph traversal finds connections</h2>
+<h2 id="graphrag">Combine text similarity with entity relationships</h2>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The blind spot</span><span>your project retrieves by <em>similarity</em>: question vector → nearest chunks. Its known blind spot is questions whose answer is <em>spread across</em> documents ("how do the WAL and the buffer pool interact?"; no single chunk says it).</span></div>
-  <div class="lc-row"><span class="lc-k">GraphRAG's move</span><span>extract an entity graph from the corpus at ingest<sup class="src"><a href="#src-12" title="From Local to Global: A Graph RAG Approach to Query-Focused Summarization (arXiv 2404.16130)">12</a></sup> (nodes for entities such as the WAL, the buffer pool, and a page; typed edges for the relationships the text states between them, such as “WAL constrains page flushing” and “buffer pool defers writes”), retrieve by <em>traversing</em> from mentioned entities, and hand the LLM connected subgraphs instead of disconnected paragraphs.</span></div>
-  <div class="lc-row"><span class="lc-k">Why they compose</span><span>similarity finds what a question <em>sounds like</em>; traversal finds what it's <em>connected to</em>; <span class="gloss" data-gloss="knowledge-graph">knowledge-graph</span> retrieval and vector retrieval compose, and hybrid is the production pattern.</span></div>
+  <div class="lc-row"><span class="lc-k">The blind spot</span><span>Vector retrieval ranks chunks by similarity to the question. A question that requires evidence from several documents may need connections that do not appear in any single highly ranked chunk.</span></div>
+  <div class="lc-row"><span class="lc-k">Graph-based retrieval</span><span>During ingestion, extract or label entities and relationships, then link them to the source chunks. Graph-based retrieval can use those links to select additional evidence. The cited GraphRAG paper also builds community summaries for questions about the corpus as a whole; it is more than a one-hop expansion.<sup class="src"><a href="#src-12" title="From Local to Global: A Graph RAG Approach to Query-Focused Summarization (arXiv 2404.16130)">12</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Combining methods</span><span>Vector search and graph-based retrieval select evidence using different signals. Combining them may recover useful passages that either method misses alone. Evaluate that benefit on questions with labeled sources.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="GraphRAG">A 1-hop entity expansion is a GraphRAG you can finish</h3>
+<h3 class="new-slide" data-kicker="GraphRAG">Try a limited one-hop entity expansion</h3>
 
-<p class="keep-in-present">GraphRAG is an optional
-extension in the project spec. A version one team can finish in the time left: tag each chunk with the entities it mentions, and when a question names an entity, add the chunks tagged with that entity's direct neighbors in the graph (a 1-hop expansion) to what similarity retrieval already returned.</p>
+<p class="keep-in-present">GraphRAG is an optional project extension. A limited experiment is to tag chunks with entities and record selected relationships between those entities. When a question names an entity, add chunks associated with its direct neighbors to the vector-search results. Compare the combined retrieval with the baseline on the same evaluation questions.</p>
 
 <!-- ============================================================ -->
-<h2 id="synthesis">You learned five ideas, then recognized them fifteen times</h2>
+<h2 id="synthesis">Five recurring database ideas</h2>
 
 <table>
   <thead><tr><th>The idea</th><th>Where you built it</th><th>Where you met it again</th></tr></thead>
   <tbody>
-    <tr><td><strong>Block I/O + caching</strong>: move data in chunks, keep hot chunks close</td><td>file manager (1), buffer pool (2)</td><td>SSTable blocks &amp; caches (14), Parquet row groups (10), the shuffle's spill files (13)</td></tr>
-    <tr><td><strong>Sorting &amp; indexes</strong>: pay organization once, skip data forever</td><td>B+ tree (6)</td><td>IVF lists (11), SSTables + Bloom filters (14), Hive partitions (8), adjacency lists (today)</td></tr>
-    <tr><td><strong>Log first, reorganize later</strong>: appends are durable and fast</td><td>WAL + recovery (7)</td><td>LSM trees (14), Delta/Iceberg commit logs (10), Spark lineage-as-plan (13)</td></tr>
-    <tr><td><strong>Declarative query → plan → execute</strong>: say what, let the engine choose how</td><td>parser + planner + iterators (4–5, 9)</td><td>DuckDB's EXPLAIN (8), Spark's DAG (13), Cypher's MATCH (today)</td></tr>
-    <tr><td><strong>Partition to scale</strong>: split by key, push work to the pieces, mind the skew</td><td>the shuffle, by hand (Lab 11)</td><td>tablets (14), Hive folders (8), IVF buckets (11), supernodes (today)</td></tr>
+    <tr><td><strong>Block I/O and caching:</strong> transfer blocks and retain frequently used data</td><td>file manager (1), buffer pool (2)</td><td>SSTable blocks &amp; caches (14), Parquet row groups (10), the shuffle's spill files (13)</td></tr>
+    <tr><td><strong>Sorting and indexes:</strong> maintain structure to skip irrelevant data</td><td>B+ tree (6)</td><td>IVF lists (11), SSTables + Bloom filters (14), Hive partitions (8), <span class="gloss" data-gloss="adjacency-list">adjacency lists</span> (today)</td></tr>
+    <tr><td><strong>Logs and recovery:</strong> record changes or dependencies so work can be recovered</td><td>WAL + recovery (7)</td><td>LSM trees (14), Delta/Iceberg transaction metadata (10), Spark lineage-as-plan (13)</td></tr>
+    <tr><td><strong>Declarative queries:</strong> describe a result, then plan and execute the work</td><td>parser + planner + iterators (4–5, 9)</td><td>DuckDB's EXPLAIN (8), Spark's DAG (13), Cypher's MATCH (today)</td></tr>
+    <tr><td><strong>Partitioning:</strong> divide data and work while monitoring uneven load</td><td>the shuffle, by hand (Lab 11)</td><td>tablets (14), Hive folders (8), IVF buckets (11), supernodes (today)</td></tr>
   </tbody>
 </table>
 
-<p class="key-fact keep-in-present"><strong>5 ideas, 15 weeks</strong> every system you met this semester was some arrangement of the same five</p>
+<p class="key-fact keep-in-present"><strong>Five recurring ideas:</strong> storage and caching, indexes, recovery, query plans, and partitioning connect the systems studied this semester.</p>
 
-<h3 class="new-slide" data-kicker="Five ideas">The next database you meet is these five, rearranged</h3>
+<h3 class="new-slide" data-kicker="Five ideas">Use these ideas to understand an unfamiliar system</h3>
 
-<p class="keep-in-present">The claim this table earns: <strong>you didn't learn fifteen
-systems this semester; you learned five ideas and then recognized them fifteen
-times.</strong> The next database you meet (there will be a next one; the field ships a new
-"category" every three years) will be these five in a new arrangement. Read its docs asking
-"where's the log, where's the index, how does it partition" and you'll know it in an
-afternoon. That ability to transfer is what the course was for.</p>
+<p class="keep-in-present">These five ideas give you useful questions to ask about a new system: How is data stored? What does it cache? Which indexes does it maintain? How does it recover? How is work planned and partitioned? The answers will not explain every feature, but they provide a starting point for evaluating the system’s design and tradeoffs.</p>
 
 <!-- ============================================================ -->
 <h2 id="endgame">Three dates left: workshop Thursday, report Monday, presentations Tuesday</h2>
 
 <ul class="checklist">
   <li>☐ <strong>Thu Dec 3, workshop:</strong> in-class working session; instructor + TAs
-  circulate. Bring your eval-set numbers and your ugliest bug.</li>
-  <li>☐ <strong>Mon Dec 7, 11:59 pm, report due:</strong> the measured-decisions document:
-  chunking, index + dial setting, eval table across at least two configurations, per the
+  circulate. Bring your eval-set numbers and one unresolved bug you can demonstrate.</li>
+  <li>☐ <strong>Mon Dec 7, 11:59 pm, report due:</strong> describe and justify your choices for
+  chunking, index and search settings, eval table across at least two configurations, per the
   <a href="../../project.html">spec</a>.</li>
   <li>☐ <strong>Tue Dec 8, presentations:</strong> 8 minutes, plus a live demo and questions per team. Show one failure you diagnosed with an eval metric and one decision you would reverse.</li>
   <li>☐ No final exam. Course evals: be specific; this course is rebuilt from them.</li>
@@ -309,14 +262,9 @@ afternoon. That ability to transfer is what the course was for.</p>
 <h2 id="recap">Final recap</h2>
 
 <ul class="recap-list">
-  <li><strong>Graph databases materialize the join</strong>: adjacency stored on the node,
-  traversal instead of key-matching; worth it when depth is variable or the path is the
-  answer, and honestly not before.</li>
-  <li><strong>Cypher is week 5's lesson resurfacing</strong>: notation that matches the
-  question's shape; <code>WITH RECURSIVE</code> is the fair SQL comparison and fine for
-  shallow work.</li>
-  <li><strong>Five ideas, fifteen costumes</strong>: blocks &amp; caching, sort &amp;
-  index, log-first, declarative plans, partitioning. Every system we met this semester was some arrangement of those five.</li>
+  <li>Adjacency-oriented storage records relationships so traversal can avoid repeated key matching. Graph query operators are useful when paths or variable-depth connections are central to the workload.</li>
+  <li>Cypher provides direct path syntax. SQL <span class="gloss" data-gloss="recursive-cte">recursive CTEs</span> can also traverse relationships; compare queries with the same result requirements and cycle rules.</li>
+  <li>Blocks and caching, indexes, recovery, query plans, and partitioning recur throughout the course. Use them to explain how a system processes a workload.</li>
 </ul>
 
 <p class="key-fact keep-in-present"><strong>Count edges and paths separately.</strong> A visited-set traversal and a query enumerating all bounded paths need not perform the same work.</p>
@@ -326,9 +274,9 @@ presentations.</p>
 
 <p class="keep-in-present"><strong>Before Thursday:</strong></p>
 <ul>
-  <li><strong>Read</strong> the project <a href="../../project.html">spec</a>'s report section: chunking, index + dial setting, and an eval table across at least two configurations.</li>
+  <li><strong>Read</strong> the project <a href="../../project.html">spec</a>'s report section: chunking, index and search settings, and an eval table across at least two configurations.</li>
   <li><strong>Run</strong> your eval set across at least two configurations so the table exists before the workshop; run <code>python3 kuzu_demo.py</code> too if you are weighing the GraphRAG extension.</li>
-  <li><strong>Bring</strong> a laptop with your eval-set numbers and your ugliest bug to Thursday's workshop.</li>
+  <li><strong>Bring</strong> a laptop with your eval-set numbers and one unresolved bug you can demonstrate to Thursday's workshop.</li>
 </ul>
 
 <p class="keep-in-present">It has been a genuine pleasure building databases with you. · DGG</p>
@@ -337,34 +285,16 @@ presentations.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Is Kuzu real enough to use, or a teaching toy?</h3>
-<p class="keep-in-present">Real: columnar storage, a vectorized query processor, a Cypher query language implementation<sup class="src"><a href="#src-13" title="kuzudb/kuzu README (GitHub)">13</a></sup>
-and it holds its own on benchmarks against Neo4j for embedded<sup class="src"><a href="#src-14" title="The Data Quarry: Embedded databases (2): Kuzu, an extremely fast embedded graph database">14</a></sup>
-analytics. Like DuckDB, its niche is in-process work rather than serving a fleet of
-concurrent clients. For a server deployment with users and auth, Neo4j or Neptune; for
-"I have a graph problem in a notebook," Kuzu is exactly right. One caveat: the original
-kuzudb/kuzu repository was archived read-only in October 2025 (last release 0.11.3), so
-<code>pip install kuzu</code> still works but development has moved to community forks<sup class="src"><a href="#src-19" title="kuzudb/kuzu on GitHub (repository archived read-only, October 2025)">19</a></sup>.</p>
+<p class="keep-in-present">Kuzu is an embedded graph engine with columnar storage, vectorized execution, and Cypher support. It is useful for this local demonstration. The original <code>kuzudb/kuzu</code> repository was archived read-only in October 2025, with 0.11.3 as its last release. Check maintenance and compatibility before choosing it for a new project; the archive remains available for the course example.<sup class="src"><a href="#src-13" title="kuzudb/kuzu README (GitHub)">13</a></sup><sup class="src"><a href="#src-14" title="The Data Quarry: Embedded databases (2): Kuzu, an extremely fast embedded graph database">14</a></sup><sup class="src"><a href="#src-19" title="kuzudb/kuzu on GitHub (repository archived read-only, October 2025)">19</a></sup></p>
 
 <h3 class="keep-in-present">Why did we not cover [Mongo/Redis/Elasticsearch/…]?</h3>
-<p class="keep-in-present">Deliberate: those are products, and products rotate. Mongo is a
-document store over a B+ tree engine (WiredTiger) with a WAL<sup class="src"><a href="#src-15" title="WiredTiger Architecture Guide: B-Trees">15</a></sup>; Redis is a data-structure
-server with an append-only log<sup class="src"><a href="#src-16" title="Redis persistence (Redis documentation)">16</a></sup>; Elasticsearch is inverted indexes (BM25, Lecture 12) over
-segment files that behave like SSTables<sup class="src"><a href="#src-17" title="Elasticsearch from the Bottom Up, Part 1 (Elastic blog)">17</a></sup>. You have the parts list. An afternoon with any of
-their architecture pages will slot them into the five-ideas table; try it.</p>
+<p class="keep-in-present">The course emphasizes mechanisms that transfer across products. MongoDB’s WiredTiger engine uses B-trees and a write-ahead log; Redis offers in-memory data structures and optional persistence; Elasticsearch uses inverted indexes and immutable segments. Their architecture documentation will let you connect those systems to the ideas covered here.<sup class="src"><a href="#src-15" title="WiredTiger Architecture Guide: B-Trees">15</a></sup><sup class="src"><a href="#src-16" title="Redis persistence (Redis documentation)">16</a></sup><sup class="src"><a href="#src-17" title="Elasticsearch from the Bottom Up, Part 1 (Elastic blog)">17</a></sup></p>
 
 <h3 class="keep-in-present">What should I learn next after this course?</h3>
-<p class="keep-in-present">Three worthy directions, pick by taste: <em>depth</em>, read
-the Red Book (Bailis, Hellerstein, Stonebraker's<sup class="src"><a href="#src-18" title="Readings in Database Systems, Fifth Edition (PDF)">18</a></sup> <em>Readings in Database Systems</em>) and
-the Spanner and Aurora papers; <em>breadth</em>, Kleppmann's <em>Designing Data-Intensive
-Applications</em>, which covers the second half of this course at production scale; <em>craft</em>,
-extend microdb (MVCC, an LSM engine, the optimizer); nothing teaches like the engine you
-already own.</p>
+<p class="keep-in-present">Choose a direction that interests you. For research depth, read <em>Readings in Database Systems</em> and the Spanner and Aurora papers. For a broader systems view, read Kleppmann’s <em>Designing Data-Intensive Applications</em>. For implementation practice, extend microdb with MVCC, an LSM engine, or more optimizer rules, and measure the results.<sup class="src"><a href="#src-18" title="Readings in Database Systems, Fifth Edition (PDF)">18</a></sup></p>
 
 <h3 class="keep-in-present">Will the project rubric reward a GraphRAG attempt?</h3>
-<p class="keep-in-present">Only the measured kind. A 1-hop entity expansion with an eval
-table showing where it helped (and where it hurt; it will, on some questions) earns real
-credit; a bolted-on graph with no measurement earns sympathy. The rubric's spine all
-semester has been the same sentence: <em>show the numbers that made you decide.</em></p>
+<p class="keep-in-present">The rubric rewards evidence for your design choices. If you add graph-based retrieval, compare it with the baseline and report where it helps, has no effect, or makes results worse. Adding a graph without evaluating its effect does not demonstrate an improvement.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -380,7 +310,7 @@ document that supports the claim it is attached to.</p>
   <li id="src-3"><a href="https://docs.aws.amazon.com/neptune/latest/userguide/intro.html">What Is Amazon Neptune? (AWS Neptune User Guide)</a></li>
   <li id="src-4"><a href="https://neo4j.com/blog/cypher-and-gql/native-vs-non-native-graph-technology/">Native vs. Non-Native Graph Technology (Neo4j blog)</a></li>
   <li id="src-5"><a href="https://www.postgresql.org/docs/current/queries-with.html">PostgreSQL documentation: 7.8. WITH Queries (Common Table Expressions)</a></li>
-  <li id="src-6"><a href="https://kuzudb.github.io/blog/post/kuzu-0.7.0-release/">Kuzu 0.7.0 Release (Kuzu blog)</a> <span class="src-note">Kuzu's docs do not name the algorithm; the 0.7.0 release post says recursive path finding was rewritten to mimic frontier-based parallel graph systems such as Ligra, Pregel and GraphChi (a BFS-style frontier expansion), and Neo4j documents its shortestPath as bidirectional BFS.</span></li>
+  <li id="src-6"><a href="https://kuzudb.github.io/blog/post/kuzu-0.7.0-release/">Kuzu 0.7.0 Release (Kuzu blog)</a> <span class="src-note">Kuzu's docs do not name the algorithm; the 0.7.0 release post says recursive path finding was rewritten to mimic frontier-based parallel graph systems such as Ligra, Pregel and GraphChi (a <span class="gloss" data-gloss="bfs">BFS</span>-style frontier expansion), and Neo4j documents its shortestPath as bidirectional BFS.</span></li>
   <li id="src-7"><a href="https://raw.githubusercontent.com/kuzudb/kuzu-docs/main/src/content/docs/cypher/query-clauses/match.md">Kuzu documentation: MATCH clause (docs source, kuzudb/kuzu-docs)</a></li>
   <li id="src-8"><a href="https://github.com/graphframes/graphframes">graphframes/graphframes (GitHub README)</a></li>
   <li id="src-9"><a href="https://www.icij.org/investigations/panama-papers/panama-papers-wins-pulitzer-prize/">ICIJ: Panama Papers wins Pulitzer Prize</a></li>

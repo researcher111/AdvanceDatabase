@@ -7,9 +7,9 @@ TableScan, record every table's schema and layout.
     field_catalog(tblname varchar(16), fldname varchar(16),
                   fldtype varchar(8), length int, offset int)
 
-The bootstrap trick: the catalog tables' OWN layouts can't be read from the
-catalog (chicken and egg), so they are hardcoded below — computed by your
-Layout class at import time. Everything else about them is ordinary.
+The catalog needs its own layouts before it can read stored schemas.
+Its two schemas are defined below, and your Layout class computes their
+layouts when Catalog is constructed. Both tables use ordinary TableScans.
 
 Note what this file is: the first *customer* of your Lab 3 code. It does
 nothing but construct Schemas and drive TableScans — if your record layer

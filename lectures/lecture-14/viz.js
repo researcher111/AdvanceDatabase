@@ -5,67 +5,43 @@
   const GLOSSARY = {
     'compaction': {
       title: 'Compaction',
-      body: '<p>The background job that merges several SSTables into one. Because each input file is sorted, the merge is a single sequential pass, like the merge step of merge sort. When the same key appears in more than one input, only the newest version is kept, and a key whose newest record is a tombstone (a delete marker) is dropped entirely. The result is fewer, larger files with less duplicated data, so a read has fewer places to look. The cost is that the same data gets rewritten several times over its life, consuming disk bandwidth that incoming writes could have used; how aggressively to compact is the main tuning decision in an LSM engine.</p>',
+      body: "<p>Compaction merges sorted files to reduce overlapping data and discard obsolete versions when safe. It can produce one or more output SSTables. Versions still needed by snapshots must be retained, and deletion markers cannot be discarded if that could expose an older value. Merging reduces some read work but rewrites data and consumes CPU and storage bandwidth.</p>",
     },
     'sstable': {
       title: 'SSTable (Sorted String Table)',
-      body: '<p>An immutable file on disk holding key-value pairs in sorted key order, produced when a memtable is flushed or when several older SSTables are compacted together. It is written once, sequentially, and never edited in place; later writes to the same key go into a newer file, and the older copy is dropped only when a compaction merges the two. Each SSTable carries a sparse index (every Nth key and its offset) so a lookup can binary-search to the one block that could hold a key, and usually a Bloom filter so most lookups can skip the file entirely. Because SSTables are immutable, they can be read by many threads and cached freely with no locking.</p>',
+      body: "<p>A Sorted String Table is an immutable file of key-value entries in sorted order. It is produced by flushing a memtable or merging older files. Index blocks help locate a key’s data block, and a Bloom filter may avoid an unnecessary lookup. Immutability simplifies concurrent reads, though file lifetimes and shared caches still need coordination.</p>",
     },
     'memtable': {
       title: 'Memtable',
-      body: '<p>The in-memory half of an LSM engine: a sorted structure in RAM (a balanced tree or skip list) that receives every write after it has been appended to the WAL. Inserting into it is fast because RAM has no seek cost, and keeping it sorted means it can be written out to disk in key order with no extra work. It has a fixed size budget; when it fills, its contents are written to disk as a new SSTable and a fresh, empty memtable takes its place. Because it holds the newest writes, every read checks it first.</p>',
+      body: "<p>An in-memory structure that holds recent writes in sorted order. In a durable LSM write path, a log protects updates until they reach an SSTable. When a memtable reaches its size limit, it is made immutable and flushed while new writes enter another memtable. A lookup checks relevant in-memory state before older files.</p>",
     },
     'wal': {
       title: 'WAL (write-ahead log)',
-      body: '<p>An append-only file on disk that records every write before the write is applied anywhere else. Appending is a sequential disk operation, so it is cheap; the database can acknowledge a write as soon as the log record is safely on disk. If the machine crashes, the log is replayed on restart and every acknowledged write comes back. In an LSM engine the WAL protects the memtable, which lives only in RAM: without the log, a crash would lose everything written since the last flush. This is the same log you met in week 7; Bigtable uses it unchanged.</p>',
+      body: "<p>A write-ahead log records changes so the engine can recover after a crash. Required log records must be durable before the corresponding durable data writes or acknowledgments that rely on them. In an LSM engine, replaying the log restores committed updates that were still only in a memtable. Exact ordering and acknowledgment rules depend on the engine’s durability protocol.</p>",
     },
     'commodity': {
       title: 'Commodity hardware',
-      body: '<p>Ordinary cheap servers instead of premium fault-tolerant machines. Google’s ' +
-        'founding cost bet: thousands of cheap boxes beat dozens of expensive ones per ' +
-        'dollar — IF the software treats machine death as routine. That "if" is why ' +
-        'replication, tablet reassignment, and recompute-from-lineage exist: reliability ' +
-        'moved from the hardware budget into the software design.</p>',
+      body: "<p>Standard servers rather than specialized fault-tolerant hardware. A system built from many servers must handle individual failures through software mechanisms such as replication, retry, and reassignment of work. The hardware choice therefore affects the system’s recovery design.</p>",
     },
     'wide-column': {
       title: 'Wide-column / sparse columns',
-      body: '<p>A row may have millions of possible columns but store only the handful it ' +
-        'actually uses — absent cells cost zero bytes because a row is stored as a sorted ' +
-        'list of (column, value) pairs, not a fixed-width slot. The opposite of Lab 3’s ' +
-        'fixed layout: there, absent data still paid rent; here, the column NAME itself is ' +
-        'data (one column per inbound link, per sensor, per friend).</p>',
+      body: "<p>A sparse row stores the columns that have values rather than reserving a fixed slot for every possible column. Bigtable groups columns into declared families and allows dynamic qualifiers within them. Column names are part of the stored data. This differs from Lab 3’s fixed-width record layout.</p>",
     },
     'hotspot': {
       title: 'Hotspot',
-      body: '<p>One partition receiving a disproportionate share of traffic. Range ' +
-        'partitioning is especially prone: timestamp-prefixed keys send every new write to ' +
-        'the final range — one server does all the work while the rest idle. Fixes are key ' +
-        'design (hash prefix, reversed domains) — the row key is Bigtable’s only knob, so ' +
-        'key design IS capacity planning.</p>',
+      body: "<p>A partition receiving much more traffic than others. Increasing timestamp keys can direct new writes to the final range partition. Row-key design and workload distribution determine whether splitting or moving tablets will help. Prefix schemes that spread writes may also make some scans more expensive.</p>",
     },
     'bloom': {
       title: 'Bloom filter',
-      body: '<p>A few bits per key that answer membership with one-sided error: "definitely ' +
-        'not present" (always trustworthy) or "maybe present" (rarely wrong). Insert = set k ' +
-        'hash-chosen bits; query = check them. ~10 bits/key gives ~1% false positives. LSM ' +
-        'reads use one per SSTable to skip files without disk I/O — the same hashing-trick ' +
-        'spirit as Lab 10’s embedder, spent on skipping instead of similarity.</p>',
+      body: "<p>A compact membership filter with possible false positives and no false negatives when correctly maintained. Insertion sets positions chosen by hash functions. A query with any zero bit is definitely absent; all ones means possibly present. Size and hash count control the false-positive rate. LSM engines use filters to skip files that cannot contain a key.</p>",
     },
     'read-amp': {
       title: 'Read amplification',
-      body: '<p>How many places one logical read must check — memtable plus K SSTables means ' +
-        'amplification K+1. Its siblings: write amplification (compaction rewrites the same ' +
-        'data W times over its life) and space amplification (shadowed versions await ' +
-        'merging). LSM tuning is a three-way budget among them; RocksDB’s hundred knobs ' +
-        'are all aliases for this triangle.</p>',
+      body: "<p>Extra work needed to serve a logical read, such as checking several files for one key. Write amplification measures how much stored data is written or rewritten relative to application writes. Space amplification measures extra storage, including obsolete versions. Compaction policy affects all three costs.</p>",
     },
     'eventual': {
       title: 'Eventual consistency',
-      body: '<p>The AP bargain: replicas may briefly disagree, but with writes stopped they ' +
-        'converge to one value. Fine for like-counts and carts (reconcile: union the items); ' +
-        'alarming for balances. Cassandra makes the trade per query — read/write quorum ' +
-        'levels — so "how consistent" is a dial you set per operation, not a property of ' +
-        'the database.</p>',
+      body: "<p>A consistency property in which replicas converge if updates stop and communication and reconciliation continue. Replicas may disagree before convergence. Applications must define how conflicting updates are resolved; simply keeping all values is not correct for every operation. The acceptable behavior depends on the application.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -211,7 +187,7 @@
     bits = new Array(M).fill(false);
     setters = Array.from({ length: M }, () => []);
     inserted = new Set();
-    msg.textContent = 'The filter starts empty: every query answers "definitely absent" for free.';
+    msg.textContent = 'The filter starts empty, so every key is definitely absent.';
     render([]);
   }
   function render(active) {
@@ -243,11 +219,11 @@
         `<strong>definitely absent</strong>. SSTable skipped, zero disk reads. (Always correct.)`;
     } else if (truly) {
       msg.innerHTML = `query("${key}") — all three bits set → <strong>maybe present</strong>. ` +
-        `Read the SSTable… and yes, it's there. The "maybe" paid off.`;
+        `Checking the SSTable confirms that the key is present.`;
     } else {
       msg.innerHTML = `query("${key}") — all three bits set → <strong>maybe present</strong>… ` +
         `but you never inserted it. <strong>That's the false positive:</strong> one wasted ` +
-        `disk read, caused by other keys' bits overlapping. The polite lie, caught.`;
+        `disk read because other keys set the same bits.`;
     }
     render(hs);
   }
@@ -256,7 +232,7 @@
   document.getElementById('bloom-seed').addEventListener('click', () => {
     for (let i = 1; i <= 6; i++) { input.value = 'k' + i; insert(); }
     input.value = '';
-    msg.innerHTML += ' — now query keys you did NOT insert (try k7, then k15, then k17…) until you catch a lie.';
+    msg.innerHTML += ' — query keys you did not insert (try k7, then k15, then k17) to find a false positive.';
   });
   document.getElementById('bloom-reset').addEventListener('click', () => { input.value = ''; reset(); });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') query(); });
@@ -291,7 +267,7 @@
       landed.push(t);
       writeSeq++;
     }
-    msg.textContent = 'user-id keys hash-like across the alphabet — every tablet took a share.';
+    msg.textContent = 'The example user-id keys are spread across the key ranges, so every tablet received writes.';
     render(new Set(landed));
   }
 
@@ -306,14 +282,14 @@
 
   function split() {
     const hot = tablets.reduce((a, b) => (b.count > a.count ? b : a), tablets[0]);
-    if (hot.count === 0) { msg.textContent = 'nothing is hot yet — send some writes first.'; return; }
+    if (hot.count === 0) { msg.textContent = 'No writes have arrived yet. Send a burst of writes first.'; return; }
     const i = tablets.indexOf(hot);
     const half = Math.floor(hot.count / 2);
     const [lo, hi] = hot.label.split(' — ');
     tablets.splice(i, 1,
       { label: `${lo} — ·`, count: hot.count - half, last: false },
       { label: `· — ${hi}`, count: half, last: hot.last });
-    msg.textContent = `split "${hot.label}" into two tablets and moved one to a fresh server — now watch where the NEXT timestamp burst lands.`;
+    msg.textContent = `split "${hot.label}" into two tablets and moved one to a fresh server — send another timestamp-key burst to check whether writes are more evenly distributed.`;
     render(new Set([i, i + 1]));
   }
 

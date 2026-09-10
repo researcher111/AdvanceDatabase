@@ -4,48 +4,28 @@
 (function () {
   const GLOSSARY = {
     'star-schema': {
-      title: 'Star schema',
-      body: '<p>The standard layout for analytics: one big <em>fact</em> table of events (here, one row per ride) ' +
-        'surrounded by small <em>dimension</em> tables that describe the ids in it (here, one row per taxi zone with ' +
-        'its borough). Drawn as a diagram the dimensions ring the fact table like points of a star. Queries filter or ' +
-        'group by a dimension attribute and aggregate the fact table, which is exactly Q8: join rides to zones, group ' +
-        'by borough, sum the fares. Warehouses are built around this shape because the fact table can be huge and ' +
-        'columnar while the dimensions stay small enough to cache whole.</p>',
+      title: "Star schema",
+      body: "<p>An analytical schema with a fact table of events or measurements connected to dimension tables that describe related entities. In this lab, rides records trips and zones describes taxi zones. Q8 joins rides to zones, groups by borough, and sums recorded revenue.</p>",
     },
     'window-fn': {
-      title: 'Window function',
-      body: '<p>An aggregate that each row can see without collapsing the rows — ' +
-        '<code>SUM(x) OVER (ORDER BY month)</code> gives every row the running total up to ' +
-        'itself. GROUP BY folds rows into groups; a window keeps the rows and annotates them. ' +
-        'The analyst workhorses (running totals, ranks, moving averages) are all windows.</p>',
+      title: "Window function",
+      body: "<p>A function computed over a defined set of rows related to the current row, without collapsing those rows into one group. Examples include ranks, running totals, and moving averages. In Q6, a window SUM accumulates the monthly totals produced by GROUP BY. Its ORDER BY determines the accumulation order.</p>",
     },
     'projection-pushdown': {
-      title: 'Projection pushdown',
-      body: '<p>Reading only the columns a query names — the column-store sibling of ' +
-        'predicate pushdown. In a row store the other columns come along physically; in ' +
-        'Parquet/DuckDB they are simply never fetched. Naming your columns instead of ' +
-        'SELECT * stops being style advice and becomes a measured cost difference.</p>',
+      title: "Projection pushdown",
+      body: "<p>Passing the required-column list down to the data scan. A Parquet reader can then skip columns that no part of the query needs. Columns used in filters or joins are needed even if they are absent from the SELECT list. This reduces data reads and decoding work.</p>",
     },
     'hive-partitioning': {
-      title: 'Hive partitioning',
-      body: '<p>The key=value folder convention (month=12/part-0.parquet) inherited from ' +
-        'Apache Hive: the partition column lives in directory names, not in the files. ' +
-        'Readers reconstruct the column from paths and skip whole directories on matching ' +
-        'WHERE clauses — pruning before a single byte of data is opened.</p>',
+      title: "Hive partitioning",
+      body: "<p>A folder convention such as <code>month=12/part-0.parquet</code>. The reader can reconstruct the partition column from the path. A matching filter can exclude files in other partitions before reading their data. In the lab’s files, month is represented by the folder name.</p>",
     },
     'row-group': {
-      title: 'Row group',
-      body: '<p>Parquet’s internal chunk: a horizontal slice (~100k rows) whose columns are ' +
-        'stored contiguously with min/max statistics per column. Small enough to skip on ' +
-        'stats, large enough to compress and scan efficiently — the Parquet-internal ' +
-        'equivalent of a block, sized for analytics.</p>',
+      title: "Row group",
+      body: "<p>A horizontal subset of a Parquet table stored as one column chunk per column. A reader can use column statistics to skip row groups that cannot satisfy a filter. Row-group size is configurable and affects skipping, compression, and scan efficiency; it is not a fixed-size database page.</p>",
     },
     'decimal-type': {
-      title: 'DECIMAL type',
-      body: '<p>Exact fixed-point numbers (DECIMAL(10,2) = up to 10 digits, 2 after the ' +
-        'point) — no floating-point rounding drift, which is why money columns use them. ' +
-        'Doubles are fine for distances and rates; sums of many small money values are ' +
-        'where float error compounds into auditors’ questions.</p>',
+      title: "DECIMAL type",
+      body: "<p>A fixed-point decimal representation with a specified precision and scale. <code>DECIMAL(10,2)</code> allows ten total digits, including two after the decimal point. It represents stored cent values exactly, avoiding binary floating-point approximation for those values. Arithmetic still needs appropriate precision and rounding rules.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -679,7 +659,7 @@
       const out = evaluate(q);
       print('out', out);
     } catch (e) {
-      print('err', 'error: ' + e.message + ' (the browser mini-engine only speaks the preset shapes; the real lab speaks full SQL)');
+      print('err', 'error: ' + e.message + ' (this demonstration recognizes only the preset query patterns; run other queries in DuckDB)');
     }
   }
 
@@ -728,7 +708,7 @@
                          revenue: RIDES.reduce((a, r) => a + r.fare + r.tip, 0).toFixed(2) }],
                       ['n_rides', 'revenue']);
     }
-    throw new Error('unrecognized shape');
+    throw new Error('unsupported query pattern');
   }
 
   function reset() {

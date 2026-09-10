@@ -46,46 +46,29 @@ const GPA_CUT = 35; // WHERE gpa > 3.5  (stored ×10)
         '</svg>' +
         '<p>A <strong>block</strong> is one such chunk <em>on disk</em> (microdb and Postgres ' +
         'default to 4\u20138\u00a0KB); a <strong>page</strong> is that same chunk once it has been ' +
-        'read <em>into memory</em>. Because one trip to storage costs the same whether it moves ' +
-        '4 bytes or 4096, engines always fetch the whole block and hope the neighbouring bytes ' +
-        'get used too.</p>',
+        'read <em>into memory</em>. Because small reads have a substantial fixed access cost, fetching ' +
+        'a whole block can make nearby data available for later requests without another ' +
+        'storage operation.</p>',
     },
     'buffer-pool': {
       title: 'Buffer pool',
-      body: '<p>The database’s private cache: a fixed set of memory slots (<em>frames</em>), ' +
-        'each holding one disk block. Every read goes through it — if the block is already in a ' +
-        'frame (a <em>hit</em>) the disk is never touched; if not (a <em>miss</em>) some frame is ' +
-        'evicted to make room. You build one in Lab 2 and measure its hit rate.</p>',
+      body: "<p>The database’s cache of file blocks. Each memory frame holds one block. A request is a hit if the block is already present; otherwise the pool loads it into a free frame or reuses an unpinned frame. Lab 2 implements the pool and measures its hit rate.</p>",
     },
     'lru': {
       title: 'LRU eviction',
-      body: '<p>When every frame in the buffer pool is occupied and a new block has to come in, ' +
-        'something must be thrown out. <strong>Least-recently-used</strong> evicts the frame whose ' +
-        'block has gone untouched the longest, betting that whatever you reached for most recently ' +
-        'you will reach for again. It is the textbook default and a good bet on most workloads, ' +
-        'but one large scan defeats it completely: by the time the scan comes back to a block, LRU ' +
-        'has just evicted it. You implement the policy in Lab 2 and measure exactly that cliff.</p>',
+      body: "<p>Least recently used replacement chooses the unpinned frame whose block was used longest ago. It assumes recently used data is more likely to be needed again. A repeated sequential scan larger than the pool can defeat this policy: every block is evicted before the next request for it. Lab 2 implements and measures this behavior.</p>",
     },
     'wal': {
       title: 'Write-ahead log (WAL)',
-      body: '<p>An append-only file the engine writes <em>before</em> changing any data page: ' +
-        '“I am about to change X from a to b.” After a crash, the engine replays or undoes ' +
-        'log entries to restore a clean state. It is the whole reason <code>COMMIT</code> can promise ' +
-        'your data survives a power cut — you build one in Lab 7 and kill it mid-write.</p>',
+      body: "<p>An append-only record of database changes used for recovery. The required log records must become durable before the corresponding changed data pages. Depending on the recovery design, the engine uses the log to redo committed changes or undo incomplete ones. Lab 7 implements transactions and recovery using a provided log manager, then tests recovery after stopping the process.</p>",
     },
     'catalog': {
       title: 'System catalog',
-      body: '<p>The database’s tables about its tables: which tables exist, their column names ' +
-        'and types, where their files live. Stored as ordinary tables in the same engine, which is ' +
-        'pleasingly circular — in Postgres, <code>\\dt</code> is just a query against the catalog. ' +
-        'You build microdb’s in Lab 3.</p>',
+      body: "<p>Tables that describe the database’s tables, fields, types, and other objects. PostgreSQL’s <code>\\dt</code> and <code>\\d</code> commands obtain information from these catalogs. Lab 3 provides a catalog implementation that uses your record layer.</p>",
     },
     'plan': {
       title: 'Query planner · plan',
-      body: '<p>SQL says <em>what</em> rows you want, never <em>how</em> to find them. The ' +
-        '<strong>planner</strong> chooses the how: which order to join, whether to use an index or ' +
-        'scan everything. Its output — the <strong>plan</strong> — is a tree of operators the ' +
-        'execution engine then runs. Same query, different plan: milliseconds vs minutes.</p>',
+      body: "<p>The planner turns a query description into an executable tree of operators. It chooses such details as join order and whether to scan a table or use an index. Different valid plans can return the same rows while performing very different amounts of work.</p>",
     },
     'explain': {
       title: 'EXPLAIN',
@@ -99,10 +82,7 @@ const GPA_CUT = 35; // WHERE gpa > 3.5  (stored ×10)
     },
     'index': {
       title: 'Index',
-      body: '<p>A side structure that maps values to row locations so the engine can jump straight ' +
-        'to matching rows instead of scanning every block — like a book index versus reading the ' +
-        'book. The standard database index is the B+ tree, which you build from scratch in Lab 6. ' +
-        'Indexes speed reads but slow every write, since they must be maintained.</p>',
+      body: "<p>A structure that helps locate rows by field values without scanning the entire table. Lab 6 builds a B+ tree. An index can make suitable lookups faster, but takes storage and must be maintained when indexed data changes.</p>",
     },
     'oltp': {
       title: 'OLTP vs OLAP',
@@ -126,19 +106,11 @@ const GPA_CUT = 35; // WHERE gpa > 3.5  (stored ×10)
     },
     'acid': {
       title: 'ACID',
-      body: '<p>The four-part promise a transactional database makes about every commit: ' +
-        '<strong>A</strong>tomic (all of the transaction happens or none of it), ' +
-        '<strong>C</strong>onsistent (the database\u2019s rules still hold afterward), ' +
-        '<strong>I</strong>solated (concurrent users don\u2019t see each other\u2019s half-done work), ' +
-        '<strong>D</strong>urable (once committed, it survives a crash). Weeks 7\u20138 are about the ' +
-        'machinery that keeps this promise \u2014 you\u2019ll build the A and the D yourself.</p>',
+      body: "<p>Four transaction properties: <strong>atomicity</strong> groups changes into an all-or-nothing unit; <strong>consistency</strong> preserves declared database constraints; <strong>isolation</strong> controls interactions between concurrent transactions; <strong>durability</strong> preserves committed changes after a crash. Lectures 7–8 examine the mechanisms and isolation levels behind these properties.</p>",
     },
     'fsync': {
       title: 'fsync',
-      body: '<p>The system call that turns “I wrote the file” into “the bytes are ' +
-        'physically on durable storage.” Ordinary writes only reach the OS’s in-memory cache; ' +
-        'an <code>fsync</code> forces them to the device — and costs 10–1000× as much. How databases ' +
-        'spend as few fsyncs as possible is the story of the write-ahead log.</p>',
+      body: "<p>A system call that requests that a file’s buffered changes be written to durable storage before it returns successfully. Python file buffers must be flushed first. Lab 1 compares write throughput with and without this durability step; the cost depends on the storage system.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -223,9 +195,9 @@ const GPA_CUT = 35; // WHERE gpa > 3.5  (stored ×10)
   const COLD = [
     ['The query arrives as text — just characters. Nothing has been checked yet.',
       () => { sqlEl.classList.add('on'); }],
-    ['The parser breaks the text into tokens and checks the grammar. (You build this in Lab 5.)',
+    ['The lexer produces tokens and the parser checks their grammar. Lab 5 provides the lexer and asks you to implement the SELECT parser.',
       () => { tokEl.querySelectorAll('.qj-token').forEach(t => t.classList.add('show')); }],
-    ['The planner turns tokens into a plan: a tree of operators. Rows will flow bottom-up.',
+    ['The planner turns the parsed query description into an operator tree. Rows flow from its inputs toward the root.',
       () => { planEl.classList.add('show'); }],
     ['Scan starts. It asks the buffer pool for block 0 — not in any frame: a MISS. The disk must be read.',
       () => { planNode('scan', true); frame(0, 'miss', 'loading…'); blockGlow(0, true); diskReads += 1; stats(); }],
@@ -239,13 +211,13 @@ const GPA_CUT = 35; // WHERE gpa > 3.5  (stored ×10)
       () => { planNode('project', true); setTimeout(() => planNode('', false), 600); againBtn.hidden = false; }],
   ];
   const WARM = [
-    ['Same query, second run. Parser and planner do their work again (that part never changes).',
+    ['On this second run, microdb parses and plans the same query again.',
       () => { sqlEl.classList.add('on'); planEl.classList.add('show'); }],
-    ['Scan asks for block 0 — it is STILL IN FRAME 0. A hit: no disk. This read costs ~1000× less.',
+    ['Block 0 is still in frame 0. This cache hit avoids a disk read: about 1/250 of the block-access time in our model.',
       () => { frame(0, 'hit'); checkRows(0); }],
-    ['Block 1 — also a hit. The disk never spins up at all.',
+    ['Block 1 is also cached, so this request needs no disk read.',
       () => { frame(1, 'hit'); checkRows(1); }],
-    ['Same three rows, 0 disk reads. That difference is the buffer pool — Lab 2. Everything fast about databases looks like this.',
+    ['The query returns the same three rows with zero disk reads. Lab 2 implements the buffer pool that makes this reuse possible.',
       () => { planNode('project', true); setTimeout(() => planNode('', false), 600); }],
   ];
 
@@ -307,28 +279,28 @@ const GPA_CUT = 35; // WHERE gpa > 3.5  (stored ×10)
   const LAYERS = [
     { name: 'SQL front end', lab: 'Lab 5 · Sep 24', desc: 'parser · planner',
       detail: '<strong>Job:</strong> turn SQL text into a checked, executable plan tree. ' +
-        '<strong>You build:</strong> a lexer, a recursive-descent parser, and a planner for a small SQL subset ' +
-        '(<code>parser.py</code>, <code>planner.py</code>). After this lab, microdb answers real SQL typed at a prompt.' },
+        '<strong>You build:</strong> a SELECT parser and planner using the provided lexer ' +
+        '(<code>sql_frontend.py</code>). After this lab, microdb answers real SQL typed at a prompt.' },
     { name: 'Execution engine', lab: 'Lab 4 · Sep 17', desc: 'scan · select · project · join',
       detail: '<strong>Job:</strong> run the plan — a pipeline of operators, each answering “next row?”. ' +
-        '<strong>You build:</strong> <code>scans.py</code>: SelectScan, ProjectScan, and a nested-loop join. ' +
+        '<strong>You build:</strong> <code>query_engine.py</code>: SelectScan, ProjectScan, and a nested-loop join. ' +
         '<strong>You measure:</strong> rows examined vs rows returned on the pinned toy queries.' },
     { name: 'Records & catalog', lab: 'Lab 3 · Sep 10', desc: 'rows in pages · schemas · tables about tables',
       detail: '<strong>Job:</strong> impose meaning on raw pages — record layout, schemas, and the system catalog. ' +
-        '<strong>You build:</strong> <code>record_page.py</code>, <code>table_scan.py</code>, <code>catalog.py</code>. ' +
-        'The ada row finally lives at a real offset in a real block.' },
+        '<strong>You build:</strong> <code>record_manager.py</code>, used by the provided <code>catalog.py</code>. ' +
+        'Each field is addressed by its slot position and layout offset.' },
     { name: 'Buffer pool', lab: 'Lab 2 · Sep 3', desc: 'frames · pin/unpin · eviction',
       detail: '<strong>Job:</strong> keep hot blocks in memory so most reads never touch the disk. ' +
         '<strong>You build:</strong> <code>buffer_manager.py</code> with pin/unpin and LRU eviction. ' +
-        '<strong>You measure:</strong> hit rate on a scan workload — the number that explains database speed.' },
+        '<strong>You measure:</strong> hit rates under sequential scans and repeated access to a hot set.' },
     { name: 'File manager', lab: 'Lab 1 · Thu!', desc: 'files as arrays of fixed-size blocks',
       detail: '<strong>Job:</strong> the only code that touches the OS — read/write block k of file f, whole blocks at a time. ' +
         '<strong>You build:</strong> <code>file_manager.py</code>: BlockId, Page, FileManager. ' +
         '<strong>You measure:</strong> what fsync really costs your SSD.' },
-    { name: 'Write-ahead log & recovery', lab: 'Lab 7 · Oct 15', side: true, desc: 'the crash-safety rail — touches every layer',
-      detail: '<strong>Job:</strong> log every change before it happens so a crash at any moment leaves a recoverable database. ' +
-        '<strong>You build:</strong> <code>log_manager.py</code> + recovery, then <code>kill -9</code> microdb mid-write and watch it come back. ' +
-        'Sits beside the stack because every layer above the file manager reports to it.' },
+    { name: 'Write-ahead log & recovery', lab: 'Lab 7 · Oct 15', side: true, desc: 'logging and recovery for transactions',
+      detail: '<strong>Job:</strong> record changes and enforce the ordering needed for crash recovery. ' +
+        '<strong>You build:</strong> the transaction methods in <code>transaction.py</code>, then <code>kill -9</code> microdb mid-write and watch it come back. ' +
+        'The transaction layer coordinates logging with data-page changes.' },
   ];
   stack.innerHTML = LAYERS.map((l, i) =>
     `<div class="ls-layer${l.side ? ' ls-side' : ''}" data-i="${i}">` +
@@ -446,15 +418,15 @@ const GPA_CUT = 35; // WHERE gpa > 3.5  (stored ×10)
   const PLAN = [
     { lab: 'Lab 7 · Oct 15', name: 'Transactions & recovery',
       desc: 'WAL · rollback · crash recovery · locks',
-      detail: '<strong>Build:</strong> the log manager, rollback, and restart recovery, plus a simple lock table. ' +
+      detail: '<strong>Build:</strong> transaction updates, commit, rollback, and restart recovery using a provided log manager. ' +
         '<strong>Measure:</strong> kill microdb mid-transaction; count what survives. (Answer: exactly the committed work.)' },
     { lab: 'Lab 6 · Oct 1', name: 'B+ tree index',
       desc: 'insert · search · range scan · planner hookup',
-      detail: '<strong>Build:</strong> a real B+ tree over the file layer, wired into the planner. ' +
-        '<strong>Measure:</strong> point-lookup time on 100k rows, scan vs index — expect orders of magnitude.' },
+      detail: '<strong>Build:</strong> an in-memory B+ tree with insert, lookup, and range scanning. ' +
+        '<strong>Measure:</strong> lookup and range costs for a table scan versus the index.' },
     { lab: 'Lab 5 · Sep 24', name: 'SQL front end',
       desc: 'lexer · parser · planner',
-      detail: '<strong>Build:</strong> tokenizer, recursive-descent parser, and a naive planner for ' +
+      detail: '<strong>Build:</strong> a SELECT parser and a simple planner, using the supplied lexer and INSERT parser for ' +
         '<code>SELECT … FROM … WHERE …</code> and <code>INSERT</code>. microdb gets a prompt.' },
     { lab: 'Lab 4 · Sep 17', name: 'Query operators',
       desc: 'select · project · nested-loop join',
@@ -462,12 +434,12 @@ const GPA_CUT = 35; // WHERE gpa > 3.5  (stored ×10)
         '<strong>Measure:</strong> rows touched by <code>WHERE gpa > 3.5</code> with and without an early filter.' },
     { lab: 'Lab 3 · Sep 10', name: 'Records & catalog',
       desc: 'slotted records · schemas · table files',
-      detail: '<strong>Build:</strong> record pages (the ada row at its real offset), table scans, and the catalog. ' +
+      detail: '<strong>Build:</strong> record layouts, record-page operations, and table scans; the catalog is provided. ' +
         '<strong>Measure:</strong> rows per block at different schema widths.' },
     { lab: 'Lab 2 · Sep 3', name: 'Buffer pool',
       desc: 'frames · pin/unpin · LRU',
       detail: '<strong>Build:</strong> the buffer manager: fixed frames, pin/unpin protocol, LRU eviction. ' +
-        '<strong>Measure:</strong> hit rate as the pool shrinks — the cliff is the lesson.' },
+        '<strong>Measure:</strong> hit rate at different pool sizes and under different access patterns.' },
     { lab: 'Lab 1 · Thu Aug 27', name: 'Disk & file manager',
       desc: 'BlockId · Page · FileManager',
       detail: '<strong>Build:</strong> the byte layer — typed reads/writes inside a page, whole-block I/O to disk. ' +

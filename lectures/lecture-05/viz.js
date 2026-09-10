@@ -5,7 +5,7 @@
   const GLOSSARY = {
     'pushdown': {
       title: 'Pushdown (selection pushdown)',
-      body: '<p>The optimizer move of applying a filter as early as possible in the plan, before the expensive operators run, instead of at the very end. Your naive planner puts a single SelectScan over the whole product of the FROM tables, so every pair of rows is formed and then most are thrown away. A pushed-down plan filters each table separately first, so only rows that survive their own conditions reach the product, and the join condition is checked on far fewer pairs. The rows that come out are identical; only the amount of work changes. Week 9&#39;s optimizer reads the same QueryData your parser produces and rewrites the plan this way automatically.</p>',
+      body: "<p>Applying a filter earlier in a plan when the rewrite preserves the result. For our inner join, each single-table condition can filter its own input before the product. The join condition then examines fewer candidate pairs. Lecture 9 explains how statistics help a planner compare such alternatives; implementing that optimizer is optional.</p>",
     },
     'predicate': {
       title: 'Predicate',
@@ -13,7 +13,7 @@
     },
     'catastrophic-backtracking': {
       title: 'Catastrophic backtracking',
-      body: '<p>Backtracking is how a typical regex engine handles a pattern that can match text in more than one way: it tries one way, and if the rest of the pattern then fails, it backs up and tries another. When a pattern contains nested or overlapping repeats, such as (a+)+, the number of ways to split the input grows exponentially with its length, and the engine tries them all before giving up. That is catastrophic backtracking: a pattern that looks harmless can take seconds, minutes, or longer on a short input. A hand-written lexer and parser do not have this failure mode, because each token is read once and the running time grows in step with the length of the input. That predictable worst case is the reason this lecture builds a lexer and a parser instead of one regex.</p>',
+      body: "<p>Some regular-expression engines try alternative matches by backtracking. Certain patterns with overlapping or nested repetition can cause the number of attempted matches to grow very rapidly on a failing input. Other regex engines avoid this behavior. Separating lexing and parsing does not automatically prove a time bound: the pattern, grammar, and implementation must each be considered.</p>",
     },
     'token': {
       title: 'Token',
@@ -21,38 +21,23 @@
     },
     'front-end': {
       title: 'Front end (of a language system)',
-      body: '<p>The stages that understand <em>text</em>: lexing (characters to tokens) and ' +
-        'parsing (tokens to structure). Compilers, interpreters, and databases all have one; ' +
-        'everything after it works on structured data and never sees a character again. ' +
-        'microdb’s back end is the scan machinery you built in Lab 4.</p>',
+      body: "<p>The stages that interpret a statement’s text and prepare it for execution. In this lecture the lexer produces tokens, the parser produces a structured statement description, and the planner builds the scan tree that the execution engine will run.</p>",
     },
     'bnf': {
-      title: 'BNF (Backus–Naur Form)',
-      body: '<p>The standard notation for grammars: each line defines a rule, <code>|</code> ' +
-        'separates alternatives, <code>{ }</code> repeats, <code>[ ]</code> is optional. ' +
-        'Reading BNF is a durable skill — the SQL standard, JSON’s spec, HTTP’s RFCs, and ' +
-        'every programming language reference are written in a dialect of it.</p>',
+      title: 'BNF and extended BNF (EBNF)',
+      body: "<p>BNF describes a language using grammar rules and alternatives. The extended form used here, EBNF, adds convenient notation such as braces for repetition and square brackets for optional items. These rules describe which token sequences the parser accepts.</p>",
     },
     'ast': {
       title: 'AST (abstract syntax tree)',
-      body: '<p>The structured, tree-shaped description a parser produces — “abstract” because ' +
-        'it keeps meaning and drops spelling (no commas, no parentheses, no keyword tokens). ' +
-        'microdb’s QueryData is a tiny AST. Keeping it as plain data is what lets a planner, ' +
-        'an optimizer, or a pretty-printer each consume it independently.</p>',
+      body: "<p>An abstract syntax tree represents a parsed statement’s structure without preserving every punctuation mark or keyword token. microdb’s QueryData is a small structured query description. It separates parsing from planning, allowing more than one plan to be built from the same parsed query.</p>",
     },
     'repl': {
       title: 'REPL',
-      body: '<p>Read–Eval–Print Loop: the interactive prompt pattern — read a line, execute ' +
-        'it, print the result, repeat. <code>python3</code> itself is one; <code>psql</code> ' +
-        'is Postgres’s; <code>microdb.py</code> is yours. Fifty lines of loop around ' +
-        '<code>db.execute()</code>, and an engine becomes a tool.</p>',
+      body: "<p>Read–Eval–Print Loop: read input, execute it, print the result, then repeat. Python and PostgreSQL’s psql provide interactive prompts. The supplied <code>microdb.py</code> runs this loop around the engine’s execute method.</p>",
     },
     'reserved-word': {
       title: 'Reserved word',
-      body: '<p>A word the grammar claims for itself — you can’t name a table ' +
-        '<code>select</code> because the lexer promotes it to a keyword before the parser ' +
-        'ever sees it. Real SQL splits hairs (reserved vs non-reserved vs context-dependent ' +
-        'keywords); microdb reserves its eleven words flatly and keeps the lexer one regex.</p>',
+      body: "<p>A word assigned a special role in the language. microdb’s lexer labels words in its keyword set as KEYWORD, so they cannot satisfy a parser rule that expects an ID. Production SQL systems often provide quoted identifiers and more detailed rules for which keywords can be names.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -183,17 +168,17 @@
       msg.innerHTML = note;
     } catch (e) {
       html += stage('3 · ParseError', `<div class="sq-body">${e.message}</div>`, true);
-      msg.innerHTML = 'The parser died <em>well</em>: it names what it expected and what it found.';
+      msg.innerHTML = 'The parser reports the token it expected and the token it found instead.';
     }
     stages.innerHTML = html;
   }
 
   $('sq-q1').addEventListener('click', () =>
     run("SELECT name FROM students WHERE gpa > 35",
-        'Four stages, one row of chips each — the whole front end at a glance.'));
+        'Compare the SQL text, tokens, parsed description, and execution plan.'));
   $('sq-q2').addEventListener('click', () =>
     run("SELECT name, dept FROM students, majors WHERE mid = mid2 AND gpa > 35",
-        'Note the description: <code>mid = F(mid2)</code> — an ID on the right became a field reference. That one fork is what makes joins parseable.'));
+        'Note the description: <code>mid = F(mid2)</code> — an ID on the right became a field reference. The parser records the comparison as field-to-field rather than field-to-constant.'));
   $('sq-q3').addEventListener('click', () =>
     run("INSERT INTO students VALUES (7, 'gil', 33)",
         'INSERT parses with the provided worked-example method — read it before Thursday.'));
@@ -209,9 +194,9 @@
   if (!tokensEl) return;
 
   const TOKENS = [
-    ['KW', 'select'], ['ID', 'name'], ['PUNCT', ','], ['ID', 'gpa'],
-    ['KW', 'from'], ['ID', 'students'], ['KW', 'where'],
-    ['ID', 'gpa'], ['OP', '>'], ['NUM', '35'],
+    ['KEYWORD', 'select'], ['ID', 'name'], ['PUNCT', ','], ['ID', 'gpa'],
+    ['KEYWORD', 'from'], ['ID', 'students'], ['KEYWORD', 'where'],
+    ['ID', 'gpa'], ['PUNCT', '>'], ['NUM', '35'],
   ];
   // Each step: tokens consumed so far, call stack, one-line note, QueryData fields.
   const STEPS = [
@@ -233,7 +218,7 @@
       data: { fields: ['name', 'gpa'], tables: ['students'] } },
     { c: 8, stack: ['parse_query', '_parse_predicate', '_parse_term'], note: '_parse_term: expect(ID) returns "gpa" (left side)',
       data: { fields: ['name', 'gpa'], tables: ['students'] } },
-    { c: 9, stack: ['parse_query', '_parse_predicate', '_parse_term'], note: 'expect(OP) returns ">"',
+    { c: 9, stack: ['parse_query', '_parse_predicate', '_parse_term'], note: 'expect(PUNCT) returns ">"',
       data: { fields: ['name', 'gpa'], tables: ['students'] } },
     { c: 10, stack: ['parse_query', '_parse_predicate', '_parse_term'], note: 'expect(NUM) returns 35 — term complete, RETURN Term(gpa > 35)',
       data: { fields: ['name', 'gpa'], tables: ['students'] } },

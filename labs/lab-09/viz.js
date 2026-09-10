@@ -5,38 +5,23 @@
   const GLOSSARY = {
     'brute-baseline': {
       title: 'Brute-force baseline',
-      body: '<p>The exact search you keep around forever: compare against everything, O(n) ' +
-        'per query, guaranteed right. Every ANN result is judged against it (recall@k is ' +
-        '"fraction of the brute-force answer found"), and at small scale it is simply the ' +
-        'correct engineering choice. The project spec requires it for both reasons.</p>',
+      body: "<p>Exact search scores every stored vector and selects the top k. With fixed vector width, its scoring work grows linearly with the number of vectors. Keep it as the reference for recall and query cost. For a small corpus, it may already meet the application’s performance requirements.</p>",
     },
     'centroid': {
       title: 'Centroid',
-      body: '<p>A cluster’s mean vector — k-means’s summary of a neighborhood. IVF stores one ' +
-        'per list and routes queries by scoring them: cheap coarse geography before fine ' +
-        'search. 20 centroids summarize 4,000 vectors the way 20 road signs summarize a ' +
-        'city.</p>',
+      body: "<p>A representative vector for a cluster, formed from the mean of its assigned vectors. IVF stores a centroid for each list and compares the query with the centroids to choose which lists to search. A cluster’s centroid is only a summary, so a close vector can still belong to an unsearched list.</p>",
     },
     'nprobe': {
       title: 'nprobe / ef_search',
-      body: '<p>The production names for this lab’s probe parameter — FAISS and pgvector call ' +
-        'it nprobe (IVF), HNSW implementations call theirs ef_search. Same contract ' +
-        'everywhere: more lists/frontier searched, higher recall, more work. Tuning it IS ' +
-        'vector-database operations.</p>',
+      body: "<p>The lab’s probe setting controls how many IVF lists are searched. FAISS calls this nprobe; pgvector uses ivfflat.probes. HNSW’s ef_search instead controls a graph-search candidate list. Both settings adjust search effort, but they control different operations and should be tuned by measurement.</p>",
     },
     'recall-at-k': {
       title: 'recall@k',
-      body: '<p>Of the true k nearest neighbors (per brute force), the fraction your index ' +
-        'returned. The honesty metric of approximate search: 0.95 recall@10 means you ' +
-        'typically miss half a neighbor per query. Distinct from the classifier recall of ' +
-        'your ML courses — same word, same spirit, different denominator.</p>',
+      body: "<p>Count how many of the exact top-k ids also appear in the approximate top-k result, then divide by k. Average the scores across evaluation queries. Average recall@10 of 0.95 means five exact neighbors were missed per ten queries on average, not that every query missed the same number.</p>",
     },
     'embedding-drift': {
       title: 'Embedding drift',
-      body: '<p>When the embedding model changes (new version, fine-tune), old vectors and ' +
-        'new queries stop sharing a geometry — similarity across the gap is meaningless. ' +
-        'Indexes must be rebuilt from re-embedded content: the operational cost that makes ' +
-        'teams version their embedding models like schemas.</p>',
+      body: "<p>If a model update changes its embedding space, old document vectors may be incompatible with new query vectors. Record the model version, rebuild corpus embeddings and their index, and switch query embedding to the matching version. Evaluate the new model rather than assuming the old search settings still work.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -51,11 +36,11 @@
   const val = document.getElementById('dl-val');
   // The reference solution's measured table (seeded, deterministic).
   const TABLE = [
-    { probe: 1,  recall: 0.758, comps: 236 },
-    { probe: 2,  recall: 0.885, comps: 471 },
-    { probe: 4,  recall: 0.948, comps: 882 },
-    { probe: 8,  recall: 0.985, comps: 1702 },
-    { probe: 16, recall: 1.000, comps: 3284 },
+    { probe: 1, recall: 0.643, comps: 244 },
+    { probe: 2, recall: 0.810, comps: 471 },
+    { probe: 4, recall: 0.917, comps: 924 },
+    { probe: 8, recall: 0.965, comps: 1756 },
+    { probe: 16, recall: 0.997, comps: 3229 },
     { probe: 20, recall: 1.000, comps: 4020 },
   ];
   const EXACT = 4000;
@@ -72,7 +57,7 @@
       `<span class="dl-mark" style="left:100%"></span></span>` +
       `<span class="dl-val">${row.comps.toLocaleString()} (${(EXACT / row.comps).toFixed(1)}x)</span></div>` +
       `<div class="dl-row"><span></span><span style="font-family:var(--sans);font-size:12px;color:var(--ink-mute)">` +
-      `missing ~${Math.round((1 - row.recall) * 10)} of the true top-10 per query` +
+      `average exact neighbors missed per query: ${((1 - row.recall) * 10).toFixed(2)}` +
       `</span><span></span></div>`;
   }
   slider.addEventListener('input', render);

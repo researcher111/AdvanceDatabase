@@ -16,14 +16,14 @@
   <p><a href="../../slides/lecture-12.html">Visual slide deck ↗</a></p>
   <ul>
     <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#why">Teaching a model your data</a></li>
-    <li><a href="#try-it">What the retriever hands it</a></li>
-    <li><a href="#pipeline">The pipeline is the course</a></li>
-    <li><a href="#chunking">Chunking is record design</a></li>
-    <li><a href="#eval">Retrieval quality is measurable</a></li>
-    <li><a href="#failures">RAG fails like databases</a></li>
-    <li><a href="#production">Production upgrades</a></li>
-    <li><a href="#thursday">You write the retriever</a></li>
+    <li><a href="#why">How to give a model access to your data</a></li>
+    <li><a href="#try-it">Inspect the evidence supplied to the model</a></li>
+    <li><a href="#pipeline">The five stages of this RAG pipeline</a></li>
+    <li><a href="#chunking">Choose chunks that preserve useful context</a></li>
+    <li><a href="#eval">Retrieval quality is measurable: two numbers, twelve questions</a></li>
+    <li><a href="#failures">Diagnose retrieval and generation failures</a></li>
+    <li><a href="#production">Improve retrieval with additional search stages</a></li>
+    <li><a href="#thursday">Thursday you write the retriever and the assembly</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
@@ -41,20 +41,11 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 12 · Tuesday November 10, 2026</div>
   <h1>RAG as a Systems Problem</h1>
-  <div class="subtitle">The model has never seen your documents and cannot hold them all in its prompt, so how does "chat with your documents" work at all?</div>
+  <div class="subtitle">How can a language model answer questions about your documents? Retrieve relevant passages, supply them as context, and measure whether the answers are supported.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">
-Ask a language model about your own documents and it has nothing to answer from. It answers from <span class="gloss" data-gloss="parametric">parametric
-knowledge</span>, whatever its training run baked into the weights<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup>; your documents aren't in
-there, and its <span class="gloss" data-gloss="context-window">context window</span> is too
-small to hold them all. Retrieval-augmented generation is the standard fix, and the central claim of
-this lecture is that the "retrieval" half is not an AI technique. It is a
-database: chunked records, an embedding column, a vector index, a top-k query, and an
-evaluation metric. You built every one of those pieces already. Thursday you wire them into a
-working RAG pipeline; your project is the same wiring at real scale.
-</p>
+<p class="lede">A language model cannot reliably answer questions about documents it has not been given. Its <span class="gloss" data-gloss="parametric">parametric knowledge</span> comes from training, and its <span class="gloss" data-gloss="context-window">context window</span> limits how much text you can send in one request. Retrieval-augmented generation (RAG) addresses this by finding relevant passages and adding them to the prompt. This lecture focuses on the database work behind retrieval: storing chunks and metadata, indexing embeddings, ranking results, and evaluating them. Thursday’s lab combines those pieces into a pipeline you can use as a starting point for the project.<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup></p>
 
 <div class="cite">
   Companion reading: Lewis et&nbsp;al., <a href="https://arxiv.org/abs/2005.11401"><em>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</em></a> (the paper that named it)<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup> ·
@@ -76,40 +67,33 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p class="keep-in-present"><strong>Quiz 9</strong> first (vector search, 10 min), then the pipeline your project is building.</p>
 
-<p class="keep-in-present">Your project's corpus is not in any model's weights, and it will not fit in any model's prompt. Nothing about the model fixes that. What fixes it is a database, and you have already built most of it.</p>
+<p class="keep-in-present">Your project must supply its own evidence. Retrieval selects a small set of relevant passages from the corpus so the model can answer without receiving every document in each prompt.</p>
 
 
-<p class="keep-in-present">Today's claim: <strong>RAG quality is mostly retrieval quality, and
-retrieval quality is measurable</strong>, with a hand-labeled <span class="gloss" data-gloss="eval-set">eval set</span>, not by reading a few answers and forming an impression.</p>
+<p class="keep-in-present">Today’s main idea: <strong>measure retrieval before judging the generated answer.</strong> Use questions with labeled source passages to test whether the pipeline finds the evidence needed to answer them.</p>
 
 <!-- ============================================================ -->
-<h2 id="why">Teaching a model your data is a database workload</h2>
+<h2 id="why">How to give a model access to your data</h2>
 
-<h3>Three ways to teach a model your data</h3>
+<h3>Compare training, full context, and retrieval</h3>
 
 <table>
   <thead><tr><th>Approach</th><th>Per update</th><th>Per question</th><th>Where it breaks</th></tr></thead>
   <tbody>
-    <tr><td><strong>Fine-tune</strong> the weights</td><td>an additional training job when learned behavior or knowledge needs updating</td><td>cheap: the question alone, with no extra tokens attached</td><td>the weights are stale the moment a document changes, and the model recalls specific facts from them unreliably<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup>. It also cannot cite: the answer comes from weights, not from a document it can point to</td></tr>
-    <tr><td><strong>Stuff the context</strong> with everything</td><td>free: just send the new text next time</td><td>every document is billed as prompt tokens on every question</td><td>a 50k-document corpus does not fit in any context window, and what does fit gets skimmed: models attend poorly to evidence buried in the middle of a long prompt, the <span class="gloss" data-gloss="lost-in-the-middle">"lost in the middle"</span> effect measured later in this lecture</td></tr>
-    <tr><td><strong>Retrieve</strong>, then generate</td><td>re-embed only the changed document and update the index</td><td>one top-k query, plus the k retrieved chunks sent as prompt tokens</td><td>the answer can only be as good as the chunks retrieved: if the right chunk does not come back, the model never sees it. That is why this lecture measures retrieval</td></tr>
+    <tr><td><strong>Fine-tune</strong> the weights</td><td>an additional training job when learned behavior or knowledge needs updating</td><td>the question can be sent without retrieving supporting passages, though inference still has a cost</td><td>document changes may not be reflected in the learned parameters, and recall of specific facts is unreliable. Source-grounded citations still require access to the documents<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup></td></tr>
+    <tr><td>send all documents in the context</td><td>no retraining or index update; send the current text with the next question</td><td>every document is billed as prompt tokens on every question</td><td>the corpus may exceed the context window. Even when it fits, a long prompt costs more to process, and models may use evidence less effectively when it appears in the middle</td></tr>
+    <tr><td><strong>Retrieve</strong>, then generate</td><td>re-embed only the changed document and update the index</td><td>one top-k query, plus the k retrieved chunks sent as prompt tokens</td><td>if retrieval misses the relevant passage, the model cannot use it as evidence. Retrieval quality therefore needs its own evaluation</td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="A database workload">Retrieval turns the problem into a database workload</h3>
 
-<p class="keep-in-present">Retrieval wins on update cost, question cost, and citability, by
-turning the problem into a database workload: <strong>keep documents in a store, index them
-for similarity, query per question</strong>. Fresh data means updating an index, not
-retraining a model.</p>
+<p class="keep-in-present">Retrieval lets you update source documents and their index without retraining the model. Each question sends only selected passages to the generator. Retaining source identifiers also gives the answer a citation trail that can be checked.</p>
 
 <!-- ============================================================ -->
-<h2 id="try-it">The model sees only what the retriever hands it</h2>
+<h2 id="try-it">Inspect the evidence supplied to the model</h2>
 
-<p>Below is a complete RAG retrieval stage running in your browser: the same math as Thursday's
-<code>micro_rag.py</code>, including its <span class="gloss" data-gloss="hashed-bag-of-words">hashed bag-of-words</span> embedder, over a 24-document corpus that summarizes
-<em>this course</em>. Ask it something from the last eleven weeks and watch what the model
-would be handed.</p>
+<p>This browser example runs the retrieval stage over 24 documents summarizing the course. It uses the same <span class="gloss" data-gloss="hashed-bag-of-words">hashed bag-of-words</span> embedding method as Thursday’s <code>micro_rag.py</code>. Ask a question to inspect both the retrieved chunks and the prompt that would be sent to a language model.</p>
 
 <div class="viz" id="viz-ask">
   <div class="viz-title">micro-rag · retrieval over 24 course-summary documents</div>
@@ -130,16 +114,13 @@ would be handed.</p>
   <details class="ask-prompt-wrap"><summary>Show the assembled prompt (what the LLM actually sees)</summary>
     <pre id="ask-prompt" class="ask-prompt"></pre>
   </details>
-  <p class="viz-caption">Try the two buffer-pool presets back to back: same information
-  need, different vocabulary, very different retrievals. That failure is the synonym wall,
-  and the section "How RAG fails" below measures it.</p>
+  <p class="viz-caption">Try the two buffer-pool presets. They ask for similar information with different words, but the bag-of-words embedder may return different evidence. The failure analysis below measures this vocabulary mismatch.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="pipeline">The pipeline is the course</h2>
+<h2 id="pipeline">The five stages of this RAG pipeline</h2>
 
-<p class="keep-in-present">Every RAG system is five stages. You have built a version of every
-stage that involves a database, which is all of them but the last:</p>
+<p class="keep-in-present">We will organize the pipeline into five stages. The first four use storage, indexing, and query techniques from earlier labs. The final stage assembles the prompt and generates an answer:</p>
 
 <pre class="equation"><code>documents ──chunk──▶ records ──embed──▶ vectors ──index──▶ ANN structure
                                                               │
@@ -147,58 +128,48 @@ question ──embed──▶ query vector ──────retrieve (top-k)─
                                           │
                         assemble context ─┴─▶ prompt ──generate──▶ answer + citations</code></pre>
 
-<h3 class="new-slide" data-kicker="The pipeline is the course">Four of five stages are database machinery you built</h3>
+<h3 class="new-slide" data-kicker="RAG pipeline">Connect the pipeline to earlier labs</h3>
 
 <div class="viz" id="viz-pipe">
-  <div class="viz-title">the pipeline · click a stage · green means "you already built this"</div>
+  <div class="viz-title">the pipeline · click a stage · green marks work from earlier labs</div>
   <div class="pipe-flow" id="pipe-flow"></div>
   <div class="pipe-detail" id="pipe-detail"></div>
-  <p class="viz-caption">Four of the five stages are database machinery you have already built. The one
-  orange box, assemble and generate, is the only new stage, and it is the stage Thursday's lab
-  mocks (a stand-in prints the assembled prompt instead of calling a real model), because
-  retrieval, not generation, sets the quality ceiling.</p>
+  <p class="viz-caption">The green stages use techniques from earlier labs. The orange stage assembles the prompt and calls the generator. In Thursday’s default echo mode, the lab prints the assembled prompt instead of calling a real model, so you can inspect the retrieved evidence directly.</p>
 </div>
 
-<p class="key-fact keep-in-present"><strong>4 of 5</strong> RAG stages are database machinery you have already built; only generate is new, and Thursday mocks it</p>
+<p class="key-fact keep-in-present"><strong>Five stages:</strong> chunk, embed, index, retrieve, then assemble and generate. The lab provides some stages and asks you to implement retrieval and prompt assembly.</p>
 
-<h3 class="new-slide" data-kicker="The pipeline is the course">The quality ceiling is set before any model runs</h3>
+<h3 class="new-slide" data-kicker="RAG pipeline">Missing evidence limits the answer</h3>
 
-<p class="keep-in-present">This is why the project spec calls the LLM "the easy part."
-The pipeline's quality ceiling is set before any model runs: <strong>if the right chunk
-isn't retrieved, no prompt engineering can quote it.</strong></p>
+<p class="keep-in-present">Retrieval determines which source passages the model can use. If a passage is missing from the prompt, a better prompt cannot make the model quote it. Generation still needs evaluation: a model can misread, ignore, or misrepresent passages that were retrieved correctly.</p>
 
-<h3 class="new-slide" data-kicker="The pipeline is the course">Your project proposal is this pipeline as four tables</h3>
+<h3 class="new-slide" data-kicker="RAG pipeline">Describe the pipeline with four related tables</h3>
 
-<p class="keep-in-present">The project spec now asks for the same discipline in your own data before any code:
-a four-table schema, <code>documents</code>, <code>chunks</code>, <code>embeddings</code>, and
-<code>eval_questions</code>, with keys, in the proposal. The one foreign key that matters is
-<code>chunks.doc_id</code> to <code>documents.doc_id</code>, because it is what lets a retrieved chunk
-cite its source. The schema, and why each column exists for the evaluation, is in
-<a href="../../project.html#schema">the project spec</a>.</p>
+<p class="keep-in-present">The project proposal asks for four tables with keys: <code>documents</code>, <code>chunks</code>, <code>embeddings</code>, and <code>eval_questions</code>. The foreign key from <code>chunks.doc_id</code> to <code>documents.doc_id</code> connects a retrieved passage to its source. The other relationships connect vectors and evaluation labels to those records. Use the project specification to check the required columns.</p>
 
 <!-- ============================================================ -->
-<h2 id="chunking">Chunking is record design, not text splitting</h2>
+<h2 id="chunking">Choose chunks that preserve useful context</h2>
 
 <h3>Whole document, paragraph, or sentence</h3>
 
 <table>
   <thead><tr><th>Choice</th><th>Retrieval precision</th><th>Context delivered</th><th>Failure mode</th></tr></thead>
   <tbody>
-    <tr><td>whole document</td><td>poor: the whole document collapses into one vector that averages every topic it covers<sup class="src"><a href="#src-4" title="Effective Chunking Strategies for RAG (Cohere)">4</a></sup></td><td>huge, and most of it has nothing to do with the question</td><td>an averaged vector is a little similar to every question and very similar to none, so the document is rarely the top hit for anything</td></tr>
-    <tr><td>paragraph / ~100–300 words</td><td>good: one topic per vector, so a question about that topic lands close to it</td><td>a self-contained claim, with enough text to answer from</td><td>few; this is the size most production systems settle on<sup class="src"><a href="#src-5" title="Evaluating Chunking Strategies for Retrieval (Chroma Research)">5</a></sup></td></tr>
-    <tr><td>sentence</td><td>sharp when the wording matches, but a single sentence has so few words that a small change in phrasing misses it</td><td>too little to answer from: a sentence usually depends on the ones around it</td><td>the retrieved sentence says "it does this" and the "it" was defined two sentences earlier, in a chunk that did not come back</td></tr>
+    <tr><td>whole document</td><td>one vector must represent all topics in the document, which can weaken a match to a specific question<sup class="src"><a href="#src-4" title="Effective Chunking Strategies for RAG (Cohere)">4</a></sup></td><td>potentially much longer than the passage needed for an answer</td><td>a passage about the relevant topic may be difficult to retrieve when represented together with unrelated topics</td></tr>
+    <tr><td>paragraph / ~100–300 words</td><td>often one topic per vector, which can make the relevant passage easier to retrieve</td><td>a self-contained claim, with enough text to answer from</td><td>a useful starting range to evaluate, but headings, tables, and cross-paragraph references may require different boundaries<sup class="src"><a href="#src-5" title="Evaluating Chunking Strategies for Retrieval (Chroma Research)">5</a></sup></td></tr>
+    <tr><td>sentence</td><td>can match a specific claim, but may lack the context needed to interpret it</td><td>too little to answer from: a sentence usually depends on the ones around it</td><td>the retrieved sentence says "it does this" and the "it" was defined two sentences earlier, in a chunk that did not come back</td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Chunking is record design">Overlap and metadata are record design too</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Overlap</span><span>repeat ~10–15% of the text at chunk boundaries, so a claim split across chunks survives whole in one of them<sup class="src"><a href="#src-6" title="Chunk large documents for vector search solutions in Azure AI Search">6</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">Metadata</span><span>store the doc id, title, and position with each chunk; Thursday's chunks carry <code>doc</code> and <code>title</code> precisely so answers can cite.</span></div>
-  <div class="lc-row"><span class="lc-k">Same decision</span><span>Sciore would call these production refinements a layout decision; LangChain calls them a text splitter<sup class="src"><a href="#src-7" title="LangChain Docs: Text splitters">7</a></sup>. Either way it is record design: deciding what one stored chunk carries.</span></div>
+  <div class="lc-row"><span class="lc-k">Overlap</span><span>A small overlap, such as 10–15%, can preserve claims that cross chunk boundaries. Measure the effect: overlap also duplicates text and can return several near-identical chunks.<sup class="src"><a href="#src-6" title="Chunk large documents for vector search solutions in Azure AI Search">6</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Metadata</span><span>Store the document id, title, and position with each chunk. The lab’s <code>doc</code> and <code>title</code> fields let the assembled context identify its source.</span></div>
+  <div class="lc-row"><span class="lc-k">Record design</span><span>Chunking decides what one retrievable record contains. A text splitter implements those boundaries, but you still need to choose boundaries and metadata that preserve the meaning of the source.<sup class="src"><a href="#src-7" title="LangChain Docs: Text splitters">7</a></sup></span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="Chunking is record design">One topic per chunk, however many words that takes</h3>
+<h3 class="new-slide" data-kicker="Chunking is record design">Evaluate chunk boundaries on your own corpus</h3>
 
 <div class="viz" id="viz-chunk">
   <div class="viz-title">chunk size vs retrieval quality · measured on the reference solution, eval set attached</div>
@@ -209,12 +180,7 @@ cite its source. The schema, and why each column exists for the evaluation, is i
     <input type="range" id="ck-slider" min="0" max="5" step="1" value="4">
   </div>
   <div id="ck-readout"></div>
-  <p class="viz-caption">Both ends of the dial need explaining. Left: sentence-sized fragments dilute the
-  signal; a 10-word chunk shares too few words with any question. Right: whole documents
-  <em>win</em> here, because this corpus's documents are already paragraph-sized and
-  single-topic; they arrive pre-chunked. The sweet-spot argument in the table above is
-  about real corpora, where a document is 30 pages and ten topics; the dial's real lesson
-  is that the rule is one topic per chunk, however many words that takes.</p>
+  <p class="viz-caption">The shortest chunks contain too few words to match these questions reliably. Whole documents work well in this experiment because each source document is already a short, single-topic paragraph. Longer documents may cover several topics and need different boundaries. Use this result to choose an experiment for your own corpus, rather than assuming one chunk size will work everywhere.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -231,12 +197,9 @@ come out of it: <span class="gloss" data-gloss="hit-at-k">hit@k</span> and <span
 0.5, rank 3 scores 0.33, and a doc that never appears scores 0.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Retrieval is measurable">One config line moved hit@3 from 0.42 to 0.92</h3>
+<h3 class="new-slide" data-kicker="Retrieval is measurable">Embedding width changed hit@3 from 0.42 to 0.92</h3>
 
-<p class="keep-in-present">Thursday's embedder is hashed bag-of-words: each word in the text is run through a
-hash function that picks one of DIM slots in the vector, and that slot is incremented, so the width DIM is a dial.
-Shrink it and unrelated words <em>collide</em> onto shared dimensions, so two texts that share no words start to
-look similar, and the eval set catches the damage without anyone reading an answer<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup>:</p>
+<p class="keep-in-present">Thursday’s hashed bag-of-words embedder maps each word to one of <code>DIM</code> vector positions and increments that position. With fewer positions, unrelated words collide more often, making unrelated texts appear similar. The <span class="gloss" data-gloss="eval-set">evaluation set</span> measures how these collisions affect retrieval:<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup></p>
 
 <table>
   <thead><tr><th>Embedding width (DIM)</th><th>hit@3</th><th>MRR</th></tr></thead>
@@ -249,16 +212,14 @@ look similar, and the eval set catches the damage without anyone reading an answ
 
 <p class="key-fact keep-in-present"><strong>0.42 → 0.92</strong> hit@3 from one config line (DIM 64 to 2048), caught by a 12-question eval set in milliseconds</p>
 
-<h3 class="new-slide" data-kicker="Retrieval is measurable">Twelve labeled questions grade every experiment in milliseconds</h3>
+<h3 class="new-slide" data-kicker="Retrieval is measurable">A small evaluation set makes configurations comparable</h3>
 
-<p class="keep-in-present">This table is the whole argument for eval sets: a one-line config
-change moved retrieval from "coin flip" to "reliable," and <strong>a 12-question labeled set
-detected it in milliseconds.</strong> Your project must ship one for its own corpus.</p>
+<p class="keep-in-present">Changing <code>DIM</code> improved hit@3 from 0.42 to 0.92 on these 12 questions. That is evidence about this corpus and question set, not a guarantee for new questions. Your project needs its own labeled set so you can compare configurations and inspect the remaining failures.</p>
 
 <!-- ============================================================ -->
-<h2 id="failures">RAG fails the way databases fail, starting with vocabulary</h2>
+<h2 id="failures">Diagnose retrieval and generation failures</h2>
 
-<h3>The synonym wall, measured</h3>
+<h3>Vocabulary mismatch, measured</h3>
 
 <p class="keep-in-present">Measured on the widget's corpus above: same information need,
 two phrasings, DIM=2048:</p>
@@ -270,55 +231,52 @@ two phrasings, DIM=2048:</p>
       → wal (0.10) ✗            selectivity (0.09)      blocks (0.09)     [bufferpool: absent]</code></pre>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The synonym wall</span><span>two phrasings of the same question share no words, so an embedder that matches words cannot tell they mean the same thing.</span></div>
-  <div class="lc-row"><span class="lc-k">Why it happens</span><span>bag-of-words matches <em>words</em>, not meaning: "popular pages in memory" shares no content words with the buffer-pool document, so it retrieves noise at scores barely above zero.</span></div>
-  <div class="lc-row"><span class="lc-k">The fix</span><span>a learned embedding model maps both phrasings near the same point. That upgrade is exactly one function swap in Thursday's code, and it is the swap your project makes.</span></div>
+  <div class="lc-row"><span class="lc-k">Vocabulary mismatch</span><span>Two questions can ask for the same information while using different words. A bag-of-words embedder cannot reliably recognize that relationship.</span></div>
+  <div class="lc-row"><span class="lc-k">Why it happens</span><span>The buffer-pool document shares few content words with “popular pages in memory.” Its low score reflects limited word overlap rather than whether it answers the question.</span></div>
+  <div class="lc-row"><span class="lc-k">The fix</span><span>A learned embedding model can place paraphrases near one another. In the lab design, you replace the <code>embed()</code> function and rebuild the vectors. Evaluate the new model to check which failures it fixes.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="RAG fails like databases">Retrieved is not read: two ranking failures</h3>
+<h3 class="new-slide" data-kicker="Failure analysis">A retrieved passage may still be ranked or used poorly</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Lost in the middle</span><span>models attend best to the start and end of a long context; retrieved-but-buried evidence gets skimmed (Liu et&nbsp;al. above measured the U-shape)<sup class="src"><a href="#src-10" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172)">10</a></sup>. Mitigation: retrieve less, order deliberately, put the best chunk first.<sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Right doc, wrong rank</span><span>the relevant chunk is retrieved but lands third in a list of five, so hit@3 counts the question as a success even though the model reads two weaker chunks first. MRR is the metric that notices, because rank 3 scores 0.33 instead of 1.0. The fix belongs to the assembly stage: improve the ranking, for example with a reranker; sorting by the same scores again cannot fix a poor ranking.</span></div>
+  <div class="lc-row"><span class="lc-k"><span class="gloss" data-gloss="lost-in-the-middle">Lost in the middle</span></span><span>Liu et al. found that the tested models used relevant evidence less reliably when it appeared in the middle of a long context. Try fewer chunks or a different order, then evaluate whether the change helps.<sup class="src"><a href="#src-10" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172)">10</a></sup><sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Right doc, wrong rank</span><span>A relevant chunk at rank 3 counts as a hit@3, just as one at rank 1 does. MRR distinguishes them: rank 3 contributes 0.33, while rank 1 contributes 1.0. A reranker can change a poor ranking by scoring the question and chunk together.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="RAG fails like databases">Staleness, drift, and overconfidence are database failures too</h3>
+<h3 class="new-slide" data-kicker="Failure analysis">Keep the index current and check answer support</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Stale index</span><span>documents changed; vectors didn't. The index answers from the past with full confidence, the RAG version of the <span class="gloss" data-gloss="stale-cache">cache-invalidation problem</span>, solved the same way: re-embed on write, version the index.</span></div>
-  <div class="lc-row"><span class="lc-k">Confident grounding failure</span><span>retrieval returns weak chunks; the model answers anyway, citing them. Defenses: score thresholds ("if the best cosine is 0.09, say so"), and prompts that permit "the sources don't answer this."</span></div>
-  <div class="lc-row"><span class="lc-k">Embedding drift</span><span>change the embedding model and every stored vector becomes meaningless, because vectors from two different models do not live in the same space and distances between them say nothing (last week's lesson, now as an operations problem). Treat the embedding model's version like a schema version: record which model produced each vector, and re-embed the whole corpus to migrate.</span></div>
+  <div class="lc-row"><span class="lc-k"><span class="gloss" data-gloss="stale-cache">Stale index</span></span><span>When a document changes but its chunks or vectors do not, retrieval can return outdated information. Rebuild the affected records on update and record document and index versions so stale entries can be detected.</span></div>
+  <div class="lc-row"><span class="lc-k">Confident grounding failure</span><span>A model may give a confident answer even when the retrieved chunks do not support it. Evaluate unsupported-answer cases, calibrate any score thresholds on your data, and allow the generator to say that the sources do not answer the question.</span></div>
+  <div class="lc-row"><span class="lc-k">Embedding drift</span><span>Query and document vectors must use a compatible embedding model. When changing models, record the model version, rebuild the corpus vectors, and switch queries to the new index together. Do not compare vectors from incompatible embedding spaces.</span></div>
 </div>
 
-<h3 class="new-slide" data-kicker="RAG fails like databases">Fabricated citations have already reached a courtroom</h3>
+<h3 class="new-slide" data-kicker="Failure analysis">Fabricated citations have already reached a courtroom</h3>
 
 <div class="callout note">
-  <span class="label">War story · Mata v. Avianca, 2023</span>
+  <span class="label">Case study · Mata v. Avianca, 2023</span>
   <p class="keep-in-present">In <em>Mata v. Avianca</em> (2023), lawyers submitted nonexistent opinions generated by ChatGPT and were sanctioned. The case illustrates why plausible text is not evidence. Retrieval can supply real source passages, but the system must still check that each citation exists and supports the claim. Carry source identifiers through the pipeline and inspect citation failures in your evaluation. <a href="#src-12">Source: the court’s order.</a></p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="production">Production upgrades are access-path ideas you already know</h2>
+<h2 id="production">Improve retrieval with additional search stages</h2>
 
 <h3>The production retrieval stack</h3>
 
-<p class="keep-in-present">Three upgrades separate Thursday's 200 lines from a production
-retrieval stack, each one a database idea you can now name:</p>
+<p class="keep-in-present">Three common additions can improve the lab pipeline. Each adds work, so use evaluation results to decide whether it is useful for your corpus:</p>
 
 <table>
   <thead><tr><th>Upgrade</th><th>What it is</th><th>Database idea underneath</th></tr></thead>
   <tbody>
-    <tr><td><strong>Hybrid search</strong></td><td>run <span class="gloss" data-gloss="bm25">BM25</span> keyword search AND vector search, merge the ranked lists<sup class="src"><a href="#src-13" title="LlamaIndex: Reciprocal Rerank Fusion Retriever">13</a></sup></td><td>two indexes over the same table, and the query uses both access paths and unions the results. Keyword search finds exact tokens (an error code, a function name) that the synonym wall hides from vectors; vector search finds paraphrases that share no exact words. Each covers the other's misses</td></tr>
-    <tr><td><strong>Reranking</strong></td><td>retrieve a generous top-50 cheaply, then let a <span class="gloss" data-gloss="reranker">reranker</span> model re-order and keep 5<sup class="src"><a href="#src-14" title="Cohere Docs: Reranking with Cohere">14</a></sup></td><td>a two-phase query plan: run the cheap, selective step (the vector index) first, then run the expensive operator (the reranker) only on the few rows that survive. It is the same cost logic as predicate pushdown, applied to a model instead of a predicate</td></tr>
-    <tr><td><strong>Metadata filtering</strong></td><td>restrict the similarity search to chunks whose stored metadata matches a predicate, for example "top-k most similar AND team = 'infra' AND date &gt; 2025"</td><td>a predicate combined with an index scan, and the reason vectors-inside-your-database (pgvector, DuckDB VSS) beats a detached vector service for filtered workloads<sup class="src"><a href="#src-15" title="pgvector README, Filtering">15</a></sup></td></tr>
+    <tr><td><strong>Hybrid search</strong></td><td>run <span class="gloss" data-gloss="bm25">BM25</span> keyword search AND vector search, merge the ranked lists<sup class="src"><a href="#src-13" title="LlamaIndex: Reciprocal Rerank Fusion Retriever">13</a></sup></td><td>combine two retrieval methods over the same corpus. Keyword search can recover exact identifiers such as error codes; vector search can recover paraphrases. Merge their ranked results and evaluate whether the combined list is better</td></tr>
+    <tr><td><strong>Reranking</strong></td><td>retrieve a generous top-50 cheaply, then let a <span class="gloss" data-gloss="reranker">reranker</span> model re-order and keep 5<sup class="src"><a href="#src-14" title="Cohere Docs: Reranking with Cohere">14</a></sup></td><td>use an inexpensive first stage to select candidates, then apply a more expensive model to that smaller set. The reduction in candidates makes reranking practical</td></tr>
+    <tr><td><strong>Metadata filtering</strong></td><td>restrict the similarity search to chunks whose stored metadata matches a predicate, for example "top-k most similar AND team = 'infra' AND date &gt; 2025"</td><td>combine a metadata predicate with nearest-neighbor search. Check whether the engine filters before, during, or after approximate search: the choice affects both result count and work<sup class="src"><a href="#src-15" title="pgvector README, Filtering">15</a></sup></td></tr>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="Production upgrades">After Thursday, a misbehaving retriever is debuggable</h3>
+<h3 class="new-slide" data-kicker="Production upgrades">Inspect each stage when retrieval fails</h3>
 
-<p class="keep-in-present">Frameworks (LangChain, LlamaIndex) package these stages behind
-one import. Fine, but after Thursday the stages are ~200 lines you have personally written,
-and "the retriever is misbehaving" will be a debuggable statement, not a support ticket.</p>
+<p class="keep-in-present">Frameworks such as LangChain and LlamaIndex package these stages. Building the small lab pipeline first makes their behavior easier to inspect: you can check chunk boundaries, embedding scores, retrieved ids, and prompt contents separately.</p>
 
 <!-- ============================================================ -->
 <h2 id="thursday">Thursday you write the retriever and the assembly</h2>
@@ -333,7 +291,7 @@ the embedder, and the LLM call are provided in the starter files; you write the 
   12-question eval set.</li>
   <li>☐ <code>python3 ask.py "your question"</code> runs your pipeline end to end; echo mode
   shows the assembled prompt; set <code>LLM_BASE_URL</code> to plug in a real model.</li>
-  <li>☐ Project teams: Thursday's file structure IS the reference architecture for your
+  <li>☐ Project teams: Thursday’s file structure is a reference architecture for your
   pipeline; bring your corpus questions.</li>
 </ul>
 
@@ -341,16 +299,12 @@ the embedder, and the LLM call are provided in the starter files; you write the 
 <h2 id="recap">Recap &amp; next time</h2>
 
 <ul class="recap-list">
-  <li><strong>RAG is a database wearing an AI costume</strong>: chunk = record design,
-  index = Lab 9, retrieve = top-k query; only generation is new, and it's the mocked part.</li>
-  <li><strong>Retrieval quality is measurable</strong>: a hand-labeled eval set plus hit@k
-  and MRR grades every experiment in milliseconds, no essay-reading required.</li>
-  <li><strong>The failures are database failures</strong> (vocabulary mismatch, ranking,
-  staleness, drift), and the production fixes (hybrid search, reranking, filtering) are
-  access-path ideas you learned in weeks 4–6.</li>
+  <li>RAG uses chunk storage, metadata, an index, and a retrieval query to supply evidence for generation. The lab’s echo mode lets you inspect that evidence before calling a model.</li>
+  <li>A labeled evaluation set makes retrieval configurations comparable. Use hit@k and MRR for retrieval, and evaluate generated answers separately.</li>
+  <li>Vocabulary mismatch, poor ranking, stale records, and incompatible embeddings cause different failures. Diagnose the cause before trying hybrid search, reranking, filtering, or an index rebuild.</li>
 </ul>
 
-<p class="key-fact keep-in-present"><strong>4 of 5 · 0.42 → 0.92</strong> four of the five RAG stages are database machinery you built; one config line moved hit@3 from 0.42 to 0.92, and twelve labeled questions caught it</p>
+<p class="key-fact keep-in-present"><strong>Evaluate each change:</strong> the 12-question set measured hit@3 rising from 0.42 to 0.92 when DIM changed from 64 to 2048.</p>
 
 <p class="keep-in-present"><strong>Thursday:</strong> build micro-rag. <strong>Next
 Tuesday:</strong> the data outgrows one machine: partitioning, MapReduce, Spark, and Ray.
@@ -367,25 +321,13 @@ Quiz 10 opens class: RAG.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Context windows keep growing: will long context kill RAG?</h3>
-<p class="keep-in-present">Long context raises the ceiling on <em>how much</em> you can send,
-not on whether sending everything is wise: you pay per token per question, latency grows<sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup>, and
-"lost in the middle" means a model can hold a long context without attending to all of it equally. Retrieval is the per-question cost
-optimizer; the bigger the corpus, the more it saves. Windows grow, but corpora
-grow faster, so retrieval stays necessary.</p>
+<p class="keep-in-present">A longer context window lets you send more text, but does not guarantee that the model will use every passage effectively. Cost, latency, and evidence selection still matter. Compare full-context and retrieval approaches on your own corpus when both are practical.<sup class="src"><a href="#src-11" title="Lost in the Middle: How Language Models Use Long Contexts (arXiv 2307.03172) PDF">11</a></sup></p>
 
 <h3 class="keep-in-present">Why not fine-tune on our documents instead?</h3>
-<p class="keep-in-present">Fine-tuning teaches style and skills well and facts poorly<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup>: recall
-of specific passages is unreliable, updates require retraining, and there's no citation trail.
-The strong pattern is both: fine-tune for domain <em>behavior</em>, retrieve for domain
-<em>facts</em>. For a corpus that changes daily, retrieval is the only option that stays
-current by updating an index.</p>
+<p class="keep-in-present">Fine-tuning can adapt behavior, but it does not provide a dependable lookup of specific passages or a source citation trail. Retrieval is useful when answers must reflect changing documents. The two approaches can be combined: adapt model behavior and retrieve current evidence.<sup class="src"><a href="#src-3" title="Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs (arXiv 2312.05934)">3</a></sup></p>
 
 <h3 class="keep-in-present">Is the hashed bag-of-words embedder just a toy?</h3>
-<p class="keep-in-present">It's the real hashing trick (scikit-learn ships it as
-<code>HashingVectorizer</code>) with a real limitation the lab measures instead of hiding<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup>.
-Everything downstream of <code>embed()</code> (index, retrieval, eval) is exactly what runs
-under a learned model. That's the point of the design: your project swaps one function and
-keeps the pipeline.</p>
+<p class="keep-in-present">It uses the same feature-hashing idea as scikit-learn’s <code>HashingVectorizer</code>. Its vocabulary limitation is intentional: the lab makes that failure visible and measurable. Replacing <code>embed()</code> with a learned model keeps the pipeline interfaces, but requires rebuilding the index and rerunning the evaluation.<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup></p>
 
 <h3 class="keep-in-present">What should our project's eval set look like?</h3>
 <p class="keep-in-present">Write at least 25 questions a real user of your corpus would ask, each labeled with the source passages that answer it. Compare at least two configurations and report retrieval and answer quality. Keep the partner team’s questions held out while tuning, then report those results alongside your own. The proposal outlines this plan; the final report supplies the evidence.</p>

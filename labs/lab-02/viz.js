@@ -7,39 +7,23 @@
   const GLOSSARY = {
     'write-back': {
       title: 'Write-back',
-      body: '<p>The caching strategy where modified data stays in memory (marked ' +
-        '<em>dirty</em>) and is written to disk later — at eviction, at a flush, at a ' +
-        'checkpoint — instead of on every change (<em>write-through</em>). It turns a thousand ' +
-        'tiny updates to a hot page into one disk write, and in exchange the system must never ' +
-        'lose track of which pages are dirty.</p>',
+      body: "<p>A caching policy that marks modified pages dirty and writes them to storage later, such as during eviction or an explicit flush. Multiple changes to a cached page can be combined into one write. The system must track dirty pages so it does not discard changes when reusing a frame.</p>",
     },
     'invariant': {
       title: 'Invariant',
-      body: '<p>A condition that must hold at every moment, not just at the end — systems code ' +
-        'is designed around them. “A pinned frame is never evicted” is this lab’s central ' +
-        'invariant: every method may assume it and every method must preserve it. When a test ' +
-        'fails mysteriously, ask which invariant got broken and by whom.</p>',
+      body: "<p>A condition an implementation must preserve at the points where other code relies on it. In this lab, a pinned frame must never be selected for eviction. Each method must maintain that rule.</p>",
     },
     'working-set': {
       title: 'Working set',
-      body: '<p>The set of pages a workload actually re-touches over a window of time — not the ' +
-        'size of the whole database. If the working set fits in the buffer pool, hit rates soar; ' +
-        'if it doesn’t, no tuning saves you. The hot-set workload in your measurement has a ' +
-        '5-block working set; the scan’s working set is the entire file.</p>',
+      body: "<p>The data a workload accesses during a period of time. The measurement’s hot-set workload concentrates most requests on five blocks, while its remaining requests reach other blocks. A full scan accesses the entire file. Pool size and access order determine how much of that data is still cached when reused.</p>",
     },
     'os-page-cache': {
       title: 'OS page cache',
-      body: '<p>The operating system’s own cache of file data, sitting underneath your buffer ' +
-        'manager. It makes your <em>misses</em> cheaper than real disk I/O (the OS often has the ' +
-        'block in RAM), which is why this lab measures hit <em>rates</em> from your counters ' +
-        'rather than timing wall-clock milliseconds.</p>',
+      body: "<p>The operating system’s cache of file data beneath your buffer manager. A buffer-pool miss may still be served from RAM by the OS. This lab counts hits and misses within your buffer manager, so the OS cache affects read latency but not the reported hit rate.</p>",
     },
     'page-table': {
       title: 'Page table (of a buffer pool)',
-      body: '<p>The lookup structure answering “which frame holds block <em>b</em>?” — in real ' +
-        'engines a hash table from block id to frame, so every pin costs O(1) instead of a scan ' +
-        'over thousands of frames. microdb scans its handful of frames instead; the Going ' +
-        'Further swaps in a dict and nothing else changes.</p>',
+      body: "<p>A mapping from a stored block’s identifier to the buffer frame that currently holds it. A hash table can provide expected constant-time lookup. The lab starts with a linear scan of its small frame pool; an optional extension replaces that search with a dictionary.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -62,7 +46,7 @@
     frames = Array.from({ length: N_FRAMES }, () => null);
     // frame: { block, value, pins, dirty, last }
     tick = 0; hits = 0; misses = 0; sel = 0;
-    msg.textContent = 'Select a block below, pin it, and start breaking things.';
+    msg.textContent = 'Select a block below, then pin it to load or access its page.';
     render();
   }
 
@@ -138,7 +122,7 @@
     const i = findFrame(sel);
     if (i < 0) { msg.innerHTML = `unpin(B${sel}) → it isn't in the pool. (In your code this is a caller bug.)`; return; }
     if (frames[i].pins === 0) {
-      msg.innerHTML = `unpin(B${sel}) → <strong>ValueError</strong>: pins is already 0. Double-release caught loudly.`;
+      msg.innerHTML = `unpin(B${sel}) → <strong>ValueError</strong>: pins is already 0. Each pin must have exactly one matching unpin.`;
       render({ frame: i, kind: 'miss' });
       return;
     }
@@ -164,7 +148,7 @@
   function flushAll() {
     let n = 0;
     frames.forEach(f => { if (f && f.dirty) { disk[f.block] = f.value; f.dirty = false; n += 1; } });
-    msg.innerHTML = n ? `flush_all() → wrote ${n} dirty frame${n > 1 ? 's' : ''} back to disk. Chips agree with frames again.`
+    msg.innerHTML = n ? `flush_all() → wrote ${n} dirty frame${n > 1 ? 's' : ''} back to disk. Stored values now match the buffer frames.`
                       : `flush_all() → nothing dirty, nothing written.`;
     render();
   }

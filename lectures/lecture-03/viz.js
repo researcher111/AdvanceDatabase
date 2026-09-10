@@ -7,52 +7,35 @@
   const GLOSSARY = {
     'iterator-model': {
       title: 'Iterator model',
-      body: '<p>The standard way a query engine is organized: every operator (scan, filter, project, join) exposes the same three calls, <code>before_first</code> to rewind, <code>next</code> to advance to the next row, and <code>get_*</code> to read a field of the current row. A query becomes a tree of these operators, each one pulling rows from the operator below it one at a time. Only the bottom operator, the TableScan, touches disk; everything above it just calls <code>next</code> on its child and decides what to do with the row. Because every operator speaks the same interface, any operator can sit on top of any other, which is what lets a WHERE, a column list, and a JOIN stack in any order. You build the bottom operator this week and the rest next week.</p>',
+      body: "<p>Operators use a common scan interface to request rows from their inputs. In microdb, a caller can rewind, advance, read fields, test field availability, and close a scan. A filter can therefore consume rows from a table scan or another compatible operator. The operator tree must still preserve the query’s meaning. Lecture 4 adds filters, projections, and products to this week’s TableScan.</p>",
     },
     'slot-directory': {
       title: 'Slot directory',
-      body: '<p>A small array at the front of a page that holds, for each record, the byte offset where that record starts and its length. The records themselves are packed at the far end of the page and can be any size. A row is addressed by its slot number, which looks up the directory entry, which points at the bytes; if a row grows and has to move within the page, only the directory entry changes and the slot number stays the same. This is how Postgres keeps variable-length rows and stable row numbers at once, at the price of one extra hop on every access. microdb skips the directory by making every slot the same size, so the offset is arithmetic instead of a lookup.</p>',
+      body: "<p>An array of entries locating records within a page. Each entry records where the row’s bytes begin, so compacting bytes within the page can update that entry rather than changing its slot number. PostgreSQL uses a page item directory, but an UPDATE can create a new tuple version with a different physical address. microdb instead gives each slot a fixed size and calculates its position directly.</p>",
     },
     'heap-file': {
       title: 'Heap file',
-      body: '<p>The default storage shape for a table: a file of blocks holding records in no ' +
-        'particular order; rows land wherever a free slot exists. Fast to insert into, fair to ' +
-        'scan, and completely unordered (sorting is the query layer’s problem). Nearly every ' +
-        'engine’s base tables are heap files; ordered access is what indexes add later.</p>',
+      body: "<p>A table storage organization that does not require records to be sorted by a key. Rows can occupy available space, and a scan visits the file’s blocks. microdb uses one heap file per table. Other databases may use different organizations, including clustered indexes.</p>",
     },
     'internal-fragmentation': {
       title: 'Internal fragmentation',
-      body: '<p>Wasted space <em>inside</em> an allocation: ada’s 3-char name in an 8-char ' +
-        'reservation leaves 5 bytes of air that nothing else can use. The price of fixed-size ' +
-        'slots, paid deliberately, in exchange for one-multiply addressing and updates that ' +
-        'never move data. Its sibling, external fragmentation, is waste <em>between</em> allocations.</p>',
+      body: "<p>Unused space inside an allocated region. Ada’s three-byte UTF-8 name in an eight-byte reservation leaves five bytes that another row cannot use. This is the space cost of microdb’s fixed-size layout. External fragmentation instead concerns free space between allocations.</p>",
     },
     'tombstone': {
       title: 'Tombstone',
-      body: '<p>A deleted record that still physically occupies its slot; only its in-use flag ' +
-        'changed. The bytes remain until some future insert reuses the slot. Tombstones make ' +
-        'deletion O(1), make “deleted” data forensically recoverable, and are why databases need ' +
-        'vacuum/compaction processes to reclaim space for real.</p>',
+      body: "<p>A marker indicating that a record is deleted. In microdb, deletion sets the slot’s flag to EMPTY and leaves its old field bytes in place. Scans skip it and later inserts can reuse it. The file does not shrink, and old bytes may remain until overwritten.</p>",
     },
     'toast': {
       title: 'TOAST',
-      body: '<p>Postgres’s scheme for oversized values (“The Oversized-Attribute Storage ' +
-        'Technique”): a big text or JSON value is compressed, chopped into chunks, and stored in ' +
-        'a side table; the main row keeps only a small pointer. Rows stay small and slot-friendly ' +
-        'while values can reach a gigabyte: fixed where possible, indirection where necessary.</p>',
+      body: "<p>PostgreSQL’s Oversized-Attribute Storage Technique. It can compress large values and store them in a separate table in chunks, leaving a small reference in the main tuple. Some compressed values remain inline. PostgreSQL uses variable-length tuples; this is an alternative to reserving a large maximum capacity in every microdb slot.</p>",
     },
     'bootstrap': {
       title: 'Bootstrapping',
-      body: '<p>Breaking a self-referential startup cycle by hardcoding just enough to get going; ' +
-        'here, the catalog tables’ own layouts are computed in code rather than read from the ' +
-        'catalog (which would require reading the catalog). Compilers, operating systems, and ' +
-        'databases all have a bootstrap moment; the trick is keeping it tiny.</p>',
+      body: "<p>Providing enough initial information to start a system that normally reads that information from its own storage. microdb defines the catalog tables’ schemas in code so it can open the catalog and then look up schemas for other tables.</p>",
     },
     'rid': {
       title: 'RID (record id)',
-      body: '<p>A row’s physical address: (block number, slot number). Stable because slotted ' +
-        'storage never moves records, which is exactly what makes RIDs safe to store in other ' +
-        'structures. An index is a map from field values to RIDs; you’ll build one in week 6.</p>',
+      body: "<p>A physical record location: <code>(block number, slot number)</code>. In microdb a live row keeps this address during an in-place update. After deletion, the same slot can hold a different row. Indexes must therefore be maintained when indexed records change or disappear.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -265,12 +248,12 @@
   }
 
   function doRename() {
-    if (renamed) { msg.innerHTML = 'Already renamed. Reset to shrink him back.'; return; }
+    if (renamed) { msg.innerHTML = 'The row has already been renamed. Reset to restore the original name.'; return; }
     renamed = true;
     render();
     msg.innerHTML = 'ben is now <strong>benjamin</strong>: the length byte changed in place, 5 new ' +
       'name bytes appeared, and the 34 bytes after them (his gpa, cyd, and dee) shifted 5 places ' +
-      'right. Nothing updated your saved address. Now read it.';
+      'right. The saved address is unchanged. Read it to see whether it still locates cyd.';
   }
 
   function readSaved() {
@@ -369,7 +352,7 @@
     const verdict =
       d.mode === 'inline' ? 'fits beside its neighbors' :
       d.mode === 'compressed' ? 'back under the threshold' :
-      'small and fixed again, however far the essay grows';
+      'the main row stores a reference instead of the external essay bytes';
     heap.innerHTML = '<div class="to-panel-title">heap page · ada’s slot</div>' +
       '<div class="to-slot"><span class="to-seg">flag 4</span><span class="to-seg">id 4</span>' +
       '<span class="to-seg">name 12</span><span class="to-seg">gpa 4</span>' + essaySeg + '</div>' +
@@ -426,7 +409,7 @@
       side.classList.add('read');
       msg.innerHTML = 'SELECT essay reads 1 heap block + ' + cur.pages + ' side-table page' +
         (cur.pages > 1 ? 's' : '') + ' = <strong>' + (1 + cur.pages) +
-        ' blocks</strong> (plus the index reads that locate the chunks). The chunks are fetched, stitched, ' +
+        ' blocks</strong> (plus the index reads that locate the chunks). The chunks are fetched, reassembled, ' +
         'and decompressed only now, because only now did a query ask for them.';
     } else {
       side.classList.remove('read');

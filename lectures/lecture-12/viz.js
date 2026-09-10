@@ -5,62 +5,43 @@
   const GLOSSARY = {
     'hashed-bag-of-words': {
       title: 'Hashed bag-of-words',
-      body: '<p>The embedder Thursday&#39;s lab uses: a text becomes a vector of DIM numbers by counting words. Each word is run through a hash function whose output picks one of the DIM slots, and that slot is incremented; the vector is then normalized to unit length so cosine similarity works. No training and no vocabulary table are needed, which is why it runs in a browser and in 200 lines of Python. Two texts score high only when they share exact words, and that is its known limitation (the synonym wall). Shrinking DIM forces more unrelated words to share slots, so unrelated texts start to look similar; the eval set measures that damage directly.</p>',
+      body: "<p>The lab represents text by counting words in a fixed-width vector. A hash selects the position incremented for each word, then the nonzero vector is normalized. The method needs no training or vocabulary table. It relies on word overlap and can also match unrelated words that hash to the same position. Increasing DIM reduces collisions but does not solve vocabulary mismatch.</p>",
     },
     'lost-in-the-middle': {
       title: 'Lost in the middle',
-      body: '<p>A measured weakness of language models given long prompts: they use information near the start and the end of the context well, and information buried in the middle poorly, even when it is exactly what the question needs. Liu et al. showed the effect as a U-shaped curve of accuracy against the position of the relevant passage. For RAG it means that stuffing many chunks into the prompt can hide the one good chunk rather than help. The practical response is to retrieve fewer chunks and to put the best-scoring one first, which is why assembly order is part of the pipeline design.</p>',
+      body: "<p>Liu et al. found that the tested language models used evidence less reliably when it appeared in the middle of a long context than at the beginning or end. This makes passage selection and ordering worth evaluating. Sending more retrieved text does not automatically improve an answer.</p>",
     },
     'eval-set': {
       title: 'Eval set',
-      body: '<p>A small, hand-labeled test set for the retriever: a list of questions a real user would ask, each paired with the ids of the documents that actually answer it. It is written once, by people who know the corpus, before any tuning starts. After that, every change to the pipeline (chunk size, embedding width, k, hybrid search on or off) is graded automatically by running the questions through the retriever and computing hit@k and MRR against the labels. It turns &#39;does retrieval work&#39; from an opinion into a number that takes milliseconds to recompute. Thursday&#39;s lab ships a 12-question eval set; your project must write its own.</p>',
+      body: "<p>A collection of questions paired with labels identifying relevant source documents or passages. Run each retrieval configuration on the same questions and compare its results with those labels. This makes configurations comparable and exposes failure cases. Keep separate held-out questions for the final evaluation. The lab supplies 12 questions; the project requires its own set.</p>",
     },
     'mrr': {
       title: 'MRR (mean reciprocal rank)',
-      body: '<p>A retrieval score that cares about position, not just presence. For each question, find the rank of the first relevant document in the returned list and take 1 divided by that rank: first place scores 1.0, second 0.5, third 0.33, and a relevant document that never appears scores 0. MRR is the average of those values over every question in the eval set. It punishes a retriever that finds the right chunk but buries it under weaker ones, a case hit@k counts as a full success. That matters because the model reads the chunks in order and attends most to the first.</p>',
+      body: "<p>Mean reciprocal rank measures how early the first relevant result appears. For each question, take 1 divided by that result’s rank: 1.0 for rank 1, 0.5 for rank 2, and about 0.33 for rank 3. Use zero when no relevant result appears in the evaluated list. Average these values across the questions. Unlike hit@k, MRR distinguishes a relevant result at rank 1 from one at rank 3.</p>",
     },
     'hit-at-k': {
       title: 'hit@k',
-      body: '<p>A retrieval score between 0 and 1. For each question in the eval set, the retriever returns its top k chunks; the question counts as a hit if at least one of those chunks comes from a document labeled relevant for it. hit@k is the fraction of questions that are hits. It answers one narrow question, did the right document come back at all, and ignores where inside the top k it landed. Thursday&#39;s lab uses k = 3 and requires hit@3 of at least 0.90.</p>',
+      body: "<p>The fraction of evaluation questions whose first k results include at least one labeled relevant source. It measures whether evidence was retrieved within the cutoff, without rewarding a higher rank inside that cutoff. The lab uses k = 3 and requires hit@3 of at least 0.90.</p>",
     },
     'parametric': {
       title: 'Parametric knowledge',
-      body: '<p>Facts stored in the model’s weights (its parameters) during training — ' +
-        'as opposed to facts handed to it in the prompt at question time. Parametric ' +
-        'knowledge is frozen at training, expensive to update, and quotes nothing; prompt ' +
-        '(non-parametric) knowledge is whatever you retrieve, current as of your index. RAG ' +
-        'is the discipline of moving fact-lookup from the first kind to the second.</p>',
+      body: "<p>Information represented in a model’s learned parameters. It differs from evidence supplied in the prompt for a particular question. Learned parameters do not provide a reliable source lookup or citation trail. RAG supplies retrieved passages so answers can be checked against explicit sources.</p>",
     },
     'context-window': {
       title: 'Context window',
-      body: '<p>The maximum number of tokens a model can attend to in one request — prompt ' +
-        'plus its answer. Tens of thousands to millions of tokens, but every token is billed ' +
-        'per question, and attention over a huge window degrades in the middle. A 50k-document ' +
-        'corpus outruns any window; a top-3 retrieval fits in any of them.</p>',
+      body: "<p>The model’s token limit for the context of a request. Inputs, retrieved passages, and the generated response must fit the model’s applicable limits. Longer context can increase processing cost and latency. Choose how much evidence to include by measuring answer quality as well as whether the text fits.</p>",
     },
     'stale-cache': {
       title: 'Cache invalidation',
-      body: '<p>The classic systems problem: a copy of data (a cache, or here, a stored ' +
-        'embedding) keeps serving after the original changed. The buffer pool solved it with ' +
-        'pins and write ordering; RAG systems solve it by re-embedding documents when they ' +
-        'change and versioning the index. Same disease, same cure: know when your copy is no ' +
-        'longer the truth.</p>',
+      body: "<p>A cached or derived record becomes stale when the source changes without a corresponding update. In RAG, an old chunk or embedding can keep returning outdated evidence. Track document and embedding versions, update affected records, and coordinate the index change with the source update.</p>",
     },
     'bm25': {
       title: 'BM25',
-      body: '<p>The standard keyword-relevance formula from classical search engines: score a ' +
-        'document by how often the query’s exact words appear in it, discounted for common ' +
-        'words and long documents. No vectors, no meaning — which makes it strong exactly ' +
-        'where embeddings are weak (rare exact tokens: error codes, function names, IDs) and ' +
-        'weak where they’re strong (synonyms). Postgres ships it as full-text search.</p>',
+      body: "<p>A keyword-ranking function based on query-term frequency, document length, and how common each term is across documents. It is useful for exact terms such as identifiers and error codes, while learned embeddings can help with paraphrases. PostgreSQL’s built-in full-text search has its own ranking functions; it does not implement BM25 by default.</p>",
     },
     'reranker': {
       title: 'Reranker',
-      body: '<p>A model that reads a (question, chunk) pair together and scores how well the ' +
-        'chunk answers the question — far more accurate than comparing two separately-made ' +
-        'vectors, and far too slow to run against a whole corpus. So it runs second: the ' +
-        'vector index nominates 50 candidates cheaply, the reranker re-orders them and keeps ' +
-        '5. Two-phase query plans, the ML edition.</p>',
+      body: "<p>A second-stage scorer that reorders a shortlist of retrieved candidates. A model can read each question and chunk together to assess relevance more closely than a first-stage similarity score. Applying it to a shortlist limits the cost. Evaluate whether the changed ranking improves retrieval and answers.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -232,20 +213,20 @@ const RAG_DATA = {"chunks":[{"doc":"blocks","title":"Blocks and pages","text":"D
 
   const STAGES = [
     { name: 'Chunk', built: true, io: 'documents → retrievable units',
-      you: 'Record design — week 3’s question ("what’s the row?") asked of prose. Size and boundaries are the schema decision; metadata (doc id, title) rides along so answers can cite.',
-      thursday: 'chunk_corpus() — provided; the dial below measures it' },
+      you: "Choose retrievable text units and keep their source ids, titles, and positions. These records need enough context to be useful when retrieved on their own.",
+      thursday: "chunk_corpus() — provided; use the slider to compare chunk sizes" },
     { name: 'Embed', built: true, io: 'text → unit vector',
-      you: 'Similarity becomes geometry — last Tuesday’s opening move. The model is swappable; the contract (unit vectors, dot = cosine) is not.',
-      thursday: 'embed() — provided; your project swaps in a learned model' },
+      you: "Represent each chunk as a vector. The lab normalizes nonzero vectors so dot products give cosine scores. A new embedding model requires rebuilding the stored vectors.",
+      thursday: "embed() — provided; evaluate a learned model for your project" },
     { name: 'Index', built: true, io: 'chunk vectors → ANN structure',
-      you: 'Literally Lab 9’s microvector.py — brute force at this corpus size, IVF/HNSW when the corpus grows. Thursday imports your file unchanged.',
-      thursday: 'BruteForceIndex — shipped from Lab 9' },
+      you: "Build a searchable structure over the chunk vectors. The lab uses the provided BruteForceIndex at this corpus size; larger workloads can be compared with approximate indexes.",
+      thursday: "BruteForceIndex — provided from Lab 9" },
     { name: 'Retrieve', built: true, io: 'question vector → top-k chunks',
-      you: 'A query plan one operator deep: embed the question, search the index, map ids back to chunks. Alignment (id i ↔ chunk i) is the whole design.',
-      thursday: 'Retriever — YOUR JOB, on the eval set’s scale' },
+      you: "Embed the question, search the index, and use each returned id to locate the corresponding chunk. Preserve the index-to-chunk mapping and result order.",
+      thursday: "Retriever — implement and test with the evaluation set" },
     { name: 'Assemble + Generate', built: false, io: 'k chunks + question → prompt → answer',
-      you: 'The only stage that is not a database. Format chunks with citations, order deliberately (rank = attention), hand to the LLM — mocked in echo mode because the graded work ends here.',
-      thursday: 'build_prompt — YOUR JOB · answer() — provided' },
+      you: "Format the retrieved chunks with source labels, add the question, and send the prompt to the generator. In echo mode, inspect the prompt directly instead of calling a model.",
+      thursday: "build_prompt — implement; answer() — provided" },
   ];
 
   let current = 0;
@@ -257,7 +238,7 @@ const RAG_DATA = {"chunks":[{"doc":"blocks","title":"Blocks and pages","text":"D
     ).join('');
     const s = STAGES[current];
     detail.innerHTML =
-      `<div class="pipe-d-head">${s.name} · ${s.built ? 'you built this' : 'the one new stage'}</div>` +
+      `<div class="pipe-d-head">${s.name} · ${s.built ? 'connects to earlier labs' : 'prompt assembly and generation'}</div>` +
       `<p>${s.you}</p>` +
       `<p class="pipe-d-thu">Thursday: <code>${s.thursday}</code></p>`;
     flow.querySelectorAll('.pipe-stage').forEach(b =>

@@ -13,9 +13,9 @@
 <aside class="toc">
   <div class="toc-title">Lab 4 · microdb 4</div>
   <ul>
-    <li><a href="#try-it">Scans stacked on scans</a></li>
-    <li><a href="#big-idea">Operators wrap, copy nothing</a></li>
-    <li><a href="#the-api">Five lines, whole engine</a></li>
+    <li><a href="#try-it">Combining scan operators</a></li>
+    <li><a href="#big-idea">How operators share rows</a></li>
+    <li><a href="#the-api">Operator control flow</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
@@ -36,7 +36,7 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 4 · Thursday September 17, 2026 · microdb part 4 of 7</div>
   <h1>Scan Operators</h1>
-  <div class="subtitle">Your TableScan reads one table, but the Lecture 1 demo query filters and projects one; today you extend it to joins: what goes in between, and why does its shape cost 15×?</div>
+  <div class="subtitle">Combine filtering, projection, and products, then measure how early filtering reduces candidate pairs in a join.</div>
   <div class="byline">Follows Lecture 4 (The Iterator Model) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 24 at class start</div>
 </header>
 
@@ -48,21 +48,16 @@
   the model's namesake: Graefe's <a href="https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf"><em>Volcano</em> paper</a>.
 </div>
 
-<p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
-</p>
+<p class="glossary-hint">Terms with a dotted underline have definitions. Hover or tap a term to read its explanation.</p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
   <div id="glossary-content" class="glossary-content"></div>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="try-it">A query is just scans stacked on scans</h2>
+<h2 id="try-it">Combining operators into a query plan</h2>
 
-<p>Build a plan by stacking operators, then run it, against the pinned students and majors
-tables, with every operator's row traffic counted. Try the join preset before reading
-further: it is today's finish line.</p>
+<p>Use the widget to combine operators over the <code>students</code> and <code>majors</code> tables. Run a plan and compare how many rows each operator processes. Start with the join preset to see the behavior you will implement.</p>
 
 <div class="viz" id="viz-stack">
   <div class="viz-title">Plan builder · students(6) ⋈ majors(3)</div>
@@ -87,41 +82,37 @@ further: it is today's finish line.</p>
     <a class="chat-dl-btn" href="starter/test_scans.py" download>test_scans.py</a>
     <a class="chat-dl-btn" href="starter/measure_pipeline.py" download>measure_pipeline.py</a>
   </div>
-  <p class="viz-caption clone-label">Or take the whole course in one clone:</p>
+  <p class="viz-caption clone-label">Or clone the course repository:</p>
 <pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
 <span class="cl-line">cd AdvanceDatabase/labs/lab-04/starter</span></pre>
-  <p class="viz-caption">Note the join preset's product line: 18 pairs built, 3 delivered.
-  Keeping that ratio civilized is what the second half of this course calls "optimization".</p>
+  <p class="viz-caption">The join preset constructs 18 pairs and returns three matching rows. Query optimization aims to reduce unnecessary work while preserving the result.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">Every operator wraps the scan below it and copies nothing</h2>
+<h2 id="big-idea">How each operator uses its input scans</h2>
 
-<p class="keep-in-present">Each operator holds a reference to the scan beneath it and answers the same five methods,
-mostly by <span class="gloss" data-gloss="delegation">delegation</span>. Nothing is copied;
-a plan over a terabyte is a small set of Python objects plus one pinned block per table.
-The craft is knowing which method each operator actually changes:</p>
+<p class="keep-in-present">Each operator refers to its input scan or scans and implements the same five methods. These operators expose one current row at a time without storing a copy of the full result. Their memory use depends on the plan and its active scans, rather than the number of result rows. The table shows which behaviors each operator changes.</p>
 
 <table>
   <thead><tr><th>Operator</th><th>Changes</th><th>Delegates untouched</th></tr></thead>
   <tbody>
     <tr><td><strong>SelectScan</strong></td><td><code>next</code>: skip until the <span class="gloss" data-gloss="predicate">predicate</span> passes</td><td>everything about row shape</td></tr>
     <tr><td><strong>ProjectScan</strong></td><td><code>get_val / has_field</code>: answer only for kept columns</td><td>everything about row flow</td></tr>
-    <tr><td><strong>ProductScan</strong></td><td>all five: it has two children</td><td>nothing (it's the interesting one)</td></tr>
+    <tr><td><strong>ProductScan</strong></td><td>all five: it has two children</td><td>none; it coordinates two inputs</td></tr>
   </tbody>
 </table>
 
 <!-- ============================================================ -->
-<h2 id="the-api">Five lines are the whole engine; read them aloud</h2>
+<h2 id="the-api">Control flow for the scan operators</h2>
 
-<p>Everything you write today, in one annotated card. These sketches show the control flow, not executable Python. Your implementation must also handle empty inputs and remain exhausted after next() returns False:</p>
+<p>The annotated sketches below describe the control flow; they are not executable Python. Handle empty inputs. Once <code>ProductScan.next()</code> returns <code>False</code>, it must keep returning <code>False</code> until the product is rewound.</p>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="sel" data-step-name="SelectScan.next" data-explain="Advance the underlying scan until a row satisfies the predicate; False when it runs out. Rejected rows are skipped in place, never copied, never seen above.">SelectScan.next:      while scan.next(): if pred.is_satisfied(scan): return True</div>
-  <div class="code-step" data-step="prj" data-step-name="ProjectScan column check" data-explain="get_val answers only for kept fields, ValueError otherwise, because silently answering would corrupt results. has_field tells the truth about what survived.">ProjectScan.get_val:  raise ValueError unless fld in self.fields</div>
-  <div class="code-step" data-step="pb" data-step-name="ProductScan.before_first" data-explain="Left on its FIRST row (rewind + one next), right BEFORE its first. Get this wrong and you produce 0 pairs or |right| too few, the two classic Thursday bugs.">ProductScan.before_first:  left rewind + next · right rewind</div>
-  <div class="code-step" data-step="pn" data-step-name="ProductScan.next" data-explain="The odometer: advance right; on rollover, rewind right and advance left. 'left.next() and right.next()' ends everything cleanly when the left runs out.">ProductScan.next:     right.next() or (right rewind · left.next() and right.next())</div>
-  <div class="code-step" data-step="pg" data-step-name="ProductScan routing" data-explain="get_val asks whichever side has_field says owns it (left checked first). has_field is the OR of both sides.">ProductScan.get_val:  ask the side whose has_field says yes</div>
+  <div class="code-step" data-step="prj" data-step-name="ProjectScan column check" data-explain="get_val returns values only for projected fields and raises ValueError for other names. has_field reports whether the field belongs to the projection.">ProjectScan.get_val:  raise ValueError unless fld in self.fields</div>
+  <div class="code-step" data-step="pb" data-step-name="ProductScan.before_first" data-explain="Rewind both children, then advance the left child once. Keep the right child before its first row. Track whether the left input is empty.">ProductScan.before_first:  left rewind + next · right rewind</div>
+  <div class="code-step" data-step="pn" data-step-name="ProductScan.next" data-explain="Advance the right child. When it is exhausted, rewind it and advance the left child. Stop when no valid pair remains, including when either input is empty.">ProductScan.next:     right.next() or (right rewind · left.next() and right.next())</div>
+  <div class="code-step" data-step="pg" data-step-name="ProductScan routing" data-explain="Use has_field to find which input supplies the field, checking the left input first. ProductScan.has_field returns True if either input contains the field.">ProductScan.get_val:  ask the side whose has_field says yes</div>
   <div class="code-explain-panel">Hover a line: if you can explain each one aloud, you are ready to implement the operators.</div>
 </div>
 
@@ -134,37 +125,27 @@ predicate <em>is</em> the join.</p>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
-<p>Seven starter files into <code>microdb-lab4/</code>: four are reference lower layers
-(note the two new methods at the bottom of the reference TableScan). Build in test order:</p>
+<p>Download the seven starter files into <code>microdb-lab4/</code>. Four files provide reference implementations of the lower layers. Read the two new methods at the bottom of the reference <code>TableScan</code>, then implement the operators in test order:</p>
 
 <ol>
   <li><strong>Read <code>query_engine.py</code> top to bottom</strong> (5 min); the module
   docstring shows a full plan being stacked and run; <code>Predicate</code> and
   <code>F</code> are provided and worth reading closely.</li>
-  <li><strong><code>SelectScan.next</code></strong>: the skip-loop. SELECT group goes green.</li>
-  <li><strong><code>ProjectScan.get_val / has_field</code></strong>: answer only for kept columns, raise for the rest. PROJECT green.</li>
+  <li><strong><code>SelectScan.next</code></strong>: the skip-loop. Run the SELECT tests.</li>
+  <li><strong><code>ProjectScan.get_val / has_field</code></strong>: answer only for kept columns, raise for the rest. Run the PROJECT tests.</li>
   <li><strong><code>ProductScan</code></strong>: <code>before_first</code> first (left gets a
-  <code>next()</code>, right doesn't), then the odometer, then routing. PRODUCT green,
-  including the course's first join.</li>
+  <code>next()</code>, right doesn't), then the odometer, then routing. Run the PRODUCT tests, including the join test.</li>
 </ol>
 
 <div class="callout note">
-  <span class="label">Gotchas that cost real debugging time</span>
-  <p>In <code>ProductScan.before_first</code>, the left side needs <code>next()</code> called
-  once; a product positioned "before" both sides yields nothing (the cardinality test reads 0
-  or 15 instead of 18). In the odometer, rewind the right <em>before</em> advancing the left.
-  And <code>close()</code> must reach both children; the pin test runs a whole join and then
-  audits the pool.</p>
+  <span class="label">Common implementation mistakes</span>
+  <p>In <code>ProductScan.before_first</code>, rewind both children and call <code>next()</code> once on the left child. Record whether that call found a row. During iteration, advance the right child through its rows; when it is exhausted, rewind it and advance the left child. Return no pairs if either input is empty. Finally, <code>close()</code> must close both children so their buffer pins are released.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
 
-<p>Eleven tests in three groups, ordered by dependency. The showcase is
-<code>a real join</code>: <code>Project(name, dept) ← Select(mid = mid2 AND gpa &gt; 35) ←
-Product(students, majors)</code> must return exactly <code>(ada, cs), (cyd, cs),
-(eli, stat)</code>; the toy rows earn their keep. The quietest test is again the pin audit:
-after a full join runs and closes, no frame may remain pinned.</p>
+<p>The eleven tests are grouped by operator. The join test runs <code>Project(name, dept) ← Select(mid = mid2 AND gpa &gt; 35) ← Product(students, majors)</code> and expects exactly <code>(ada, cs), (cyd, cs), (eli, stat)</code>. A separate test checks that no frame remains pinned after the join is closed.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_scans.py</span>
 <span class="t-head">SELECT group</span>
@@ -202,10 +183,7 @@ same query, same answer, two shapes (300 students x 3 majors):
 
 <p class="key-fact keep-in-present"><strong>15×</strong> less pair-building work from moving one filter below the join, with the same 20 rows out</p>
 
-<p class="keep-in-present">Two lessons for the price of one: filter placement bought
-<strong>15×</strong> with an identical answer, and the right input of a nested loop is
-re-executed once per left row, so input order and whether the inner data stays cached both affect cost
-and why week 9 invents the hash join.</p>
+<p class="keep-in-present">Filtering before the product reduces the number of pairs examined by a factor of 15 in this example, while returning the same rows. The right input is scanned once per left row, so input order also affects the work. Caching the inner input can reduce repeated reads; Lecture 9 introduces hash joins as another way to avoid enumerating every pair.</p>
 
 <p class="keep-in-present"><strong>Now change something.</strong> Both plans in <code>measure_pipeline.py</code>
 filter on <code>("gpa", ">", 35)</code>. Change the 35 to 25 in both places and run, then to 20
@@ -215,28 +193,20 @@ one sentence why Plan A's count never moves while the ratio does.</p>
 <h3 class="new-slide" data-kicker="Part 3 · Measure">pandas materializes join results; ProductScan streams pairs</h3>
 
 <table>
-  <thead><tr><th>Tool</th><th>What the join does with the 900 pairs</th><th>Plan shape</th></tr></thead>
+  <thead><tr><th>Tool</th><th>How rows are processed</th><th>Plan shape</th></tr></thead>
   <tbody>
-    <tr><td><strong>pandas</strong></td><td><code>df.merge</code> materializes matching rows; a large many-to-many result can exhaust memory without constructing the full Cartesian product</td><td>Plan A, held in memory</td></tr>
+    <tr><td><strong>pandas</strong></td><td><code>df.merge</code> <span class="gloss" data-gloss="materialization">materializes</span> matching rows; a large many-to-many result can exhaust memory without constructing the full Cartesian product</td><td>Result materialized in memory</td></tr>
     <tr><td><strong>Your <code>ProductScan</code></strong></td><td>builds the same pairs one at a time through <code>next()</code> and holds one</td><td>Plan A, streamed</td></tr>
-    <tr><td><strong>Python generators</strong></td><td><code>yield</code> is <code>next()</code>; a chain of generators is a plan tree pulling from the bottom</td><td>whatever you chain</td></tr>
-    <tr><td><strong>Polars lazy · Spark DataFrame</strong></td><td><code>filter(...).select(...)</code> builds a plan, nothing runs until <code>.collect()</code>, and the optimizer moves the filter below the join</td><td>Plan B, chosen for you</td></tr>
+    <tr><td><strong>Python generators</strong></td><td><code>next()</code> resumes a generator, and <code>yield</code> returns its next value. Chained generators can process rows incrementally.</td><td>whatever you chain</td></tr>
+    <tr><td><strong>Polars lazy · Spark DataFrame</strong></td><td>Builds a plan that executes when an action requests results; the optimizer can move eligible filters earlier.</td><td>Filter placement chosen by the optimizer</td></tr>
   </tbody>
 </table>
 
 <p>A pandas merge materializes its result, so joins with many matches can require much more memory than either input. An equality merge does not normally build the full Cartesian product. Our <code>ProductScan</code> does enumerate every pair, but streams them one at a time. Filter placement matters in both approaches.</p>
 
-<p>A Python generator is the iterator
-model in different spelling: <code>yield</code> is <code>next()</code>, and a chain of generators
-is a plan tree that pulls one row at a time from the bottom.</p>
+<p>Python generators use a similar pull-based model. Calling <code>next(generator)</code> resumes execution until the next <code>yield</code>, which returns a value to the caller. A chain of generators can therefore pass one row at a time through several processing steps.</p>
 
-<p>Polars' lazy API and Spark's
-DataFrame make the tree visible: <code>df.filter(...).select(...)</code> builds a plan, nothing
-runs until <code>.collect()</code>, and the optimizer moves the filter below the join for you,
-which is the Plan B you assembled by hand. A Spark stage is one of these pipelines with a shuffle
-at each end: rows still flow from one operator to the next, but between stages they cross the
-network, so every pair you avoided building by filtering early is a pair that never left the
-machine.</p>
+<p>Polars’ lazy API and Spark DataFrames describe computations as plans. An action such as <code>collect()</code> executes the plan. Their optimizers can move a filter closer to its input when doing so preserves the result. In distributed processing, filtering before a shuffle can also reduce the rows sent across the network.</p>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
@@ -252,8 +222,7 @@ score you see locally is the grade.</p>
 <p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
-<p>The measurement and reflection questions are still the point of the later parts of the lab; they
-are just not turned in. Bring your numbers and your answers to class, where we compare them.</p>
+<p>Use the measurement and reflection questions to explain your results. They are not graded, but bring your measurements and answers to class for discussion.</p>
 <ul>
   <li>Both plan tables plus your answers to the script's
   three questions (where B's advantage comes from, the 60-through-a-1-row-filter puzzle, and
@@ -263,11 +232,11 @@ are just not turned in. Bring your numbers and your answers to class, where we c
   size: what <em>does</em> it grow with, and why?</li>
 </ul>
 
-<h3>What's provided vs what you write</h3>
+<h3>Provided code and required work</h3>
 <table>
   <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
   <tbody>
-    <tr><td><code>query_engine.py</code></td><td>F, Predicate, CountingScan, all delegation stubs</td><td>SelectScan.next · ProjectScan's column check · ProductScan's four methods</td></tr>
+    <tr><td><code>query_engine.py</code></td><td>F, Predicate, CountingScan, all <span class="gloss" data-gloss="delegation">delegation</span> stubs</td><td>SelectScan.next · ProjectScan's column check · ProductScan's four methods</td></tr>
     <tr><td>reference layers ×4</td><td>Labs 1–3 (+ TableScan's get_val/has_field), do not edit</td><td>&nbsp;</td></tr>
     <tr><td>harness + measure</td><td>complete, do not edit</td><td>run, record</td></tr>
   </tbody>
@@ -284,28 +253,16 @@ are just not turned in. Bring your numbers and your answers to class, where we c
 <!-- ============================================================ -->
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
-<p class="keep-in-present">Fast finishers: write a <strong>JoinScan</strong> convenience class
-(constructor takes two scans + a join predicate, builds Select-over-Product internally; same
-tests should pass with plans half as deep); add <strong>OR</strong> to Predicate (a list of
-AND-groups: satisfied if any group is) with a test of your own; or write the cruelest
-five-line scan there is, a <strong>CachingScan</strong> that
-<span class="gloss" data-gloss="materialization">materializes</span> its input's rows in
-a Python list on first pass and replays from memory on rewind, then re-run
-<code>measure_pipeline.py</code> with it wrapped around Plan B's right input and explain the
-new counter readings. That's a hash join's little sibling, and week 9 will feel familiar.</p>
+<p class="keep-in-present">If you finish early, add a <code>JoinScan</code> wrapper that constructs a <code>SelectScan</code> over a <code>ProductScan</code>. Alternatively, extend <code>Predicate</code> to support OR between groups of AND terms. A third option is a <code>CachingScan</code> that stores its input rows on the first pass and reuses them after a rewind. Wrap it around Plan B’s right input and compare the counters. Unlike a hash join, this cache avoids repeated input reads but still examines the same candidate pairs.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">My join returns 18 rows, not 3.</h3>
-<p class="keep-in-present">Your SelectScan's predicate isn't being consulted, or the plan
-stacked Product over Select instead of Select over Product. Print the plan as you build it;
-the tree reads bottom-up.</p>
+<p class="keep-in-present">Check that the plan places the join’s <code>SelectScan</code> above <code>ProductScan</code> and that <code>SelectScan.next()</code> evaluates the predicate before returning a row. The product generates 18 pairs; the selection must keep only the three that match.</p>
 
 <h3 class="keep-in-present">My join returns 0 rows but cardinality passes.</h3>
-<p class="keep-in-present">Almost always field routing: <code>get_val("mid2")</code> is being
-answered by the left side (which lacks it) or has_field lies. Check ProductScan asks
-<code>has_field</code> before choosing a side.</p>
+<p class="keep-in-present">Check field routing first. <code>ProductScan.get_val("mid2")</code> must ask the child that contains <code>mid2</code>. Use each child’s <code>has_field</code> method to choose which child supplies the value.</p>
 
 <h3 class="keep-in-present">Does the order of terms inside a Predicate matter?</h3>
 <p class="keep-in-present">For correctness, no: it's a conjunction. For speed, mildly:
@@ -314,10 +271,7 @@ most-often-failing test first saves comparisons. Real optimizers reorder terms f
 this reason.</p>
 
 <h3 class="keep-in-present">Why "left wins ties" instead of an error on ambiguous fields?</h3>
-<p class="keep-in-present">Honesty about scope: real SQL makes you qualify
-(<code>students.id</code>) and errors on ambiguity, which needs a name-resolution layer we
-haven't built. microdb documents its simple rule and the tests avoid collisions; a teaching
-engine should be predictable before it's featureful.</p>
+<p class="keep-in-present">Microdb checks the left input first when both inputs have the same field name. The tests avoid that ambiguity. SQL normally requires a qualified name such as <code>students.id</code> when an unqualified reference is ambiguous; supporting that would require a name-resolution layer beyond this lab.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science

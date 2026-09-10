@@ -5,52 +5,35 @@
   const GLOSSARY = {
     'working-set': {
       title: 'Working set',
-      body: '<p>The portion of a job&#39;s data that it needs close at hand at the same time: for a grouped aggregation, the running totals for every key seen so far; for a hash join, the whole build side. When the working set fits in RAM, the job runs at memory speed. When it does not, the machine keeps evicting part of it to disk and reading it back, and the job slows to disk speed. Partitioning helps because each machine only needs its own share of the working set, and one hundredth of a working set fits where the whole one did not.</p>',
+      body: "<p>The data an operation needs to retain while it runs. Examples include running totals for an aggregation or the build-side hash table for a join. If this state exceeds RAM, the engine may partition or spill it to disk. Distribution can reduce each worker’s share, but uneven key frequencies can still leave one worker with too much state.</p>",
     },
     'rdd': {
       title: 'RDD (Resilient Distributed Dataset)',
-      body: '<p>Spark&#39;s core data structure: one logical collection (the lines of a file, a list of pairs) cut into partitions that live on different machines. You never touch a partition directly; you call transformations such as map, filter, and reduceByKey that describe a new RDD in terms of an old one, and Spark records that description as a plan. Nothing runs until an action such as collect() asks for a result, at which point the whole plan executes at once. &#39;Resilient&#39; refers to lineage: because each partition&#39;s recipe is recorded, a lost partition can be recomputed instead of restored from a copy.</p>',
+      body: "<p>A resilient distributed dataset is a logical collection divided into partitions. Transformations such as map and filter define new RDDs from existing ones. Spark records their dependencies and evaluates the required work when an action requests results. The recorded lineage can be used to recompute lost partitions.</p>",
     },
     'shuffle': {
       title: 'Shuffle',
-      body: '<p>The step in a distributed job that moves every record with the same key to the same machine. Each mapper hashes the key of every pair it emits, writes the pair into a local bucket for the destination machine, and each destination machine then pulls its bucket from every mapper over the network. It is the only step where data crosses machines, so it is the step that costs the most; the map and reduce work stays local. The shuffle is what makes reduce&#39;s guarantee true: after it, a machine holds every value for the keys it owns, and no other machine holds any of them. It is the distributed cousin of the partitioning step in Lab 4&#39;s hash join.</p>',
+      body: "<p>A redistribution of records between partitions, often to place equal keys together for a join or aggregation. In MapReduce, mapper output is grouped by reducer destination and transferred to the reducers. Serialization, network traffic, and storage access can make this expensive. Other operations can also transfer data; shuffle is the redistribution step emphasized in this lecture.</p>",
     },
     'skew': {
-      title: 'Skew (the celebrity problem)',
-      body: '<p>When one key owns a wildly disproportionate share of the records — one URL ' +
-        'with 40% of traffic, one user with a million events. Hash partitioning balances ' +
-        'keys, not rows, so the hot key’s partition finishes long after the rest. Fixes: ' +
-        'salt the key (append a random suffix, aggregate in two rounds) or special-case it. ' +
-        'First symptom in practice: 99 tasks done, 1 still running.</p>',
+      title: 'Skew',
+      body: "<p>An uneven distribution of data or work. For example, one key may occur in 40% of the records, putting much of an aggregation on one partition. A uniform hash of distinct keys does not prevent that imbalance. Possible remedies include splitting suitable aggregations with salted keys or handling a frequent key separately.</p>",
     },
     'straggler': {
       title: 'Straggler',
-      body: '<p>The one slow task the whole job waits on — caused by skew, a sick machine, or ' +
-        'bad luck. Distributed runtimes fight stragglers with speculative execution: launch a ' +
-        'duplicate of the laggard elsewhere and take whichever finishes first. The 2004 ' +
-        'MapReduce paper devotes a section to this; it mattered from day one.</p>',
+      body: "<p>A task that finishes much later than comparable tasks and delays the job. Skew, a slow worker, and resource contention are possible causes. Some runtimes use speculative execution: start another copy elsewhere and accept the first completed result. That can help with a slow worker but does not remove an inherently oversized partition.</p>",
     },
     'stage': {
       title: 'Stage',
-      body: '<p>A run of shuffle-free (narrow) transformations that Spark fuses into one ' +
-        'pass over each partition. Stages are separated by shuffles: a job with one ' +
-        'reduceByKey has two stages, map-side and reduce-side. The Spark UI’s stage view is ' +
-        'a job’s cost broken down at exactly these boundaries.</p>',
+      body: "<p>A group of tasks that can execute a portion of Spark’s plan without crossing a shuffle dependency. Pipelined narrow transformations can share a stage. Shuffle dependencies separate stages. Use the plan and Spark UI to inspect their boundaries and costs.</p>",
     },
     'lineage': {
       title: 'Lineage',
-      body: '<p>The recorded recipe for each partition of each RDD — "partition 3 = flatMap ' +
-        'of partition 3 of the file." When a machine dies, Spark recomputes its lost ' +
-        'partitions from the recipe instead of restoring a replica. Fault tolerance from a ' +
-        'plan rather than from copies — cheap when healthy, pay-on-failure when not. It’s ' +
-        'the R in RDD (Resilient).</p>',
+      body: "<p>The dependencies and transformations that describe how an RDD was produced. Spark can follow this record to recompute lost partitions when the required inputs are available. This avoids making a separate durable copy of every intermediate result, but recovery requires additional computation.</p>",
     },
     'actor': {
       title: 'Actor',
-      body: '<p>Ray’s stateful worker: @ray.remote on a class gives you an object that ' +
-        'lives on some machine, holds state between calls (a loaded model, a counter), and ' +
-        'processes method calls one at a time. Tasks are for stateless fan-out; actors are ' +
-        'for "load the 2 GB model once, then serve 10,000 embed calls against it."</p>',
+      body: "<p>A Ray actor is an instance of a remote class that retains state between method calls. It can, for example, load a model once and reuse it for many requests. A normal synchronous actor processes calls serially; Ray also supports actor concurrency options. Choose tasks for independent calls and actors when persistent worker state is useful.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -95,7 +78,7 @@
       },
     },
     {
-      label: 'Phase 1 · map — each machine emits (word, 1) pairs, alone. Color = destination partition, computable locally',
+      label: 'Phase 1 · map — each document produces (word, 1) pairs. Color marks the partition selected by the key.',
       render() {
         return `<div class="mr-cols">` + DOCS.map((d, i) =>
           `<div class="mr-box"><div class="mr-box-title">map(doc ${i + 1})</div>` +
@@ -105,7 +88,7 @@
       },
     },
     {
-      label: 'Phase 2 · shuffle — every pair travels to the partition its key hashes to (the only network step)',
+      label: 'Phase 2 · shuffle — route each pair to the partition selected by its key’s hash.',
       render() {
         const parts = [[], []];
         for (const d of DOCS) for (const w of d.split(' ')) parts[partOf(w)].push(w);
@@ -131,7 +114,7 @@
       },
     },
     {
-      label: 'Phase 4 · reduce — each key’s values collapse to a total; no partition needed another’s data',
+      label: 'Phase 4 · reduce — sum each key’s grouped values within its assigned partition.',
       render() {
         const parts = [{}, {}];
         for (const d of DOCS) for (const w of d.split(' ')) {
@@ -236,11 +219,11 @@
           `</div></div>`;
       }).join('');
       verdict.textContent = !loaded ? '' :
-        mode === 'point' ? 'partitions touched: 1 — routing is arithmetic either way' :
+        mode === 'point' ? 'partitions contacted: 1 — either rule identifies the key’s destination' :
         mode === 'range' ? (ruleName === 'hash'
-          ? 'partitions touched: 4 of 4 — matches could be anywhere, so ask everyone'
-          : `partitions touched: ${active.size} of 4 — sorted neighbors live together`) :
-        'keys spread by ' + (ruleName === 'hash' ? 'hash — uniform, orderless' : 'first letter — ordered, uneven');
+          ? 'partitions contacted: 4 of 4 — any partition may contain matching keys'
+          : `partitions touched: ${active.size} of 4 — adjacent keys share range partitions`) :
+        'keys spread by ' + (ruleName === 'hash' ? 'hash — equal keys stay together; key order is not preserved' : 'first letter — ordered, uneven');
     }
   }
   document.getElementById('pt-load').addEventListener('click', () => { loaded = true; mode = 'none'; render(); });

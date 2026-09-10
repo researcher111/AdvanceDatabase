@@ -228,12 +228,13 @@ class TableScan:
         raise NotImplementedError
 
     def insert(self) -> None:
-        """Move to a fresh USED slot, extending the file if every block is
-        full. After this, the set_* methods write the new record's fields.
+        """Find an EMPTY slot after the current position and mark it USED.
+        Search forward, appending a block if no empty slot remains.
+        Then use the set_* methods to write the new record's fields.
 
-        Sketch: try insert_after(current_slot) on the current page. While
-        it says -1: move to the next block — or append a brand-new zeroed
-        block if this was the last — and try again from slot -1."""
+        Call insert_after(current_slot) on the current page. If it returns
+        -1, move to the next block, or append a zeroed block if this is the
+        last block. Search the new block from slot -1 and repeat as needed."""
         # TODO
         raise NotImplementedError
 
