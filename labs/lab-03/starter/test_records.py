@@ -8,14 +8,27 @@ Four groups, mirroring the lab page:
     CATALOG — the provided catalog works iff your record layer does
 
 Pure stdlib; no pytest. The Gradescope autograder runs this same harness.
+
+Test one function while the other methods are unfinished:
+    python3 test_records.py --list
+    python3 test_records.py --unit RecordPage.get_int
+    python3 test_records.py --unit
+
+Unit checks supply fixed layouts, page data, and prerequisite methods.
+They always call your implementation of the selected function. Running
+without arguments uses the original twelve integration tests, with no
+replacement methods; those tests determine your grade.
 """
 
+import argparse
+from contextlib import contextmanager
 import shutil
 import sys
 import tempfile
 import traceback
+from unittest.mock import patch
 
-from file_manager import BlockId, FileManager
+from file_manager import BlockId, FileManager, Page
 from buffer_manager import BufferManager
 from record_manager import Schema, Layout, RecordPage, TableScan
 from catalog import Catalog
@@ -274,7 +287,274 @@ def test_catalog_rows():
         cleanup(d, fm)
 
 
-if __name__ == "__main__":
+# ---------------- Isolated function checks (not graded) ----------------
+# These fixtures deliberately use the provided Page and buffer APIs, not
+# student record methods, to prepare and inspect records. Scoped patches
+# replace only prerequisites; the function being tested stays untouched.
+
+def fixture_layout():
+    return Layout.from_metadata(students_schema(),
+                                {"id": 4, "name": 8, "gpa": 20}, 24)
+
+
+def fixture_field_pos(self, slot, fldname):
+    return slot * self.layout.slot_size + self.layout.offset(fldname)
+
+
+def fixture_next_after(self, slot):
+    for candidate in range(slot + 1, self.slot_count()):
+        if self.is_used(candidate):
+            return candidate
+    return -1
+
+
+def fixture_insert_after(self, slot):
+    for candidate in range(slot + 1, self.slot_count()):
+        if not self.is_used(candidate):
+            self._set_flag(candidate, 1)
+            return candidate
+    return -1
+
+
+@contextmanager
+def unit_page():
+    d, fm, bm = fresh(num_buffers=2)
+    rp = None
+    try:
+        rp = RecordPage(bm, fm.append("t.tbl"), fixture_layout())
+        yield rp, rp._buf.contents()
+    finally:
+        if rp is not None:
+            rp.close()
+        cleanup(d, fm)
+
+
+def seed_page(page, flags):
+    """Write known bytes without calling any student record method."""
+    for slot, flag in enumerate(flags):
+        base = slot * 24
+        page.set_int(base, flag)
+        page.set_int(base + 4, 100 + slot)
+        page.set_string(base + 8, "ada" if slot % 2 == 0 else "éé")
+        page.set_int(base + 20, 30 + slot)
+
+
+def unit_layout():
+    test_layout_offsets()
+    cases = [
+        (Schema(), {}, 4),
+        (Schema().add_string_field("tag", 3).add_int_field("count")
+         .add_string_field("empty", 0), {"tag": 4, "count": 11, "empty": 15}, 19),
+        (Schema().add_int_field("only"), {"only": 4}, 8),
+    ]
+    for schema, offsets, size in cases:
+        lay = Layout(schema)
+        expect(lay.slot_size == size, f"expected slot size {size}, got {lay.slot_size}")
+        for field, offset in offsets.items():
+            expect(lay.offset(field) == offset, f"wrong offset for {field}")
+
+
+def unit_field_pos():
+    with unit_page() as (rp, page):
+        for slot in (0, 1, 4):
+            for field, offset in (("id", 4), ("name", 8), ("gpa", 20)):
+                expect(rp._field_pos(slot, field) == slot * 24 + offset,
+                       f"wrong byte position for slot {slot}, field {field}")
+        schema = Schema().add_string_field("tag", 3).add_int_field("count")
+        rp.layout = Layout.from_metadata(schema, {"tag": 4, "count": 11}, 15)
+        expect(rp._field_pos(3, "count") == 56, "use the supplied layout, not fixed offsets")
+
+
+def unit_get_int():
+    with unit_page() as (rp, page), patch.object(RecordPage, "_field_pos", fixture_field_pos):
+        seed_page(page, [1, 1, 0, 0, 1])
+        page.set_int(4, -123)
+        before = bytes(page.contents())
+        for slot, field, value in ((0, "id", -123), (1, "gpa", 31), (4, "id", 104)):
+            expect(rp.get_int(slot, field) == value, f"wrong {field} in slot {slot}")
+        expect(bytes(page.contents()) == before, "get_int must not change the page")
+        expect(not rp._buf.dirty, "reading must not mark the buffer dirty")
+
+
+def unit_set_int():
+    with unit_page() as (rp, page), patch.object(RecordPage, "_field_pos", fixture_field_pos):
+        seed_page(page, [1] * 5)
+        for slot, field, offset, value in ((1, "id", 4, -2147483648),
+                                          (4, "gpa", 20, 2147483647)):
+            before = bytes(page.contents())
+            rp._buf.dirty = False
+            rp.set_int(slot, field, value)
+            start = slot * 24 + offset
+            expect(page.get_int(start) == value, "set_int wrote the wrong value or address")
+            expect(page.contents()[:start] == before[:start]
+                   and page.contents()[start + 4:] == before[start + 4:],
+                   "set_int changed neighboring bytes")
+            expect(rp._buf.dirty, "set_int must mark the buffer dirty")
+        rp.bm.flush_all()
+        stored = Page(BLOCK_SIZE)
+        rp.bm.fm.read(rp.block, stored)
+        expect(stored.contents() == page.contents(), "the write did not survive a flush")
+
+
+def unit_get_string():
+    with unit_page() as (rp, page), patch.object(RecordPage, "_field_pos", fixture_field_pos):
+        seed_page(page, [1] * 5)
+        page.set_string(4 * 24 + 8, "")
+        before = bytes(page.contents())
+        for slot, value in ((0, "ada"), (1, "éé"), (4, "")):
+            expect(rp.get_string(slot, "name") == value,
+                   f"wrong string in slot {slot}; read its UTF-8 bytes and length prefix")
+        expect(bytes(page.contents()) == before, "get_string must not change the page")
+        expect(not rp._buf.dirty, "reading must not mark the buffer dirty")
+
+
+def unit_set_string():
+    with unit_page() as (rp, page), patch.object(RecordPage, "_field_pos", fixture_field_pos):
+        seed_page(page, [1] * 5)
+        for slot, value in ((1, "éééé"), (1, "a"), (4, "")):
+            before = bytes(page.contents())
+            start = slot * 24 + 8
+            rp._buf.dirty = False
+            rp.set_string(slot, "name", value)
+            expect(page.get_string(start) == value, "string bytes or length prefix are wrong")
+            expect(page.contents()[:start] == before[:start]
+                   and page.contents()[start + 12:] == before[start + 12:],
+                   "set_string changed bytes outside the field's reserved capacity")
+            expect(rp._buf.dirty, "set_string must mark the buffer dirty")
+        for value in ("123456789", "ééééé"):
+            before = bytes(page.contents())
+            try:
+                rp.set_string(1, "name", value)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("reject strings longer than 8 UTF-8 bytes with ValueError")
+            expect(bytes(page.contents()) == before, "an oversized string changed the page")
+
+
+def unit_insert_after():
+    with unit_page() as (rp, page):
+        seed_page(page, [1, 0, 1, 0, 0])
+        for after, expected in ((0, 1), (1, 3), (3, 4)):
+            before = bytes(page.contents())
+            rp._buf.dirty = False
+            expect(rp.insert_after(after) == expected, "insert_after must find the first empty slot after its argument")
+            start = expected * 24
+            expect(page.get_int(start) == 1, "the returned slot must be marked USED")
+            expect(page.contents()[:start] == before[:start]
+                   and page.contents()[start + 4:] == before[start + 4:],
+                   "insertion must change only the chosen slot's flag")
+            expect(rp._buf.dirty, "changing a status flag must mark the buffer dirty")
+        expect(rp.insert_after(-1) == -1, "a full page must return -1")
+        page.set_int(0, 0)
+        expect(rp.insert_after(4) == -1, "do not wrap around to earlier empty slots")
+        expect(rp.insert_after(-1) == 0, "searching from -1 must include slot 0")
+
+
+def unit_next_after():
+    with unit_page() as (rp, page):
+        seed_page(page, [1, 0, 1, 0, 0])
+        before = bytes(page.contents())
+        for after, expected in ((-1, 0), (0, 2), (1, 2), (2, -1), (4, -1)):
+            expect(rp.next_after(after) == expected, "next_after must find the first USED slot strictly after its argument")
+        expect(bytes(page.contents()) == before and not rp._buf.dirty,
+               "next_after must only read the page")
+
+
+def unit_delete():
+    with unit_page() as (rp, page):
+        seed_page(page, [1] * 5)
+        before = bytes(page.contents())
+        rp.delete(2)
+        expect(page.get_int(48) == 0, "delete must mark the selected slot EMPTY")
+        expect(page.contents()[:48] == before[:48] and page.contents()[52:] == before[52:],
+               "delete must preserve the field bytes and other slots")
+        expect(rp._buf.dirty, "delete must mark the buffer dirty")
+
+
+@contextmanager
+def unit_table(flags_by_block):
+    d, fm, bm = fresh(num_buffers=2)
+    ts = None
+    try:
+        for flags in flags_by_block:
+            block = fm.append("students.tbl")
+            page = Page(BLOCK_SIZE)
+            seed_page(page, flags)
+            fm.write(block, page)
+        ts = TableScan(bm, fm, "students", fixture_layout())
+        yield ts, bm, fm
+    finally:
+        if ts is not None:
+            ts.close()
+        cleanup(d, fm)
+
+
+def expect_one_pin(bm):
+    expect(sum(buffer.pins for buffer in bm.pool) == 1,
+           "a scan must hold exactly one pin, including after changing blocks")
+
+
+def unit_scan_next():
+    cases = [
+        ([[1, 0, 0, 1, 0], [0] * 5, [0, 1, 0, 0, 1], [0] * 5],
+         [(0, 0), (0, 3), (2, 1), (2, 4)]),
+        ([[0] * 5], []),
+        ([[0, 0, 0, 0, 1]], [(0, 4)]),
+    ]
+    with patch.object(RecordPage, "next_after", fixture_next_after):
+        for flags, expected in cases:
+            with unit_table(flags) as (ts, bm, fm):
+                for _ in range(2):
+                    ts.before_first()
+                    for rid in expected:
+                        expect(ts.next() is True, f"scan ended before RID {rid}")
+                        expect(ts.rid() == rid, f"expected RID {rid}, got {ts.rid()}")
+                        expect_one_pin(bm)
+                    expect(ts.next() is False, "scan should end after the last occupied slot")
+                    expect_one_pin(bm)
+                ts.close()
+                expect(not any(b.is_pinned() for b in bm.pool), "close() must release the final pin")
+
+
+def unit_scan_insert():
+    with patch.object(RecordPage, "insert_after", fixture_insert_after):
+        with unit_table([[1] * 5, [1, 0, 1, 0, 1], [1] * 5]) as (ts, bm, fm):
+            for rid, blocks in (((1, 1), 3), ((1, 3), 3), ((3, 0), 4), ((3, 1), 4)):
+                ts.insert()
+                expect(ts.rid() == rid, f"expected insertion at {rid}, got {ts.rid()}")
+                expect(ts.rp.is_used(rid[1]), "insert must position on a USED slot")
+                expect(fm.length("students.tbl") == blocks, "grow the file only when no empty slot remains ahead")
+                expect_one_pin(bm)
+            ts.close()
+            expect(not any(b.is_pinned() for b in bm.pool), "insertion leaked a pin")
+        with unit_table([[0, 1, 1, 1, 1]]) as (ts, bm, fm):
+            ts.current_slot = 2
+            ts.insert()
+            expect(ts.rid() == (1, 0), "insert must search forward, not reuse a slot before the cursor")
+            ts.before_first()
+            ts.insert()
+            expect(ts.rid() == (0, 0), "before_first must allow reuse of the earlier empty slot")
+            expect_one_pin(bm)
+
+
+UNIT_TESTS = {
+    "Layout.__init__": unit_layout,
+    "RecordPage._field_pos": unit_field_pos,
+    "RecordPage.get_int": unit_get_int,
+    "RecordPage.set_int": unit_set_int,
+    "RecordPage.get_string": unit_get_string,
+    "RecordPage.set_string": unit_set_string,
+    "RecordPage.insert_after": unit_insert_after,
+    "RecordPage.next_after": unit_next_after,
+    "RecordPage.delete": unit_delete,
+    "TableScan.next": unit_scan_next,
+    "TableScan.insert": unit_scan_insert,
+}
+
+
+def run_integration():
+    RESULTS.clear()
     print("LAYOUT group")
     check("LAYOUT", "students offsets are 4 / 8 / 20, slot 24", test_layout_offsets)
     check("LAYOUT", "slots per block arithmetic",               test_slots_per_block)
@@ -293,4 +573,33 @@ if __name__ == "__main__":
     check("CATALOG", "field_catalog rows are exactly right",    test_catalog_rows)
     n = sum(RESULTS)
     print(f"\n{n}/{len(RESULTS)} tests passed")
-    sys.exit(0 if n == len(RESULTS) else 1)
+    return 0 if n == len(RESULTS) else 1
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--list", action="store_true", help="list function-level test targets")
+    mode.add_argument("--unit", nargs="?", const="all", choices=["all", *UNIT_TESTS],
+                      metavar="FUNCTION", help="run one function's checks, or all unit checks")
+    parser.add_argument("-v", action="store_true", help="show tracebacks for failures")
+    args = parser.parse_args(argv)
+    if args.list:
+        print("Function-level targets (ungraded):")
+        print("\n".join(UNIT_TESTS))
+        return 0
+    if args.unit:
+        RESULTS.clear()
+        print("Unit checks: fixtures supply unfinished dependencies; integration tests are not run.")
+        selected = UNIT_TESTS if args.unit == "all" else {args.unit: UNIT_TESTS[args.unit]}
+        for name, fn in selected.items():
+            check("UNIT", name, fn)
+        n = sum(RESULTS)
+        print(f"\n{n}/{len(RESULTS)} unit checks passed (not the grading score)")
+        return 0 if n == len(RESULTS) else 1
+    return run_integration()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

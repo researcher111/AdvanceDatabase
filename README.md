@@ -58,17 +58,37 @@ Clone the whole repository or download each complete `starter/` directory.
 Labs 8–11 include data files that the individual Python download links do not
 include. Labs 9–10 require no model download or paid API for the graded work.
 
-Run each lab from its `starter/` directory. Unimplemented exercises deliberately
-fail their tests; implement the marked methods before expecting a passing suite.
-Measurements and reflections are for discussion, as stated on the lab pages.
+Run each lab from its `starter/` directory. Test a function as soon as you implement
+it using the harness's `--unit` mode. For example, in Lab 3:
+
+```bash
+python3 test_records.py --list                     # available function names
+python3 test_records.py --unit RecordPage.get_int  # one function
+python3 test_records.py --unit                     # all function-level checks
+python3 test_records.py                            # full integration tests
+```
+
+Every lab's test script supports these options. In Lab 8, use query names such
+as `--unit Q1`. Lab 11 also provides local unit checks for the optional Spark and
+Ray functions without starting either engine.
+
+Function-level checks provide known data and working helpers for unfinished
+dependencies, while always calling the selected student function. These results
+are practice feedback. Running without flags uses the original integration tests
+and grading rules; it never substitutes implementations. Unfinished methods still
+fail their own checks. Measurements and reflections remain for class discussion.
 
 ## Maintainer checks
 
 Run `python3 -m unittest discover -s tests -v` from the repository root to check
 supplied infrastructure. These ungraded checks do not require student TODOs
-to be completed and are separate from each lab’s exercise tests.
+to be completed and are separate from each lab’s exercise tests. They also verify
+that each function can pass independently and that test helpers cannot mask an
+unfinished or incorrect implementation. Install `duckdb` to include the SQL
+execution regressions; those checks are skipped when it is unavailable.
 
 ## Note
 
-Reference solutions, autograders, quiz and exam generators are kept in a separate
-private repository and are deliberately not published here.
+Instructor autograders and quiz and exam generators are kept in a separate
+private repository. The public tests include reference helpers and small
+implementations used to test student functions independently.

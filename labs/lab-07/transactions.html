@@ -113,10 +113,12 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
+<p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
+
 <ol>
   <li><strong>Read <code>LogManager</code> and <code>LockTable</code></strong> (about 8 min). Check that log appends sync by default, and identify where the transaction code must flush data pages.</li>
-  <li><strong><code>set_int</code>, then <code>set_string</code></strong>: follow the lock, log, modify, and mark-dirty sequence. Run the WAL test group.</li>
-  <li><strong><code>commit</code></strong>: flush the pages, sync COMMIT, release locks, and unpin. Run the first COMMIT test.</li>
+  <li><strong><code>set_int</code>, then <code>set_string</code></strong>: follow the lock, log, modify, and mark-dirty sequence. Run <code>--unit Transaction.set_int</code> and <code>--unit Transaction.set_string</code>.</li>
+  <li><strong><code>commit</code></strong>: flush the pages, sync COMMIT, release locks, and unpin. Run <code>--unit Transaction.commit</code>.</li>
   <li><strong><code>rollback</code></strong>: scan your transaction’s changes backward, restore old values, flush, then record completion. Check the test that updates the same slot twice.</li>
   <li><strong><code>recover</code></strong>: implement the module-level recovery function. Identify finished transactions during the backward scan, undo the others, then flush repairs before recording completion. Run the subprocess crash tests.</li>
 </ol>
@@ -131,6 +133,15 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<h3 id="function-tests">Test one function at a time</h3>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_tx.py --list</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_tx.py --unit Transaction.set_string</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_tx.py --unit</span></code></pre>
+<p>Unit results are practice feedback. Run <code>python3 test_tx.py</code> without flags to check that your functions work together. The integration tests below determine your grade.</p>
+
+<h3>Run the full tests</h3>
 
 <p>The nine tests cover four groups. WAL checks that each change logs the old value and its location. COMMIT checks <span class="gloss" data-gloss="the-fsync">commit ordering</span> and rollback behavior, including repeated changes to one slot. RECOVER starts a subprocess, commits one transfer, interrupts another with <code>os._exit</code>, then checks that recovery preserves the first and undoes the second. Running recovery twice must leave the data unchanged and return no newly undone transactions on the second run. LOCKS checks shared reads and conflicting writes.</p>
 

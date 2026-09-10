@@ -123,10 +123,10 @@
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
+<p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
+
 <p>Download the four starter files into <code>microdb-lab2/</code>. Note that
-<code>file_manager.py</code> is the <strong>reference Lab 1 implementation</strong>; use it for a consistent baseline, or use your own implementation if it satisfies the same interface. The four functions depend on each
-other, so most of the test cases may not pass until all four functions are properly
-implemented. Build in this order:</p>
+<code>file_manager.py</code> is the <strong>reference Lab 1 implementation</strong>; use it for a consistent baseline, or use your own implementation if it satisfies the same interface. The function-level tests supply the dependencies needed to test each method separately. The full tests check all four methods together. Build in this order:</p>
 
 <ol>
   <li>Read <code>buffer_manager.py</code> (5 min). The <code>Buffer</code> class is complete. Its <code>assign_to_block</code> method flushes a dirty page before loading another block. Your four methods manage frames and pin counts; they use the provided methods to move bytes.</li>
@@ -149,6 +149,15 @@ implemented. Build in this order:</p>
 
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<h3 id="function-tests">Test one function at a time</h3>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_buffermanager.py --list</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_buffermanager.py --unit BufferManager._find_existing</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_buffermanager.py --unit</span></code></pre>
+<p>Unit results are practice feedback. Run <code>python3 test_buffermanager.py</code> without flags to check that your functions work together. The integration tests below determine your grade.</p>
+
+<h3>Run the full tests</h3>
 
 <p>The ten tests cover three areas. PIN checks that pages load, repeated pins reuse a frame, pin counts increase correctly, and a double-unpin raises <code>ValueError</code>. LRU checks victim selection, recency updates, protection of pinned frames, and the all-pinned error. DIRTY checks that changes survive eviction and that <code>flush_all</code> writes modified pages back.</p>
 

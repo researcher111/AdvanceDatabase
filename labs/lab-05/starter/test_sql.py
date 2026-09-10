@@ -1,5 +1,13 @@
 """Lab 5 test harness — run:  python3 test_sql.py
 
+Build one function at a time:
+    python3 test_sql.py --list
+    python3 test_sql.py --unit Class.method
+    python3 test_sql.py --unit
+Unit checks supply the other functions as test fixtures. The target always
+runs your code. The default command still runs the full integration suite.
+
+
 Three groups, mirroring the lab page:
 
     PARSE — SQL text becomes the right QueryData (and bad SQL dies well)
@@ -214,7 +222,168 @@ def test_sql_no_pins_leak():
         cleanup(d, fm)
 
 
-if __name__ == "__main__":
+# ---------------- function-level checks ----------------
+from contextlib import ExitStack
+from unittest.mock import patch
+from query_engine import Predicate, SelectScan, ProjectScan, ProductScan
+
+
+def _fixture_term(parser):
+    field = parser.lex.expect("ID")
+    op = parser.lex.expect("PUNCT")
+    if op not in ("=", "<", ">"):
+        raise ParseError("expected comparison operator")
+    if parser.lex.match("ID"):
+        rhs = F(parser.lex.next()[1])
+    else:
+        rhs = parser._parse_literal()
+    return field, op, rhs
+
+
+def _fixture_predicate(parser):
+    terms = [_fixture_term(parser)]
+    while parser.lex.match("KEYWORD", "and"):
+        parser.lex.next()
+        terms.append(_fixture_term(parser))
+    return Predicate(*terms)
+
+
+def _fixture_query(parser):
+    parser.lex.expect("KEYWORD", "select")
+    if parser.lex.match("PUNCT", "*"):
+        parser.lex.next()
+        fields = ["*"]
+    else:
+        fields = [parser.lex.expect("ID")]
+        while parser.lex.match("PUNCT", ","):
+            parser.lex.next()
+            fields.append(parser.lex.expect("ID"))
+    parser.lex.expect("KEYWORD", "from")
+    tables = [parser.lex.expect("ID")]
+    while parser.lex.match("PUNCT", ","):
+        parser.lex.next()
+        tables.append(parser.lex.expect("ID"))
+    predicate = None
+    if parser.lex.match("KEYWORD", "where"):
+        parser.lex.next()
+        predicate = _fixture_predicate(parser)
+    return QueryData(fields, tables, predicate)
+
+
+_UNIT_PARSER_DEPENDENCIES = {"parse_query": _fixture_query,
+                             "_parse_predicate": _fixture_predicate,
+                             "_parse_term": _fixture_term}
+
+
+def _terms_as_values(predicate):
+    return [(field, op, ("field", rhs.name) if isinstance(rhs, F) else rhs)
+            for field, op, rhs in predicate.terms]
+
+
+def _unit_parser(method):
+    with ExitStack() as stack:
+        for name, implementation in _UNIT_PARSER_DEPENDENCIES.items():
+            if name != method:
+                stack.enter_context(patch.object(Parser, name, implementation))
+        if method == "parse_query":
+            for text, fields, tables, terms in [
+                ("SELECT name, gpa FROM students", ["name", "gpa"], ["students"], None),
+                ("select * from students where gpa > 35 AND name = 'Ada'", ["*"], ["students"],
+                 [("gpa", ">", 35), ("name", "=", "Ada")]),
+                ("SELECT name FROM students, majors WHERE mid = mid2", ["name"], ["students", "majors"],
+                 [("mid", "=", ("field", "mid2"))]),
+            ]:
+                parser = Parser(text)
+                got = parser.parse_query()
+                expect(isinstance(got, QueryData) and got.fields == fields and got.tables == tables,
+                       "parse_query must preserve selected fields and table order")
+                expect((None if got.predicate is None else _terms_as_values(got.predicate)) == terms,
+                       "parse the optional WHERE; absent WHERE means None")
+                expect(parser.lex.peek()[0] == "EOF", "consume exactly the complete query")
+            bad = ["SELECT name students", "SELECT FROM students", "SELECT name FROM", "SELECT * FROM students WHERE"]
+        elif method == "_parse_predicate":
+            for text, terms in [
+                ("gpa > 35", [("gpa", ">", 35)]),
+                ("gpa > 30 AND name = 'Ada' AND mid = mid2",
+                 [("gpa", ">", 30), ("name", "=", "Ada"), ("mid", "=", ("field", "mid2"))]),
+            ]:
+                parser = Parser(text + ")")
+                got = parser._parse_predicate()
+                expect(isinstance(got, Predicate) and _terms_as_values(got) == terms,
+                       "collect one or more AND-ed terms in order")
+                expect(parser.lex.peek() == ("PUNCT", ")"), "leave the token after the predicate unconsumed")
+            bad = ["", "gpa > 30 AND"]
+        else:
+            for text, expected in [
+                ("gpa > 35", ("gpa", ">", 35)), ("gpa < 0", ("gpa", "<", 0)),
+                ("name = 'Ada'", ("name", "=", "Ada")),
+                ("mid = mid2", ("mid", "=", ("field", "mid2"))),
+            ]:
+                parser = Parser(text + " AND more = 1")
+                got = parser._parse_term()
+                expect(_terms_as_values(Predicate(got)) == [expected],
+                       "parse field, comparison and literal or F(field) right-hand side")
+                expect(parser.lex.peek() == ("KEYWORD", "and"), "consume only one term")
+            bad = ["gpa >", "35 > gpa", "gpa name 2", "gpa , 2"]
+        for text in bad:
+            try:
+                getattr(Parser(text), method)()
+            except ParseError:
+                pass
+            else:
+                raise AssertionError(f"malformed input must raise ParseError: {text!r}")
+
+
+def _unit_plan():
+    # Construct QueryData directly; every parser TODO can still be unfinished.
+    layouts = {name: object() for name in ("students", "majors", "rooms")}
+    manager, files = object(), object()
+    class CatalogFixture:
+        def get_layout(self, name):
+            return layouts[name]
+    class TableFixture:
+        def __init__(self, bm, fm, name, layout):
+            expect(bm is manager and fm is files, "pass the database's managers to each table scan")
+            expect(layout is layouts[name], "look up each table's own layout")
+            self.name = name
+        def before_first(self):
+            raise AssertionError("plan_query builds the plan; the runner positions it later")
+        def close(self):
+            pass
+    db = Database(files, manager, CatalogFixture())
+    cases = [(["*"], ["students"], None),
+             (["name"], ["students"], None),
+             (["*"], ["students"], Predicate(("gpa", ">", 35))),
+             (["name", "dept"], ["students", "majors", "rooms"], Predicate(("mid", "=", F("mid2"))))]
+    with patch("sql_frontend.TableScan", TableFixture):
+        for fields, tables, predicate in cases:
+            plan = db.plan_query(QueryData(fields, tables, predicate))
+            scan = plan
+            try:
+                if fields != ["*"]:
+                    expect(isinstance(scan, ProjectScan) and scan.fields == fields, "projection must be outermost")
+                    scan = scan.scan
+                if predicate is not None:
+                    expect(isinstance(scan, SelectScan) and scan.predicate is predicate, "apply the query predicate below projection")
+                    scan = scan.scan
+                for name in reversed(tables[1:]):
+                    expect(isinstance(scan, ProductScan), "multiple tables require products folded left to right")
+                    expect(isinstance(scan.right, TableFixture) and scan.right.name == name, "preserve table order")
+                    scan = scan.left
+                expect(isinstance(scan, TableFixture) and scan.name == tables[0],
+                       "single-table or leftmost input must be the matching table scan, with no extra wrappers")
+            finally:
+                if plan is not None:
+                    plan.close()
+
+
+UNIT_TESTS = {f"Parser.{name}": (lambda name=name: _unit_parser(name))
+              for name in _UNIT_PARSER_DEPENDENCIES}
+UNIT_TESTS["Database.plan_query"] = _unit_plan
+
+
+def run_integration():
+    RESULTS.clear()
     print("PARSE group")
     check("PARSE", "SELECT fields FROM table",                 test_parse_simple_query)
     check("PARSE", "star select + AND-ed WHERE",               test_parse_star_and_where)
@@ -233,3 +402,32 @@ if __name__ == "__main__":
     n = sum(RESULTS)
     print(f"\n{n}/{len(RESULTS)} tests passed")
     sys.exit(0 if n == len(RESULTS) else 1)
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--list", action="store_true", help="list function-level test targets")
+    mode.add_argument("--unit", nargs="?", const="all", choices=["all", *UNIT_TESTS],
+                      metavar="TARGET", help="test one function, or all functions if omitted")
+    parser.add_argument("-v", action="store_true", help="show tracebacks for failures")
+    args = parser.parse_args()
+    if args.list:
+        print("\n".join(UNIT_TESTS))
+        return
+    if args.unit is not None:
+        RESULTS.clear()
+        print("UNIT checks use test fixtures for unfinished dependencies.")
+        print("Run without --unit to check the complete implementation together.")
+        names = UNIT_TESTS if args.unit == "all" else [args.unit]
+        for name in names:
+            check("UNIT", name, UNIT_TESTS[name])
+        n = sum(RESULTS)
+        print(f"\n{n}/{len(RESULTS)} function checks passed")
+        sys.exit(0 if n == len(RESULTS) else 1)
+    run_integration()
+
+
+if __name__ == "__main__":
+    main()

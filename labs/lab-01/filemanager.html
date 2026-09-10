@@ -291,12 +291,14 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
+<p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
+
 <p>Download the three starter files using the buttons below the page widget. Put them in <code>microdb-lab1/</code> and implement the methods in the order below. Run the tests after each step to check the behavior you have added.</p>
 
 <ol>
   <li><strong>Read <code>file_manager.py</code> top to bottom first</strong> (5 min). The module docstring describes the required behavior; <code>BlockId</code> and the file-handle helpers are already written.
   Your work is the ten <code>TODO</code>-marked methods.</li>
-  <li><code>Page.set_int / get_int</code>: use <code>struct.pack_into("&lt;i", …)</code> and <code>struct.unpack_from</code> for signed four-byte integers. Run <code>python3 test_filemanager.py</code> to check the first PAGE test.</li>
+  <li><code>Page.set_int / get_int</code>: use <code>struct.pack_into("&lt;i", …)</code> and <code>struct.unpack_from</code> for signed four-byte integers. Test each method with <code>--unit Page.set_int</code> or <code>--unit Page.get_int</code>.</li>
   <li><code>set_bytes / get_bytes</code>: store the payload length at <code>off</code> and its bytes starting at <code>off + 4</code>. Read that length to determine the payload slice.</li>
   <li><code>set_string / get_string</code>: encode and decode UTF-8 using the byte methods. All four PAGE tests should now pass.</li>
   <li><strong><code>FileManager</code>: <code>length</code>, then <code>append</code>, then
@@ -427,6 +429,15 @@ f.tell()                    report the cursor's absolute byte position.</code></
 
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<h3 id="function-tests">Test one function at a time</h3>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_filemanager.py --list</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_filemanager.py --unit Page.get_int</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_filemanager.py --unit</span></code></pre>
+<p>Unit results are practice feedback. Run <code>python3 test_filemanager.py</code> without flags to check that your functions work together. The integration tests below determine your grade.</p>
+
+<h3>Run the full tests</h3>
 
 <p>The tests come in two groups. The <strong>PAGE</strong> tests never touch disk. Each one
 writes a value into a page and reads it back: ints (including negatives, which is why the spec

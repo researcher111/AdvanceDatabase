@@ -110,14 +110,16 @@
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
+<p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
+
 <p>Download all six starter files into <code>microdb-lab3/</code>, or work in <code>labs/lab-03/starter/</code> if you cloned the repository. Run the commands below from that directory. The file and buffer managers are reference implementations from Labs 1–2, and <code>catalog.py</code> is complete. Implement the marked methods in <code>record_manager.py</code> in this order:</p>
 
 <ol>
   <li><strong>Read the slot layout</strong> at the top of <code>record_manager.py</code> (3 min). It defines the required format and includes a worked example.</li>
-  <li><strong><code>Layout.__init__</code></strong>: calculate each field’s offset and the slot size. Run <code>python3 test_records.py</code> and check the LAYOUT results. For the students schema, the expected offsets are 4, 8, and 20 bytes; the slot size is 24 bytes.</li>
-  <li><strong><code>_field_pos</code>, then the four get/set methods</strong>: calculate each field’s byte position and use the page’s read or write method. Reject strings whose UTF-8 byte length exceeds the field’s capacity. Call <code>set_modified()</code> after each write. Rerun the tests; the RECORD test for reading back field values should now pass.</li>
-  <li><strong><code>insert_after</code>, <code>next_after</code>, and <code>delete</code></strong>: search for an EMPTY or USED slot as required, and update the status flag when inserting or deleting. Check that all RECORD tests pass.</li>
-  <li><strong><code>TableScan.next()</code>, then <code>insert()</code></strong>: implement the loops described above using the provided <code>_move_to_block</code> and <code>_append_new_block</code> helpers. Run the SCAN and CATALOG tests. The catalog requires no changes, but it depends on your scan methods.</li>
+  <li><strong><code>Layout.__init__</code></strong>: calculate each field’s offset and the slot size. Run <code>python3 test_records.py --unit Layout.__init__</code>. For the students schema, the expected offsets are 4, 8, and 20 bytes; the slot size is 24 bytes.</li>
+  <li><strong><code>_field_pos</code>, then the four get/set methods</strong>: calculate each field’s byte position and use the page’s read or write method. Reject strings whose UTF-8 byte length exceeds the field’s capacity. Call <code>set_modified()</code> after each write. Test each method with its own target, such as <code>--unit RecordPage._field_pos</code> or <code>--unit RecordPage.set_string</code>.</li>
+  <li><strong><code>insert_after</code>, <code>next_after</code>, and <code>delete</code></strong>: search for an EMPTY or USED slot as required, and update the status flag when inserting or deleting. Run <code>--unit RecordPage.insert_after</code>, <code>--unit RecordPage.next_after</code>, and <code>--unit RecordPage.delete</code> as you finish them.</li>
+  <li><strong><code>TableScan.next()</code>, then <code>insert()</code></strong>: implement the loops using the provided block-navigation helpers. Test them separately with <code>--unit TableScan.next</code> and <code>--unit TableScan.insert</code>. Then run <code>python3 test_records.py</code> to check all twelve integration tests, including the provided catalog.</li>
 </ol>
 
 <div class="callout note">
@@ -127,6 +129,15 @@
 
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<h3 id="function-tests">Test one function at a time</h3>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_records.py --list</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_records.py --unit RecordPage.get_int</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_records.py --unit</span></code></pre>
+<p>Unit results are practice feedback. Run <code>python3 test_records.py</code> without flags to check that your functions work together. The integration tests below determine your grade.</p>
+
+<h3>Run the full tests</h3>
 
 <p>The twelve tests run in four groups:</p>
 <ul>

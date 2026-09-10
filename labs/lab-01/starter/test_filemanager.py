@@ -1,5 +1,13 @@
 """Lab 1 test harness. Run:  python3 test_filemanager.py
 
+Build one function at a time:
+    python3 test_filemanager.py --list
+    python3 test_filemanager.py --unit Class.method
+    python3 test_filemanager.py --unit
+Unit checks supply the other functions as test fixtures. The target always
+runs your code. The default command still runs the full integration suite.
+
+
 Two groups, mirroring the lab page:
 
     PAGE  : Page get/set round-trips (no disk involved)
@@ -169,7 +177,183 @@ def test_durability_across_reopen():
     in_tmpdir(go)
 
 
-if __name__ == "__main__":
+# ---------------- function-level checks ----------------
+# These small reference dependencies exist only inside --unit checks. Raw
+# bytes and OS file reads supply expected values, so a getter and setter
+# cannot hide matching bugs in one another.
+import struct
+from contextlib import ExitStack
+from unittest.mock import patch
+
+
+def _fixture_get_int(page, off):
+    return struct.unpack_from("<i", page.contents(), off)[0]
+
+
+def _fixture_set_int(page, off, val):
+    struct.pack_into("<i", page.contents(), off, val)
+
+
+def _fixture_get_bytes(page, off):
+    size = _fixture_get_int(page, off)
+    return bytes(page.contents()[off + 4:off + 4 + size])
+
+
+def _fixture_set_bytes(page, off, data):
+    _fixture_set_int(page, off, len(data))
+    page.contents()[off + 4:off + 4 + len(data)] = data
+
+
+def _fixture_length(fm, filename):
+    f = fm._file(filename)
+    f.seek(0, 2)  # length may move the cursor; read/append must seek afterwards
+    return f.tell() // fm.block_size
+
+
+def _fixture_read(fm, block, page):
+    if block.blknum >= _fixture_length(fm, block.filename):
+        raise ValueError("block past end")
+    f = fm._file(block.filename)
+    f.seek(block.blknum * fm.block_size)
+    page.contents()[:] = f.read(fm.block_size)
+
+
+def _fixture_write(fm, block, page, sync=True):
+    f = fm._file(block.filename)
+    f.seek(block.blknum * fm.block_size)
+    f.write(page.contents())
+    f.flush()
+    if sync:
+        os.fsync(f.fileno())
+
+
+def _fixture_append(fm, filename):
+    block = BlockId(filename, _fixture_length(fm, filename))
+    _fixture_write(fm, block, Page(fm.block_size), sync=False)
+    return block
+
+
+_UNIT_DEPENDENCIES = {
+    Page: {
+        "get_int": _fixture_get_int,
+        "set_int": _fixture_set_int,
+        "get_bytes": _fixture_get_bytes,
+        "set_bytes": _fixture_set_bytes,
+        "get_string": lambda page, off: _fixture_get_bytes(page, off).decode("utf-8"),
+        "set_string": lambda page, off, value: _fixture_set_bytes(page, off, value.encode("utf-8")),
+    },
+    FileManager: {"read": _fixture_read, "write": _fixture_write,
+                  "append": _fixture_append, "length": _fixture_length},
+}
+
+
+def _isolated(target, test):
+    with ExitStack() as stack:
+        for cls, methods in _UNIT_DEPENDENCIES.items():
+            for name, implementation in methods.items():
+                if f"{cls.__name__}.{name}" != target:
+                    stack.enter_context(patch.object(cls, name, implementation))
+        test()
+
+
+def _unit_page(method):
+    is_int = method.endswith("int")
+    is_string = method.endswith("string")
+    values = [0, -2147483648, 2147483647, -19] if is_int else (
+        ["", "ada", "héllo 🌳"] if is_string else [b"", b"\x00\xffabc", b"xyz"])
+    for value in values:
+        p = Page(BLOCK_SIZE)
+        p.contents()[:] = b"\xa5" * BLOCK_SIZE
+        off = 7
+        data = value.encode("utf-8") if is_string else value
+        encoded = struct.pack("<i", value) if is_int else struct.pack("<i", len(data)) + data
+        expected = bytearray(p.contents())
+        expected[off:off + len(encoded)] = encoded
+        if method.startswith("get"):
+            p.contents()[:] = expected
+            got = getattr(p, method)(off)
+            expect(got == value, f"{method} at offset {off}: got {got!r}, expected {value!r}")
+            expect(p.contents() == expected, "reading must not change page bytes")
+        else:
+            getattr(p, method)(off, value)
+            expect(p.contents() == expected,
+                   f"{method} must write the specified bytes and preserve neighboring bytes")
+
+
+def _unit_file(method):
+    with tempfile.TemporaryDirectory(prefix="microdb-unit-") as d:
+        filename = "t.tbl"
+        path = os.path.join(d, filename)
+        original = b"a" * BLOCK_SIZE + b"b" * BLOCK_SIZE + b"c" * BLOCK_SIZE
+        with open(path, "wb") as f:
+            f.write(original)
+        fm = FileManager(d, BLOCK_SIZE)
+        try:
+            if method == "length":
+                expect(fm.length(filename) == 3, "existing file has three blocks")
+                expect(fm.length("empty.tbl") == 0, "a new file has zero blocks")
+                with open(path, "ab") as f:
+                    f.write(b"d" * BLOCK_SIZE)
+                expect(fm.length(filename) == 4, "length must observe file growth")
+            elif method == "read":
+                p = Page(BLOCK_SIZE)
+                for k in [2, 0, 1, 2]:
+                    fm.read(BlockId(filename, k), p)
+                    expect(bytes(p.contents()) == original[k * BLOCK_SIZE:(k + 1) * BLOCK_SIZE],
+                           f"read must seek to block {k}, including the last valid block")
+                try:
+                    fm.read(BlockId(filename, 3), p)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("reading the first block past the end must raise ValueError")
+            elif method == "append":
+                for k in (3, 4):
+                    block = fm.append(filename)
+                    expect(block == BlockId(filename, k), "append must return the new block's ID")
+                    with open(path, "rb") as f:
+                        expect(f.read() == original + bytes((k - 2) * BLOCK_SIZE),
+                               "append must preserve existing blocks and add one zeroed block")
+                expect(fm.append("new.tbl") == BlockId("new.tbl", 0), "new file starts at block zero")
+                with open(os.path.join(d, "new.tbl"), "rb") as f:
+                    expect(f.read() == bytes(BLOCK_SIZE), "new file contains one zeroed block")
+            else:
+                p = Page(BLOCK_SIZE)
+                p.contents()[:] = bytes(range(BLOCK_SIZE))
+                expected = original[:BLOCK_SIZE] + bytes(p.contents()) + original[2 * BLOCK_SIZE:]
+                synced = []
+                def observe_sync(fd):
+                    with open(path, "rb") as f:
+                        expect(f.read() == expected, "flush written bytes before fsync")
+                    expect(fd == fm._file(filename).fileno(), "sync the written file")
+                    synced.append(fd)
+                with patch("file_manager.os.fsync", side_effect=observe_sync):
+                    fm.write(BlockId(filename, 1), p)
+                expect(bool(synced), "write defaults to sync=True and must call fsync")
+                with open(path, "rb") as f:
+                    expect(f.read() == expected, "write the target block and preserve its neighbors")
+                p.contents()[:] = b"z" * BLOCK_SIZE
+                with patch("file_manager.os.fsync") as sync:
+                    fm.write(BlockId(filename, 1), p, sync=False)
+                    expect(not sync.called, "sync=False must not call fsync")
+                with open(path, "rb") as f:
+                    expect(f.read() == original[:BLOCK_SIZE] + bytes(p.contents()) + original[2 * BLOCK_SIZE:],
+                           "sync=False still writes and flushes the requested bytes")
+        finally:
+            fm.close()
+
+
+UNIT_TESTS = {}
+for _cls, _methods in _UNIT_DEPENDENCIES.items():
+    for _method in _methods:
+        _target = f"{_cls.__name__}.{_method}"
+        _test = _unit_page if _cls is Page else _unit_file
+        UNIT_TESTS[_target] = lambda target=_target, method=_method, test=_test: _isolated(
+            target, lambda: test(method))
+
+
+def run_integration():
+    RESULTS.clear()
     print("PAGE group")
     check("PAGE", "int round-trip (incl. negative, INT_MAX)", test_int_roundtrip)
     check("PAGE", "bytes round-trip (length-prefixed)",       test_bytes_roundtrip)
@@ -184,3 +368,32 @@ if __name__ == "__main__":
     n_pass = sum(RESULTS)
     print(f"\n{n_pass}/{len(RESULTS)} tests passed")
     sys.exit(0 if n_pass == len(RESULTS) else 1)
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--list", action="store_true", help="list function-level test targets")
+    mode.add_argument("--unit", nargs="?", const="all", choices=["all", *UNIT_TESTS],
+                      metavar="TARGET", help="test one function, or all functions if omitted")
+    parser.add_argument("-v", action="store_true", help="show tracebacks for failures")
+    args = parser.parse_args()
+    if args.list:
+        print("\n".join(UNIT_TESTS))
+        return
+    if args.unit is not None:
+        RESULTS.clear()
+        print("UNIT checks use test fixtures for unfinished dependencies.")
+        print("Run without --unit to check the complete implementation together.")
+        names = UNIT_TESTS if args.unit == "all" else [args.unit]
+        for name in names:
+            check("UNIT", name, UNIT_TESTS[name])
+        n = sum(RESULTS)
+        print(f"\n{n}/{len(RESULTS)} function checks passed")
+        sys.exit(0 if n == len(RESULTS) else 1)
+    run_integration()
+
+
+if __name__ == "__main__":
+    main()

@@ -114,13 +114,15 @@
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
+<p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
+
 <p>Download the nine files into <code>microdb-lab5/</code>. Five provide the lower database layers, and the REPL is complete. All required changes belong in <code>sql_frontend.py</code>. Implement the methods in this order:</p>
 
 <ol>
   <li>Read <code>parse_insert</code> and <code>parse_create</code> alongside the grammar in the module docstring (about 8 min). Identify how each method handles required tokens, repeated items, and errors.</li>
   <li><strong><code>parse_query</code></strong>: field list (star or <code>{ , }</code>),
-  FROM, table list, optional WHERE. Run the first three PARSE tests.</li>
-  <li><code>_parse_predicate</code> and <code>_parse_term</code>: parse AND-separated terms, and distinguish literal values from field references represented by <code>F</code>. Run the remaining PARSE tests, including the error cases.</li>
+  FROM, table list, optional WHERE. Run <code>--unit Parser.parse_query</code>; its fixture supplies the unfinished predicate parser.</li>
+  <li><code>_parse_predicate</code> and <code>_parse_term</code>: parse AND-separated terms, and distinguish literal values from field references represented by <code>F</code>. Test each with <code>--unit Parser._parse_predicate</code> and <code>--unit Parser._parse_term</code>, then run the PARSE integration tests.</li>
   <li><code>plan_query</code>: construct table scans, combine them with products, add selection when needed, and add projection unless the query requests <code>*</code>. Run the PLAN and SQL tests, then start the REPL with <code>python3 microdb.py</code>.</li>
 </ol>
 
@@ -131,6 +133,15 @@
 
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<h3 id="function-tests">Test one function at a time</h3>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_sql.py --list</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_sql.py --unit Parser._parse_term</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_sql.py --unit</span></code></pre>
+<p>Unit results are practice feedback. Run <code>python3 test_sql.py</code> without flags to check that your functions work together. The integration tests below determine your grade.</p>
+
+<h3>Run the full tests</h3>
 
 <p>The twelve tests cover parsing, plan structure, and query execution. PARSE checks <span class="gloss" data-gloss="ast">query descriptions</span>, field references represented by <code>F</code>, and invalid SQL that must raise <code>ParseError</code>. PLAN checks that the planner adds only the required operators: <code>SELECT * FROM t</code> needs just a <code>TableScan</code>. SQL runs complete queries, including the Lab 4 join, and checks that <code>execute()</code> releases its buffer pins.</p>
 

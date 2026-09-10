@@ -110,7 +110,7 @@
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="sel" data-step-name="SelectScan.next" data-explain="Advance the underlying scan until a row satisfies the predicate; False when it runs out. Rejected rows are skipped in place, never copied, never seen above.">SelectScan.next:      while scan.next(): if pred.is_satisfied(scan): return True</div>
   <div class="code-step" data-step="prj" data-step-name="ProjectScan column check" data-explain="get_val returns values only for projected fields and raises ValueError for other names. has_field reports whether the field belongs to the projection.">ProjectScan.get_val:  raise ValueError unless fld in self.fields</div>
-  <div class="code-step" data-step="pb" data-step-name="ProductScan.before_first" data-explain="Rewind both children, then advance the left child once. Keep the right child before its first row. Track whether the left input is empty.">ProductScan.before_first:  left rewind + next · right rewind</div>
+  <div class="code-step" data-step="pb" data-step-name="ProductScan.before_first" data-explain="Rewind both children, then advance the left child once and store its result in self._left_ready. Keep the right child before its first row. next() uses this shared state to detect an empty or exhausted left input.">ProductScan.before_first:  left rewind + next · right rewind</div>
   <div class="code-step" data-step="pn" data-step-name="ProductScan.next" data-explain="Advance the right child. When it is exhausted, rewind it and advance the left child. Stop when no valid pair remains, including when either input is empty.">ProductScan.next:     right.next() or (right rewind · left.next() and right.next())</div>
   <div class="code-step" data-step="pg" data-step-name="ProductScan routing" data-explain="Use has_field to find which input supplies the field, checking the left input first. ProductScan.has_field returns True if either input contains the field.">ProductScan.get_val:  ask the side whose has_field says yes</div>
   <div class="code-explain-panel">Hover a line: if you can explain each one aloud, you are ready to implement the operators.</div>
@@ -124,6 +124,8 @@ predicate <em>is</em> the join.</p>
 
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
+
+<p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
 <p>Download the seven starter files into <code>microdb-lab4/</code>. Four files provide reference implementations of the lower layers. Read the two new methods at the bottom of the reference <code>TableScan</code>, then implement the operators in test order:</p>
 
@@ -139,11 +141,20 @@ predicate <em>is</em> the join.</p>
 
 <div class="callout note">
   <span class="label">Common implementation mistakes</span>
-  <p>In <code>ProductScan.before_first</code>, rewind both children and call <code>next()</code> once on the left child. Record whether that call found a row. During iteration, advance the right child through its rows; when it is exhausted, rewind it and advance the left child. Return no pairs if either input is empty. Finally, <code>close()</code> must close both children so their buffer pins are released.</p>
+  <p>In <code>ProductScan.before_first</code>, rewind both children and store the result of <code>left.next()</code> in <code>self._left_ready</code>. The unit tests use this shared state to test <code>before_first</code> and <code>next</code> independently. During iteration, advance the right child; when it is exhausted, rewind it and advance the left child, updating <code>self._left_ready</code>. Keep it false once either input is exhausted and no pair remains. Finally, <code>close()</code> must close both children so their buffer pins are released.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
+
+<h3 id="function-tests">Test one function at a time</h3>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_scans.py --list</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_scans.py --unit ProductScan.before_first</span>
+<span class="t-prompt">$</span> <span class="t-cmd">python3 test_scans.py --unit</span></code></pre>
+<p>Unit results are practice feedback. Run <code>python3 test_scans.py</code> without flags to check that your functions work together. The integration tests below determine your grade.</p>
+
+<h3>Run the full tests</h3>
 
 <p>The eleven tests are grouped by operator. The join test runs <code>Project(name, dept) ← Select(mid = mid2 AND gpa &gt; 35) ← Product(students, majors)</code> and expects exactly <code>(ada, cs), (cyd, cs), (eli, stat)</code>. A separate test checks that no frame remains pinned after the join is closed.</p>
 

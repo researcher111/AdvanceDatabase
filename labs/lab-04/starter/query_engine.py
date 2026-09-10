@@ -134,20 +134,22 @@ class ProductScan:
     def __init__(self, left, right):
         self.left = left
         self.right = right
+        self._left_ready = False  # shared cursor state for before_first() and next()
 
     # ---------------- YOUR JOB starts here. ----------------
 
     def before_first(self) -> None:
         """Position for the first pair: left on its FIRST row (rewind,
-        then one next()), right before its first. Remember whether left.next()
-        succeeded so an empty left input produces no pairs."""
+        then one next()), right before its first. Store the result of left.next()
+        in self._left_ready so next() knows whether a left row exists."""
         # TODO
         raise NotImplementedError
 
     def next(self) -> bool:
         """Advance right; when right runs out, rewind it and advance
-        left. Return False if either input is empty, and remain exhausted
-        until before_first() is called."""
+        left. Use self._left_ready to track whether a left row exists. Return
+        False if either input is empty, and set self._left_ready to False
+        when exhausted until before_first() is called."""
         # TODO: handle empty inputs as well as the normal rollover.
         raise NotImplementedError
 

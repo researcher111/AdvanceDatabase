@@ -2,16 +2,20 @@
 
 Parses your assignment.sql (one query under each "-- Qn:" marker), runs
 each against DuckDB, and diffs the result against the reference answer
-computed live from the same data. Ordered questions (2, 4, 5, 6, 8) compare
+computed live from the same data. Ordered questions (2, 3, 4, 5, 6, 8) compare
 exactly; unordered ones compare as sets.
 
 Run gen_data.py once first. Requires: pip install duckdb
+
+    python3 test_duckdb.py --list       # list query targets; no DuckDB needed
+    python3 test_duckdb.py --unit Q3    # test Q3 while other queries are blank
+    python3 test_duckdb.py --unit       # test every query
 """
 
+import argparse
 import re
 import sys
-
-import duckdb
+import traceback
 
 # Reference queries — the harness's own answers, computed at test time so
 # they can never drift from the data. (Yes, you could read these. The
@@ -37,6 +41,10 @@ REFERENCE = {
 }
 
 RESULTS = []
+VERBOSE = False
+QUERY_NAMES = {1: "totals", 2: "revenue by month", 3: "distance by payment",
+               4: "top-5 fares", 5: "card share", 6: "running revenue",
+               7: "partitioned Q4 totals", 8: "revenue by pickup borough (join)"}
 
 
 def check(name, fn):
@@ -47,12 +55,16 @@ def check(name, fn):
     except Exception as e:
         RESULTS.append(False)
         print(f"  [FAIL] SQL: {name} — {type(e).__name__}: {e}")
+        if VERBOSE:
+            traceback.print_exc()
 
 
 def parse_assignment(path="assignment.sql"):
     """{q_number: sql} for every non-empty stub."""
-    text = open(path).read()
-    chunks = re.split(r"^-- Q(\d+):", text, flags=re.M)
+    with open(path) as source:
+        text = source.read()
+    # Consume the full marker comment, including its question description.
+    chunks = re.split(r"^-- Q(\d+):[^\n]*", text, flags=re.M)
     out = {}
     for i in range(1, len(chunks), 2):
         n = int(chunks[i])
@@ -68,7 +80,25 @@ def run(con, sql):
     return con.execute(sql).fetchall()
 
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--list", action="store_true", help="list query targets and exit")
+    parser.add_argument("--unit", nargs="?", const="all", choices=["all"] +
+                        [f"Q{n}" for n in REFERENCE], metavar="TARGET",
+                        help="test one query, or all queries when no target is given")
+    parser.add_argument("-v", action="store_true", help="show failure tracebacks")
+    args = parser.parse_args(argv)
+    global VERBOSE
+    VERBOSE = args.v
+    if args.list:
+        for n, name in QUERY_NAMES.items():
+            print(f"Q{n} — {name}")
+        return 0
+    try:
+        import duckdb
+    except ImportError:
+        parser.exit(2, "DuckDB is required to run queries: python3 -m pip install duckdb\n")
+    RESULTS.clear()
     import os
     if not os.path.exists("data/rides.csv"):
         print("data/ missing — generating it first (gen_data.py)...")
@@ -79,7 +109,8 @@ def main():
     con.execute("CREATE TABLE zones AS SELECT * FROM 'data/zones.csv'")
 
     student = parse_assignment()
-    for n in sorted(REFERENCE):
+    selected = sorted(REFERENCE) if args.unit in (None, "all") else [int(args.unit[1:])]
+    for n in selected:
         ref_sql, ordered = REFERENCE[n]
 
         def one(n=n, ref_sql=ref_sql, ordered=ordered):
@@ -96,15 +127,13 @@ def main():
                     f"result differs: yours starts {got[:2]}, expected starts {want[:2]} "
                     f"({len(got)} vs {len(want)} rows)")
 
-        check(f"Q{n} " + {1: "totals", 2: "revenue by month", 3: "distance by payment",
-                          4: "top-5 fares", 5: "card share", 6: "running revenue",
-                          7: "partitioned Q4 totals",
-                          8: "revenue by pickup borough (join)"}[n], one)
+        check(f"Q{n} " + QUERY_NAMES[n], one)
 
+    con.close()
     n_pass = sum(RESULTS)
     print(f"\n{n_pass}/{len(RESULTS)} tests passed")
-    sys.exit(0 if n_pass == len(RESULTS) else 1)
+    return 0 if n_pass == len(RESULTS) else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
