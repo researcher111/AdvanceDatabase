@@ -174,7 +174,57 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
   </li>
   <li><strong><code>_field_pos</code>, then the four get/set methods</strong>: calculate each field’s byte position and use the page’s read or write method. Reject strings whose UTF-8 byte length exceeds the field’s capacity. Call <code>set_modified()</code> after each write. Test each method with its own target, such as <code>--unit RecordPage._field_pos</code> or <code>--unit RecordPage.set_string</code>.</li>
   <li><strong><code>insert_after</code>, <code>next_after</code>, and <code>delete</code></strong>: search for an EMPTY or USED slot as required, and update the status flag when inserting or deleting. Run <code>--unit RecordPage.insert_after</code>, <code>--unit RecordPage.next_after</code>, and <code>--unit RecordPage.delete</code> as you finish them.</li>
-  <li><strong><code>TableScan.next()</code>, then <code>insert()</code></strong>: implement the loops using the provided block-navigation helpers. Test them separately with <code>--unit TableScan.next</code> and <code>--unit TableScan.insert</code>. Then run <code>python3 test_records.py</code> to check all twelve integration tests, including the provided catalog.</li>
+  <li><strong><code>TableScan.next()</code>, then <code>insert()</code></strong>: these methods use the provided helpers to move between blocks. Each table below explains the code line by line, counting <code>def</code> as line 1.
+    <p><strong><code>next()</code>: find the next existing row.</strong></p>
+<pre class="language-python"><code>def next(self) -&gt; bool:
+    self.current_slot = self.rp.next_after(self.current_slot)
+    while self.current_slot &lt; 0:
+        if self._at_last_block():
+            return False
+        self._move_to_block(self.rp.block.blknum + 1)
+        self.current_slot = self.rp.next_after(-1)
+    return True</code></pre>
+    <table>
+      <thead><tr><th>Line</th><th>Explanation</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Define a method that returns whether it found another row.</td></tr>
+        <tr><td>2</td><td>Ask the current record page for the next USED slot after the current position. Save the returned slot number, or <code>-1</code> if none remains on this page.</td></tr>
+        <tr><td>3</td><td>While no row has been found, keep looking in later blocks. The loop can skip several empty blocks.</td></tr>
+        <tr><td>4</td><td>Check whether the current block is the last block in the table file.</td></tr>
+        <tr><td>5</td><td>No row remains on this page and there are no later blocks, so return <code>False</code> to end the scan.</td></tr>
+        <tr><td>6</td><td>Move to the next block. The helper closes the old record page to unpin it, opens the new page, and resets the current slot to <code>-1</code>.</td></tr>
+        <tr><td>7</td><td>Search the new page from before slot 0. Passing <code>-1</code> lets <code>next_after</code> include slot 0 in its search.</td></tr>
+        <tr><td>8</td><td>The loop ends when the current slot identifies a USED row. Return <code>True</code>; the caller can now read that row’s fields.</td></tr>
+      </tbody>
+    </table>
+    <p>Test this method with <code>python3 test_records.py --unit TableScan.next</code>.</p>
+    <p><strong><code>insert()</code>: reserve a slot for a new row.</strong></p>
+<pre class="language-python"><code>def insert(self) -&gt; None:
+    slot = self.rp.insert_after(self.current_slot)
+    while slot &lt; 0:
+        if self._at_last_block():
+            self._append_new_block()
+        else:
+            self._move_to_block(self.rp.block.blknum + 1)
+        slot = self.rp.insert_after(-1)
+    self.current_slot = slot</code></pre>
+    <table>
+      <thead><tr><th>Line</th><th>Explanation</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Define a method that positions the scan on a new row and returns no value.</td></tr>
+        <tr><td>2</td><td>Ask the current page to find an EMPTY slot after the current position and mark it USED. Save its slot number, or <code>-1</code> if none remains.</td></tr>
+        <tr><td>3</td><td>If no slot was reserved, continue searching forward through the file.</td></tr>
+        <tr><td>4</td><td>Check whether there is another existing block to search.</td></tr>
+        <tr><td>5</td><td>At the last block, append a zeroed block. This helper also moves the scan to it; all its slots start EMPTY.</td></tr>
+        <tr><td>6</td><td>Otherwise, the file already has another block.</td></tr>
+        <tr><td>7</td><td>Move to that existing block, unpinning the old page before opening the next one.</td></tr>
+        <tr><td>8</td><td>Try to reserve a slot on the new page, starting before slot 0. If none is available, the loop repeats.</td></tr>
+        <tr><td>9</td><td>Store the reserved slot as the current position. The caller can now use <code>set_int()</code> and <code>set_string()</code> to fill the new row.</td></tr>
+      </tbody>
+    </table>
+    <p><code>insert()</code> searches forward from the current position. Call <code>before_first()</code> first if you want it to consider empty slots earlier in the file.</p>
+    <p>Test this method with <code>python3 test_records.py --unit TableScan.insert</code>. Once all required methods are complete, run <code>python3 test_records.py</code> to check all twelve integration tests, including the provided catalog.</p>
+  </li>
 </ol>
 
 <div class="callout note">
