@@ -239,6 +239,20 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
         <tr><td>8</td><td>The loop ends when the current slot identifies a USED row. Return <code>True</code>; the caller can now read that row’s fields.</td></tr>
       </tbody>
     </table>
+    <div class="callout note">
+      <span class="label">Question · reading the search result</span>
+      <p><strong>Why does <code>next_after()</code> return <code>-1</code> while we are in block 0?</strong></p>
+      <p><code>next_after()</code> searches for the next USED slot within the current block, starting <strong>after</strong> <code>self.current_slot</code>.</p>
+      <p>In the walkthrough’s “Cross an empty block” example, block 0 contains:</p>
+      <div style="overflow-x: auto;" tabindex="0" role="region" aria-label="Slot statuses in block 0">
+        <table>
+          <thead><tr><th scope="col">Slot</th><th scope="col">0</th><th scope="col">1</th><th scope="col">2</th><th scope="col">3</th><th scope="col">4</th></tr></thead>
+          <tbody><tr><th scope="row">Status</th><td>USED</td><td>USED</td><td>EMPTY</td><td>EMPTY</td><td>EMPTY</td></tr></tbody>
+        </table>
+      </div>
+      <p>The current slot is <strong>1</strong>, so the search checks slots <strong>2, 3, and 4</strong>. None is USED, so it returns <code>-1</code>, meaning <strong>“no later row in this block.”</strong></p>
+      <p><code>TableScan.next()</code> then moves to block 1 and calls <code>next_after(-1)</code> to search that block starting at slot 0. As an argument, <code>-1</code> starts the search before slot 0; as a return value, it means no matching slot was found.</p>
+    </div>
     <p>Test this method with <code>python3 test_records.py --unit TableScan.next</code>.</p>
     <p><strong><code>insert()</code>: reserve a slot for a new row.</strong></p>
 <pre class="language-python" id="table-insert-code"><code>def insert(self) -&gt; None:
