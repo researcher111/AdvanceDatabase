@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
 
@@ -175,8 +175,50 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
   <li><strong><code>_field_pos</code>, then the four get/set methods</strong>: calculate each field’s byte position and use the page’s read or write method. Reject strings whose UTF-8 byte length exceeds the field’s capacity. Call <code>set_modified()</code> after each write. Test each method with its own target, such as <code>--unit RecordPage._field_pos</code> or <code>--unit RecordPage.set_string</code>.</li>
   <li><strong><code>insert_after</code>, <code>next_after</code>, and <code>delete</code></strong>: search for an EMPTY or USED slot as required, and update the status flag when inserting or deleting. Run <code>--unit RecordPage.insert_after</code>, <code>--unit RecordPage.next_after</code>, and <code>--unit RecordPage.delete</code> as you finish them.</li>
   <li><strong><code>TableScan.next()</code>, then <code>insert()</code></strong>: these methods use the provided helpers to move between blocks. Each table below explains the code line by line, counting <code>def</code> as line 1.
+    <div class="viz ts-walkthrough" id="viz-table-methods" role="region" aria-labelledby="ts-title">
+      <div class="viz-title" id="ts-title">Inside next() and insert() · follow one call</div>
+      <p class="viz-description">Choose a method and example, then step through its Python lines. Watch the search, cursor, and pin move. Each block has five slots. A search starting at <code>-1</code> includes slot 0.</p>
+      <div class="ts-methods" role="group" aria-label="Method to explore">
+        <button type="button" class="btn primary" id="ts-next-mode" aria-pressed="true">next() · find a row</button>
+        <button type="button" class="btn" id="ts-insert-mode" aria-pressed="false">insert() · reserve a slot</button>
+      </div>
+      <div class="ts-example">
+        <label for="ts-scenario">Example</label>
+        <select id="ts-scenario" aria-describedby="ts-description"></select>
+      </div>
+      <p class="ts-description" id="ts-description"></p>
+      <div class="ts-controls" role="group" aria-label="Walkthrough controls">
+        <button type="button" class="btn primary" id="ts-step">Step line →</button>
+        <button type="button" class="btn" id="ts-back" disabled>← Back</button>
+        <button type="button" class="btn" id="ts-restart">Restart</button>
+        <button type="button" class="btn" id="ts-finish">Show result</button>
+        <span class="ts-progress" id="ts-progress"></span>
+      </div>
+      <div class="ts-blocks" id="ts-blocks" role="group" aria-label="Table blocks and slots"></div>
+      <div class="ts-legend" aria-label="Diagram legend">
+        <span><span class="ts-key ts-key-used" aria-hidden="true"></span>USED row</span>
+        <span><span class="ts-key ts-key-empty" aria-hidden="true"></span>EMPTY slot</span>
+        <span><span class="ts-key ts-key-checked" aria-hidden="true"></span>Searched this line</span>
+        <span><span class="ts-key ts-key-found" aria-hidden="true"></span>Found a match</span>
+        <span><span class="ts-key ts-key-reserved" aria-hidden="true"></span>Newly reserved</span>
+        <span>▶ current_slot</span>
+      </div>
+      <dl class="ts-values" aria-label="Current variables">
+        <div><dt>block</dt><dd id="ts-block-value">0</dd></div>
+        <div><dt>current_slot</dt><dd id="ts-current-value">−1</dd></div>
+        <div><dt id="ts-local-label">helper result</dt><dd id="ts-local-value">—</dd></div>
+        <div><dt>return value</dt><dd id="ts-return-value">not returned</dd></div>
+      </dl>
+      <p class="ts-message" id="ts-message" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div class="ts-code-heading"><strong id="ts-code-title">TableScan.next()</strong><span id="ts-code-caption">Method entry · ready to step</span></div>
+      <div class="ts-code-scroll" tabindex="0" role="region" aria-label="Python code; scroll horizontally on small screens">
+        <ol class="ts-code-lines" id="ts-code" aria-label="Method source code"></ol>
+      </div>
+      <p class="ts-footnote">A search helper runs as one step; outlined slots show what it checked. Moving blocks unpins the old page before pinning the new one. The final page stays pinned until <code>close()</code>.</p>
+      <noscript><p>Enable JavaScript to use the walkthrough. Both methods and their line-by-line explanations follow below.</p></noscript>
+    </div>
     <p><strong><code>next()</code>: find the next existing row.</strong></p>
-<pre class="language-python"><code>def next(self) -&gt; bool:
+<pre class="language-python" id="table-next-code"><code>def next(self) -&gt; bool:
     self.current_slot = self.rp.next_after(self.current_slot)
     while self.current_slot &lt; 0:
         if self._at_last_block():
@@ -199,7 +241,7 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
     </table>
     <p>Test this method with <code>python3 test_records.py --unit TableScan.next</code>.</p>
     <p><strong><code>insert()</code>: reserve a slot for a new row.</strong></p>
-<pre class="language-python"><code>def insert(self) -&gt; None:
+<pre class="language-python" id="table-insert-code"><code>def insert(self) -&gt; None:
     slot = self.rp.insert_after(self.current_slot)
     while slot &lt; 0:
         if self._at_last_block():
@@ -377,5 +419,7 @@ full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=3"></script>
+<script src="scan-walkthrough-model.js?v=1"></script>
+<script src="scan-walkthrough.js?v=1"></script>
 </body>
 </html>
