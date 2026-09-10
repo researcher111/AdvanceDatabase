@@ -81,9 +81,9 @@
     <a class="chat-dl-btn" href="starter/test_records.py" download>test_records.py</a>
     <a class="chat-dl-btn" href="starter/measure_layout.py" download>measure_layout.py</a>
   </div>
-  <p class="viz-caption clone-label">Or clone the course repository:</p>
-<pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
-<span class="cl-line">cd AdvanceDatabase/labs/lab-03/starter</span></pre>
+  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files, then open this lab’s starter folder:</p>
+<pre class="clone-cmd"><span class="cl-line">git pull</span>
+<span class="cl-line">cd labs/lab-03/starter</span></pre>
   <p class="viz-caption">Delete a row, then call <code>before_first()</code> and insert a row to reuse the empty slot. Insertion searches forward from the current slot, so it can miss an earlier empty slot. Continue inserting to see the file grow. The tests check slot reuse, file growth, and scan behavior.</p>
 </div>
 
@@ -112,24 +112,65 @@
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
-<p>Download all six starter files into <code>microdb-lab3/</code>, or work in <code>labs/lab-03/starter/</code> if you cloned the repository. Run the commands below from that directory. The file and buffer managers are reference implementations from Labs 1–2, and <code>catalog.py</code> is complete. Implement the marked methods in <code>record_manager.py</code> in this order:</p>
+<p>Work in <code>labs/lab-03/starter/</code> after pulling the latest files, or download all six starter files into <code>microdb-lab3/</code>. Run the commands below from that directory. The file and buffer managers are reference implementations from Labs 1–2, and <code>catalog.py</code> is complete. Implement the marked methods in <code>record_manager.py</code> in this order:</p>
 
 <ol>
   <li><strong>Read the slot layout</strong> at the top of <code>record_manager.py</code> (3 min). It defines the required format and includes a worked example.</li>
   <li><strong><code>Layout.__init__</code></strong>: calculate each field’s offset and the slot size. Run <code>python3 test_records.py --unit Layout.__init__</code>. For the students schema, the expected offsets are 4, 8, and 20 bytes; the slot size is 24 bytes.
-    <p><strong>Pseudocode</strong> (byte offsets measured from the start of a slot):</p>
-<pre class="language-none"><code>offsets ← empty map
-next_offset ← 4                         // reserve the status flag
+    <p><strong>Pseudocode</strong> for <code>Layout.__init__</code>. Translate these steps into Python using the explanations below. The starter already handles lines 1–2; implement the remaining steps in the marked section.</p>
+<pre class="language-none"><code> 1  keep the supplied schema
+ 2  prepare an empty field-offset map
+ 3  position ← size of the slot's status flag
+ 4  for each field in schema order:
+ 5      record position as this field's offset
+ 6      if the field is an integer:
+ 7          advance position by the integer size
+ 8      otherwise:
+ 9          advance position by the length-prefix size + field capacity
+10  store the final position as the slot size</code></pre>
+    <table>
+      <thead><tr><th>Line</th><th>Explanation</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Keep the schema so the layout can look up field names, types, and capacities later.</td></tr>
+        <tr><td>2</td><td>The map will associate each field name with its starting byte offset within a slot.</td></tr>
+        <tr><td>3</td><td>Start at byte 4. Bytes 0–3 hold the in-use flag. The position tracks the next free byte within the slot.</td></tr>
+        <tr><td>4</td><td>Visit fields in the order the schema defines them so their byte positions stay consistent.</td></tr>
+        <tr><td>5</td><td>Save the current position before advancing it; this is where the field begins.</td></tr>
+        <tr><td>6</td><td>Use the field’s declared type to choose how much space to reserve.</td></tr>
+        <tr><td>7</td><td>An integer occupies 4 bytes, so move the position forward by 4.</td></tr>
+        <tr><td>8</td><td>The other supported type is a variable-length string.</td></tr>
+        <tr><td>9</td><td>Reserve 4 bytes for the string’s length prefix plus its full UTF-8 byte capacity. A <code>varchar(8)</code> always needs 12 bytes, even for a shorter value.</td></tr>
+        <tr><td>10</td><td>After the loop, the position is the total slot size: the status flag plus all reserved field bytes. Replace the starter’s zero placeholder with this value.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Example output</strong>. After implementing the constructor, run <code>python3</code> in the starter folder and try this session. Lines without <code>&gt;&gt;&gt;</code> or <code>...</code> are the expected output:</p>
+<pre class="terminal"><code>&gt;&gt;&gt; from record_manager import Layout, Schema
+&gt;&gt;&gt; schema = (Schema().add_int_field("id")
+...           .add_string_field("name", 8)
+...           .add_int_field("gpa"))
+&gt;&gt;&gt; layout = Layout(schema)
+&gt;&gt;&gt; {name: layout.offset(name) for name in schema.fields()}
+{'id': 4, 'name': 8, 'gpa': 20}
+&gt;&gt;&gt; layout.slot_size
+24</code></pre>
+    <p>The position starts at 4, then advances to 8 after <code>id</code>, 20 after <code>name</code>, and 24 after <code>gpa</code>. Save each field’s offset <em>before</em> advancing the position.</p>
+    <p><strong>More expected results</strong>. The same function-level test checks these cases. All offsets and sizes are in bytes:</p>
+    <table>
+      <thead><tr><th>Fields in schema order</th><th>Expected offsets</th><th>Slot size</th></tr></thead>
+      <tbody>
+        <tr><td>No fields</td><td><code>{}</code></td><td>4</td></tr>
+        <tr><td><code>only int</code></td><td><code>{'only': 4}</code></td><td>8</td></tr>
+        <tr><td><code>tag varchar(3), count int, empty varchar(0)</code></td><td><code>{'tag': 4, 'count': 11, 'empty': 15}</code></td><td>19</td></tr>
+      </tbody>
+    </table>
+    <p>An empty schema still needs the 4-byte status flag. A <code>varchar(0)</code> still needs its 4-byte length prefix. Fields have no alignment padding, so an integer can begin at byte 11.</p>
+    <p>Exit Python with <code>exit()</code>, then run the function-level test. A correct constructor produces:</p>
+<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_records.py --unit Layout.__init__</span>
+Unit checks: fixtures supply unfinished dependencies; integration tests are not run.
+  <span class="t-pass">[PASS]</span> UNIT: Layout.__init__
 
-for each field in schema order:
-    offsets[field] ← next_offset         // save where this field begins
-    if the field is an integer:
-        next_offset ← next_offset + 4
-    otherwise, for varchar(n):
-        next_offset ← next_offset + 4 + n  // length prefix + byte capacity
-
-slot_size ← next_offset                 // flag + all reserved field bytes</code></pre>
-    <p>Use <code>self._offsets</code> for the map and <code>self.slot_size</code> for the final size. Here, <code>n = schema.length_of(field)</code> is the reserved UTF-8 byte capacity. A <code>varchar(8)</code> field always reserves <code>4 + 8 = 12</code> bytes, even for a shorter value.</p>
+<span class="t-pass">1/1 unit checks passed (not the grading score)</span></code></pre>
+    <p>The single PASS line covers all four schemas above. You can run this check while the other methods are unfinished.</p>
   </li>
   <li><strong><code>_field_pos</code>, then the four get/set methods</strong>: calculate each field’s byte position and use the page’s read or write method. Reject strings whose UTF-8 byte length exceeds the field’s capacity. Call <code>set_modified()</code> after each write. Test each method with its own target, such as <code>--unit RecordPage._field_pos</code> or <code>--unit RecordPage.set_string</code>.</li>
   <li><strong><code>insert_after</code>, <code>next_after</code>, and <code>delete</code></strong>: search for an EMPTY or USED slot as required, and update the status flag when inserting or deleting. Run <code>--unit RecordPage.insert_after</code>, <code>--unit RecordPage.next_after</code>, and <code>--unit RecordPage.delete</code> as you finish them.</li>
