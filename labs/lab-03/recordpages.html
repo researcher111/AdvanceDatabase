@@ -116,7 +116,21 @@
 
 <ol>
   <li><strong>Read the slot layout</strong> at the top of <code>record_manager.py</code> (3 min). It defines the required format and includes a worked example.</li>
-  <li><strong><code>Layout.__init__</code></strong>: calculate each field’s offset and the slot size. Run <code>python3 test_records.py --unit Layout.__init__</code>. For the students schema, the expected offsets are 4, 8, and 20 bytes; the slot size is 24 bytes.</li>
+  <li><strong><code>Layout.__init__</code></strong>: calculate each field’s offset and the slot size. Run <code>python3 test_records.py --unit Layout.__init__</code>. For the students schema, the expected offsets are 4, 8, and 20 bytes; the slot size is 24 bytes.
+    <p><strong>Pseudocode</strong> (byte offsets measured from the start of a slot):</p>
+<pre class="language-none"><code>offsets ← empty map
+next_offset ← 4                         // reserve the status flag
+
+for each field in schema order:
+    offsets[field] ← next_offset         // save where this field begins
+    if the field is an integer:
+        next_offset ← next_offset + 4
+    otherwise, for varchar(n):
+        next_offset ← next_offset + 4 + n  // length prefix + byte capacity
+
+slot_size ← next_offset                 // flag + all reserved field bytes</code></pre>
+    <p>Use <code>self._offsets</code> for the map and <code>self.slot_size</code> for the final size. Here, <code>n = schema.length_of(field)</code> is the reserved UTF-8 byte capacity. A <code>varchar(8)</code> field always reserves <code>4 + 8 = 12</code> bytes, even for a shorter value.</p>
+  </li>
   <li><strong><code>_field_pos</code>, then the four get/set methods</strong>: calculate each field’s byte position and use the page’s read or write method. Reject strings whose UTF-8 byte length exceeds the field’s capacity. Call <code>set_modified()</code> after each write. Test each method with its own target, such as <code>--unit RecordPage._field_pos</code> or <code>--unit RecordPage.set_string</code>.</li>
   <li><strong><code>insert_after</code>, <code>next_after</code>, and <code>delete</code></strong>: search for an EMPTY or USED slot as required, and update the status flag when inserting or deleting. Run <code>--unit RecordPage.insert_after</code>, <code>--unit RecordPage.next_after</code>, and <code>--unit RecordPage.delete</code> as you finish them.</li>
   <li><strong><code>TableScan.next()</code>, then <code>insert()</code></strong>: implement the loops using the provided block-navigation helpers. Test them separately with <code>--unit TableScan.next</code> and <code>--unit TableScan.insert</code>. Then run <code>python3 test_records.py</code> to check all twelve integration tests, including the provided catalog.</li>
