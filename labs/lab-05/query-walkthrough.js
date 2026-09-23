@@ -7,7 +7,8 @@
   const $ = id => root.querySelector('#qw-' + id);
   const stageButtons = [...root.querySelectorAll('[data-qw-stage]')];
   const stageNames = { lex: 'Lexing', parse: 'Parsing', plan: 'Planning' };
-  let trace, index = 0, timer = null, playing = false, dirty = false, codeMethod = null, dataStage = null, previousOverflow = '';
+  let trace, index = 0, timer = null, playing = false, dirty = false, codeMethod = null, dataStage = null;
+  const inFullscreen = () => document.fullscreenElement === root;
   const make = (tag, text, cls) => {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
@@ -140,7 +141,7 @@
     $('restart').disabled = dirty; $('scrub').disabled = dirty;
     $('workspace').hidden = dirty;
     displayCode(frame); displayTokens(frame); displayData(frame); displayPlan(frame);
-    if (root.classList.contains('is-expanded') && frame.stage === 'plan') {
+    if (inFullscreen() && frame.stage === 'plan') {
       keepVisible(root.querySelector('.qw-visual-panel'), $('plan').querySelector('.is-active'));
     }
     root.dataset.stage = frame.stage; root.dataset.step = index;
@@ -183,22 +184,36 @@
   });
   $('speed').addEventListener('change', () => { if (playing) { clearTimeout(timer); schedule(); } });
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
-  function expand(on) {
-    root.classList.toggle('is-expanded', on); $('expand').setAttribute('aria-expanded', String(on));
-    $('expand').textContent = on ? 'Close expanded view' : 'Expand diagram';
+  function fullscreenChanged() {
+    const on = inFullscreen();
+    $('fullscreen').setAttribute('aria-pressed', String(on));
+    $('fullscreen').textContent = on ? 'Exit full screen' : 'Full screen';
+    $('fullscreen').title = on ? 'Exit fullscreen (Esc)' : 'Open the walkthrough in fullscreen';
     if (on) {
-      previousOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; root.scrollTop = 0;
+      root.scrollTop = 0;
       root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'SQL query walkthrough');
     } else {
-      document.body.style.overflow = previousOverflow;
-      root.removeAttribute('role'); root.removeAttribute('aria-modal'); root.removeAttribute('aria-label'); $('expand').focus();
+      root.removeAttribute('role'); root.removeAttribute('aria-modal'); root.removeAttribute('aria-label'); $('fullscreen').focus();
     }
     render();
   }
-  $('expand').addEventListener('click', () => expand(!root.classList.contains('is-expanded')));
+  async function toggleFullscreen() {
+    $('view-status').hidden = true;
+    try {
+      if (inFullscreen()) await document.exitFullscreen();
+      else await root.requestFullscreen();
+    } catch (_) {
+      $('view-status').textContent = 'The browser could not change fullscreen mode. The walkthrough is still available on this page.';
+      $('view-status').hidden = false;
+    }
+  }
+  $('fullscreen').disabled = !root.requestFullscreen || document.fullscreenEnabled === false;
+  if ($('fullscreen').disabled) $('fullscreen').title = 'Fullscreen is unavailable in this browser.';
+  $('fullscreen').addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', fullscreenChanged);
   root.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && root.classList.contains('is-expanded')) { event.stopPropagation(); expand(false); return; }
-    if (event.key === 'Tab' && root.classList.contains('is-expanded')) {
+    if (event.key === 'Escape' && inFullscreen()) { event.stopPropagation(); toggleFullscreen(); return; }
+    if (event.key === 'Tab' && inFullscreen()) {
       const focusable = [...root.querySelectorAll('button:not(:disabled), a, input:not(:disabled), textarea, select, summary')]
         .filter(node => node.getClientRects().length);
       const first = focusable[0], last = focusable.at(-1);

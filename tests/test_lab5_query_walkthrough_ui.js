@@ -50,10 +50,12 @@ const { chromium } = require('playwright');
     assert(!(await page.locator('#qw-next').isDisabled()));
     await page.locator('[data-qw-stage="parse"]').click();
     assert.equal(await root.getAttribute('data-stage'), 'parse');
-    await page.locator('#qw-expand').click();
-    assert.equal(await page.locator('#qw-expand').getAttribute('aria-expanded'), 'true');
+    await page.locator('#qw-fullscreen').click();
+    await page.waitForFunction(() => document.fullscreenElement?.id === 'viz-query-walkthrough');
+    assert.equal(await page.locator('#qw-fullscreen').getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('Escape');
-    assert.equal(await page.locator('#qw-expand').getAttribute('aria-expanded'), 'false');
+    await page.waitForFunction(() => !document.fullscreenElement);
+    assert.equal(await page.locator('#qw-fullscreen').getAttribute('aria-pressed'), 'false');
     assert.equal(await page.evaluate(() => document.body.style.overflow), '');
     // Join, SELECT *, strings, parser errors, planner errors.
     for (let i = 0; i < 6; i++) {
@@ -98,20 +100,23 @@ const { chromium } = require('playwright');
     await page.locator('#qw-finish').click();
     if (process.env.QUERY_REVIEW_DIR) await root.screenshot({ path: path.join(process.env.QUERY_REVIEW_DIR, 'lab5-query-plan.png') });
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.locator('#qw-expand').click();
-    const expanded = await page.evaluate(() => {
+    await page.locator('#qw-fullscreen').click();
+    await page.waitForFunction(() => document.fullscreenElement?.id === 'viz-query-walkthrough');
+    const fullscreen = await page.evaluate(() => {
       const query = document.querySelector('#qw-query').getBoundingClientRect();
       const code = document.querySelector('#qw-code .is-active').getBoundingClientRect();
       const plan = document.querySelector('#qw-plan .is-active').getBoundingClientRect();
       const leaf = [...document.querySelectorAll('.qw-plan-node')].at(-1).getBoundingClientRect();
       return [query, code, plan, leaf].every(rect => rect.top >= 0 && rect.bottom <= innerHeight);
     });
-    assert(expanded, 'Query, highlighted code, and the complete example plan fit in expanded view');
-    await page.locator('#qw-expand').focus();
+    assert(fullscreen, 'Query, highlighted code, and the complete example plan fit in fullscreen');
+    await page.locator('#qw-fullscreen').focus();
     await page.keyboard.press('Shift+Tab');
-    assert(await root.evaluate(root => root.contains(document.activeElement)), 'Expanded view retains keyboard focus');
-    if (process.env.QUERY_REVIEW_DIR) await page.screenshot({ path: path.join(process.env.QUERY_REVIEW_DIR, 'lab5-query-expanded.png') });
-    await page.keyboard.press('Escape');
+    assert(await root.evaluate(root => root.contains(document.activeElement)), 'Fullscreen retains keyboard focus');
+    if (process.env.QUERY_REVIEW_DIR) await page.screenshot({ path: path.join(process.env.QUERY_REVIEW_DIR, 'lab5-query-fullscreen.png') });
+    await page.locator('#qw-fullscreen').click();
+    await page.waitForFunction(() => !document.fullscreenElement);
+    assert.equal(await page.locator('#qw-fullscreen').textContent(), 'Full screen');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#qw-example').selectOption('0');
     await page.locator('[data-qw-stage="parse"]').click();

@@ -16,7 +16,7 @@ explains the simple plan; query execution remains in the existing terminal.
 - `query-walkthrough.js` owns rendering, playback, stage navigation, and editing.
   User-entered SQL is rendered with text nodes, never evaluated or inserted as HTML.
 - `query-walkthrough.css` keeps the visual and code beside each other on desktop
-  and stacks them on narrow screens. The expanded view keeps controls visible.
+  and stacks them on narrow screens. The native fullscreen view keeps controls visible. Exit with the button or Escape.
 
 Run these checks from the repository root:
 
