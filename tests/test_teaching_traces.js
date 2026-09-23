@@ -92,7 +92,8 @@ for (const base of ['lectures','labs']) {
     }
   }
 }
-assert.equal(pageCount,17);
+// Lab 5 now has its own query-driven explorer, tested in test_lab5_query_trace.js.
+assert.equal(pageCount,16);
 assert.equal(covered.size,Object.keys(examples).length);
 
 // Verify the projected scenes really use these states, and keep the sixty

@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="styles.css?v=1">
-<link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
+<link rel="stylesheet" href="query-walkthrough.css?v=1">
 </head>
 <body>
 
@@ -18,11 +18,11 @@
     <li><a href="#verify">Part 1 · Run the supplied engine</a></li>
     <li><a href="#terminal">Interactive SQL terminal</a></li>
     <li><a href="#big-idea">Part 2 · Walk through the implementation</a></li>
+    <li><a href="#worked-example">Interactive query walkthrough</a></li>
     <li><a href="#the-api">Grammar and token helpers</a></li>
     <li><a href="#parse-query">Parse SELECT</a></li>
     <li><a href="#parse-predicate">Parse predicates and field references</a></li>
     <li><a href="#plan-query">Build and execute the scan tree</a></li>
-    <li><a href="#worked-example">Trace a complete query</a></li>
     <li><a href="#build">Part 3 · Write queries and predict</a></li>
     <li><a href="#measure">Part 4 · Measure and explain</a></li>
     <li><a href="#assignment">Assignment</a></li>
@@ -154,6 +154,41 @@ SELECT label FROM readings WHERE value &gt; 20;</code></pre>
 <h2 id="big-idea">Part 2 · Walk through the implementation <span class="part-time">25 min</span></h2>
 <p class="keep-in-present">Open <a href="starter/sql_frontend.py"><code>sql_frontend.py</code></a> alongside this page. Everything below is supplied. Follow the token cursor, the data returned by each method, and the scan objects built from that data. No parser or planner code is required for this lab.</p>
 
+<h3 id="worked-example">Follow your query from text to a scan plan</h3>
+<p>Type a SELECT query, then trace each stage. Watch the characters become tokens, the parser collect a <code>QueryData</code> object, and the planner wrap scans around the tables. The highlighted Python lines correspond to the step shown on the right.</p>
+<div class="viz qw" id="viz-query-walkthrough">
+  <div class="qw-heading"><div class="viz-title">Inside the SQL front end</div><button type="button" class="btn" id="qw-expand" aria-expanded="false">Expand diagram</button></div>
+  <p class="viz-description">Use <code>students(sid, name, gpa, mid)</code> and <code>majors(mid2, dept)</code>. This walkthrough builds SELECT plans; use the terminal above to execute SQL.</p>
+  <form id="qw-form">
+    <label for="qw-query">Your SQL query</label>
+    <textarea id="qw-query" rows="2" maxlength="2000" spellcheck="false" autocomplete="off" aria-describedby="qw-query-help">SELECT name FROM students WHERE gpa &gt; 35</textarea>
+    <div class="qw-query-actions"><button type="submit" class="btn primary">Trace query</button><label for="qw-example">Try an example</label><select id="qw-example"><option value="custom">Custom query</option></select></div>
+  </form>
+  <p class="qw-hint" id="qw-query-help">Ctrl/⌘ + Enter traces your query. Supports *, comma-separated fields and tables, and WHERE comparisons joined by AND. Step back freely to compare states.</p>
+  <p id="qw-validation" class="qw-validation" role="status" hidden></p>
+  <nav class="qw-stages" aria-label="Query stages"><button type="button" class="btn" data-qw-stage="lex">1 · Lexing</button><button type="button" class="btn" data-qw-stage="parse">2 · Parsing</button><button type="button" class="btn" data-qw-stage="plan">3 · Planning</button></nav>
+  <div class="qw-controls"><button type="button" class="btn" id="qw-restart">Restart</button><button type="button" class="btn" id="qw-back">Back</button><button type="button" class="btn primary" id="qw-next">Step</button><button type="button" class="btn" id="qw-play" aria-pressed="false">Play</button><button type="button" class="btn" id="qw-finish">Jump to end</button><label for="qw-speed">Pace</label><select id="qw-speed"><option value="1800">Slow</option><option value="1000" selected>Normal</option><option value="450">Fast</option></select><span id="qw-progress"></span></div>
+  <label class="qw-scrub-label" for="qw-scrub">Trace position</label><input id="qw-scrub" type="range" min="0" max="1" value="0">
+  <div class="qw-message" aria-live="polite" aria-atomic="true"><strong id="qw-action"></strong><p id="qw-note"></p></div>
+  <div class="qw-workspace" id="qw-workspace">
+    <section class="qw-code-panel" aria-label="Highlighted Python source">
+      <div class="qw-panel-heading"><h4 id="qw-method"></h4><a href="starter/sql_frontend.py" target="_blank" rel="noopener">Full source</a></div>
+      <p class="qw-hint" id="qw-stack"></p>
+      <ol id="qw-code" class="qw-code" aria-label="Python code with current lines highlighted"></ol>
+      <p class="qw-hint">Line numbers refer to <code>sql_frontend.py</code>. Docstrings are omitted. State shows the effect of the highlighted line; each lexer-helper call is one step.</p>
+      <details class="qw-helper"><summary id="qw-helper-title">Token-recognition pattern</summary><pre id="qw-helper-code"></pre></details>
+    </section>
+    <section class="qw-visual-panel" aria-label="Query state">
+      <div id="qw-characters"><h4>Characters being recognized</h4><pre id="qw-sql-span"></pre></div>
+      <div id="qw-token-section"><h4 id="qw-token-title">Tokens produced so far</h4><p class="qw-hint" id="qw-cursor"></p><div id="qw-tokens" class="qw-tokens"></div></div>
+      <details id="qw-data-section" hidden open><summary id="qw-data-title">Query parts collected so far</summary><dl id="qw-data" class="qw-data"></dl><p id="qw-term" class="qw-current-term"></p></details>
+      <div id="qw-plan-section" hidden><h4 id="qw-plan-title">Scan plan under construction</h4><div id="qw-plan" class="qw-plan"></div><p class="qw-hint">Highlighted node = scan just created or selected as the root. Child scans provide input to their parent. Building this tree does not pull rows.</p></div>
+    </section>
+  </div>
+  <p class="viz-caption">The browser trace mirrors the supplied Python SELECT parser and simple planner. It uses the two schemas above, independently of the browser SQL prompt. Lexer internals are optional: choose <strong>2 · Parsing</strong> to start with tokens.</p>
+  <noscript><p>Enable JavaScript to edit and step through a query. For <code>SELECT name FROM students WHERE gpa &gt; 35</code>, the plan is ProjectScan[name] over SelectScan[gpa &gt; 35] over TableScan(students). The Python implementation follows below.</p></noscript>
+</div>
+
 <h3 id="the-api">The grammar tells each method what to consume</h3>
 <pre><code>query     := SELECT fieldlist FROM tablelist [ WHERE predicate ]
 fieldlist := * | field { , field }
@@ -271,13 +306,6 @@ ProjectScan[name]
         plan.close()</code></pre>
 <p><code>before_first()</code> initializes the scans; repeated <code>next()</code> calls on the root pull qualifying rows through the tree. <code>get_val()</code> reads each requested output field. The list stores the result in memory. <code>finally</code> releases the plan's buffer pins even if a query fails. Creating the plan alone does not enumerate the result.</p>
 
-<h3 id="worked-example">Trace the tokens, query description, and scan plan</h3>
-<div data-teaching-trace="sql-plan">
-  <p><strong>Worked result:</strong> <code>SELECT name FROM students WHERE gpa &gt; 35</code> becomes fields <code>[name]</code>, tables <code>[students]</code>, and predicate <code>gpa &gt; 35</code>. ProjectScan wraps SelectScan wraps TableScan. On the six toy rows, it yields ada, cyd, and eli.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p>Explain each boundary aloud: characters → tokens → query description → scan tree → rows. The measurements below use a larger, explicitly defined dataset.</p>
-
 <!-- ============================================================ -->
 <h2 id="build">Part 3 · Write queries and predict <span class="part-time">20 min</span></h2>
 <p>Complete <a href="starter/queries.sql" download><code>queries.sql</code></a> from these English requests. Save your predictions in the <a href="starter/lab5_report.md" download>report template</a> <strong>before</strong> running the measurement script.</p>
@@ -373,7 +401,8 @@ WHERE mid = mid2 AND gpa &gt; 35 AND dept = 'ds';</code></pre>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=2"></script>
-<script src="../_shared/teaching-traces.js?v=1"></script>
-<script src="../_shared/teaching-trace.js?v=1"></script>
+<script src="query-trace-source.js?v=1"></script>
+<script src="query-trace.js?v=1"></script>
+<script src="query-walkthrough.js?v=1"></script>
 </body>
 </html>
