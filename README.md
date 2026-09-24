@@ -95,6 +95,14 @@ measurements, and explanations. Other labs retain their stated grading rules.
 
 ## Maintainer checks
 
+Website downloads link directly to the tracked files in this repository;
+GitHub Pages publishes the root of `main`. There is no separate download copy.
+Run `python3 scripts/check_downloads.py` to check download targets locally.
+After pushing changes and waiting for the Pages deployment, run
+`python3 scripts/check_downloads.py --live` to compare every download and its
+linking page byte-for-byte with your working tree. Unpublished edits will be
+reported as differences.
+
 Run `python3 -m unittest discover -s tests -v` from the repository root to check
 supplied infrastructure. These ungraded checks do not require student TODOs
 to be completed and are separate from each lab’s exercise tests. They also verify

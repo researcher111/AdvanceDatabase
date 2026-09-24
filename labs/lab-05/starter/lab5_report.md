@@ -2,7 +2,6 @@
 
 Name:
 Environment (Python version and operating system):
-Commands used, student count, and timing repetitions:
 
 Submit four individual files to the Lab 5 programming assignment on Gradescope:
 `queries.sql`, `results-300.json`, `results-600.json`, and this completed report
