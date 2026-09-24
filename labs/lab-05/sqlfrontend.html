@@ -373,7 +373,36 @@ WHERE mid = mid2 AND gpa &gt; 35 AND dept = 'ds';</code></pre>
 
 <!-- ============================================================ -->
 <h2 id="assignment">Assignment</h2>
-<p><strong>Submit your completed report, <code>queries.sql</code>, and measurement outputs by Thursday Oct 1 at class start, using the course submission instructions.</strong> The <a href="starter/lab5_report.md" download>report template</a> lists the questions and evidence. You may submit the report as Markdown or PDF.</p>
+<p><strong>Submit four files to the Lab 5 programming assignment on Gradescope by Thursday Oct 1 at class start.</strong> The <a href="starter/lab5_report.md" download>report template</a> lists the questions and evidence.</p>
+<table><thead><tr><th>File</th><th>What to include</th></tr></thead><tbody>
+<tr><td><code>queries.sql</code></td><td>Exactly six SELECT statements, in this order: <strong>S1, S2, S3, J1, J2, J3</strong>. Separate statements with semicolons. Keep the worksheet comments if helpful.</td></tr>
+<tr><td><code>results-300.json</code></td><td>The measurement runner's complete JSON output for all six queries with 300 students, both plans, and at least seven timing samples per plan.</td></tr>
+<tr><td><code>results-600.json</code></td><td>The same six queries with 600 students, both plans, and at least seven timing samples per plan.</td></tr>
+<tr><td><code>lab5_report.md</code> or <code>lab5_report.pdf</code></td><td>Your completed report: implementation walkthrough, original predictions, measurements, and explanations. Submit one format.</td></tr>
+</tbody></table>
+
+<h3 id="gradescope">Generate evidence, upload, and read the feedback</h3>
+<ol>
+<li>Complete <code>queries.sql</code> and record your predictions in the report <strong>before</strong> measuring. Keep the supplied Python files unchanged.</li>
+<li>From your starter folder, run both commands below. They must finish without errors. Upload the JSON files they create without editing or rounding their contents.</li>
+</ol>
+<pre><code>python3 measure_sql.py --queries queries.sql --students 300 --repeat 7 --json &gt; results-300.json
+python3 measure_sql.py --queries queries.sql --students 600 --repeat 7 --json &gt; results-600.json</code></pre>
+<ol start="3">
+<li>Open Lab 5 on Gradescope and upload the four files listed above <strong>as individual files, not inside a folder or ZIP</strong>. Do not submit the Python engine or a database directory. The two JSON files must be separate attachments even if you also discuss their contents in your report.</li>
+<li>Wait for the autograder and open its feedback. Checks identify the query (for example, J2), dataset size, and plan that needs attention. If you change any SQL, regenerate <strong>both</strong> JSON files and update your report; then resubmit all four files before the deadline.</li>
+</ol>
+
+<h3>What is graded?</h3>
+<table><thead><tr><th>Component</th><th>Points</th><th>How it is checked</th></tr></thead><tbody>
+<tr><td>Six SQL queries</td><td>36</td><td>Each query earns 2 points for the requested fields and FROM order, and 4 for correct results on additional data. Checks include GPA boundaries, different major IDs, and duplicate values; row order does not matter.</td></tr>
+<tr><td>Plans and work counts</td><td>24</td><td>1 point for each query × dataset size × plan: the plan, table visits, candidate pairs, comparisons, returned rows, and output cells must match the supplied engine for your submitted SQL.</td></tr>
+<tr><td>Measurement protocol</td><td>10</td><td>2 points per JSON file for the fixture/report format, plus 0.25 per query × size × plan for at least seven finite, nonnegative timing samples and their correct median.</td></tr>
+<tr><td>Written reasoning (staff review)</td><td>30</td><td>Implementation walkthrough: 8; original predictions with reasons: 6; six operator-based comparisons: 12; timing limitations and reflection on a prediction: 4.</td></tr>
+</tbody></table>
+<p><strong>The autograder reports a score out of 70; staff add the 30-point report grade.</strong> A report-received check confirms only that a file is present. Passing the automatic checks does not establish that the report is complete.</p>
+<p>SQL keywords, whitespace, and equivalent expressions may differ from the worked examples. S3 may use <code>*</code> or explicitly list all four student fields. AND terms may be reordered, but their order can change comparison counts: the grader checks the counts for <em>your</em> query. Measurement credit is separate from query correctness, so accurate evidence for an incorrect query can still earn measurement points.</p>
+<p><strong>There is no runtime target or required speedup.</strong> Your computer need not match another computer's milliseconds, and an early-filter plan need not win every timing sample. Explain the logical work, then use repeated timings as evidence with appropriate limits.</p>
 <ul><li>Explain the supplied parser/planner using the four walkthrough questions.</li><li>Write all six SQL queries and retain your predictions.</li><li>Include results for 300 and 600 students, both plans, with commands and repeat counts.</li><li>Explain the six comparisons from the scan operations and discuss timing limitations.</li></ul>
 <p>Assessment is based on query correctness, reproducible measurements, and explanations supported by the operator behavior and observed counts. The already-passing implementation tests are a setup check, not a score for this assignment. No changes to <code>sql_frontend.py</code> are required.</p>
 

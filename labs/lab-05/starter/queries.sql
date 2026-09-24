@@ -1,4 +1,6 @@
 -- Lab 5: write one SELECT for each request. End each statement with a semicolon.
+-- Submit exactly six statements in order: S1, S2, S3, J1, J2, J3.
+-- Comments are optional; the autograder identifies queries by their order.
 -- Run: python3 measure_sql.py --queries queries.sql --repeat 7
 -- Use students(sid, name, gpa, mid) and majors(mid2, dept).
 -- GPA is stored as an integer from 20 through 39; 35 represents 3.5.
