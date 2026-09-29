@@ -27,6 +27,12 @@ shown in an expandable **Teaching context** section and in full in the printable
 guide. Existing structured notes take precedence. Worked traces derive their
 main idea, step explanations, question, and answer from the shared example data.
 
+Lecture 6 loads `decks/storage-choices.js` and `decks/btree-growth.js` after
+the common notes. These files own the drawings, animation states, and teaching
+cues for `four-storage-choices` and `the-fifth-key`. Edit their frame sequences
+together; they preserve scene IDs and teaching minutes. The growth animation
+uses key/RID entries instead of the shared trace's code/table view.
+
 Keep the main idea to one sentence. Write each build as a concrete teaching cue
 for what is visible at that step. Put the question in direct classroom language
 and keep its answer separate so it can stay hidden until discussion finishes.
