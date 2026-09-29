@@ -33,6 +33,12 @@ cues for `four-storage-choices` and `the-fifth-key`. Edit their frame sequences
 together; they preserve scene IDs and teaching minutes. The growth animation
 uses key/RID entries instead of the shared trace's code/table view.
 
+`decks/btree-clarity.js` owns the other Lecture 6 scenes. It adds short projected
+step explanations, labeled routes, visible RID lists, and explicit cost units.
+Its search and range drawings use the same keys and RIDs as the shared worked
+examples. Keep those fixtures in sync if the shared data changes. Edit each
+frame's caption and teaching cue together; do not change its minutes or ID.
+
 Keep the main idea to one sentence. Write each build as a concrete teaching cue
 for what is visible at that step. Put the question in direct classroom language
 and keep its answer separate so it can stay hidden until discussion finishes.
