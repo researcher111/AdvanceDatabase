@@ -70,6 +70,13 @@
       scene.traceId = exampleId;
       scene.steps = example.frames.length;
       scene.states = example.frames.map(f => f.label);
+      scene.teaching = {
+        idea: example.premise,
+        builds: example.frames.map(f => f.explanation),
+        question: example.question,
+        answer: example.answer,
+        context: 'Ask students to predict the next state before advancing. The reading and lab use this same worked example.'
+      };
       scene.notes = example.premise + '\n\nAsk students to predict each next state before advancing. ' +
         example.frames.map((f,i) => `Build ${i+1}: ${f.label}. ${f.rows.map(r => r.join(': ')).join('. ')}. ${f.explanation}`).join('\n\n') +
         '\n\nCheck yourself: ' + example.question + '\nExpected answer: ' + example.answer;

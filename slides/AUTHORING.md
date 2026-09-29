@@ -9,7 +9,7 @@ A scene has a stable `id`, an instructor-only `title`, `minutes`, `kind`,
 a lecture must total 60, excluding any quiz. `steps` counts states starting
 at zero. `states` gives the presenter a brief description of each build.
 
-Scenes may also provide `teaching` with `idea`, `builds`, `question`, `answer`,
+Every scene provides `teaching` with `idea`, `builds`, `question`, `answer`,
 and optional `context`. Each `builds` entry explains the matching animation
 state. The presenter shows the current instruction first, with expandable
 answers and a list of all steps. The printable guide includes every step and
@@ -18,6 +18,18 @@ from it when registering the deck, so the two versions stay consistent.
 An optional `checks` array supplies a `question` and `answer` for each build.
 The presenter shows the current build's question, and the guide includes them
 alongside their steps. Keep the scene-level question as a final recap.
+
+`decks/teaching-notes.js` supplies these cues for scenes that do not define
+`teaching` in their deck bundle. Entries use the lecture number and stable scene
+ID; edit the matching entry when changing an animation. The file loads after
+the deck and before the player. It preserves the original `notes` as `reference`,
+shown in an expandable **Teaching context** section and in full in the printable
+guide. Existing structured notes take precedence. Worked traces derive their
+main idea, step explanations, question, and answer from the shared example data.
+
+Keep the main idea to one sentence. Write each build as a concrete teaching cue
+for what is visible at that step. Put the question in direct classroom language
+and keep its answer separate so it can stay hidden until discussion finishes.
 
 Keep explanations, prediction questions, expected answers, caveats, and
 source citations in the notes. On the projected canvas, use brief definitions,

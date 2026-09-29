@@ -74,7 +74,9 @@
     };
     paragraph(target,'Main idea:',t.idea,'teaching-idea');
     const build=(parent,i)=>{
-      paragraph(parent,`Step ${i+1}:`,t.builds[i]);
+      const section=el('div','teaching-step');
+      section.append(el('p','build',`Step ${i+1} of ${sc.steps}: ${sc.states[i]}`));
+      notesParagraphs(section,t.builds[i]);parent.append(section);
       if(step===null&&t.checks?.[i]){
         paragraph(parent,'Ask:',t.checks[i].question);
         paragraph(parent,'Expected answer:',t.checks[i].answer);
@@ -87,13 +89,20 @@
       current.append(el('p','',t.builds[step]));target.append(current);
     }
     const check=step===null?t:t.checks?.[step]||t;
-    paragraph(target,step===null&&t.checks?'Recap question:':'Ask the class:',check.question);
+    paragraph(target,step===null&&t.checks?'Recap question:':'Ask the class:',check.question,'teaching-question');
     if(step===null)paragraph(target,'Expected answer:',t.answer);
     else{
       const answer=el('details','teaching-answer');answer.append(el('summary','','Expected answer'),el('p','',check.answer));target.append(answer);
       const all=el('details','teaching-all');all.append(el('summary','','All animation steps'));t.builds.forEach((_,i)=>build(all,i));target.append(all);
     }
     if(t.context)paragraph(target,'Teaching context:',t.context,'teaching-context');
+    if(t.reference){
+      if(step===null){
+        const context=el('div','teaching-reference');context.append(el('h3','','Teaching context'));notesParagraphs(context,t.reference);target.append(context);
+      }else{
+        const context=el('details','teaching-reference');context.append(el('summary','','Teaching context'));notesParagraphs(context,t.reference);target.append(context);
+      }
+    }
   }
   function presenter(){
     document.body.className='presenter';document.body.innerHTML='<header><div><h1></h1><p>Presenter view · 60 teaching minutes · quizzes separate</p><span class="connection" id="connection"></span></div><div><span class="clock" id="clock">0:00</span> <button id="clock-button">Start clock</button> <button id="reset-clock">↺</button></div></header><div class="workspace"><section><div class="preview" id="preview"></div><div class="timing"><span id="scene-time"></span><span id="pace"></span></div><div class="speaker-tools" id="speaker-tools"></div><div class="timeline"><span id="timeline-progress"></span></div><label for="jump">Slide </label><select id="jump"></select><p class="next" id="next-scene"></p><a class="guide-link" id="guide-link" target="_blank">Full teaching guide</a></section><section id="notes" aria-live="polite"></section></div>';
@@ -154,7 +163,7 @@
   if(role==='guide'){guide();return;}if(role==='presenter')presenter();else audience();
   window.addEventListener('keydown',e=>{
     if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&e.key!=='Escape')return;
-    if(/^(BUTTON|A)$/.test(e.target.tagName)&&[' ','Enter'].includes(e.key))return;
+    if(/^(BUTTON|A|SUMMARY)$/.test(e.target.tagName)&&[' ','Enter'].includes(e.key))return;
     if(e.ctrlKey||e.metaKey||e.altKey)return;
     if($('overlay')){if(e.key==='Escape'){e.preventDefault();closeOverlay();}return;}
     const map={ArrowRight:'next',' ':'next',ArrowLeft:'back',PageDown:'next-slide',PageUp:'previous-slide',r:'replay',R:'replay',a:'play',A:'play',b:'blackout',B:'blackout'};
