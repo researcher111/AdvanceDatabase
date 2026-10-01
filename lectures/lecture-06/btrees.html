@@ -5,10 +5,9 @@
 <title>Lecture 6 · B+ Trees from First Principles · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
-<link rel="stylesheet" href="styles.css?v=2">
-<link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
+<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=2">
 </head>
 <body>
 
@@ -16,18 +15,19 @@
   <div class="toc-title">Lecture 6</div>
   <p><a href="../../slides/lecture-06.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
-    <li><a href="#problem">A full scan checks every row</a></li>
-    <li><a href="#try-it">The tree grows by splitting, and every leaf stays level</a></li>
-    <li><a href="#anatomy">Leaves hold entries; internal nodes route searches</a></li>
-    <li><a href="#worked-example">Worked example</a></li>
-    <li><a href="#split">Splits preserve equal leaf depth</a></li>
-    <li><a href="#fanout">Fan-out 200 makes a billion rows a four-level tree</a></li>
-    <li><a href="#costs">Indexes add write and storage costs</a></li>
-    <li><a href="#thursday">Thursday you build it in four methods</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
-    <li><a href="#faq">FAQ</a></li>
-    <li><a href="#sources">Sources</a></li>
+    <li><a href="#plan">What we will learn</a></li>
+    <li><a href="#problem">Why add an index?</a></li>
+    <li><a href="#choices">Compare four organizations</a></li>
+    <li><a href="#anatomy">Read a small B+ tree</a></li>
+    <li><a href="#worked-example">Connect the diagrams to code</a></li>
+    <li><a href="#split">Build and split the tree</a></li>
+    <li><a href="#try-it">Try your own insertions</a></li>
+    <li><a href="#fanout">Why large trees stay short</a></li>
+    <li><a href="#costs">When an index helps</a></li>
+    <li><a href="#thursday">Connect the ideas to Lab 6</a></li>
+    <li><a href="#recap">Recap and next time</a></li>
+    <li><a href="#faq">Common questions</a></li>
+    <li><a href="#sources">Sources and further reading</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -42,76 +42,190 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 6 · Tuesday September 29, 2026</div>
   <h1>B+ Trees from First Principles</h1>
-  <div class="subtitle">How does a B+ tree locate a row without scanning the whole table?<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, Boeing Scientific Research Laboratories Report No. 20, 1970)">1</a></sup></div>
+  <div class="subtitle">Follow a key to its row, watch a leaf split, and trace the repair back to the root.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Your engine currently finds rows by scanning the table. A B+ tree adds a sorted map from values to <span class="gloss" data-gloss="rid-recall">RIDs</span>, so a lookup can go directly to the matching records. Its internal nodes can have hundreds of children, keeping the tree shallow even when the table is large. When an insertion overfills a node, the tree splits that node and updates its parent. These local changes keep every leaf at the same depth. In Thursday’s lab, you will implement searches, inserts, splits, and range scans.</p>
+<p class="lede">In Lecture 5, our engine tested a condition by reading rows one at a time. Now imagine asking for one student in a table with 100,000 rows. An <strong>index</strong> gives the engine another way to find that row: look up the value, get its address, and go to the row. A <strong>B+ tree</strong> keeps these lookup entries in order and makes room as new entries arrive.</p>
 
-<div class="cite">
-  Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 12 ·
-  the classic survey: Comer, <a href="https://dl.acm.org/doi/10.1145/356770.356776"><em>The Ubiquitous B-Tree</em></a> (1979) ·
-  Postgres's <a href="https://www.postgresql.org/docs/current/btree.html">btree docs</a>.
-</div>
-
-<p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
-</p>
+<div class="cite">Optional reading: Sciore, <a href="https://link.springer.com/book/10.1007/978-3-030-33836-7"><em>Database Design and Implementation</em>, chapter 12</a>. Read if curious; not required. The <a href="../../labs/lab-06/btree.html">Lab 6 page</a> explains what you will implement.</div>
+<p class="glossary-hint">New terms are explained in the text. Hover or tap a dotted-underlined term to see its definition again.</p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
   <div id="glossary-content" class="glossary-content"></div>
 </div>
 
-<!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">What we will learn</h2>
+<p><strong>Quiz 5</strong> comes first: parsing and planning, 10 minutes. Then we will answer three questions:</p>
+<ol>
+  <li>How does an index lead us to a row?</li>
+  <li>How does the tree make room for new entries?</li>
+  <li>When is using the index less work than scanning the table?</li>
+</ol>
+<p>We will follow the same sequence as the visual slides: compare ways to organize keys, read a tree, follow a lookup and a range, then build and split the tree ourselves. Finally, we will count the work. Lab 6 stores its tree in Python objects in memory; a later example explicitly switches to an index stored in disk pages.</p>
 
-<p class="keep-in-present"><strong>Quiz 5</strong> first (parsing &amp; planning, 10 min), then B+ trees: how an index reduces the work needed to find a row.</p>
+<div class="callout"><p><strong>How to use the diagrams.</strong> Each drawing has Previous, Next, and a step selector. Pause before advancing and predict what will move, which pointer we will follow, or what the operation will return. Use <strong>Enlarge</strong> for a closer view. The diagrams use the same drawings as the slide deck; the text below explains the complete operation even without the controls.</p></div>
 
-<p class="keep-in-present">A complete scan of the Lab 6 benchmark checks 100,000 rows across 294 blocks. A B+ tree can find a key in a billion-entry index by visiting about four index pages, followed by any required heap reads. Today we will trace that lookup and examine the cost of maintaining the index.</p>
-
-
-<p class="keep-in-present"><strong>An index maps values to RIDs.</strong> A B+ tree keeps those entries sorted and maintains a balanced search structure as keys are inserted.</p>
-
-<!-- ============================================================ -->
-<h2 id="problem">A full scan checks every row</h2>
-
-<p class="key-fact keep-in-present"><strong>294 blocks</strong> are visited by a complete scan of the 100,000-row benchmark table. Repeated scans visit those blocks again, though some may already be cached.</p>
-
-<h3 class="new-slide" data-kicker="The problem">Compare lookup, insertion, and range-scan costs</h3>
-
+<h2 id="problem">Why add an index?</h2>
+<p>Suppose we want the name of each student whose GPA is 3.6. As in Lab 5, the table stores GPA as an integer: <code>36</code> means 3.6.</p>
+<pre><code class="language-sql">SELECT name FROM students WHERE gpa = 36;</code></pre>
+<p>The <strong>heap file</strong> is where the table's rows live. Here, “heap” means the rows have no required order by GPA. The SQL states what we want; it does not say where the matching rows are.</p>
 <table>
-  <thead><tr><th>Scheme</th><th>Point lookup</th><th>Insert</th><th>Range scan</th><th>Verdict</th></tr></thead>
+  <thead><tr><th>Row address</th><th>name</th><th>gpa</th></tr></thead>
   <tbody>
-    <tr><td>Heap file + scan (now)</td><td>\(O(n)\), everything</td><td>\(O(1)\), any free slot</td><td>\(O(n)\)</td><td>inserts can use free slots; lookups without an index require a scan</td></tr>
-    <tr><td>Sorted file</td><td>\(O(\log n)\) binary search</td><td>\(O(n)\), shift or re-sort</td><td>excellent</td><td>maintaining order may require shifting rows or reorganizing the file</td></tr>
-    <tr><td>Hash table</td><td>\(O(1)\)</td><td>\(O(1)\)</td><td>requires a scan; hashing does not preserve key order</td><td>efficient for equality lookups; does not directly support ordered traversal (see FAQ)</td></tr>
-    <tr><td><strong>B+ tree</strong></td><td>\(O(\log n)\), base ~200</td><td>\(O(\log n)\)</td><td>excellent, leaves are chained</td><td>supports all three operations efficiently<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup></td></tr>
+    <tr><td>(0, 0)</td><td>ada</td><td>39</td></tr>
+    <tr><td>(0, 1)</td><td>ben</td><td>31</td></tr>
+    <tr><td>(0, 2)</td><td>cyd</td><td>37</td></tr>
+    <tr><td>(0, 3)</td><td>dee</td><td>28</td></tr>
+    <tr><td>(0, 4)</td><td>eli</td><td>36</td></tr>
+    <tr><td>(0, 5)</td><td>fay</td><td>34</td></tr>
+    <tr><td>(1, 0)</td><td>gia</td><td>31</td></tr>
+  </tbody>
+</table>
+<p>A scan tests every row and returns <code>eli</code>. It must keep looking after finding a match because another row might also have GPA 36. The extra row, <code>gia</code>, will help us see how an index handles two rows with the same GPA.</p>
+
+<h3 class="new-slide" data-kicker="Why an index?">An index stores values and row addresses</h3>
+<p>A <strong>search key</strong> is the value we look up, such as GPA 36. It does not have to be unique. A <span class="gloss" data-gloss="rid-recall">RID (record identifier)</span> is a row address: <code>(block number, slot number)</code>. A block holds several rows; a slot identifies one place within that block.</p>
+<figure class="bt-reading" data-btree-scene="index">
+  <img class="bt-reading-static" src="diagrams/index.svg" alt="Key 36 maps to RID (0, 4), which fetches eli, GPA 36, from heap block 0, slot 4." loading="lazy" width="1280" height="720">
+  <figcaption>One value leads to an address list; the heap supplies the requested fields. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p>The GPA index stores <code>36 → [(0, 4)]</code>. It stores <code>31 → [(0, 1), (1, 0)]</code> because two rows have GPA 31. <strong>Finding the addresses and fetching the rows are separate steps.</strong></p>
+<p>Adding this index leaves the heap rows in place. A separate index on <code>name</code> could arrange names in order and point to those same rows.</p>
+
+<h2 id="choices">The same keys, four ways to organize them</h2>
+<p>Before we build the tree, compare it with three familiar alternatives. Use the same six distinct keys—<code>1, 3, 5, 7, 9, 11</code>—in every picture. We will ask each structure to <strong>find 7</strong>, <strong>insert 6</strong>, and <strong>return keys 3 through 9</strong>. The results should agree; the work needed to produce them differs.</p>
+<figure class="bt-reading" data-btree-scene="four-storage-choices">
+  <img class="bt-reading-static" src="diagrams/four-storage-choices.svg" alt="Heap, sorted array, hash buckets, and a B+ tree all return keys 3, 5, 6, 7, 9 after inserting 6." loading="lazy" width="1280" height="720">
+  <figcaption>Work through lookup, insertion, and a range on the same data. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p><strong>Find 7.</strong> In the unordered heap, check 9, 1, 11, 3, and finally 7. In the sorted array, compare with 5, then 9, then 7. In the toy hash index, <code>7 mod 3 = 1</code> selects bucket 1, where we still have to distinguish 7 from 1. In the B+ tree, the root separator 7 sends equality right, to the leaf containing the actual entry.</p>
+<p>This comparison assumes the six toy keys are unique, so its heap lookup can stop at 7. Our GPA query returns <em>all</em> matches and has no such uniqueness guarantee. Finding one student does not establish that there are no others.</p>
+<p><strong>Insert 6.</strong> The heap can use its free slot. The packed sorted array shifts 7, 9, and 11 right to make a gap. The hash rule sends 6 to bucket 0 alongside 3 and 9. The B+ tree routes 6 left, where it fills the fourth leaf slot without splitting. These examples assume available space; allocating heap space, resizing a hash table, and splitting tree nodes each have their own costs.</p>
+<p><strong>Find 3 through 9.</strong> All four now contain seven keys, and the answer is <code>3, 5, 6, 7, 9</code>. The heap tests every row. The toy hash index checks every bucket because its bucket numbers do not preserve key order. The sorted array finds the lower bound and walks forward. The tree finds the starting leaf and follows its leaf links until it reaches 11. This combination—ordered access and room to grow—is what we want to understand.</p>
+
+<h2 id="anatomy">Read a small B+ tree</h2>
+<p>A tree is made of <strong>nodes</strong>, the boxes below. The <strong>root</strong> is the starting node at the top. A node can point to other nodes, called its <strong>children</strong>. A <strong>leaf</strong> has no children and stores the actual lookup entries.</p>
+<figure class="bt-reading" data-btree-scene="b-tree">
+  <img class="bt-reading-static" src="diagrams/b-tree.svg" alt="Root separator 36 routes keys below 36 left and keys at least 36 right. Leaves contain 28, 31, 34 and 36, 37, 39. Key 31 has two RIDs; the leaves link in key order." loading="lazy" width="1280" height="720">
+  <figcaption>Read the routing boundaries, then inspect the entries and their RID lists. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p>The root is an <strong>internal node</strong>: it gives directions. Its 36 is a <span class="gloss" data-gloss="routing-key">separator</span>, a boundary between two groups of keys. Values below 36 go left. Values equal to or above 36 go right. The root's 36 has no RID list; the leaf's 36 does.</p>
+<p>With two separators, such as <code>[31, 36]</code>, there would be three children: keys below 31, keys from 31 up to but not including 36, and keys at least 36. <strong>One more separator creates one more group.</strong></p>
+<p>A <strong>pointer</strong> is a link to another node. Each leaf has a <code>next</code> pointer to the next leaf in key order. Every leaf is the same number of steps from the root; we call that <strong>balanced</strong>. The tree’s <strong>height</strong> is its number of levels. Here, the height is two: the root level and the leaf level.</p>
+
+<h3 class="new-slide" data-kicker="Read the tree">A lookup follows one path</h3>
+<p>Keep the full tree in view while following the highlighted route. There are three decisions: <strong>which child, which entry, and which row address?</strong> Finding the right leaf settles only the first of them.</p>
+<figure class="bt-reading" data-btree-scene="find-37">
+  <img class="bt-reading-static" src="diagrams/find-37.svg" alt="Searching for 36 follows the right child, returns [(0, 4)], and fetches eli. Searching for 35 returns []; searching for 31 returns [(0, 1), (1, 0)]." loading="lazy" width="1280" height="720">
+  <figcaption>Search for the separator itself, then try a missing key and a duplicate value. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<ol>
+  <li><strong>Start at the root.</strong> To find 36, compare it with the separator 36. Equality goes right in our tree.</li>
+  <li><strong>Search that leaf.</strong> In <code>[36, 37, 39]</code>, find 36 and return its RID list: <code>[(0, 4)]</code>.</li>
+  <li><strong>Fetch the row.</strong> Use <code>move_to_rid((0, 4))</code> to reach <code>eli</code>. Now read the requested <code>name</code> field.</li>
+</ol>
+<p>The index search visits <strong>two nodes</strong>. It does not visit every leaf. Looking for 35 also visits two nodes: go left, see that 35 is absent, and return an empty list. There is then no matching heap row to fetch. Searching for 31 takes the same left route, but returns <code>[(0, 1), (1, 0)]</code>. Fetch both addresses to return ben and gia. <strong>One lookup key can produce several rows.</strong></p>
+
+<h3 class="new-slide" data-kicker="Read the tree">A range lookup starts once, then moves right</h3>
+<p>For <code>range(31, 37)</code>, both endpoints count. First find the leaf where 31 belongs. Then read forward through the linked leaves.</p>
+<figure class="bt-reading" data-btree-scene="walk-a-range">
+  <img class="bt-reading-static" src="diagrams/walk-a-range.svg" alt="The inclusive range 31–37 accepts keys 31, 34, 36, 37, collecting five RIDs, and stops before 39." loading="lazy" width="1280" height="720">
+  <figcaption>Watch the cursor cross a leaf boundary without returning to the root. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<table>
+  <thead><tr><th>Step</th><th>What we do</th><th>RIDs collected so far</th></tr></thead>
+  <tbody>
+    <tr><td>Visit [28, 31, 34]</td><td>Skip 28. Take both RIDs for 31 and the RID for 34.</td><td>3</td></tr>
+    <tr><td>Follow next to [36, 37, 39]</td><td>Take the RIDs for 36 and 37.</td><td>5</td></tr>
+    <tr><td>Reach 39</td><td>Stop: 39 is above 37, and later keys can only be larger.</td><td>5</td></tr>
+  </tbody>
+</table>
+<p>We found <strong>four different keys and five matching rows</strong>. We did not restart at the root for each match. The results are in GPA order; the heap rows themselves have not moved. Their addresses are <code>(0, 1), (1, 0), (0, 5), (0, 4), (0, 2)</code>: notice that the addresses do not increase with the keys. The leaf chain orders the index entries, not the physical heap pages.</p>
+<p>If the lower bound were 32 instead, the same left leaf would be the starting point, and 34 would be the first accepted key. A range endpoint need not exist in the tree. The stopping rule is <code>key &gt; hi</code>, not <code>key &gt;= hi</code>, because the upper endpoint is included.</p>
+
+<h2 id="worked-example">Connect the diagrams to code</h2>
+<p>The visual lookup and range now give meaning to the code. In the companion below, each step highlights code and shows the tree after that operation. Choose <code>child_index_for</code> to watch the separator comparisons, or <code>_descend</code> to follow the path as it grows. Lookup and range move through the tree; the split example changes its structure. You can return to its split example after building the tree in the next section. <strong>Keep three things separate:</strong> the key we search for, the separator that gives directions, and the RID that identifies a row.</p>
+<div data-teaching-trace="btree-search btree-child-index btree-descend btree-split btree-range">
+  <p><strong>Lookup:</strong> <code>search(36)</code> goes right at the root and returns <code>[(0, 4)]</code>. Fetching that address returns eli's row.</p>
+  <p><strong>Split:</strong> five keys <code>[1, 2, 3, 4, 5]</code> become leaves <code>[1, 2]</code> and <code>[3, 4, 5]</code>, with a new root <code>[3]</code>.</p>
+  <p><strong>Range:</strong> <code>range(31, 37)</code> returns five RIDs, because key 31 has two rows. Enable JavaScript to see the steps.</p>
+</div>
+<p><a href="../../labs/lab-06/btree.html#worked-example">Lab 6 uses the same worked examples</a>. The tree methods return RIDs. The provided <code>IndexSelectScan</code> uses those RIDs to fetch rows.</p>
+
+<h2 id="split">Build the tree, then make room</h2>
+<p>Switch to small integer keys so we can concentrate on movement. In this toy tree, <code>ORDER = 4</code> means <strong>at most four distinct keys per node</strong>. This is the lab's convention; other sources may define “order” differently. Letters a–g abbreviate row addresses: <code>[a]</code> is a RID list containing address a. Each list must travel with its key.</p>
+<p>Begin with one node that is both the root and a leaf. Insert 3, then 1, then 4, then 2. The existing entries move to keep the keys sorted. After the fourth insertion, the leaf contains <code>[1, 2, 3, 4]</code>. It is full and still legal.</p>
+<figure class="bt-reading" data-btree-scene="first-four-keys">
+  <img class="bt-reading-static" src="diagrams/first-four-keys.svg" alt="Insertions 3, 1, 4, 2 produce sorted leaf entries 1→[a], 2→[b], 3→[c], 4→[d]; all four slots are occupied without a split." loading="lazy" width="1280" height="720">
+  <figcaption>Follow each key and its RID list as entries shift within one leaf. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p>A second RID for an existing key extends that key's list. It does not consume another distinct-key slot in this teaching model. To force a split, we need a fifth <em>different</em> key.</p>
+
+<h3 class="new-slide" data-kicker="Making room">A leaf split keeps every entry in a leaf</h3>
+<ol>
+  <li>Insert 5 in sorted order: <code>[1, 2, 3, 4, 5]</code>. There are now five keys.</li>
+  <li>Split near the middle. Keep <code>[1, 2]</code> in the left leaf and put <code>[3, 4, 5]</code> in a new right leaf. Move each key's RID list with that key.</li>
+  <li>Link the left leaf to the new right leaf. If there was already a next leaf, the new right leaf points to it.</li>
+  <li>Put a <strong>copy of 3</strong>, the first key in the right leaf, in the parent. If there is no parent yet, create a new root.</li>
+</ol>
+<figure class="bt-reading" data-btree-scene="the-fifth-key">
+  <img class="bt-reading-static" src="diagrams/the-fifth-key.svg" alt="Keys 1–5 split into leaves [1, 2] and [3, 4, 5] under root [3]. After 6 and 7, root [3, 5] routes to [1, 2], [3, 4], and [5, 6, 7], with every RID preserved." loading="lazy" width="1280" height="720">
+  <figcaption>Build from an empty leaf through two splits. Pause at the prediction steps. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p>The overflow, separated leaves, repaired leaf link, and new parent are successive parts of <em>one insertion</em>. The wider overflow drawing shows a temporary fifth entry; it does not grant extra capacity. The operation is complete only after the parent points to the new leaf and the routing boundary is installed.</p>
+<p>The root's copy of 3 gives directions, while the leaf's entry keeps 3 with its RIDs. If we removed the leaf entry, a range scan would miss key 3. Copying the separator preserves both jobs.</p>
+<details><summary>How does this match the Python slices?</summary>
+<p>There are five keys, so <code>mid = len(keys) // 2</code> gives position 2. Python positions start at 0: position 2 holds key 3. <code>keys[:mid]</code> gives <code>[1, 2]</code>; <code>keys[mid:]</code> gives <code>[3, 4, 5]</code>. Split the RID lists at the same position.</p>
+<p>The provided method <code>is_full()</code> returns true only when <code>len(keys) &gt; ORDER</code>. Despite the name, it tests whether the node is <em>overfull</em>.</p>
+</details>
+
+<h3 class="new-slide" data-kicker="Making room">A split can make the parent overfull too</h3>
+<p>After a leaf splits, its parent gains a separator and a child. If that parent now has five separators, split it too. Continue upward only as far as needed.</p>
+<p>Continue inserting in order through 12. The root contains <code>[3, 5, 7, 9]</code> and has five leaf children. The last leaf is <code>[9, 10, 11, 12]</code>. Insert 13 there: first split that leaf into <code>[9, 10]</code> and <code>[11, 12, 13]</code>. Copying 11 into the parent produces <code>[3, 5, 7, 9, 11]</code> with six children. <strong>The leaf split is what makes the root overflow.</strong></p>
+<figure class="bt-reading" data-btree-scene="a-root-splits">
+  <img class="bt-reading-static" src="diagrams/a-root-splits.svg" alt="An overfull internal root [3, 5, 7, 9, 11] splits into [3, 5] and [9, 11] under new root [7]. The six linked leaves retain every key from 1 through 13." loading="lazy" width="1280" height="720">
+  <figcaption>Trace the repair upward, preserving all six children and every leaf entry. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p>Move the middle routing key, 7, into a new root. The left internal node keeps <code>[3, 5]</code> and the first three children. The right internal node keeps <code>[9, 11]</code> and the last three. Count the pointers: each two-separator node has three children. The new root has one separator and two children.</p>
+<p>An internal split <strong>moves</strong> the middle separator upward. Here, 7 becomes the boundary between two groups of children. It is no longer needed inside either resulting internal node. The actual entry for key 7 is still in a leaf farther down the tree.</p>
+<table>
+  <thead><tr><th>What splits?</th><th>What goes to the parent?</th><th>What stays below?</th></tr></thead>
+  <tbody>
+    <tr><td>A leaf</td><td>A copy of the first key in the new right leaf</td><td>Every key and its RID list, including the copied key</td></tr>
+    <tr><td>An internal node</td><td>The middle separator, moved out of that node</td><td>The remaining separators and all child pointers</td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">B+ trees support equality lookups, ordered scans, and updates in one structure. This makes them a common default index type, including in PostgreSQL.<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 11.2. Index Types">3</a></sup></p>
-
-<h3 class="new-slide" data-kicker="The problem">An index locates rows in the heap</h3>
-
-<div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The heap</span><span>remains an unordered collection of rows, as in Lab 3. Adding this index does not rearrange the heap.</span></div>
-  <div class="lc-row"><span class="lc-k">The index</span><span>stores (value, RID) pairs in sorted order, providing another way to locate the same heap rows.</span></div>
-  <div class="lc-row"><span class="lc-k">The hand-off</span><span>the index returns the matching RIDs. <code>move_to_rid</code> on the reference TableScan uses each RID to reach its heap row. A RID stays valid while that record occupies its slot; deleting or replacing the record requires updating any index entries that refer to it.</span></div>
-  <div class="lc-row"><span class="lc-k">Many indexes</span><span>uid, name, and gpa can each have a separate index over the same heap. Inserts and deletes must update each index; an update must maintain the entries affected by the changed fields.</span></div>
+<h3 class="new-slide" data-kicker="Making room">Only a root split makes the tree taller</h3>
+<p>A split normally creates another node at the same level. When the <em>root</em> splits, we need a new starting node above it. That adds one level above <strong>every</strong> leaf at once. This is why the leaves stay equally far from the root.</p>
+<p>Contrast that height increase with a smaller repair. In the earlier tree, inserting 7 splits a leaf but leaves room in the existing root:</p>
+<figure class="bt-reading" data-btree-scene="predict-the-next-split">
+  <img class="bt-reading-static" src="diagrams/predict-the-next-split.svg" alt="Inserting 6 fills the right leaf. Inserting 7 splits it; copying 5 into the existing root gives [3, 5] and three leaves, still at height 2." loading="lazy" width="1280" height="720">
+  <figcaption>A new leaf does not necessarily mean a new level. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<div class="exercise">
+  <span class="ex-label">Check yourself</span>
+  <p>Start with root <code>[3]</code> and leaves <code>[1, 2]</code> and <code>[3, 4, 5]</code>. Insert 6, then 7. Which insertion causes a split? Does the height change?</p>
+  <details><summary>Show answer</summary>
+  <p>Inserting 6 gives <code>[3, 4, 5, 6]</code>: full, but still legal. Inserting 7 gives five keys, so that leaf splits into <code>[3, 4]</code> and <code>[5, 6, 7]</code>. Copy 5 into the root, making it <code>[3, 5]</code>. The root has room, so the height stays at two levels.</p>
+  </details>
 </div>
 
-<!-- ============================================================ -->
-<h2 id="try-it">The tree grows by splitting, and every leaf stays level</h2>
+<h3 class="new-slide" data-kicker="Making room">Splitting near the middle avoids wasted space</h3>
+<p>Preserving entries and depth is necessary, but we also want useful free space where later inserts can use it.</p>
+<p>Dividing five leaf keys into groups of two and three leaves both nodes at least half full. Dividing them into one and four would leave one node nearly empty and the other already full.</p>
+<p><span class="gloss" data-gloss="occupancy">Occupancy</span> means how much of a node's space is used. Repeatedly leaving nearly empty nodes makes the same data occupy more nodes and can add levels to the tree. With this lab's capacity of four, middle splits leave non-root nodes with at least two keys. The root is allowed to have fewer.</p>
+<p>These are different checks: keys can be in order and leaves can be at equal depth, yet the tree can still waste space. The lab checks both search results and tree shape.</p>
 
-<p>Insert keys and watch the tree respond, especially the moment a node fills. Run the
-scripted insertion of the six example gpa values first, then try your own keys.</p>
-
+<h2 id="try-it">Try your own insertions</h2>
+<p>Now control the insertions yourself. Unlike the fixed walkthroughs, this widget builds a tree from the keys you enter. The capacity is still four distinct keys per node. It hides RIDs so you can focus on routing, leaf links, and height.</p>
+<p>Click <strong>Insert the six GPAs</strong>. They arrive in this order: 39, 31, 37, 28, 36, 34. Notice when one leaf becomes two leaves. Then use <strong>Reset</strong> and insert 1–20 to see the tree grow another level.</p>
 <div class="viz" id="viz-btree">
-  <div class="viz-title">A live B+ tree · ORDER = 4 (max 4 keys per node, like the lab)</div>
-  <p class="viz-description"><span class="hexlegend hit">Leaves</span> hold keys (and, in the
-  lab, RIDs) and are chained left-to-right; <span class="hexlegend miss">internal nodes</span>
-  hold <span class="gloss" data-gloss="routing-key">routing keys</span> only. A node's fifth key triggers the split.</p>
+  <div class="viz-title">Insert a key and watch where it goes · four keys fit in each node</div>
+  <p class="viz-description"><span class="hexlegend hit">Leaves</span> store the indexed values. <span class="hexlegend miss">Internal nodes</span>
+  show which child to follow. This picture hides the row addresses so the tree is easier to read.
+  A fifth <em>distinct</em> key triggers a split.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="bt-script">▶ Insert the six gpas</button>
     <button type="button" class="btn" id="bt-many">▶ Insert 1–20</button>
@@ -124,314 +238,188 @@ scripted insertion of the six example gpa values first, then try your own keys.<
   <div class="qj-msg" id="bt-msg">Insert keys until the root splits. Compare the tree’s height before and after the split.</div>
   <div class="bt-canvas" id="bt-canvas"></div>
   <div class="bs-stats" id="bt-stats"></div>
-  <p class="viz-caption">Search highlights the nodes it visits: one node at each level. This count measures index traversal; fetching heap rows and reading uncached pages add work. Reset or a manual insert/search stops any running insertion sequence.</p>
+  <p class="viz-caption">After inserting the six GPAs, search for 36, then 35. Both searches visit two nodes; only 36 is present. The widget shows keys only. The lab tree also returns RIDs, including every RID for a duplicate key. Reset stops an animation.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="The live tree">Splits maintain equal leaf depth</h3>
 
+<p>The six GPAs finish with root <code>[36]</code> over <code>[28, 31, 34]</code> and <code>[36, 37, 39]</code>, the GPA tree from our lookups. The same split rules work for these values as for keys 1–13.</p>
+
+<h2 id="fanout">Why large trees stay short</h2>
+<p>So far, we used small nodes to make the drawings readable. A database index stored on disk usually packs a node into a page. A page can hold many keys and child pointers. The exact number depends on the page size and how wide the entries are.<sup class="src"><a href="#src-2">2</a></sup></p>
+<p><span class="gloss" data-gloss="fanout">Fan-out</span> means the number of children an internal node has. More children let one decision rule out more of the remaining tree. With two children, choose between two groups. With 200 children, choose one of 200 groups.</p>
+
+<p>The comparison below fixes the data at 100 million distinct keys. It assumes each leaf holds F entries and each internal node has F children. Follow one orange path: a lookup visits one node per level, not every box in the tree.</p>
+<figure class="bt-reading" data-btree-scene="fan-out">
+  <img class="bt-reading-static" src="diagrams/fan-out.svg" alt="A fully packed model for 100 million keys requires 27 levels at fan-out 2, 7 at 20, and 4 at 200; the long path is abbreviated." loading="lazy" width="1280" height="720">
+  <figcaption>Compare the same key count with 2, 20, and 200 children per internal node. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<h3 class="new-slide" data-kicker="Tree height">Count capacity one level at a time</h3>
+<p>For an easy estimate, suppose each leaf holds 200 entries and each internal node can point to 200 children. Assume every key has one RID and the nodes are completely full.</p>
 <table>
-  <thead><tr><th>Script</th><th>Splits</th><th>Height</th><th>The moment to replay</th></tr></thead>
+  <thead><tr><th>Levels, including root and leaves</th><th>How the capacity grows</th><th>Maximum entries</th></tr></thead>
   <tbody>
-    <tr><td>the six gpas</td><td>1</td><td>2</td><td>the fifth key (36) arrives; [28 31 36 37 39] splits; 36 is copied up as the first root</td></tr>
-    <tr><td>1–20 in order</td><td>6</td><td>3</td><td>sequential inserts always split the rightmost leaf; watch the splits march right</td></tr>
+    <tr><td>1: the root is a leaf</td><td>One leaf holds 200 entries.</td><td>200</td></tr>
+    <tr><td>2</td><td>The root points to 200 leaves.</td><td>200 × 200 = 40,000</td></tr>
+    <tr><td>3</td><td>Each child can point to another 200 nodes.</td><td>200 × 200 × 200 = 8 million</td></tr>
+    <tr><td>4</td><td>Add one more level of branching.</td><td>200 × 200 × 200 × 200 = 1.6 billion</td></tr>
   </tbody>
 </table>
-
-<p class="keep-in-present">Every leaf remains at the same depth after each insertion. Splitting nodes and updating their parents maintains that property; insertion needs no separate pass over the whole tree.</p>
-
-<!-- ============================================================ -->
-<h2 id="anatomy">Leaves hold entries; internal nodes route searches</h2>
-
-<div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Leaves</span><span>hold the actual index entries, <code>(key, RID)</code> pairs in sorted order, and a <code>next</code> pointer to the right-hand sibling. <strong>Every index entry is stored in a leaf.</strong></span></div>
-  <div class="lc-row"><span class="lc-k">Internal nodes</span><span>hold routing keys and child pointers. <em>k</em> keys separate <em>k+1</em> child ranges. For example, a separator of 10 sends keys below 10 left and keys at least 10 right. Internal keys do not carry RIDs.</span></div>
-  <div class="lc-row"><span class="lc-k">The leaf chain</span><span>linked leaves support range scans: descend once to <code>lo</code>, then follow <code>next</code> until a key passes <code>hi</code>. B+ trees keep the entries in leaves and link those leaves for ordered traversal<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">The <span class="gloss" data-gloss="invariant">invariant</span></span><span>every leaf is the same distance from the root. The next section shows how splitting preserves this property.</span></div>
-</div>
-
-<h3 class="new-slide" data-kicker="Leaves and directions">An index search visits one node per level</h3>
-
-<pre class="equation"><code>after inserting gpas 39, 31, 37, 28, 36, 34:        [ 36 ]            ← root (internal)
-                                                   /      \
-search(37):                            [28 31 34] → [36 37 39]        ← leaves, chained
-  at [36]:      37 >= 36 → go right
-  at leaf:      find 37 → its RIDs                 2 nodes touched, n = 6</code></pre>
-
-<p class="keep-in-present">Compare 37 with the root’s separator, follow the right child, and search that leaf. This example visits two index nodes. Larger trees use the same process at each level.</p>
-
-<h3 class="new-slide" data-kicker="Leaves and directions">Ranges: descend once, then walk the chain</h3>
-
-<pre class="equation"><code>range(31, 37) on the pinned tree:
-
-  descend once to 31's leaf ......... [28 31 34] → collect 31, 34
-  follow next → sibling ............. [36 37 39] → collect 36, 37; 39 > hi → stop
-
-  one descent + a walk.  Without a leaf chain, an ordered tree can still traverse successors using a stack or parent links; the chain makes the scan simpler.</code></pre>
-
-<p class="keep-in-present">The sorted leaf chain can serve <code>BETWEEN</code>, <code>ORDER BY</code>, and date-range queries without scanning unrelated index entries. Whether an index is faster than a heap scan depends on how many rows match and how they are stored. A hash index does not provide this ordered traversal.</p>
-
-<!-- ============================================================ -->
-<h2 id="worked-example">Trace the key, the RID, and the row</h2>
-
-<p>A <strong>key</strong> is the indexed value. A <strong>separator</strong> routes a search between children. A <strong>RID</strong> identifies a heap block and slot. Use the examples below to distinguish those values, then predict the next step before advancing. The duplicate key 31 has two RIDs in this teaching fixture.</p>
-<div data-teaching-trace="btree-search btree-split btree-range">
-  <p><strong>Worked result:</strong> <code>search(36)</code> goes right at separator 36 and returns <code>[(0, 4)]</code>. A scan then fetches that heap row. Splitting <code>[1,2,3,4,5]</code> produces leaves <code>[1,2]</code> and <code>[3,4,5]</code> with root <code>[3]</code>. The inclusive range <code>[31,37]</code> finds four keys and five rows in the duplicate-key fixture.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Lab connection:</strong> <a href="../../labs/lab-06/btree.html#worked-example">Lab 6 uses these same examples</a> before the independent function checks. The browser shows expected behavior; your Python methods still implement it.</p>
-
-<!-- ============================================================ -->
-<h2 id="split">Splits preserve equal leaf depth</h2>
-
-<p class="keep-in-present">After an insertion overfills a node, split it and add a separator to its parent. If the parent also overflows, repeat the process upward. If the root splits, create a new root. Each step preserves equal leaf depth.</p>
-
-<h3 class="new-slide" data-kicker="The split">Leaves copy the middle key up; internal nodes move it</h3>
-
-<table>
-  <thead><tr><th></th><th>Leaf split</th><th>Internal split</th></tr></thead>
-  <tbody>
-    <tr><td>Right sibling takes</td><td>keys[mid:] and their RIDs</td><td>keys[mid+1:] and matching children</td></tr>
-    <tr><td>The middle key</td><td><strong>COPIED</strong> up: the key stays in the leaf and a copy goes into the parent, because every (key, RID) entry must remain in a leaf where searches and range scans can find it</td><td><strong>MOVED</strong> up: the key leaves the node and goes into the parent, because the separator will now route searches from the parent; its corresponding index entry remains in a leaf</td></tr>
-    <tr><td>Also fix</td><td>the leaf chain: the new sibling's <code>next</code> takes the old node's <code>next</code>, and the old node's <code>next</code> now points at the sibling, so a range scan still walks every leaf in order</td><td>&nbsp;</td></tr>
-    <tr><td>No parent?</td><td colspan="2">make a new root of one key and two children: <strong>the tree grows at the top</strong>, height increases by one, and every leaf is one level farther from the root</td></tr>
-  </tbody>
-</table>
-
-<p class="keep-in-present">A root split adds one level above every existing leaf. A non-root split divides a node at its current level. Neither operation changes one leaf’s depth relative to another’s, so the tree remains balanced.<sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, 1970/1972)">1</a></sup></p>
-
-<h3 class="new-slide" data-kicker="The split">Splits cascade upward, and a root split adds a level</h3>
-
-<pre class="equation"><code>insert 5 into a full tree of 1..4:                 root [3] appears
-[1 2 3 4] + 5  →  split at mid=2  →   [1 2]  →  [3 4 5]      height 1 → 2
-
-keep inserting 6, 7:   [3 4 5] fills, splits at 5 → root becomes [3 5]
-insert 8, 9:           [5 6 7] fills... root [3 5 7] → root gains its fourth key at 11 and overflows at 13
-                       → the ROOT splits → new root, height 2 → 3</code></pre>
-
-<p class="keep-in-present">Splits occur when insertions exceed a node’s capacity. Each split creates space for more keys and changes only the affected node, its new sibling, and any ancestors that also split. Thursday’s harness inserts 25 scattered keys and checks the resulting tree invariants.</p>
-
-<h3 class="new-slide" data-kicker="The split">Check yourself: does 6 split? Does 7?</h3>
-
-<div class="exercise">
-  <span class="ex-label">Check yourself · run the cascade</span>
-  <p>The hand-traced tree stands at root <code>[3]</code> over leaves <code>[1 2]</code> and
-  <code>[3 4 5]</code> (capacity 4 per node). Insert <strong>6</strong>, then <strong>7</strong>.
-  For each: does a split happen, what moves up, and what does the root hold afterward?</p>
-  <details><summary>Show answer</summary>
-  <p>Insert 6: the right leaf becomes <code>[3 4 5 6]</code>, full but legal, <strong>no
-  split</strong>. Insert 7: now it overflows; split at the middle key 5 into <code>[3 4]</code>
-  and <code>[5 6 7]</code>, and a <em>copy</em> of 5 goes up: root <code>[3 5]</code>, three
-  leaves, height unchanged. If you moved 5 up without leaving it in a leaf, key 5 just became
-  missing from the leaf chain. The lab checks that leaf splits preserve every key and RID.</p>
-  </details>
-</div>
-
-<h3 class="new-slide" data-kicker="The split">Middle splits preserve minimum occupancy</h3>
-
-<table>
-  <thead><tr><th>Pivot choice</th><th>Result</th><th>Long-run <span class="gloss" data-gloss="occupancy">occupancy</span></th></tr></thead>
-  <tbody>
-    <tr><td><code>mid = len // 2</code></td><td>two half-full nodes</td><td>non-root nodes retain at least half their key capacity, which bounds the node count and height in terms of effective <span class="gloss" data-gloss="fanout">fan-out</span><sup class="src"><a href="#src-1" title="Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, 1970/1972)">1</a></sup></td></tr>
-    <tr><td><code>mid = 1</code> (skewed)</td><td>one nearly empty node, one nearly full one</td><td>under sequential inserts, each split leaves a nearly empty node behind; storing the same keys then requires more nodes and may require a taller tree</td></tr>
-  </tbody>
-</table>
-
-<p class="keep-in-present">A skewed split can preserve key order and equal leaf depth while violating minimum occupancy. Searches may still return correct results, but the tree uses extra space and can become taller. The lab’s 500-key height check tests this efficiency requirement alongside the correctness checks.</p>
-
-<!-- ============================================================ -->
-<h2 id="fanout">Fan-out 200 makes a billion rows a four-level tree</h2>
-
-<p class="key-fact keep-in-present"><strong>4 levels</strong> can hold a billion distinct keys in an ideal model with 200 entries per leaf and up to 200 children per internal node.</p>
-
-<h3 class="new-slide" data-kicker="Fan-out and height">Count leaf capacity as well as child pointers</h3>
-
-<div class="math">
-\[ \text{maximum entries at height } h = L \times F^{h-1} \]
-<p><em>L</em> is entries per leaf, <em>F</em> is children per internal node, and height counts levels including the root and leaves. For this table, assume <em>L</em> = <em>F</em> = 200 and choose the smallest height with enough capacity. This is an ideal capacity estimate, not a promise about occupancy after arbitrary inserts.</p>
-<table>
-  <thead><tr><th>Distinct keys</th><th>Index levels</th><th>Capacity at that height</th></tr></thead>
-  <tbody>
-    <tr><td>100</td><td>1</td><td>200 entries in one root leaf</td></tr>
-    <tr><td>100,000</td><td>3</td><td>200 × 200² = 8,000,000</td></tr>
-    <tr><td>100,000,000</td><td>4</td><td>200 × 200³ = 1,600,000,000</td></tr>
-    <tr><td>1,000,000,000</td><td>4</td><td>1,600,000,000</td></tr>
-  </tbody>
-</table>
-<p>Lab 6 uses four keys per node and up to five children, with splits leaving partially filled nodes. Its reference insertion of 100,000 ordered keys produces height 11. Do not substitute <code>ORDER</code> for the observed average fan-out. Fetching a heap row adds work beyond the index traversal, and cached pages may avoid physical reads.</p>
-</div>
-
-<p class="keep-in-present">Large fan-out keeps the height small. Page-sized nodes hold many keys and child pointers, so each page read narrows the search substantially. The exact fan-out depends on page size, entry size, and occupancy.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup></p>
-
-<h3 class="new-slide" data-kicker="Fan-out and height">Fan-out 2 costs 27 levels; fan-out 200 costs four</h3>
-
+<p class="key-fact keep-in-present"><strong>Four levels</strong> have room for a billion entries in this fully packed model. A lookup follows just one node at each level.</p>
+<p>Real nodes have spare space, so this is a capacity estimate. It does not promise that every billion-row index has four levels. Our lab uses four keys per node, not 200; its reference tree for 100,000 ordered keys has <strong>11 levels</strong>.</p>
+<details><summary>The same count as a formula</summary>
+<p>If a leaf holds <em>L</em> entries and an internal node has up to <em>F</em> children, a fully packed tree with <em>h</em> levels holds up to <code>L × F^(h − 1)</code> entries. The exponent counts the branching levels above the leaves. With one level, the root is a leaf and the capacity is just <em>L</em>.</p>
+</details>
 <div class="viz" id="viz-fanout">
-  <div class="viz-title">fan-out vs height · compare the number of levels</div>
-  <p class="viz-description">Pick a table size, then drag the fan-out from binary-tree
-  territory (2) to page-sized nodes (~200). Each bar is a tree level, labeled with its node
-  count; the height is how many bars you must descend. This widget uses the same chosen number for leaf capacity and internal fan-out, assumes maximum packing, and counts one entry per row.</p>
+  <div class="viz-title">More children per node means fewer levels</div>
+  <p class="viz-description">Choose a row count, then move the slider. Each bar represents a level. The number beside it is the number of nodes needed at that level. For this model, each row has a different key, every leaf holds up to the selected number of entries, and every internal node has up to that many children. Nodes are packed as tightly as possible.</p>
   <div class="qj-controls">
     <button type="button" class="btn" data-n="100000" id="fo-100k">100 thousand rows (the lab)</button>
     <button type="button" class="btn primary" data-n="100000000" id="fo-100m">100 million rows</button>
     <button type="button" class="btn" data-n="10000000000" id="fo-10b">10 billion rows</button>
   </div>
   <div class="fo-controls">
-    <label>fan-out: <span id="fo-val">200</span></label>
+    <label for="fo-slider">fan-out: <span id="fo-val">200</span></label>
     <input type="range" id="fo-slider" min="1" max="100" step="1" value="87">
   </div>
   <div id="fo-stage"></div>
-  <p class="viz-caption">With 100 million rows, fan-out 2 gives about 27 levels in this model. Increasing fan-out to about 200 reduces that to four. Each level is an index-page access; only uncached accesses require a disk read.</p>
+  <p class="viz-caption">Try 100 million rows with 2, then about 200, children per node. The model changes from 27 levels to 4. This predicts index-node visits, not elapsed time or the number of physical reads.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Fan-out and height">Caching can reduce the disk reads per lookup</h3>
 
+
+<h3 class="new-slide" data-kicker="Tree height">A node visit is not always a disk read</h3>
+<p>A <strong>node visit</strong> means we inspect a node. For a disk-based index, that node is on a page. If the buffer pool already holds the page, visiting it needs no new disk read. The root is used by every lookup, so keeping it in memory can save work.</p>
+<p>For a concrete disk-index example, assume a four-level search path whose three upper pages are cached, while its leaf and the target heap page are uncached. Visiting the root and two internal nodes adds three visits and zero reads. The leaf adds one visit and one read; following its RID adds one heap-page visit and one more read. The totals are <strong>four index-node visits, one heap-page visit, and two physical reads</strong>.</p>
+<figure class="bt-reading" data-btree-scene="index-pages-and-heap-pages">
+  <img class="bt-reading-static" src="diagrams/index-pages-and-heap-pages.svg" alt="With three upper index pages cached and the leaf and heap page uncached, the lookup makes four index visits plus one heap visit and two disk reads." loading="lazy" width="1280" height="720">
+  <figcaption>Keep separate counters as the lookup reaches the leaf and then the heap. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
 <table>
-  <thead><tr><th>Tree level (fan-out 200, 100M rows)</th><th>Nodes</th><th>Where it lives</th></tr></thead>
+  <thead><tr><th>What we count</th><th>What it tells us</th></tr></thead>
   <tbody>
-    <tr><td>root</td><td>1</td><td>usually cached because every lookup accesses it; memory pressure can still evict it</td></tr>
-    <tr><td>level 2</td><td>~200</td><td>often cached: 200 pages can fit in a modest buffer pool and are accessed frequently</td></tr>
-    <tr><td>level 3</td><td>~40,000</td><td>may be cached if the buffer pool has room for these pages and the workload reuses them</td></tr>
-    <tr><td>leaves</td><td>~10⁶</td><td>may exceed the cache capacity, making leaf accesses more likely to require disk I/O</td></tr>
+    <tr><td>Tree-node visits</td><td>How many tree nodes the search follows. In Lab 6, those nodes are Python objects in memory.</td></tr>
+    <tr><td>Heap rows fetched</td><td>How many matching row addresses we follow. Several rows may share a block.</td></tr>
+    <tr><td>Physical reads</td><td>Which pages must actually be brought in from storage because they are not cached.</td></tr>
+    <tr><td>Elapsed time</td><td>How long the whole measured operation takes, including comparisons and other work.</td></tr>
   </tbody>
 </table>
+<p>A short tree reduces search work. The number of matches, their locations in the heap, and the cache still affect the cost of fetching the answers.</p>
 
-<p class="keep-in-present">The buffer pool reduces the I/O cost of index traversal by caching frequently used upper levels. A point lookup may then need one leaf read plus heap reads. A full table scan still visits every heap page, though those pages can also be cached.</p>
+<h2 id="costs">When does an index help?</h2>
+<p>The first question is <strong>how many rows match?</strong> An index can save a great deal of work when we need just a few rows. PostgreSQL's B-tree indexes support both equality and range searches.<sup class="src"><a href="#src-1">1</a></sup></p>
+<p>In Lab 6, a complete scan for <code>uid = 77777</code> examines 100,000 rows across 294 heap blocks. The reference index follows 11 in-memory tree nodes and returns one RID. The matching row occupies one heap block. The benchmark times index construction separately from the lookup.</p>
 
-<!-- ============================================================ -->
-<h2 id="costs">Indexes add write and storage costs</h2>
+<h3 class="new-slide" data-kicker="Choosing an access path">Many matches can make a scan cheaper</h3>
+<p>First use a heap small enough to see: six pages with two rows each. One matching RID reaches one page. A broader condition returns eight RIDs spread across all six pages. In the illustrated RID order, we visit pages <code>0 → 4 → 1 → 5 → 2 → 3 → 0 → 4</code>. Some pages appear twice; a repeat visit may still hit the buffer pool.</p>
+<figure class="bt-reading" data-btree-scene="when-scanning-wins">
+  <img class="bt-reading-static" src="diagrams/when-scanning-wins.svg" alt="Eight matching rows span all six heap pages. A scan visits pages 0 through 5, tests twelve rows, and returns the same eight matches." loading="lazy" width="1280" height="720">
+  <figcaption>Compare the same eight results through scattered RIDs and an ordered heap scan. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p>A scan visits pages <code>0 → 1 → 2 → 3 → 4 → 5</code>, tests all twelve rows, and returns those same eight matches. The index no longer avoids any distinct heap page in this example, and it adds tree traversal and RID processing. That makes a scan a plausible alternative; it does not establish a universal timing threshold.</p>
+<p>Now suppose a condition matches 99,000 of those 100,000 rows. The index returns many RIDs. If those addresses send us back and forth across heap pages, following them can be more work than scanning the 294 blocks in order.</p>
+<p>That is why an available index is a choice, not an instruction to use it. The planner compares the alternatives. Caching, the order of the heap rows, and which columns the query needs can change the answer.<sup class="src"><a href="#src-4">4</a></sup></p>
+<p><strong>Selectivity</strong> is the fraction of rows that match. One match out of 100,000 is <code>1 / 100000</code>. In everyday database language, that is a “highly selective” condition because it excludes almost everything. Say the fraction or match count when the wording could be confusing.</p>
 
-<p class="keep-in-present">Maintaining an index requires additional work when table data changes. This is a form of <span class="gloss" data-gloss="write-amplification">write amplification</span>: one logical table change can cause writes to several structures.</p>
-
+<h3 class="new-slide" data-kicker="Choosing an access path">An index also has to be built and maintained</h3>
+<p>Insert <code>(uid=42, name=mia, gpa=36)</code> and let its heap address be <code>r</code>. A uid index receives <code>42 → [r]</code>; a name index receives <code>mia → [r]</code>; a GPA index receives <code>36 → [r]</code>. If 36 already exists, append r to that entry's RID list. All three addresses refer to the same new row.</p>
+<figure class="bt-reading" data-btree-scene="the-write-bill">
+  <img class="bt-reading-static" src="diagrams/the-write-bill.svg" alt="Inserting one row into a table with three indexes maintains four structures: the heap and uid, name, and GPA indexes, all using the same RID." loading="lazy" width="1280" height="720">
+  <figcaption>Compare tables with zero, one, two, and three indexes. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p>The animation compares different index configurations; it is not creating a new whole-table index after each insert. Maintaining an existing index and building one from an existing table are different operations.</p>
 <table>
-  <thead><tr><th>You pay</th><th>When</th><th>How much</th></tr></thead>
+  <thead><tr><th>Action</th><th>Extra work for the index</th></tr></thead>
   <tbody>
-    <tr><td>Maintenance</td><td>every INSERT/UPDATE/DELETE</td><td>one \(O(\log n)\) tree update <em>per index on the table</em>: five indexes mean six structures to update for an insert; the number of physical writes varies<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 11.1. Indexes Introduction">5</a></sup></td></tr>
-    <tr><td>Space</td><td>always</td><td>roughly another copy of the indexed column + RIDs, often 10–30% of the table, each</td></tr>
-    <tr><td>Build time</td><td>CREATE INDEX</td><td>in this lab, one full scan + n inserts; measure the elapsed time on your machine</td></tr>
-    <tr><td>Planner risk</td><td>query time</td><td>an index used on a low-<span class="gloss" data-gloss="selectivity">selectivity</span> predicate is <em>slower</em> than the scan it replaced (random hops vs one smooth read)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">6</a></sup></td></tr>
+    <tr><td>Build an index on an existing table</td><td>Read the existing rows and create entries. Lab 6 does this with one scan and one insertion per row.</td></tr>
+    <tr><td>Insert a row</td><td>Add its key and RID to each index on the table. A node may need to split.</td></tr>
+    <tr><td>Change an indexed value</td><td>Replace the old lookup entry so searches find the row under its new value.</td></tr>
+    <tr><td>Delete a row</td><td>Remove its index entries so they no longer point to that row.</td></tr>
+    <tr><td>Keep the index</td><td>Use space for keys, row addresses, child pointers, and room for future inserts.</td></tr>
   </tbody>
 </table>
+<p>Adding three indexes means an insert must maintain the heap and three index structures. It does not mean exactly four disk writes: buffering and page splits affect the actual writes. Choose indexes whose lookup benefits justify this extra work.<sup class="src"><a href="#src-3">3</a></sup></p>
 
-<p class="keep-in-present">Add indexes for queries that benefit enough to justify their maintenance and storage costs. Check actual query plans and usage before adding or dropping an index. The optimizer, covered in Lecture 9, estimates whether a particular query should use an available index.</p>
+<details><summary>Optional: what if the index already has every column we need?</summary>
+<p>An index on GPA tells us where to find a student's name, but does not itself store the name. A <strong>covering index</strong> also contains the columns a particular query needs. For this query, including <code>name</code> could let the engine answer without fetching the row's fields from the heap.</p>
+<p>PostgreSQL supports <code>INCLUDE</code> columns for this purpose. It may still need heap access to check whether a row is visible to the query. Extra columns also make the index larger. This is an extension beyond the Lab 6 tree.<sup class="src"><a href="#src-5">5</a></sup></p>
+</details>
 
-<h3 class="new-slide" data-kicker="The index bill">Many heap fetches can cost more than a table scan</h3>
-
-<pre class="equation"><code>WHERE score > 10        keeps ~99% of rows (low selectivity)
-
-  via index:  one descent + a leaf-range scan + up to 99,000 RANDOM heap jumps      ← disaster
-  via scan:   294 blocks, read once, in order                    ← boring, correct, faster</code></pre>
-
-<p class="keep-in-present">When a predicate matches most rows, scattered heap fetches through an index can cost more than a sequential scan. Lecture 9 explains how the optimizer estimates these alternatives and chooses a plan.</p>
-
-<h3 class="new-slide" data-kicker="The index bill">A covering index answers from the index alone</h3>
-
-<div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Included columns</span><span>store the columns a hot query needs <em>inside</em> the index entries, then answer from the index alone, potentially zero heap visits; PostgreSQL also checks visibility, which can require a heap fetch.</span></div>
-  <div class="lc-row"><span class="lc-k">The name</span><span>a <span class="gloss" data-gloss="covering-index">covering index</span>; Postgres calls the resulting plan an index-only scan and offers <code>INCLUDE</code> to build one deliberately<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 11.9. Index-Only Scans and Covering Indexes">7</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">The price</span><span>adding columns makes index entries larger, which can reduce fan-out and increase storage and maintenance costs. Compare those costs with the heap reads the index can save.</span></div>
-  <div class="lc-row"><span class="lc-k">Try it</span><span>Thursday's Going Further builds the toy version and measures the jumps it saves.</span></div>
-</div>
-
-<!-- ============================================================ -->
-<h2 id="thursday">Thursday you build it in four methods</h2>
-
-<p>You will implement four methods using the provided Node class, then use the resulting RIDs to fetch matching rows from the heap file.</p>
-
+<h2 id="thursday">Connect the ideas to Lab 6</h2>
+<p>You will implement four methods in <code>btree.py</code>. The node class and the helper that follows a root-to-leaf path are provided. The table storage code is also provided.</p>
 <table>
-  <thead><tr><th>You write</th><th>Responsibility</th><th>Lines</th></tr></thead>
+  <thead><tr><th>Method</th><th>Plain-language job</th></tr></thead>
   <tbody>
-    <tr><td><code>search</code></td><td>descend (helper provided), find in leaf, return the RID list</td><td>~6</td></tr>
-    <tr><td><code>insert</code></td><td>descend, insort into the leaf, repair overfull nodes upward</td><td>~14</td></tr>
-    <tr><td><code>_split</code></td><td>apply the leaf or internal split, repair the leaf chain, and create a root if needed</td><td>~22</td></tr>
-    <tr><td><code>range</code></td><td>descend to lo, walk the chain until past hi</td><td>~10</td></tr>
+    <tr><td><code>search(key)</code></td><td>Find the key's leaf. Return a copy of its RID list, or an empty list if the key is missing. A copy lets the caller change its result without changing the index.</td></tr>
+    <tr><td><code>insert(key, rid)</code></td><td>Put the new entry in order, or append the RID to an existing key's list. Repair any nodes that become overfull.</td></tr>
+    <tr><td><code>_split(node, parent)</code></td><td>Divide an overfull node, keep its entries or children together, and update the parent. Create a root when needed.</td></tr>
+    <tr><td><code>range(lo, hi)</code></td><td>Start at the leaf for lo. Follow the leaf links and collect RIDs through hi, including both endpoints.</td></tr>
   </tbody>
 </table>
+<p><strong>The lab tree lives in memory.</strong> The provided benchmark builds it from the heap, then uses <code>IndexSelectScan</code> to fetch matching rows. The SQL planner from Lab 5 does not automatically choose this new index. Storing tree nodes on disk and integrating index choice into SQL planning are later extensions.</p>
+<h3 class="new-slide" data-kicker="Check the implementation">A balanced-looking tree can still lose a row</h3>
+<p>Imagine a faulty leaf split that moved 36 out of its leaf instead of copying it. The root still contains separator 36, and the leaves can still be sorted and equally deep. Yet <code>search(36)</code> cannot return eli's RID, and <code>range(34, 37)</code> returns only 34 and 37. The routing key cannot fill in a missing leaf entry.</p>
+<figure class="bt-reading" data-btree-scene="build-and-test">
+  <img class="bt-reading-static" src="diagrams/build-and-test.svg" alt="A broken tree retains separator 36 in its root but omits its leaf entry. Restoring 36→[(0, 4)] repairs equality lookup and the inclusive range 34–37." loading="lazy" width="1280" height="720">
+  <figcaption>Use an equality lookup and a crossing range to expose a missing leaf entry. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p>Check the result addresses as well as the shape: the repaired range returns <code>[(0, 5), (0, 4), (0, 2)]</code>. After an insertion, verify that keys remain sorted, routing reaches the right children, each internal node has one more child than separator, every key retains its RID list, the leaf chain is complete, and all leaves have equal depth. Check occupancy separately.</p>
+<p>For Thursday, October 1, <a href="../../labs/lab-06/btree.html">get the eight Lab 6 starter files</a> and run <code>python3 test_btree.py</code>. A fresh starter reports <strong>0/9 passing</strong> because the four methods are unfinished. You can test one method at a time with <code>--unit</code>. Bring a drawing of what happens when you insert 5 into <code>[1, 2, 3, 4]</code>.</p>
 
-<h3 class="new-slide" data-kicker="Thursday's lab">Prepare for Thursday’s lab</h3>
-
-<ul class="checklist">
-  <li>☐ Lab 5 submitted: the starter ships reference Labs 1–5, including a TableScan that
-  gained <code>move_to_rid()</code> (three lines; read them).</li>
-  <li>☐ Download the eight starter files from the Lab 6 page.</li>
-  <li>☐ Harness runs: <code>python3 test_btree.py</code> prints <strong>0/9 passed</strong>.</li>
-  <li>☐ On paper: insert 1, 2, 3, 4, 5 into an empty ORDER-4 tree and draw the result. The
-  harness's second test checks your drawing.</li>
-</ul>
-
-<!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
-
-<p>Three ideas to carry into the lab and later lectures.</p>
-
+<h2 id="recap">Explain one complete operation</h2>
+<p>Start with <code>[1, 2, 3, 4]</code>, insert 5, and then search for 4. Narrate the changes before advancing: overflow, split, link, copy the separator, route right, return the address, fetch the row. If you can explain why key 3 remains in its leaf and why finding 4 does not yet fetch its row, the two halves of the lecture fit together.</p>
+<figure class="bt-reading" data-btree-scene="exit-trace">
+  <img class="bt-reading-static" src="diagrams/exit-trace.svg" alt="After inserting 5, root [3] routes to leaves [1, 2] and [3, 4, 5]. Searching for 4 returns RID d, which the heap uses to fetch the row." loading="lazy" width="1280" height="720">
+  <figcaption>Connect insertion, routing, and row fetching in one final trace. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
 <ul class="recap-list">
-  <li><strong>An index is a map from values to RIDs</strong>: sorted entries provide direct access to heap rows and must be maintained when those rows change.</li>
-  <li><strong>One move keeps it balanced:</strong> split the full node, push the middle up,
-  grow at the root. Splits preserve equal leaf depth.</li>
-  <li><strong>Fan-out is what makes the tree fast.</strong> With about 200 entries per leaf and 200 children per internal node, a billion keys fit in roughly four index levels; a heap fetch adds a page access<sup class="src"><a href="#src-8" title="How does B-tree make your queries fast? (Allegro Tech Blog)">8</a></sup>. The file, buffer, and record layers support those accesses.</li>
+  <li><strong>Find the address, then fetch the row.</strong> Internal nodes give directions; leaves store keys and RIDs.</li>
+  <li><strong>Keep every entry in a leaf.</strong> A leaf split copies a separator upward. An internal split moves a separator upward.</li>
+  <li><strong>Only a root split adds a level.</strong> Every leaf gains that level together.</li>
+  <li><strong>Count the whole lookup.</strong> A short search path helps, but many matching rows can still make a scan cheaper.</li>
 </ul>
+<p><strong>Thursday, October 1:</strong> Lab 6, building and measuring the tree. <strong>Next lecture, Thursday, October 8:</strong> transactions and the write-ahead log. Tuesday, October 6 is during Reading Days. Quiz 6 is Tuesday, October 13.</p>
 
-<p class="key-fact keep-in-present"><strong>294 blocks</strong> per scan lookup today · <strong>4 levels</strong> for a billion rows with fan-out 200</p>
+<h2 id="faq">Common questions</h2>
+<h3>Is the search key the same thing as a primary key?</h3>
+<p>No. Here, “search key” means the value an index is organized by. Several students can have GPA 31. The index stores all of their RIDs under that value.</p>
+<h3>Does a RID stay valid forever?</h3>
+<p>No. It identifies a block and slot while that row occupies the slot. If the row is deleted or the slot is reused, indexes referring to it must be updated. A RID is a storage address, not a permanent student identifier.</p>
+<h3>Why not just use a sorted list or a hash table?</h3>
+<p>A sorted array supports binary search: compare with the middle value and repeatedly halve the remaining search range. But inserting a value in the middle may shift many entries. A B+ tree makes room by splitting individual nodes. A hash index is useful for equality searches, but it does not keep keys in order for a range such as 31 through 37. These structures suit different workloads.<sup class="src"><a href="#src-1">1</a></sup></p>
+<h3>Does “balanced” mean both sides have the same number of keys?</h3>
+<p>No. It means every leaf is at the same depth. One leaf can hold two keys while another holds four. Occupancy is a separate rule about how full a node must be.</p>
+<h3>Why is it called B+ rather than a binary search tree?</h3>
+<p>A binary search tree has at most two children per node. A B+ tree can have many children. In the B+ tree described here, every key-to-RID entry lives in a leaf, and the leaves are linked for range scans.</p>
+<h3>What about deletion and saving the tree to disk?</h3>
+<p>Neither is required in Lab 6. Deletion may leave nodes too empty; textbook algorithms move entries between neighboring nodes or merge nodes. A persistent index stores nodes in pages and needs machinery to recover from crashes and handle concurrent changes. The lab keeps the tree in memory so you can focus on searching, inserting, and splitting.<sup class="src"><a href="#src-7">7</a></sup></p>
 
-<p class="keep-in-present"><strong>Thursday:</strong> build it, then compare a complete index lookup with a scan. Record the node and row counts as well as your measured time; the timing ratio depends on your run.
-<strong>Next class is Thursday Oct 8</strong> (Tuesday falls during Reading Days): transactions and
-the write-ahead log: what COMMIT actually promises. Quiz 6 lands Tue Oct 13.</p>
-
-<p class="keep-in-present"><strong>Before Thursday (Lab 6, October 1):</strong></p>
-<ul>
-  <li><strong>Read</strong> the three lines of <code>move_to_rid()</code> in the starter TableScan (Sciore ch. 12 if you want a detailed description of splitting).</li>
-  <li><strong>Run</strong> <code>python3 test_btree.py</code> on the eight Lab 6 starter files until it prints <strong>0/9 passed</strong>.</li>
-  <li><strong>Bring</strong> your paper drawing of 1, 2, 3, 4, 5 inserted into an empty ORDER-4 tree; the harness's second test checks it.</li>
-</ul>
-
-<!-- ============================================================ -->
-<h2 id="faq">FAQ</h2>
-
-<h3 class="keep-in-present">Why not a hash index? O(1) beats O(log n).</h3>
-<p class="keep-in-present">Hash indexes support efficient equality lookups, and PostgreSQL provides them. They do not preserve key order for range scans or sorted output. B+ trees support both equality and ordered access, making them useful for a wider range of queries. Bigtable, covered in Lecture 14, also preserves key order but uses write-optimized log-structured storage.<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 65.2. Hash Indexes">9</a></sup><sup class="src"><a href="#src-10" title="PostgreSQL Documentation: 11.4. Indexes and ORDER BY">10</a></sup><sup class="src"><a href="#src-11" title="Bigtable: A Distributed Storage System for Structured Data (Chang et al., OSDI 2006)">11</a></sup></p>
-
-<h3 class="keep-in-present">Is the binary search tree from my algorithms class the same thing?</h3>
-<p class="keep-in-present">Both structures route searches by comparing keys. A binary tree has at most two children per node, so even a balanced tree needs about 27 levels for 100 million entries. A B+ tree packs many keys into each disk page and branches to many children, reducing the number of page accesses. The design optimizes page I/O as well as comparisons.<sup class="src"><a href="#src-2" title="The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)">2</a></sup></p>
-
-<h3 class="keep-in-present">How does deletion affect node occupancy?</h3>
-<p class="keep-in-present">Deletion can leave nodes underfull. Textbook B+ trees redistribute keys or merge nodes to restore minimum occupancy. Production policies differ: PostgreSQL reclaims empty index pages but does not merge partly full pages, while other engines may merge them. The lab does not require deletion; Sciore ch. 12 covers the fuller algorithm.<sup class="src"><a href="#src-12" title="PostgreSQL source: src/backend/access/nbtree/README">12</a></sup><sup class="src"><a href="#src-13" title="Database Design and Implementation: Second Edition (Edward Sciore, Springer 2020)">13</a></sup></p>
-
-<h3 class="keep-in-present">Does Postgres really rebuild indexes at startup like ours?<sup class="src"><a href="#src-14" title="PostgreSQL Documentation: 65.1. B-Tree Indexes (Implementation)">14</a></sup></h3>
-<p class="keep-in-present">No. Persistent indexes store nodes in disk pages and represent child links with page identifiers, so the tree survives a restart. The lab keeps its index in memory to focus on search and splitting. Persisting it would also require page allocation, recovery, and careful updates to links; Going Further outlines the storage mapping.</p>
-
-<footer>
-  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
-</footer>
-
-<!-- ============================================================ -->
-<h2 id="sources">Sources</h2>
-<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
-document that supports the claim it is attached to.</p>
+<h2 id="sources">Sources and further reading</h2>
+<p>The small examples follow <a href="../../labs/lab-06/starter/btree.py">the Lab 6 interface</a> and <a href="../../labs/lab-06/starter/measure_index.py">its measurement script</a>. The links below support the discussion of production indexes.</p>
 <ol class="sources">
-  <li id="src-1"><a href="https://infolab.usc.edu/csci585/Spring2010/den_ar/indexing.pdf">Organization and Maintenance of Large Ordered Indices (Bayer and McCreight, Boeing Scientific Research Laboratories Report No. 20, 1970)</a> <span class="src-note">Bayer and McCreight described B-trees in a July 1970 Boeing report (published in Acta Informatica in 1972), so the structure is over fifty years old in 2026, not forty.</span></li>
-  <li id="src-2"><a href="https://dl.acm.org/doi/10.1145/356770.356776">The Ubiquitous B-Tree (Douglas Comer, ACM Computing Surveys 11(2), 1979)</a></li>
-  <li id="src-3"><a href="https://www.postgresql.org/docs/current/indexes-types.html">PostgreSQL Documentation: 11.2. Index Types</a></li>
-  <li id="src-4"><a href="https://www.postgresql.org/docs/current/storage-page-layout.html">PostgreSQL Documentation: 66.6. Database Page Layout</a> <span class="src-note">PostgreSQL stores every index as an array of fixed-size pages (usually 8 kB); a page holds hundreds of entries, and Allegro's worked example fits about 375 BIGINT keys per 8 kB page, so 200 is a conservative round figure.</span></li>
-  <li id="src-5"><a href="https://www.postgresql.org/docs/current/indexes-intro.html">PostgreSQL Documentation: 11.1. Indexes Introduction</a></li>
-  <li id="src-6"><a href="https://www.postgresql.org/docs/current/using-explain.html">PostgreSQL Documentation: 14.1. Using EXPLAIN</a></li>
-  <li id="src-7"><a href="https://www.postgresql.org/docs/current/indexes-index-only-scans.html">PostgreSQL Documentation: 11.9. Index-Only Scans and Covering Indexes</a></li>
-  <li id="src-8"><a href="https://blog.allegro.tech/2023/11/how-does-btree-make-your-queries-fast.html">How does B-tree make your queries fast? (Allegro Tech Blog)</a> <span class="src-note">200^4 is 1.6 billion, so a billion keys fit in a height-4 tree (four index pages plus one heap page); Allegro's PostgreSQL walkthrough with ~375 keys per page reaches the same four-level conclusion, and Postgres Professional reports real trees of depth 4 to 5 for very large tables.</span></li>
-  <li id="src-9"><a href="https://www.postgresql.org/docs/current/hash-index.html">PostgreSQL Documentation: 65.2. Hash Indexes</a></li>
-  <li id="src-10"><a href="https://www.postgresql.org/docs/current/indexes-ordering.html">PostgreSQL Documentation: 11.4. Indexes and ORDER BY</a></li>
-  <li id="src-11"><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf">Bigtable: A Distributed Storage System for Structured Data (Chang et al., OSDI 2006)</a> <span class="src-note">Bigtable does replace B-trees with a log-structured design (memtable plus immutable SSTables), but it is not a hash-style, orderless system: the paper says data is kept in lexicographic row-key order so that short row-range scans are efficient, so the opposite bet is write-optimized storage rather than giving up ordering.</span></li>
-  <li id="src-12"><a href="https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README">PostgreSQL source: src/backend/access/nbtree/README</a> <span class="src-note">True for PostgreSQL, whose nbtree README says pages are deleted (by VACUUM) only when completely empty and partly-full pages are never merged; but MySQL InnoDB does merge an index page with a neighbor when it falls below MERGE_THRESHOLD (default 50%), so 'mostly' overstates the case.</span></li>
-  <li id="src-13"><a href="https://link.springer.com/book/10.1007/978-3-030-33836-7">Database Design and Implementation: Second Edition (Edward Sciore, Springer 2020)</a></li>
-  <li id="src-14"><a href="https://www.postgresql.org/docs/current/btree.html">PostgreSQL Documentation: 65.1. B-Tree Indexes (Implementation)</a></li>
+  <li id="src-1"><a href="https://www.postgresql.org/docs/current/indexes-types.html">PostgreSQL: Index Types</a> — equality and range queries, and the difference from hash indexes.</li>
+  <li id="src-2"><a href="https://www.postgresql.org/docs/current/storage-page-layout.html">PostgreSQL: Database Page Layout</a> — index storage uses fixed-size pages. The 200-entry capacity in this reading is an illustrative assumption.</li>
+  <li id="src-3"><a href="https://www.postgresql.org/docs/current/indexes-intro.html">PostgreSQL: Introduction to Indexes</a> — lookup benefits, maintenance, and storage costs.</li>
+  <li id="src-4"><a href="https://www.postgresql.org/docs/current/using-explain.html">PostgreSQL: Using EXPLAIN</a> — choosing between index access and a scan.</li>
+  <li id="src-5"><a href="https://www.postgresql.org/docs/current/indexes-index-only-scans.html">PostgreSQL: Index-Only Scans and Covering Indexes</a> — included columns and visibility checks.</li>
+  <li id="src-6"><a href="https://link.springer.com/book/10.1007/978-3-030-33836-7">Sciore: Database Design and Implementation, second edition</a> — optional book reading, chapter 12.</li>
+  <li id="src-7"><a href="https://www.postgresql.org/docs/current/btree.html">PostgreSQL: B-Tree Implementation</a> — further details beyond the teaching tree.</li>
 </ol>
+<footer>DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science</footer>
 
 </main>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../slides/_shared/visuals.js"></script>
+<script src="../../labs/_shared/teaching-traces.js?v=2"></script>
+<script src="../../slides/_shared/trace-scenes.js?v=1"></script>
+<script src="../../slides/decks/lectures-06-10.js?v=2"></script>
+<script src="../../slides/decks/storage-choices.js"></script>
+<script src="../../slides/decks/btree-growth.js"></script>
+<script src="../../slides/decks/btree-clarity.js"></script>
+<script src="reading-diagrams.js?v=1"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
-        onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
-<script src="../../labs/_shared/teaching-traces.js?v=1"></script>
-<script src="../../labs/_shared/teaching-trace.js?v=1"></script>
+<script src="viz.js?v=5"></script>
+<script src="../../labs/_shared/btree-trace-view.js?v=1"></script>
+<script src="../../labs/_shared/teaching-trace.js?v=2"></script>
 </body>
 </html>

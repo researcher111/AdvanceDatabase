@@ -5,23 +5,23 @@
   const GLOSSARY = {
     'occupancy': {
       title: 'Occupancy',
-      body: "<p>The fraction of a node’s key capacity currently in use. A middle split produces nodes that are roughly half full; later inserts may fill them further. Lower occupancy requires more nodes for the same keys and can increase tree height. The root is allowed to have fewer keys than the usual non-root minimum.</p>",
+      body: "<p>How much of a node’s available space is used. Two keys in a node with four slots means 50% occupancy. Splitting five keys into groups of two and three leaves useful room in both nodes. Repeatedly leaving nearly empty nodes wastes space.</p>",
     },
     'routing-key': {
       title: 'Routing key',
-      body: "<p>An internal-node key that separates child ranges. For keys [k1, k2, ..., kn], the node has n+1 children: keys below k1 go to the first child, keys from k1 up to but not including k2 go to the second, and so on. Routing keys do not carry RIDs. An internal split moves a separator to the parent; a leaf split copies a separator upward while preserving the leaf entry.</p>",
+      body: "<p>A key used to choose a child. In our tree, separator 36 sends values below 36 left and values equal to or above 36 right. It gives directions; it does not store row addresses. The actual entry for 36 is in a leaf.</p>",
     },
     'invariant': {
       title: 'Invariant',
       body: "<p>A property that must hold after every completed operation. For this B+ tree, keys are sorted, leaves have equal depth, non-root nodes meet minimum occupancy, and all (key, RID) entries remain in leaves. The lab tests these properties after insertions and splits.</p>",
     },
     'rid-recall': {
-      title: 'RID (record id) — recall',
-      body: "<p>A record identifier from Lab 3: (block number, slot number). It stays valid while the record occupies that slot. If the record is deleted or the slot is reused, index entries referring to it must be removed or updated. B+ tree leaves store RIDs so an index lookup can locate the matching heap rows.</p>",
+      title: 'RID (record identifier)',
+      body: "<p>A row address written as (block number, slot number). For example, (0, 4) means block 0, slot 4. The index returns this address; the table scan uses it to fetch the row. If that row is deleted or its slot reused, the index entry must be updated.</p>",
     },
     'fanout': {
       title: 'Fan-out',
-      body: "<p>The number of children an internal node has. A binary tree has at most two; a page-sized B+ tree node can have hundreds, depending on key size and page layout. More children per node usually means fewer levels and fewer page accesses per lookup. The lecture uses about 200 as an illustrative value.</p>",
+      body: "<p>The number of children an internal node has. With 200 children, one decision chooses among 200 groups of keys. More children usually means fewer levels. How many children fit depends on page size, entry size, and how full the nodes are.</p>",
     },
     'selectivity': {
       title: 'Selectivity',
@@ -151,16 +151,44 @@
 
   function render(flashKey, visitedPath, foundKey) {
     const visited = new Set((visitedPath || []).map(n => n.id));
-    canvas.innerHTML = levels().map(level =>
-      `<div class="bt-level">` + level.map(n => {
-        const cls = ['bt-node'];
-        if (n.leaf) cls.push('leaf');
-        if (visited.has(n.id)) cls.push('visited');
-        if (flashKey !== null && flashKey !== undefined && n.keys.includes(flashKey)) cls.push('split-flash');
-        return `<div class="${cls.join(' ')}">` + n.keys.map(k =>
-          `<span class="bt-key${k === foundKey ? ' found' : ''}">${k}</span>`).join('') + '</div>';
-      }).join('') + `</div>`
-    ).join('') + (height > 1 ? `<div class="bt-chain">leaves link left → right for range scans</div>` : '');
+    const treeLevels = levels(), leaves = treeLevels[treeLevels.length - 1];
+    const keyWidth = Math.max(34, ...treeLevels.flat().flatMap(n => n.keys.map(k => String(k).length * 10 + 18)));
+    const nodeWidth = n => Math.max(90, n.keys.length * keyWidth + 20);
+    const gap = Math.max(190, ...treeLevels.flat().map(n => nodeWidth(n) + 35));
+    const width = Math.max(700, leaves.length * gap + 30), svgHeight = height * 135 + 62;
+    const positions = new Map();
+    leaves.forEach((n, i) => positions.set(n, {x: width / 2 + (i - (leaves.length - 1) / 2) * gap, y: 35 + (height - 1) * 135}));
+    for (let level = treeLevels.length - 2; level >= 0; level--) {
+      treeLevels[level].forEach(n => positions.set(n, {
+        x: (positions.get(n.children[0]).x + positions.get(n.children[n.children.length - 1]).x) / 2,
+        y: 35 + level * 135,
+      }));
+    }
+    const drawing = [];
+    treeLevels.flat().forEach(n => {
+      const p = positions.get(n);
+      n.children.forEach(child => {
+        const q = positions.get(child), hot = visited.has(n.id) && visited.has(child.id);
+        drawing.push(`<path class="bt-child-edge${hot ? ' active' : ''}" d="M ${p.x} ${p.y + 52} L ${q.x} ${q.y}"/>`);
+      });
+      if (n.leaf && n.next) {
+        const q = positions.get(n.next), left = p.x + nodeWidth(n) / 2 + 5, right = q.x - nodeWidth(n.next) / 2 - 5;
+        drawing.push(`<path class="bt-next-edge" d="M ${left} ${p.y + 26} H ${right} m -8 -5 l 8 5 l -8 5"/>`);
+      }
+    });
+    treeLevels.flat().forEach(n => {
+      const p = positions.get(n), w = nodeWidth(n), flash = flashKey != null && n.keys.includes(flashKey);
+      drawing.push(`<rect class="bt-svg-node ${n.leaf ? 'leaf' : 'internal'}${visited.has(n.id) || flash ? ' active' : ''}" x="${p.x - w / 2}" y="${p.y}" width="${w}" height="52" rx="8"/>`);
+      if (!n.keys.length) drawing.push(`<text x="${p.x}" y="${p.y + 27}">empty</text>`);
+      n.keys.forEach((k, i) => {
+        const x = p.x + (i - (n.keys.length - 1) / 2) * keyWidth;
+        if (n.leaf && k === foundKey) drawing.push(`<rect class="bt-found-key" x="${x - keyWidth / 2 + 2}" y="${p.y + 6}" width="${keyWidth - 4}" height="40" rx="4"/>`);
+        drawing.push(`<text x="${x}" y="${p.y + 27}">${k}</text>`);
+      });
+      if (n === root) drawing.push(`<text class="bt-node-label" x="${p.x}" y="${p.y - 17}">${n.leaf ? 'root = leaf' : 'root: routing keys'}</text>`);
+    });
+    canvas.innerHTML = `<svg class="bt-live-tree" viewBox="0 0 ${width} ${svgHeight}" style="min-width:${width}px" role="img" aria-label="B+ tree with ${count} distinct keys and ${height} levels. Internal branches lead to children; green arrows link leaves in key order.">` + drawing.join('') + '</svg>' +
+      (height > 1 ? '<div class="bt-chain">Gray branches: child pointers · green arrows: next leaf · all leaves have equal depth</div>' : '');
     stats.textContent = `keys: ${count}    height: ${height}    splits so far: ${splits}`;
   }
 
@@ -227,7 +255,7 @@
     const shown = levels.slice().reverse();   // root first
     stage.innerHTML =
       `<div class="fo-verdict">height = <strong>${height}</strong> level${height === 1 ? '' : 's'} ` +
-      `for ${fmt(n)} rows at fan-out ${f} — a point lookup touches ${height} node${height === 1 ? '' : 's'}</div>` +
+      `for ${fmt(n)} distinct keys — one lookup visits ${height} node${height === 1 ? '' : 's'}</div>` +
       (height > maxShow
         ? `<div class="fo-too-tall">${height} levels — too tall to draw. Lower fan-out requires more levels.</div>`
         : shown.map((c, i) => {

@@ -6,7 +6,7 @@ const requested=process.argv.slice(2).map(Number);
 const lectureIds=requested.length?requested:Array.from({length:15},(_,i)=>i+1);
 const groups=[...new Set(lectureIds.map(id=>id<=5?'01-05':id<=10?'06-10':'11-15'))];
 const context=vm.createContext({window:{},console});
-for(const p of ['slides/_shared/visuals.js','labs/_shared/rag-measurements.js','labs/_shared/teaching-traces.js','slides/_shared/trace-scenes.js',...groups.map(g=>'slides/decks/lectures-'+g+'.js'),'slides/decks/teaching-notes.js','slides/decks/storage-choices.js','slides/decks/btree-growth.js','slides/decks/btree-clarity.js'])vm.runInContext(fs.readFileSync(p,'utf8'),context,{filename:p});
+for(const p of ['slides/_shared/visuals.js','labs/_shared/rag-measurements.js','labs/_shared/teaching-traces.js','slides/_shared/trace-scenes.js',...groups.map(g=>'slides/decks/lectures-'+g+'.js'),'slides/decks/teaching-notes.js','slides/decks/storage-choices.js','slides/decks/btree-growth.js','slides/decks/btree-clarity.js','slides/decks/clarity-captions.js','slides/decks/clarity-layout.js','slides/decks/clarity-diagrams.js','slides/decks/course-clarity.js'])vm.runInContext(fs.readFileSync(p,'utf8'),context,{filename:p});
 const {COURSE_DECKS:decks,DeckViz:V}=context.window;
 let scenes=0,builds=0,animated=0;const warnings=[];
 for(const id of lectureIds){
@@ -37,7 +37,10 @@ for(const id of lectureIds){
         for(const [attr,value]of Object.entries(item.attrs))if(typeof value==='number')assert(Number.isFinite(value),name+' finite '+attr);
         if(item.tag==='text'){
           assert(item.attrs['font-size']>=16,name+' label too small: '+item.text);
-          const a=item.attrs,estimated=String(item.text).length*a['font-size']*.51;
+          const a={...item.attrs};
+          const transform=/translate\(([-.\d]+) ([-.\d]+)\) scale\(([-.\d]+)\)/.exec(a.transform||'');
+          if(transform){const [,dx,dy,scale]=transform.map(Number);a.x=a.x*scale+dx;a.y=a.y*scale+dy;a['font-size']*=scale;}
+          const estimated=String(item.text).length*a['font-size']*.51;
           const start=a['text-anchor']==='start'?a.x:a['text-anchor']==='end'?a.x-estimated:a.x-estimated/2;
           if(start<10||start+estimated>1270||a.y<20||a.y>700)warnings.push(`${name} build${step+1}: text may exceed canvas: "${item.text}"`);
         }

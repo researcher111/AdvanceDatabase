@@ -37,6 +37,22 @@
     ]
   };
   const ridText = rids => '[' + rids.map(r => '(' + r.join(', ') + ')').join(', ') + ']';
+  // Visual snapshots are plain data, shared by the reading and lab. IDs keep
+  // the same node recognizable while keys, child pointers, and next links change.
+  const treeView = (options = {}) => ({
+    nodes: [
+      {id:'root', label:'root · separators', keys:[36], x:360, y:72},
+      ...tree.leaves.map((leaf, i) => ({id:i ? 'right' : 'left', label:i ? 'right leaf' : 'left leaf',
+        ...leaf, x:i ? 545 : 175, y:226}))
+    ],
+    edges:[{from:'root', to:'left', label:'child 0 · key < 36'}, {from:'root', to:'right', label:'child 1 · key ≥ 36'}],
+    links:[{from:'left', to:'right'}, {from:'right', to:null}],
+    active:[], marked:[], path:[], result:'No heap rows fetched.', ...options
+  });
+  const attachTrees = (id, views) => {
+    if (examples[id].frames.length !== views.length) throw new Error('Missing tree frame: '+id);
+    examples[id].frames.forEach((f, i) => { f.tree = views[i]; });
+  };
   add('btree-search', {
     title: 'An equality lookup reaches a heap row',
     premise: 'Toy tree: root [36], leaves [28, 31, 34] and [36, 37, 39]. Each RID is (block, slot). Find key 36, exactly equal to the separator.',
@@ -57,10 +73,14 @@
     code: ['insert key and [rid] at the same position', 'if len(node.keys) > ORDER:', '    mid = len(node.keys) // 2', '    right takes keys[mid:] and rids[mid:]', '    left keeps keys[:mid] and rids[:mid]', '    right.next = left.next', '    left.next = right', '    copy right.keys[0] into the parent', '    if no parent: create root; height += 1'],
     frames: [
       frame('Full is still legal', [], [['keys', '[1, 2, 3, 4]'], ['RID lists', '[a, b, c, d]'], ['height', '1']], 'Four keys fill this leaf. Splitting happens only after a fifth distinct key arrives. Another RID for an existing key does not add a key slot.'),
-      frame('Insert before checking overflow', [1, 2], [['keys', '[1, 2, 3, 4, 5]'], ['RID lists', '[a, b, c, d, e]'], ['overflow?', '5 > 4: yes']], 'The provided is_full() name means over capacity: its condition is len(keys) > ORDER.'),
-      frame('Divide keys and RID lists together', [3, 4, 5], [['mid', '5 // 2 = 2'], ['left keys / RIDs', '[1, 2] / [a, b]'], ['right keys / RIDs', '[3, 4, 5] / [c, d, e]']], 'Slices use a zero-based position. Key 3 is the first entry in the new right leaf, and its RID list moves with it.'),
-      frame('Repair the leaf chain', [6, 7], [['left.next', 'right'], ['right.next', 'old successor (none)'], ['all leaf keys', '[1, 2, 3, 4, 5]']], 'Save the old successor before replacing left.next. Otherwise a split in the middle of a longer chain can lose later leaves.'),
-      frame('Create a new root', [8, 9], [['root.keys', '[3]'], ['root children', 'left, right'], ['height', '2'], ['key 3 remains', 'in the right leaf']], 'The root contains a routing copy of 3. Every leaf moves one level farther from the root together, preserving equal depth.')
+      frame('Insert the fifth entry', [1], [['keys', '[1, 2, 3, 4, 5]'], ['RID lists', '[a, b, c, d, e]']], 'Insert 5 and its RID list at matching positions. The fifth slot is temporary overflow, not an increase in this node’s capacity.'),
+      frame('Check is_full(): five is greater than four', [2], [['len(node.keys)', '5'], ['ORDER', '4'], ['overflow?', 'True']], 'The provided is_full() name means over capacity: its condition is len(keys) > ORDER. A node with exactly four keys does not split.'),
+      frame('Choose the slice boundary', [3], [['mid', '5 // 2 = 2'], ['key at position 2', '3']], 'Python indexes start at zero. The new right leaf begins with key 3; the left leaf will keep the two entries before position 2.'),
+      frame('Copy the right half into a new leaf', [4], [['right.keys', '[3, 4, 5]'], ['right.rids', '[c, d, e]'], ['left still holds', '[1, 2, 3, 4, 5]']], 'Slicing creates a new list. At this intermediate line the entries are in both nodes; the next assignment trims the original leaf. The insertion is not finished yet.'),
+      frame('Trim the original leaf', [5], [['left.keys', '[1, 2]'], ['left.rids', '[a, b]'], ['right.keys / rids', '[3, 4, 5] / [c, d, e]']], 'Now each key and its RID list lives in exactly one leaf again. The new right leaf is still detached from the root and the leaf chain.'),
+      frame('Preserve the old successor', [6], [['old left.next', 'None'], ['right.next', 'None']], 'Copy the old successor before replacing left.next. Here there is no successor; in a longer chain this assignment would preserve the link to the following leaf.'),
+      frame('Link left to right', [7], [['left.next', 'right'], ['right.next', 'None'], ['all leaf keys', '[1, 2, 3, 4, 5]']], 'The leaf chain now reaches the new sibling. Search still needs a parent separator and a second child pointer before this insertion is complete.'),
+      frame('Copy the separator into a new root', [8, 9], [['root.keys', '[3]'], ['root children', 'left, right'], ['height', '2'], ['key 3 remains', 'in the right leaf']], 'There was no parent, so create the new root with a routing copy of 3 and pointers to both leaves. Every leaf gains one level together; its actual entries remain unchanged.')
     ],
     question: 'How would an internal node [3, 5, 7, 9, 11] split?',
     answer: 'Move separator 7 to the parent. Left keeps [3, 5] and its first three children; right keeps [9, 11] and its last three children. An internal node with two separators needs three children. The actual entry for key 7 remains in a leaf.'
@@ -79,6 +99,111 @@
     question: 'What changes for range(32, 36)?',
     answer: 'Return only the RIDs for 34 and 36: [(0, 5), (0, 4)]. The lower bound need not exist. Start in its leaf and collect the first key at least 32.'
   });
+
+  attachTrees('btree-search', [
+    treeView({active:['root'], result:'Search key = 36. The separator gives directions.'}),
+    treeView({active:['right'], path:['root','right'], result:'36 ≥ 36 → child 1. Path = [root, right].'}),
+    treeView({active:['right'], path:['root','right'], marked:['right:36'], result:'leaf.keys[0] = 36 → leaf.rids[0] = [(0, 4)].'}),
+    treeView({marked:['right:36'], result:'Returned copy: [(0, 4)]. No heap row fetched yet.'}),
+    treeView({marked:['right:36'], heap:{rid:'(0, 4)', name:'eli', key:36}, result:'move_to_rid((0, 4)) → read name = eli, gpa = 36.'})
+  ]);
+
+  const splitView = (leftKeys, rightKeys, options = {}) => {
+    const leaf = (id, keys, x, label) => ({id, label, keys, x, y:226,
+      rids:keys.map(key => [String.fromCharCode(96 + key)])});
+    return {nodes:[leaf('left',leftKeys,175,'root = left leaf'),
+        ...(rightKeys ? [leaf('right',rightKeys,545,'new right leaf')] : [])],
+      edges:[], links:[{from:'left',to:null}, ...(rightKeys ? [{from:'right',to:null}] : [])],
+      active:['left'], marked:[], path:[], result:'', ...options};
+  };
+  const splitFinal = splitView([1,2],[3,4,5], {active:['root'], marked:['root:3','right:3'],
+    edges:[{from:'root',to:'left',label:'child 0 · key < 3'}, {from:'root',to:'right',label:'child 1 · key ≥ 3'}],
+    links:[{from:'left',to:'right'}, {from:'right',to:null}],
+    result:'Height = 2. Copy 3 upward; keep key 3 and [c] in the leaf.'});
+  splitFinal.nodes[0].label = 'left leaf';
+  splitFinal.nodes.push({id:'root',label:'new root · routing copy',keys:[3],x:360,y:72});
+  attachTrees('btree-split', [
+    splitView([1,2,3,4],null,{result:'Height = 1. Four keys fit; there is no parent.'}),
+    splitView([1,2,3,4,5],null,{marked:['left:5'], result:'Insert 5 → [e]. Five entries temporarily occupy a four-key leaf.'}),
+    splitView([1,2,3,4,5],null,{overflow:['left'], result:'is_full() → 5 > 4 → True. A split is required.'}),
+    splitView([1,2,3,4,5],null,{boundary:{node:'left',index:2},result:'mid = 2: [1, 2] | [3, 4, 5]. Split RID lists at the same position.'}),
+    splitView([1,2,3,4,5],[3,4,5],{active:['right'], marked:['right:3','right:4','right:5'],result:'Temporary copy: right gets [3, 4, 5] and [c, d, e]. Left is not trimmed yet.'}),
+    splitView([1,2],[3,4,5],{active:['left'],result:'Left keeps [1, 2] with [a, b]. Right is not attached to a parent yet.'}),
+    splitView([1,2],[3,4,5],{active:['right'],activeLink:'right',result:'right.next = old left.next = None.'}),
+    splitView([1,2],[3,4,5],{activeLink:'left',links:[{from:'left',to:'right'},{from:'right',to:null}],result:'left.next = right. The leaf chain now reaches all five entries.'}),
+    splitFinal
+  ]);
+  attachTrees('btree-range', [
+    treeView({active:['left'],path:['root','left'],result:'Lower bound 31 < 36 → start at left. result = []'}),
+    treeView({active:['left'],marked:['left:31','left:34'],result:'result = [(0, 1), (1, 0), (0, 5)] · 3 RIDs'}),
+    treeView({active:['right'],marked:['left:31','left:34'],activeLink:'left',result:'leaf = leaf.next. Keep the 3 RIDs already collected.'}),
+    treeView({active:['right'],marked:['left:31','left:34','right:36','right:37'],result:'result = [(0, 1), (1, 0), (0, 5), (0, 4), (0, 2)] · 5 RIDs'}),
+    treeView({active:['right'],marked:['left:31','left:34','right:36','right:37'],rejected:['right:39'],result:'39 > hi (37) → stop. Return 5 RIDs for 4 distinct keys.'})
+  ]);
+
+  add('btree-child-index', {
+    title:'child_index_for: equality advances to the next child',
+    codeLabel:'Provided Python · Node.child_index_for',
+    premise:'Use key 36 and root separators [31, 36]. Three children hold [28], [31, 34], and [36, 37, 39]. The helper returns a child index; it does not visit that child or change any keys.',
+    code:['i = 0','while i < len(self.keys) and key >= self.keys[i]:','    i += 1','return i'],
+    frames:[
+      frame('Begin with child index zero', [1], [['key','36'],['i','0'],['self.keys','[31, 36]']], 'The index i starts at child 0, whose range ends before the first separator. The orange comparison marker will move through the root’s separators.'),
+      frame('Compare with separator 31', [2], [['i < len(keys)','0 < 2: True'],['key >= keys[0]','36 >= 31: True']], 'Both parts of the while condition are true. The key cannot belong in child 0, so the next line advances the candidate child index.'),
+      frame('Advance to child 1', [3], [['i','1'],['candidate range','31 <= key < 36']], 'Increment i once. This is still a candidate child index; the loop must test the next separator before it can return a final routing decision.'),
+      frame('Equality passes separator 36', [2], [['i < len(keys)','1 < 2: True'],['key >= keys[1]','36 >= 36: True']], 'The greater-than-or-equal comparison is deliberate. A key equal to 36 belongs to the child on the right of 36, not the child ending just below it.'),
+      frame('Advance to child 2', [3], [['i','2'],['candidate range','key >= 36']], 'There are two separators but three children. Child index 2 is valid even though key index 2 does not exist; these arrays have different lengths.'),
+      frame('Stop before indexing beyond keys', [2], [['i < len(keys)','2 < 2: False'],['second comparison','not evaluated']], 'Python short-circuits and: when the first condition is false, it never reads self.keys[2]. The loop ends safely with i equal to the number of separators.'),
+      frame('Return the child index', [4], [['return','2'],['next action in _descend','visit node.children[2]']], 'The helper only returns the number 2. The highlighted arrow shows the selected route; _descend is responsible for following the pointer and extending the path.')
+    ],
+    question:'What changes for key 35? What about key 30?',
+    answer:'35 passes 31 but fails 35 >= 36, so return child index 1. 30 fails the first comparison with 31, so return child index 0. The leaf contents never change during routing.'
+  });
+  const routeView = (options = {}) => ({
+    nodes:[{id:'root',label:'self = root · separators',keys:[31,36],x:360,y:72},
+      {id:'left',label:'child 0',keys:[28],x:120,y:226},
+      {id:'middle',label:'child 1',keys:[31,34],x:360,y:226},
+      {id:'right',label:'child 2',keys:[36,37,39],x:600,y:226}],
+    edges:[{from:'root',to:'left',label:'< 31'}, {from:'root',to:'middle',label:'31 ≤ key < 36'}, {from:'root',to:'right',label:'≥ 36'}],
+    links:[{from:'left',to:'middle'},{from:'middle',to:'right'},{from:'right',to:null}],
+    active:['root'], marked:[], path:[], compact:true, ...options
+  });
+  attachTrees('btree-child-index', [
+    routeView({candidate:'left',result:'i = 0 → first candidate child. key = 36.'}),
+    routeView({candidate:'left',marked:['root:31'],result:'36 ≥ 31 is True → enter the loop body.'}),
+    routeView({candidate:'middle',result:'i = 1 → next candidate child. Test the loop again.'}),
+    routeView({candidate:'middle',marked:['root:36'],result:'36 ≥ 36 is True → equality advances right.'}),
+    routeView({candidate:'right',result:'i = 2. Three children, only two separators.'}),
+    routeView({candidate:'right',result:'2 < 2 is False → do not evaluate keys[2].'}),
+    routeView({chosen:'right',result:'return 2. The caller may now follow children[2].'})
+  ]);
+  add('btree-descend', {
+    title:'_descend: build the path one pointer at a time',
+    codeLabel:'Provided Python · BPlusTree._descend',
+    premise:'Find key 36 in the two-level tree with root [36]. Start nodes_touched at 0. Watch path grow from the root to the right leaf; the helper returns nodes, not matching RIDs or heap rows.',
+    code:['path = [self.root]','while not path[-1].leaf:','    node = path[-1]','    path.append(node.children[node.child_index_for(key)])','self.nodes_touched += len(path)','return path'],
+    frames:[
+      frame('Start the path at the root', [1], [['key','36'],['path','[root]'],['nodes_touched','0']], 'The first item in path is the root object. The diagram marks it as the current path endpoint; no child pointer has been followed yet.'),
+      frame('The root is not a leaf', [2], [['path[-1]','root'],['not root.leaf','True']], 'The last node on the path is internal, so the loop must descend. This check prevents trying to read child pointers from a leaf.'),
+      frame('Bind node to the current endpoint', [3], [['node','root'],['path','[root]']], 'node refers to the same root object already in path. Binding this name does not copy the node, change its keys, or extend the path.'),
+      frame('Call child_index_for(36)', [4], [['node.keys','[36]'],['child_index_for(36)','1'],['path before append','[root]']], 'Evaluate the inner helper call first. Equality routes right, so the result is 1. The pending orange arrow is a choice; path has not grown yet.'),
+      frame('Append the chosen child', [4], [['node.children[1]','right leaf'],['path','[root, right]']], 'Follow child pointer 1 and append that leaf object. path[-1] now refers to the right leaf, while the local variable node still refers to the root.'),
+      frame('The leaf ends the loop', [2], [['path[-1]','right leaf'],['not path[-1].leaf','False']], 'The new endpoint is a leaf, so the while condition is false. Descent stops here without searching for key 36 inside the leaf.'),
+      frame('Count the nodes on the path', [5], [['len(path)','2'],['nodes_touched','0 + 2 = 2']], 'Count the root and the leaf once each. This counter accumulates in-memory node visits in the lab; it is not a measurement of physical disk reads.'),
+      frame('Return the complete path', [6], [['return','[root, right]'],['caller’s leaf','path[-1]'],['heap rows fetched','0']], 'search can now look for a key in this leaf; insert can use the same path to repair ancestors after splitting. _descend itself never changes the tree structure.')
+    ],
+    question:'What happens when the root is already a leaf?',
+    answer:'path starts as [root], the while condition is immediately false, and nodes_touched increases by one. Return [root]; there is no child_index_for call.'
+  });
+  attachTrees('btree-descend', [
+    treeView({active:['root'],path:['root'],result:'path = [root] · nodes_touched = 0'}),
+    treeView({active:['root'],path:['root'],result:'root.leaf = False → enter the while loop.'}),
+    treeView({active:['root'],path:['root'],result:'node = root · path = [root]'}),
+    treeView({active:['root'],path:['root'],candidate:'right',result:'child_index_for(36) returns 1. Append has not happened yet.'}),
+    treeView({active:['right'],path:['root','right'],result:'path = [root, right] · node still refers to root'}),
+    treeView({active:['right'],path:['root','right'],result:'right.leaf = True → exit the while loop.'}),
+    treeView({path:['root','right'],result:'nodes_touched += 2 → nodes_touched = 2'}),
+    treeView({active:['right'],path:['root','right'],result:'return [root, right] → the caller receives the full path.'})
+  ]);
   const undoLog = [
     {kind:'START', tx:1}, {kind:'SET_INT', tx:1, old:100}, {kind:'COMMIT', tx:1},
     {kind:'START', tx:2}, {kind:'SET_INT', tx:2, old:60}, {kind:'SET_INT', tx:2, old:40}

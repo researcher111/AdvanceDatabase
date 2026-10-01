@@ -20,19 +20,18 @@ function versions(d,step,y=295){const vv=[120,70,50];vv.forEach((v,i)=>{d.rect('
 const draws={
 6:[
 (d,s)=>title(d,['B+ trees'],()=>{heap(d,'h',120,300,5,8,s? [14]:[]);treeNode(d,'r',920,290,[36]);treeNode(d,'l',800,460,[28,31],true);treeNode(d,'rr',1060,460,[36,39],true);branch(d,'bl',920,352,800,460);branch(d,'br',920,352,1060,460);if(s)line(d,'link',790,520,435,360,P.orange);}),
-(d,s)=>{heap(d,'h',150,170,8,18,s===0?[113]:Array.from({length:s===1?72:144},(_,i)=>i));tx(d,'counter',640,590,s===0?'1 row':s===1?'147 blocks':'294 blocks',44);d.circle('scan',180+(s*360),125,18,P.orange);},
-(d,s)=>{[28,31,36,39].forEach((v,i)=>chip(d,'key'+i,160+i*240,260,v,P.greenLight,100));heap(d,'heap',400,410,4,9,s?[s===1?6:29]:[]);if(s)line(d,'loc',s===1?450:930,323,s===1?740:530,s===1?420:530,P.orange);if(s===2)tx(d,'rid',1000,540,'(3, 2)',30);},
-(d,s)=>{heap(d,'heap',110,220,3,4,s?[6]:[]);[1,3,5,7,9,11].forEach((v,i)=>chip(d,'sorted'+i,405+(i%3)*64,220+Math.floor(i/3)*65,v,P.white,55));[0,1,2].forEach((_,i)=>{d.circle('bucket'+i,770+(i%2)*110,245+Math.floor(i/2)*115,43,P.blueLight,P.blue);});treeNode(d,'r',1080,220,[5]);treeNode(d,'a',990,365,[1,3],true);treeNode(d,'b',1145,365,[5,7],true);branch(d,'aa',1080,282,990,365);branch(d,'bb',1080,282,1145,365);tx(d,'op',640,545,['= 7','+ 6','3 ≤ x ≤ 9'][s],42);if(s===2){line(d,'range',963,446,1190,446,P.orange);line(d,'sort-range',410,380,583,380,P.orange);}},
-(d,s)=>{const all=[39,31,37,28].slice(0,s+1).sort((a,b)=>a-b);treeNode(d,'single',640,300,all,true);tx(d,'capacity',640,450,all.length+' / 4',38);if(s<3)chip(d,'incoming',900,150,[31,37,28][s],P.orangeLight);},
-(d,s)=>{treeNode(d,'root',640,260,[36]);const yl=s===0?460:460;branch(d,'a',640,322,390,yl);branch(d,'b',640,322,890,yl);treeNode(d,'left',390,yl,[28,31,34],true);treeNode(d,'right',890,yl,[36,37,39],true);if(s>0){line(d,'chain',505,550,770,550);d.line('baseline',180,yl+75,1100,yl+75,P.orange,3,'7 7');}if(s>1){tx(d,'rid1',390,615,'(0, 3)  (1, 2)  (2, 1)',22);tx(d,'rid2',890,615,'(1, 0)  (0, 2)  (0, 0)',22);}},
+(d,s)=>{tx(d,'query',640,150,'Find uid = 77777',40);heap(d,'h',170,220,6,18,Array.from({length:[0,54,108][s]},(_,i)=>i));tx(d,'counter',640,540,['Start the scan','50,000 rows checked','100,000 rows checked'][s],38);tx(d,'blocks',640,598,['The heap is not ordered by uid','147 of 294 heap blocks visited','All 294 heap blocks visited'][s],29);tx(d,'caption',640,660,'Schematic: each square represents part of the table.',23,P.muted);},
+(d,s)=>{tx(d,'heading',640,150,'Value → row address → row',42);d.box('key',85,285,230,115,'GPA 36',P.greenLight,P.green,34);if(s>=1){line(d,'a',330,342,465,342);d.box('rid',485,285,290,115,'(0, 4)',P.orangeLight,P.orange,38);tx(d,'rid-caption',630,465,'block 0, slot 4',28);}if(s>=2){line(d,'b',790,342,915,342);d.box('row',935,285,250,115,'eli, GPA 36',P.blueLight,P.blue,30);}tx(d,'meaning',640,575,['The search key is a field value.','The index returns a RID: a row address.','The table scan uses that address to fetch the row.'][s],30);},
+(d,s)=>{tx(d,'op',640,135,['Find one value: key = 31','Insert a new key','Find a range: 31 through 37'][s],39);const rows=[['Structure',['Lookup work','Insertion work','Range work'][s]],['Heap',['Scan rows','Find a free slot','Scan rows'][s]],['Sorted array',['Binary search','May shift many entries','Find start, read forward'][s]],['Hash index',['Choose a bucket','Update a bucket','No key order to follow'][s]],['B+ tree',['Follow one tree path','Insert; split if needed','Find start, follow leaves'][s]]];d.table('choices',150,220,[310,670],rows,{rowHeight:75,fontSize:28});},
+(d,s)=>{treeNode(d,'single',640,300,[1,2,3,4].slice(0,s+1),true);tx(d,'root-label',640,235,'The root is also the only leaf.',30);tx(d,'capacity',640,450,(s+1)+' of 4 key slots used',36);tx(d,'rule',640,550,s===3?'Four keys fit. The next distinct key needs a split.':'Keep the leaf keys in sorted order.',29);},
+(d,s)=>{treeNode(d,'root',640,205,[36]);branch(d,'a',640,267,350,420);branch(d,'b',640,267,930,420);treeNode(d,'left',350,420,[28,31,34],true);treeNode(d,'right',930,420,[36,37,39],true);tx(d,'root-label',640,155,'Root: the separator gives directions',30);tx(d,'left-label',315,330,'below 36',29);tx(d,'right-label',960,330,'36 or above',29);if(s>0){line(d,'chain',478,515,800,515);tx(d,'chain-label',640,560,'next leaf',24,P.green);}if(s>1){tx(d,'rid',640,625,'Leaf entry: 36 → [(0, 4)]',30,P.orange);}else tx(d,'leaf-label',640,625,'Both leaves are one step below the root.',29);},
 (d,s)=>{if(s===0){treeNode(d,'left',640,360,[28,31,37,39],true);chip(d,'new',595,160,36,P.orangeLight,90);}else{treeNode(d,'left',380,440,s===1?[28,31]:[28,31,34],true);treeNode(d,'right',900,440,[36,37,39],true);treeNode(d,'root',640,220,[36]);branch(d,'l',640,282,380,440);branch(d,'r',640,282,900,440);line(d,'chain',475,545,775,545);if(s===1){d.path('copy','M 900 420 Q 950 260 700 250','none',P.orange,4);}}},
 (d,s)=>{treeNode(d,'root',640,175,[36],false,s>0?0:-1);treeNode(d,'l',370,395,[28,31,34],true,s===3?2:-1);treeNode(d,'r',910,395,[36,37,39],true,s===2?1:-1);branch(d,'al',640,237,370,395);branch(d,'ar',640,237,910,395);tx(d,'query',200,130,s===3?'35?':'37?',42);d.circle('search',s===0?200:s===1?640:s===2?910:370,s===0?190:s===1?145:360,18,P.orange);if(s===2){line(d,'rid',910,475,910,550,P.orange);chip(d,'heaprow',810,565,'(0, 2)',P.orangeLight,200);}},
 (d,s)=>{treeNode(d,'root',640,175,[36]);treeNode(d,'l',350,365,[28,31,34],true);treeNode(d,'r',920,365,[36,37,39],true);branch(d,'a',640,237,350,365);branch(d,'b',640,237,920,365);line(d,'chain',480,440,775,440);tx(d,'range',200,125,'[31, 37]',38);const list=[31,34,36,37];list.slice(0,s===0?0:s===1?2:4).forEach((v,i)=>chip(d,'out'+i,390+i*110,550,v,P.orangeLight));d.circle('cursor',s===0?640:s===1?350:920,s===0?150:330,18,P.orange);if(s===3)tx(d,'stop',1080,500,'39 > 37',28,P.red);},
 (d,s)=>{treeNode(d,'root',640,180,s<2?[3]:[3,5]);const leaves=s<2?[[1,2],s===0?[3,4,5]:[3,4,5,6]]:[[1,2],[3,4],[5,6,7]];leaves.forEach((ks,i)=>{let x=leaves.length===2?380+i*520:260+i*380;branch(d,'br'+i,640,242,x,405);treeNode(d,'leaf'+i,x,405,ks,true);});if(s<2)chip(d,'in',595,550,s===0?'6?':'7?',P.orangeLight,90);},
 (d,s)=>{const root=s===0?[3,5,7,9]:s===1?[3,5,7,9,11]:[7];treeNode(d,'root',640,150,root);if(s<2){const xx=s===0?[170,380,590,800,1050]:[160,350,540,730,920,1110];xx.forEach((x,i)=>{branch(d,'b'+i,640,212,x,420);const ks=s===0&&i===4?[9,10,11,12]:s===1&&i===5?[11,12,13]:[i*2+1,i*2+2];treeNode(d,'leaf'+i,x,420,ks,true);});if(s===1)tx(d,'over',640,300,'5 > 4',42,P.orange);}else{treeNode(d,'left',345,320,[3,5]);treeNode(d,'right',930,320,[9,11]);branch(d,'i1',640,212,345,320);branch(d,'i2',640,212,930,320);[160,350,540,730,920,1110].forEach((x,i)=>{branch(d,'b'+i,i<3?345:930,382,x,520);treeNode(d,'leaf'+i,x,520,i===5?[11,12,13]:[i*2+1,i*2+2],true);});}},
-(d,s)=>{[0,1].forEach(side=>{const x=100+side*650;d.line('base'+side,x,570,x+500,570,P.line,3);for(let i=0;i<5;i++){const count=side===0?2+(i%2):1;d.rect('page'+side+i,x+i*96,280,82,240,P.white,P.line,8);for(let j=0;j<(s?count:2);j++)d.rect('entry'+side+i+j,x+i*96+10,485-j*52,62,42,side===0?P.greenLight:P.orangeLight,P.line,4);}tx(d,'frac'+side,x+240,220,s?(side===0?'½+':'¼'):'?',42);});if(s===2){d.rect('extra',780,580,380,35,P.orangeLight,P.orange,6);}},
 (d,s)=>{const heights=[16,7,4];const h=heights[s];tx(d,'f',990,300,['2','20','200'][s],70,P.green);tx(d,'symbol',990,375,'children',26);for(let i=0;i<h;i++){const width=140+(i/(h-1))*530;d.rect('level'+i,450-width/2,255+i*(315/h),width,Math.min(46,240/h),P.greenLight,P.green,5);}tx(d,'h',990,495,[27,7,4][s]+' levels',36);if(s===0)tx(d,'ellipsis',450,602,'⋮',38);},
-(d,s)=>{d.rect('cache',130,115,750,230,P.blueLight,P.blue,18);tx(d,'cache-l',250,160,'RAM',28);[1,3,6,10].forEach((n,i)=>{for(let j=0;j<n;j++)d.rect('level'+i+j,450-n*23+j*46,180+i*100,40,35,i<2?P.white:P.greenLight,P.line,4);});d.circle('read',450,s===0?160:s===1?360:560,15,P.orange);d.box('heap',915,450,250,110,'heap',P.white,P.line,32);if(s>1)line(d,'heaparrow',700,480,900,505,P.orange);tx(d,'count',1040,260,s===0?'0 I/O':s===1?'1 leaf':'+ heap',38);},
+(d,s)=>{tx(d,'title',640,125,'Four node visits can mean fewer disk reads',39);const labels=['root','internal','internal','leaf'];labels.forEach((label,i)=>{const y=200+i*95;d.box('node'+i,195,y,280,70,label,i<2?P.blueLight:P.greenLight,i<2?P.blue:P.green,28);if(i<3)line(d,'a'+i,335,y+74,335,y+90);tx(d,'status'+i,730,y+45,i<2?'already in the buffer pool':s===0?'is this page cached?':i===2?'cached in this example':'read if not cached',27);});if(s>=2){d.line('heap-down',335,555,335,605,P.orange,4);d.line('heap-across',335,605,1085,605,P.orange,4);line(d,'heap-arrow',1085,605,1085,575,P.orange);d.box('heap',975,475,220,90,'heap row',P.orangeLight,P.orange,29);tx(d,'rid-label',710,580,'follow the RID',25,P.orange);}tx(d,'foot',640,655,'Lab 6 keeps every tree node in memory; heap pages use the buffer pool.',24,P.muted);},
 (d,s)=>{d.box('row',480,120,320,100,'+ row',P.greenLight,P.green,36);d.box('heap',480,335,320,100,'heap',P.white,P.line,30);line(d,'a',640,230,640,322);const count=s+1;for(let i=0;i<count;i++){const x=200+i*290;treeNode(d,'index'+i,x,550,[i+1],true);line(d,'b'+i,640,440,x,530,P.orange);}tx(d,'writecount',1035,180,(count+1)+' structures',29);},
 (d,s)=>{heap(d,'heap',550,190,8,11,s===0?[25]:s===1?[2,8,17,29,37,44,57,63]:Array.from({length:88},(_,i)=>i));treeNode(d,'idx',235,250,[35]);for(let i=0;i<(s===0?1:s===1?6:15);i++)line(d,'jump'+i,280,320,570+(i*137)%550,205+(i*83)%300,P.orange);tx(d,'sel',235,455,['1%','20%','99%'][s],50);if(s===2)line(d,'scan',570,585,1115,585,P.green);},
 (d,s)=>{treeNode(d,'root',640,150,[36]);treeNode(d,'l',350,360,[28,31,34],true);treeNode(d,'r',910,360,s<2?[37,39]:[36,37,39],true);branch(d,'a',640,212,350,360);branch(d,'b',640,212,910,360);line(d,'c',470,450,790,450);tx(d,'range',640,560,'[34, 37]',38);if(s===1)d.circle('gap',818,389,28,P.orangeLight,P.red,4);if(s===2)tx(d,'fix',640,620,'34  36  37',34,P.green);},
@@ -142,10 +141,10 @@ const plans = [
     "date": "2026-09-29",
     "scenes": [
       {
-        "title": "B+ Trees",
+        "title": "An index gives another route to a row",
         "minutes": 2,
         "kind": "title",
-        "notes": "Open with the existing heap on the left and a shallow index on the right. Ask: how can we find one row without reading every row, while preserving cheap heap inserts? Expected: keep a separate structure organized by search key. Point out that the index ultimately fetches the same heap record. Today students will predict splits, trace searches and ranges, and judge index costs. The scheduled ten-minute Quiz 5 is separate from this sixty-minute teaching deck.",
+        "notes": "The index finds row addresses without scanning every heap row.\n\nPoint to the heap: the rows already exist. Introduce the index as a second way to reach them.\n\nFollow the arrow from the index to the heap. The answer still comes from the same stored row.\n\nAsk: What does the index help us avoid?\n\nExpected answer: Testing every heap row when only a few rows match.",
         "id": "b-trees",
         "steps": 2,
         "states": [
@@ -153,14 +152,23 @@ const plans = [
           "Index finds the heap row"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
+          "lectures/lecture-06/btrees.html#problem"
+        ],
+        "teaching": {
+          "idea": "The index finds row addresses without scanning every heap row.",
+          "builds": [
+            "Point to the heap: the rows already exist. Introduce the index as a second way to reach them.",
+            "Follow the arrow from the index to the heap. The answer still comes from the same stored row."
+          ],
+          "question": "What does the index help us avoid?",
+          "answer": "Testing every heap row when only a few rows match."
+        }
       },
       {
-        "title": "One row, every block",
+        "title": "A complete scan checks every row",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Begin with the Lab 3 100,000-row heap example. Ask why the engine reads so much to answer uid = a single value. Expected: the heap has no ordering or auxiliary access path. Cache may reduce physical reads; the logical scan still examines the rows. Invite a prediction: could we create a shortcut without rearranging the heap? Keep the heap on screen when the index appears.",
+        "notes": "A scan has no shortcut to the matching value.\n\nRead the request uid = 77777. Explain that this is the separate 100,000-row Lab 6 benchmark.\n\nHalfway through, 50,000 rows and 147 heap blocks have been visited. The diagram is schematic.\n\nThe complete scan has tested 100,000 rows across 294 blocks. Cached blocks may avoid new disk reads.\n\nAsk: Why keep scanning after the first match?\n\nExpected answer: The scan returns all matches; its implementation does not stop after finding one.",
         "id": "one-row-every-block",
         "steps": 3,
         "states": [
@@ -169,32 +177,52 @@ const plans = [
           "Read every block"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
+          "lectures/lecture-06/btrees.html#costs"
+        ],
+        "teaching": {
+          "idea": "A scan has no shortcut to the matching value.",
+          "builds": [
+            "Read the request uid = 77777. Explain that this is the separate 100,000-row Lab 6 benchmark.",
+            "Halfway through, 50,000 rows and 147 heap blocks have been visited. The diagram is schematic.",
+            "The complete scan has tested 100,000 rows across 294 blocks. Cached blocks may avoid new disk reads."
+          ],
+          "question": "Why keep scanning after the first match?",
+          "answer": "The scan returns all matches; its implementation does not stop after finding one."
+        }
       },
       {
-        "title": "Index",
+        "title": "An index maps values to row addresses",
         "minutes": 3,
-        "kind": "definition",
-        "notes": "Introduce the definition once. The index is a separate structure, not a reordered copy of the heap. Trace one key to one RID to one row. Explain that a RID is stable while that record remains in its slot; deletion and slot reuse require maintaining indexes. Ask whether name and gpa indexes must share an ordering. Expected: no; they are separate access paths into the same heap.",
-        "definition": "An index maps search keys to row locations.",
+        "kind": "visual",
+        "notes": "A RID tells us where to fetch a row.\n\nGPA 36 is the value we want. A search key is a field value, not necessarily a primary key.\n\nReveal (0, 4). Say: block zero, slot four. Expand RID as record identifier.\n\nFollow that address to eli. Index lookup and row retrieval are separate steps.\n\nAsk: What does the index return for GPA 31?\n\nExpected answer: Two RIDs: (0, 1) for ben and (1, 0) for gia.",
+        "definition": "An index maps field values to row addresses.",
         "id": "index",
         "steps": 3,
         "states": [
-          "Sorted keys",
-          "Follow one RID",
-          "A second independent key"
+          "Look up GPA 36",
+          "Get a row address",
+          "Fetch eli’s row"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
+          "lectures/lecture-06/btrees.html#problem"
         ],
-        "term": "Index"
+        "term": "Index",
+        "teaching": {
+          "idea": "A RID tells us where to fetch a row.",
+          "builds": [
+            "GPA 36 is the value we want. A search key is a field value, not necessarily a primary key.",
+            "Reveal (0, 4). Say: block zero, slot four. Expand RID as record identifier.",
+            "Follow that address to eli. Index lookup and row retrieval are separate steps."
+          ],
+          "question": "What does the index return for GPA 31?",
+          "answer": "Two RIDs: (0, 1) for ben and (1, 0) for gia."
+        }
       },
       {
-        "title": "Four storage choices",
+        "title": "Different structures suit different requests",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Have students match each visual to heap, sorted file, hash table and B+ tree. Ask which structure supports a sorted range directly and which makes inserting in order expensive. Expected: hashes serve equality but do not preserve order; a sorted file makes insertion movement costly; a B+ tree balances access and updates. Complexity statements depend on the storage representation: discuss disk block work, not merely CPU comparisons.",
+        "notes": "Keeping keys in order makes range access possible.\n\nCompare ways to find one value. Define a hash bucket simply as the group selected by the hash function.\n\nNow add a key. A sorted array may shift many entries; a B+ tree can split a single overfull node.\n\nFor a range, the sorted array reads forward and the B+ tree follows leaf links. A hash index has no key order to follow.\n\nAsk: Why are hashes not our only index?\n\nExpected answer: They support equality lookups but do not preserve the key order used for range scans.",
         "id": "four-storage-choices",
         "steps": 3,
         "states": [
@@ -203,33 +231,54 @@ const plans = [
           "Walk a range"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
+          "lectures/lecture-06/btrees.html#faq"
+        ],
+        "teaching": {
+          "idea": "Keeping keys in order makes range access possible.",
+          "builds": [
+            "Compare ways to find one value. Define a hash bucket simply as the group selected by the hash function.",
+            "Now add a key. A sorted array may shift many entries; a B+ tree can split a single overfull node.",
+            "For a range, the sorted array reads forward and the B+ tree follows leaf links. A hash index has no key order to follow."
+          ],
+          "question": "Why are hashes not our only index?",
+          "answer": "They support equality lookups but do not preserve the key order used for range scans."
+        }
       },
       {
-        "title": "First four keys",
+        "title": "Four keys fit in one leaf",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Give students the four keys before each click and ask where the new one belongs. ORDER = 4 means at most four keys, not four children. At this point the root is also the sole leaf. Ask whether a full node is already illegal. Expected: no; four is legal, five overflows. Reuse lecture-06/styles.css and viz.js; the widget keeps private state, so advance through controls rather than calling an invented API. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "A node splits only after it exceeds its capacity.\n\nStart a fresh example with key 1. This is separate from the GPA tree.\n\nInsert 2 in sorted order. The single node is both the root and a leaf.\n\nInsert 3. There is still one free key slot.\n\nInsert 4. The leaf is full but legal. ORDER = 4 means four keys, not four children.\n\nAsk: Does inserting another RID for key 4 trigger a split?\n\nExpected answer: No. It extends the RID list for key 4; it does not add another distinct key.",
         "id": "first-four-keys",
         "steps": 4,
         "states": [
-          "39",
-          "31 joins",
-          "37 joins",
-          "28 fills the leaf"
+          "Insert 1",
+          "Insert 2",
+          "Insert 3",
+          "Insert 4: full but legal"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
+          "lectures/lecture-06/btrees.html#try-it"
         ],
-        "demo": "viz-btree"
+        "demo": "viz-btree",
+        "teaching": {
+          "idea": "A node splits only after it exceeds its capacity.",
+          "builds": [
+            "Start a fresh example with key 1. This is separate from the GPA tree.",
+            "Insert 2 in sorted order. The single node is both the root and a leaf.",
+            "Insert 3. There is still one free key slot.",
+            "Insert 4. The leaf is full but legal. ORDER = 4 means four keys, not four children."
+          ],
+          "question": "Does inserting another RID for key 4 trigger a split?",
+          "answer": "No. It extends the RID list for key 4; it does not add another distinct key."
+        }
       },
       {
-        "title": "B+ tree",
+        "title": "Internal nodes route; leaves hold entries",
         "minutes": 3,
-        "kind": "definition",
-        "notes": "Name internal routing keys, leaf entries and leaf sibling links orally. All actual index entries remain in leaves. Internal nodes with k keys route to k+1 children. The equal-depth invariant is the central claim; ask students to keep watching for any operation that might break it. Do not claim leaves contain entire heap rows in this secondary-index lab.",
-        "definition": "A B+ tree is a balanced ordered index with entries in linked leaves.",
+        "kind": "visual",
+        "notes": "The root gives directions and the leaves hold keys with row addresses.\n\nUse the GPA tree. At separator 36, smaller values go left and equal or larger values go right.\n\nReveal next. Both leaves have the same depth, and the link puts them in key order.\n\nThe leaf entry for 36 owns the RID list [(0, 4)]. The separator at the root has no RID list.\n\nAsk: Is matching the root separator enough to return a row?\n\nExpected answer: No. Follow the right child and find the RID list in the leaf.",
+        "definition": "A B+ tree routes searches to sorted, linked leaves.",
         "id": "b-tree",
         "steps": 3,
         "states": [
@@ -238,15 +287,25 @@ const plans = [
           "Entries carry RIDs"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
+          "lectures/lecture-06/btrees.html#anatomy"
         ],
-        "term": "B+ tree"
+        "term": "B+ tree",
+        "teaching": {
+          "idea": "The root gives directions and the leaves hold keys with row addresses.",
+          "builds": [
+            "Use the GPA tree. At separator 36, smaller values go left and equal or larger values go right.",
+            "Reveal next. Both leaves have the same depth, and the link puts them in key order.",
+            "The leaf entry for 36 owns the RID list [(0, 4)]. The separator at the root has no RID list."
+          ],
+          "question": "Is matching the root separator enough to return a row?",
+          "answer": "No. Follow the right child and find the RID list in the leaf."
+        }
       },
       {
-        "title": "The fifth key",
-        "minutes": 3,
+        "title": "A leaf split copies a separator",
+        "minutes": 5,
         "kind": "visual",
-        "notes": "Before insertion ask students to predict where 36 goes and where the split lands. Five sorted keys split at index two. Expected: [28,31] and [36,37,39], with 36 copied into a new root. After 34 the leaves are [28,31,34] and [36,37,39]. Ask why 36 must remain below: range scans need every entry at the leaf level. Height increases for every leaf together. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Every key and its row addresses must remain in a leaf.\n\nAsk: Why must key 3 stay in the right leaf?\n\nExpected answer: It is an actual index entry. The parent only needs a routing copy.",
         "id": "the-fifth-key",
         "steps": 3,
         "states": [
@@ -255,15 +314,21 @@ const plans = [
           "34 enters the left leaf"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
+          "lectures/lecture-06/btrees.html#split"
         ],
-        "demo": "viz-btree"
+        "demo": "viz-btree",
+        "teaching": {
+          "idea": "Every key and its row addresses must remain in a leaf.",
+          "builds": [],
+          "question": "Why must key 3 stay in the right leaf?",
+          "answer": "It is an actual index entry. The parent only needs a routing copy."
+        }
       },
       {
-        "title": "Find 37",
+        "title": "Follow a key to its row",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Let the class choose the branch at routing key 36 before highlighting it. Expected: equality and greater values route right; 37 is in the right leaf. The index search touches two nodes, then may fetch a heap page. An absent key still follows one path and stops at a leaf. Clarify that displayed node visits are not a promise of physical reads: the buffer pool may already hold pages. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Follow one root-to-leaf path, then use the returned RID.\n\nAsk: What does search(35) return?\n\nExpected answer: An empty list. It reaches the left leaf, where 35 is absent.",
         "id": "find-37",
         "steps": 4,
         "states": [
@@ -273,15 +338,21 @@ const plans = [
           "Search for absent 35"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
+          "lectures/lecture-06/btrees.html#anatomy"
         ],
-        "demo": "viz-btree"
+        "demo": "viz-btree",
+        "teaching": {
+          "idea": "Follow one root-to-leaf path, then use the returned RID.",
+          "builds": [],
+          "question": "What does search(35) return?",
+          "answer": "An empty list. It reaches the left leaf, where 35 is absent."
+        }
       },
       {
-        "title": "Walk a range",
+        "title": "A range follows the leaf links",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Ask how many descents are necessary for four answers. Expected: one, followed by a leaf-chain walk. The supplied B+ tree widget renders leaf order but has no range-operation control, so build this as a dedicated animation, not a fictitious widget action. Compare with four independent point lookups. Output and heap-fetch work still grows with the number of results; range access does not make a huge answer free.",
+        "notes": "Descend once, then collect row addresses in key order.\n\nAsk: Why do four matching keys return five RIDs?\n\nExpected answer: Two students have key 31, so that key contributes two row addresses.",
         "id": "walk-a-range",
         "steps": 4,
         "states": [
@@ -291,14 +362,20 @@ const plans = [
           "Stop beyond the high key"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
+          "lectures/lecture-06/btrees.html#anatomy"
+        ],
+        "teaching": {
+          "idea": "Descend once, then collect row addresses in key order.",
+          "builds": [],
+          "question": "Why do four matching keys return five RIDs?",
+          "answer": "Two students have key 31, so that key contributes two row addresses."
+        }
       },
       {
-        "title": "Predict the next split",
+        "title": "Full is allowed; overfull needs a split",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Give partners one minute to draw both outcomes. Insert 6 fills the right leaf without splitting. Insert 7 overflows it and copies 5 up; the root becomes [3,5] and height remains two. Ask a student to explain the copy, not just the arrangement. This is the core lab misconception, so require the explanation before advancing. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Insert 6 fits; insert 7 creates a fifth key and needs a split.\n\nShow root [3] over [1, 2] and [3, 4, 5]. Ask partners to draw the result of inserting 6.\n\nReveal [3, 4, 5, 6]. Four keys fit, so no split occurs. Now ask them to insert 7.\n\nSplit into [3, 4] and [5, 6, 7]. Copy 5 into the parent, which becomes [3, 5]. Height stays at two levels.\n\nAsk: Why does the tree not grow taller here?\n\nExpected answer: The parent has room for the new separator; it does not need a new parent.",
         "id": "predict-the-next-split",
         "steps": 3,
         "states": [
@@ -307,15 +384,25 @@ const plans = [
           "7 triggers copy-up"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
+          "lectures/lecture-06/btrees.html#split"
         ],
-        "demo": "viz-btree"
+        "demo": "viz-btree",
+        "teaching": {
+          "idea": "Insert 6 fits; insert 7 creates a fifth key and needs a split.",
+          "builds": [
+            "Show root [3] over [1, 2] and [3, 4, 5]. Ask partners to draw the result of inserting 6.",
+            "Reveal [3, 4, 5, 6]. Four keys fit, so no split occurs. Now ask them to insert 7.",
+            "Split into [3, 4] and [5, 6, 7]. Copy 5 into the parent, which becomes [3, 5]. Height stays at two levels."
+          ],
+          "question": "Why does the tree not grow taller here?",
+          "answer": "The parent has room for the new separator; it does not need a new parent."
+        }
       },
       {
-        "title": "A root splits",
-        "minutes": 3,
+        "title": "An internal split moves a separator",
+        "minutes": 4,
         "kind": "visual",
-        "notes": "Contrast the internal split with the previous leaf split. The separator 7 leaves the old internal node because it is only a routing key; its actual entry still lives in a leaf. Splits propagate only along the insertion path. A new root adds one level everywhere. Avoid the #bt-many timed script during a pause: its interval cannot be cancelled by the current reset handler, so manual insertion is safer for presenter pacing. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "The middle separator moves to the parent while every child is preserved.\n\nThis is the tree after inserting 1 through 12. The root has four separators and five children.\n\nInsert 13. Splitting its leaf adds separator 11, so the root now has five separators and six children.\n\nMove 7 to a new root. Left keeps [3, 5] and three children; right keeps [9, 11] and three children. All leaves gain one level together.\n\nAsk: Did moving 7 remove its lookup entry?\n\nExpected answer: No. The actual key 7 and its RID list remain in a leaf below the internal nodes.",
         "id": "a-root-splits",
         "steps": 3,
         "states": [
@@ -324,32 +411,26 @@ const plans = [
           "7 moves into a new root"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
+          "lectures/lecture-06/btrees.html#split"
         ],
-        "demo": "viz-btree"
+        "demo": "viz-btree",
+        "teaching": {
+          "idea": "The middle separator moves to the parent while every child is preserved.",
+          "builds": [
+            "This is the tree after inserting 1 through 12. The root has four separators and five children.",
+            "Insert 13. Splitting its leaf adds separator 11, so the root now has five separators and six children.",
+            "Move 7 to a new root. Left keeps [3, 5] and three children; right keeps [9, 11] and three children. All leaves gain one level together."
+          ],
+          "question": "Did moving 7 remove its lookup entry?",
+          "answer": "No. The actual key 7 and its RID list remain in a leaf below the internal nodes."
+        }
       },
       {
-        "title": "Occupancy",
-        "minutes": 3,
-        "kind": "activity",
-        "notes": "Ask which invariants could still hold in the sparse tree. Expected: sorted keys and equal leaf depth may hold, while minimum occupancy fails. Correctness and efficient shape are separate properties. Explain why splitting near the middle gives useful capacity bounds; the root is an exception to normal minimum occupancy. Deletion and merging are not implemented in this lab; production engines vary in reclamation policy.",
-        "id": "occupancy",
-        "steps": 3,
-        "states": [
-          "Same data",
-          "Different occupancy",
-          "Sparse pages accumulate"
-        ],
-        "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
-      },
-      {
-        "title": "Fan-out",
+        "title": "More children keep the tree short",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Introduce the definition, then let students predict the shape at about 200 children. The slider is logarithmic: value 100 means roughly 399, despite the static HTML initially saying 200; value 87 gives about 200. This is an idealized occupancy model. Larger page capacity means a larger logarithm base. It does not mean 200 physical comparisons per lookup. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
-        "definition": "Fan-out is the number of children an internal node can route to.",
+        "notes": "Fan-out is the number of children a node can point to.\n\nCompare the fully packed model for 100 million distinct keys. Two children and two leaf entries need 27 levels; the drawing abbreviates them.\n\nWith 20 children and 20 entries per leaf, the model needs seven levels.\n\nWith 200 children and 200 entries per leaf, it needs four levels. This is a capacity estimate, not a guarantee about a real tree.\n\nAsk: Why does more branching reduce the number of levels?\n\nExpected answer: Each choice narrows the search to one of more groups, so fewer choices are needed.",
+        "definition": "Fan-out is the number of children an internal node can have.",
         "id": "fan-out",
         "steps": 3,
         "states": [
@@ -358,32 +439,52 @@ const plans = [
           "Page-sized fan-out"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
+          "lectures/lecture-06/btrees.html#fanout"
         ],
         "term": "Fan-out",
-        "demo": "viz-fanout"
+        "demo": "viz-fanout",
+        "teaching": {
+          "idea": "Fan-out is the number of children a node can point to.",
+          "builds": [
+            "Compare the fully packed model for 100 million distinct keys. Two children and two leaf entries need 27 levels; the drawing abbreviates them.",
+            "With 20 children and 20 entries per leaf, the model needs seven levels.",
+            "With 200 children and 200 entries per leaf, it needs four levels. This is a capacity estimate, not a guarantee about a real tree."
+          ],
+          "question": "Why does more branching reduce the number of levels?",
+          "answer": "Each choice narrows the search to one of more groups, so fewer choices are needed."
+        }
       },
       {
-        "title": "Index pages and heap pages",
+        "title": "Node visits and disk reads are different counts",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Use the explicit capacity model L × F^(h−1), with 200 entries per leaf and up to 200 children per internal node. Four levels can hold 1.6 billion distinct entries under maximum packing. This is an ideal capacity estimate, not a measured occupancy guarantee. Distinguish four index-node visits from potentially another heap read. Cache residency and page occupancy affect I/O. A covering index contains the needed columns, but PostgreSQL index-only scans may still fetch the heap for visibility checks. Ask which lecture made the upper levels cheap: the buffer pool.",
+        "notes": "A cached page can be visited without reading it from disk again.\n\nThis is a disk-based index example. The upper two nodes are already in the buffer pool.\n\nSuppose the third level is cached too. The leaf needs a disk read only if it is not cached.\n\nAfter finding a RID, fetch the matching heap row. Its page may also be cached. In Lab 6, all tree nodes are in memory.\n\nAsk: Are four node visits always four physical reads?\n\nExpected answer: No. Cached index pages need no new read; fetching the heap row adds separate work.",
         "id": "index-pages-and-heap-pages",
         "steps": 3,
         "states": [
-          "Cached upper levels",
-          "Read the leaf",
-          "Fetch the heap row"
+          "Upper pages are cached",
+          "Check the lower pages",
+          "Fetch the matching heap row"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
+          "lectures/lecture-06/btrees.html#fanout"
+        ],
+        "teaching": {
+          "idea": "A cached page can be visited without reading it from disk again.",
+          "builds": [
+            "This is a disk-based index example. The upper two nodes are already in the buffer pool.",
+            "Suppose the third level is cached too. The leaf needs a disk read only if it is not cached.",
+            "After finding a RID, fetch the matching heap row. Its page may also be cached. In Lab 6, all tree nodes are in memory."
+          ],
+          "question": "Are four node visits always four physical reads?",
+          "answer": "No. Cached index pages need no new read; fetching the heap row adds separate work."
+        }
       },
       {
-        "title": "The write bill",
+        "title": "Each index adds work when rows change",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Ask what changes when a table has indexes on uid, name and gpa. Expected: inserts maintain all three; updates maintain affected index entries; deletes must remove stale entries. One logical insert can involve multiple structures and page operations, not exactly one physical write per index. Covering entries trade fewer heap visits for wider entries, lower capacity and storage. Have students name an index they would not add without workload evidence.",
+        "notes": "An insert must update the heap and each of its indexes.\n\nAdd a row to a table with one index: maintain two structures.\n\nWith two indexes, the insert maintains three structures.\n\nWith three indexes, maintain four structures. Buffering, splits, and logging determine physical writes.\n\nAsk: If GPA changes, what must happen to its index entry?\n\nExpected answer: Remove or replace the old GPA entry and add the new GPA with the row address.",
         "id": "the-write-bill",
         "steps": 3,
         "states": [
@@ -392,14 +493,24 @@ const plans = [
           "Three indexes"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
+          "lectures/lecture-06/btrees.html#costs"
+        ],
+        "teaching": {
+          "idea": "An insert must update the heap and each of its indexes.",
+          "builds": [
+            "Add a row to a table with one index: maintain two structures.",
+            "With two indexes, the insert maintains three structures.",
+            "With three indexes, maintain four structures. Buffering, splits, and logging determine physical writes."
+          ],
+          "question": "If GPA changes, what must happen to its index entry?",
+          "answer": "Remove or replace the old GPA entry and add the new GPA with the row address."
+        }
       },
       {
-        "title": "When scanning wins",
+        "title": "Many matches can make a scan cheaper",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Ask whether a WHERE clause matching 99% of rows should automatically use the index. Expected: no; an ordered leaf walk can still cause many heap visits, while a sequential scan reads the table once. State assumptions: heap locality, caching and covering indexes can change the choice. This plants the question for Lecture 9. The benefit of an index depends on query and data, not merely its existence.",
+        "notes": "The index benefit depends on the work needed to fetch its matching rows.\n\nFew matches mean only a few heap rows to fetch. The picture illustrates addresses, not measured disk reads.\n\nAs more rows match, the index returns more RIDs. Scattered addresses can revisit heap pages.\n\nAt 99% matches, a sequential scan may be cheaper. Locality, cached pages, and covered columns can change the choice.\n\nAsk: Does an available index have to be used?\n\nExpected answer: No. The planner can choose a scan when it estimates less work.",
         "id": "when-scanning-wins",
         "steps": 3,
         "states": [
@@ -408,14 +519,24 @@ const plans = [
           "A scan becomes attractive"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
+          "lectures/lecture-06/btrees.html#costs"
+        ],
+        "teaching": {
+          "idea": "The index benefit depends on the work needed to fetch its matching rows.",
+          "builds": [
+            "Few matches mean only a few heap rows to fetch. The picture illustrates addresses, not measured disk reads.",
+            "As more rows match, the index returns more RIDs. Scattered addresses can revisit heap pages.",
+            "At 99% matches, a sequential scan may be cheaper. Locality, cached pages, and covered columns can change the choice."
+          ],
+          "question": "Does an available index have to be used?",
+          "answer": "No. The planner can choose a scan when it estimates less work."
+        }
       },
       {
-        "title": "Build and test",
+        "title": "A missing leaf entry breaks the answer",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Connect these pictures to search, insert, _split and range in Lab 6; method names can remain in speaker notes. The tree is in memory and rebuilt from the heap in this teaching lab; a persistent production index requires additional page, recovery and concurrency machinery. Ask which test catches the missing leaf key: a range including that separator. Then ask which test detects skewed shape: a height or occupancy check.",
+        "notes": "Keeping a separator in the root does not replace its leaf entry.\n\nAsk for keys 34 through 37. The left leaf has 34, but the right leaf is missing 36.\n\nPoint to the gap: the root has separator 36, yet the leaf chain cannot return it.\n\nRestore the leaf entry for 36 and its RID list. The range now finds 34, 36, and 37.\n\nAsk: Which lab operation exposes this mistake?\n\nExpected answer: A range including 36, or search(36), shows that the leaf entry is missing.",
         "id": "build-and-test",
         "steps": 3,
         "states": [
@@ -424,14 +545,24 @@ const plans = [
           "Repair the range"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
+          "lectures/lecture-06/btrees.html#thursday"
+        ],
+        "teaching": {
+          "idea": "Keeping a separator in the root does not replace its leaf entry.",
+          "builds": [
+            "Ask for keys 34 through 37. The left leaf has 34, but the right leaf is missing 36.",
+            "Point to the gap: the root has separator 36, yet the leaf chain cannot return it.",
+            "Restore the leaf entry for 36 and its RID list. The range now finds 34, 36, and 37."
+          ],
+          "question": "Which lab operation exposes this mistake?",
+          "answer": "A range including 36, or search(36), shows that the leaf entry is missing."
+        }
       },
       {
-        "title": "Exit trace",
+        "title": "Explain one split and one lookup",
         "minutes": 2,
         "kind": "recap",
-        "notes": "Ask three fast oral questions: where are real entries; what happens when a root splits; why is fan-out important? Expected: leaves; all leaves gain a level; few page visits. Students should leave able to trace one split and one range scan. Mention the exceptional next meeting: Thursday October 8 is the WAL lecture because Tuesday is a Reading Day. Do not create slides for the intervening lab day.",
+        "notes": "Leaves keep the entries, and a root split adds a level above every leaf.\n\nShow [1, 2, 3, 4] and ask where 5 belongs. Four keys fit; five do not.\n\nSplit into [1, 2] and [3, 4, 5]. Copy 3 into the new root; keep its RID list in the leaf.\n\nTrace a lookup for 4: go right, find its RID list, then fetch the matching row.\n\nAsk: What will you implement in Lab 6?\n\nExpected answer: Search, insertion, splitting, and inclusive range lookup. Nodes live in memory; the provided scan fetches heap rows.",
         "id": "exit-trace",
         "steps": 3,
         "states": [
@@ -440,8 +571,18 @@ const plans = [
           "Search then walk"
         ],
         "sources": [
-          "lectures/lecture-06/btrees.html"
-        ]
+          "lectures/lecture-06/btrees.html#recap"
+        ],
+        "teaching": {
+          "idea": "Leaves keep the entries, and a root split adds a level above every leaf.",
+          "builds": [
+            "Show [1, 2, 3, 4] and ask where 5 belongs. Four keys fit; five do not.",
+            "Split into [1, 2] and [3, 4, 5]. Copy 3 into the new root; keep its RID list in the leaf.",
+            "Trace a lookup for 4: go right, find its RID list, then fetch the matching row."
+          ],
+          "question": "What will you implement in Lab 6?",
+          "answer": "Search, insertion, splitting, and inclusive range lookup. Nodes live in memory; the provided scan fetches heap rows."
+        }
       }
     ]
   },
@@ -1656,7 +1797,17 @@ const plans = [
 ];
 for (const deck of plans) {
  deck.scenes.forEach((scene, i) => { scene.draw = draws[deck.id][i]; });
+ const lectureSixTeaching = deck.id === 6 ? new Map(deck.scenes.map(scene => [scene.id, scene.teaching])) : null;
  window.CourseTraceSlides.apply(deck);
+ if (deck.id === 6) {
+   for (const scene of deck.scenes) {
+     if (!scene.traceId) continue;
+     const example = window.CourseTraces.examples[scene.traceId];
+     scene.teaching = {...lectureSixTeaching.get(scene.id), builds: example.frames.map(frame => frame.explanation)};
+     scene.teaching.question = example.question;
+     scene.teaching.answer = example.answer;
+   }
+ }
  window.COURSE_DECKS = window.COURSE_DECKS || {};
  window.COURSE_DECKS[deck.id] = deck;
 }

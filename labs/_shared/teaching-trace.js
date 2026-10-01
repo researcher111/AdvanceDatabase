@@ -51,12 +51,22 @@
     const code = make('ol', 'trace-code');
     source.append(codeLabel, code);
     const state = make('div', 'trace-state');
+    const hasTree = ids.some(id => CourseTraces.examples[id].frames.some(f => f.tree));
+    const treeView = hasTree && window.CourseBTreeTrace ? window.CourseBTreeTrace.create(state, prefix) : null;
+    if (treeView) root.classList.add('trace-with-tree');
     const table = make('table', 'trace-table');
     const caption = make('caption');
     const tbody = make('tbody');
     table.append(caption, tbody);
     const explanation = make('p', 'trace-explanation');
-    state.append(table, explanation);
+    if (treeView) {
+      const variables = make('details', 'trace-variables');
+      variables.append(make('summary', '', 'Variables at this step'), table);
+      source.append(variables);
+      state.append(explanation);
+    } else {
+      state.append(table, explanation);
+    }
     body.append(source, state);
     const check = make('details', 'trace-check');
     const question = make('summary');
@@ -78,6 +88,7 @@
         }
         return li;
       }));
+      if (treeView) treeView.render(current.tree, current, example);
       caption.textContent = current.label;
       tbody.replaceChildren(...current.rows.map(([name, value]) => {
         const tr = make('tr');

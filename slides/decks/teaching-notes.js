@@ -795,16 +795,6 @@
         "Move 7 into a new root and compare every leaf's new depth."
       ]
     },
-    "occupancy": {
-      "idea": "Sorted keys and equal leaf depth alone do not guarantee efficient occupancy.",
-      "question": "Can a sparse tree still return correct search results?",
-      "answer": "Yes, while using more pages and failing the intended occupancy bound.",
-      "builds": [
-        "Compare trees containing the same data.",
-        "Check sorted order, equal depth, and occupancy separately.",
-        "Count the extra sparse pages and explain why splits aim near the middle."
-      ]
-    },
     "fan-out": {
       "idea": "Large fan-out keeps a page-based search tree shallow.",
       "question": "Why does larger fan-out reduce tree height?",

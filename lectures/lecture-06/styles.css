@@ -1,4 +1,4 @@
-/* Lecture 6 — B+ Trees · widget rules only. */
+/* Lecture 6 — B+ Trees · reading and widget rules. */
 
 .bt-inline {
   font-family: var(--mono);
@@ -19,6 +19,16 @@
   overflow-x: auto;
   padding: 8px 0;
 }
+.bt-live-tree { display: block; width: 100%; height: auto; }
+.bt-live-tree text { font: 18px var(--mono); text-anchor: middle; dominant-baseline: middle; fill: #20352e; }
+.bt-live-tree .bt-node-label { font: 14px var(--sans); fill: #61716a; }
+.bt-child-edge { fill: none; stroke: #c8d1c9; stroke-width: 2; }
+.bt-child-edge.active { stroke: #c06335; stroke-width: 4; }
+.bt-next-edge { fill: none; stroke: #30785b; stroke-width: 2; }
+.bt-svg-node { fill: #fff; stroke: #c06335; stroke-width: 2; }
+.bt-svg-node.leaf { fill: #dcece1; stroke: #30785b; }
+.bt-svg-node.active { stroke: #c06335; stroke-width: 4; }
+.bt-found-key { fill: #f4dfd1; stroke: #c06335; }
 .bt-level {
   display: flex;
   justify-content: center;
@@ -85,3 +95,69 @@ body.presentation-mode .bt-chain { font-size: 0.4em; }
 body.presentation-mode .fo-row { font-size: 0.5em; grid-template-columns: 5em 1fr 7em; }
 body.presentation-mode .fo-verdict, body.presentation-mode .fo-controls { font-size: 0.55em; }
 body.presentation-mode .fo-count { font-size: 1em; }
+
+/* The small worked trees fit the reading column and narrow screens. */
+.tree-figure {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: white;
+}
+.tree-figure svg { display: block; width: 100%; max-width: 600px; height: auto; margin: 0 auto; }
+.tree-figure svg text { font: 28px var(--mono); text-anchor: middle; fill: var(--ink); }
+.tree-figure svg .tree-label { font: 25px var(--sans); }
+.tree-internal { fill: #fde0d2; stroke: #bd794f; stroke-width: 2; }
+.tree-leaf { fill: #dcece1; stroke: #30785b; stroke-width: 2; }
+.tree-branch { fill: none; stroke: #74867c; stroke-width: 2; }
+.tree-link { fill: none; stroke: #30785b; stroke-width: 2; }
+.tree-figure figcaption { margin-top: 8px; font: 14px/1.5 var(--sans); color: var(--ink-mute); }
+@media (max-width: 520px) { .tree-figure { padding: 10px 6px; } }
+
+/* The reading shares the slide drawings, with readable HTML step captions. */
+main { max-width: 1060px; }
+main > p, main > ol, main > ul, main > table, main > .callout { max-width: 760px; }
+@media (min-width: 1181px) {
+  main { margin-left: max(270px, calc((100vw - 1060px) / 2)); margin-right: 28px; }
+}
+.bt-reading { margin: 26px 0 36px; padding: 18px; border: 1px solid var(--rule); border-radius: 12px; background: #f7f6f2; }
+.bt-reading-static { display: block; width: 100%; height: auto; }
+.bt-reading[data-ready] > .bt-reading-static { display: none; }
+.bt-reading-title { font: 650 22px/1.35 var(--sans); color: #20352e; }
+.bt-reading-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0; }
+.bt-reading-controls .btn, .bt-reading-close { font: 14px/1.5 var(--sans); padding: 7px 12px; }
+.bt-reading-controls button:disabled { opacity: .45; cursor: default; }
+.bt-reading-select-label { display: flex; align-items: center; gap: 7px; font: 14px var(--sans); min-width: 0; max-width: 100%; }
+.bt-reading-select { min-width: 0; max-width: 320px; padding: 7px; border: 1px solid var(--rule); border-radius: 5px; background: white; color: var(--ink); font: 14px var(--sans); }
+.bt-reading-status { margin: 12px 0; min-height: 3em; font: 600 18px/1.5 var(--sans); color: #30785b; }
+.bt-reading-viewport { overflow-x: auto; border-radius: 6px; }
+.bt-reading-viewport svg { display: block; width: 100%; min-width: 820px; height: auto; font-family: var(--sans); }
+.bt-reading figcaption { margin: 14px 0 0; font: 14px/1.6 var(--sans); color: var(--ink-soft); }
+.bt-slide-link { display: inline-block; margin-left: 6px; }
+.bt-reading-check { margin-top: 15px; padding-top: 12px; border-top: 1px solid var(--rule); font: 16px/1.6 var(--sans); }
+.bt-reading-check summary { cursor: pointer; font-weight: 600; }
+.bt-reading-check p { margin: 10px 0; }
+.bt-reading-answer { margin: 10px 0 0; color: var(--ink-soft); }
+.bt-reading-hint { display: none; margin: 10px 0; font: 13px/1.5 var(--sans); color: var(--ink-mute); }
+.bt-reading-dialog { width: min(1400px, 96vw); max-width: none; max-height: 94vh; padding: 22px; border: 1px solid var(--rule); border-radius: 12px; background: #f7f6f2; color: var(--ink); }
+.bt-reading-dialog::backdrop { background: #20352eaa; }
+.bt-reading-close { float: right; margin: 0 0 12px 16px; }
+.bt-reading-dialog .bt-reading-panel { clear: both; }
+.bt-reading :focus-visible, .bt-reading-dialog :focus-visible { outline: 3px solid #356885; outline-offset: 3px; }
+@media (max-width: 1000px) { .bt-reading-hint { display: block; } }
+@media (max-width: 600px) {
+  main { padding: 20px 18px 60px; }
+  .bt-reading { padding: 12px; }
+  .bt-reading-select-label { flex-basis: 100%; }
+  .bt-reading-select { width: 100%; max-width: 100%; }
+  .bt-reading-dialog { padding: 12px; }
+}
+body.presentation-mode .bt-reading { margin: .6em 0; }
+body.presentation-mode .bt-reading-controls .btn { font-size: 14px; }
+@media print {
+  aside.toc, .present-toggle, .bt-reading-panel, .bt-reading-dialog { display: none !important; }
+  main { margin: 0; max-width: none; }
+  .bt-reading { break-inside: avoid; padding: 8px; }
+  .bt-reading[data-ready] > .bt-reading-static { display: block !important; }
+  .bt-slide-link { display: none; }
+}

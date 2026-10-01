@@ -253,32 +253,6 @@
     'Its leaf entry and RID list remain in leaf [7,8]. Only a routing key moves between internal levels.',
     'Toy capacity four keys per node. RID lists are omitted; every leaf entry carries its list unchanged. Intermediate split frames are temporary until parent pointers are repaired.');
 
-  register('occupancy','Split near the middle',
-    'Sharing entries near the middle leaves useful space in both resulting nodes.',[
-      frame('Compare two proposals','Divide the same five keys; each leaf can hold four.','Compare [1,2] plus [3,4,5] with the skewed proposal [1] plus [2,3,4,5]. Empty slots are real free capacity in this toy example.'),
-      frame('Count the free slots','The middle split leaves 2 + 1 free slots; the skewed split leaves 3 + 0.','Count free slots by node. Both layouts use five entries across eight slots, but the skewed one puts all spare capacity on the wrong side for a larger incoming key.'),
-      frame('Insert the next larger key','6 fits after the middle split; the skewed right leaf overflows.','Insert 6 in the right leaf of each proposal. The upper right leaf reaches four keys legally. The lower right leaf reaches five and needs another split.')
-    ],(d,s)=>{
-      const ys=[285,472],groups=s===2?[[[1,2],[3,4,5,6]],[[1],[2,3,4,5,6]]]:[[[1,2],[3,4,5]],[[1],[2,3,4,5]]];
-      d.text('capacity',640,204,'Toy leaf capacity: 4 keys',25,P.muted);
-      groups.forEach((pair,r)=>{
-        d.text('choice-'+r,150,ys[r]+36,r?'Skewed':'Middle',26,r?P.orange:P.green,'middle',650);
-        pair.forEach((keys,c)=>{
-          const cx=c?945:455,w=keys.length>4?430:350,x=cx-w/2;
-          d.rect('leaf-'+r+'-'+c,x,ys[r],w,83,P.white,keys.length>4?P.red:r?P.orange:P.green,8,2);
-          for(let i=0;i<Math.max(4,keys.length);i++){
-            const ex=cx+(i-(Math.max(4,keys.length)-1)/2)*80;
-            d.rect('slot-'+r+'-'+c+'-'+i,ex-32,ys[r]+12,64,59,i<keys.length?keys[i]===6?P.orangeLight:P.greenLight:P.bg,P.line,5,1);
-            d.text('value-'+r+'-'+c+'-'+i,ex,ys[r]+42,i<keys.length?keys[i]:'—',27,i<keys.length?P.ink:P.muted);
-          }
-          if(s>=1)d.text('free-'+r+'-'+c,cx,ys[r]+119,keys.length>4?'5 keys > 4: overflow':(4-keys.length)+' free slots',25,keys.length>4?P.red:P.muted);
-        });
-      });
-      foot(d,'Equal leaf depth and good occupancy are different properties.',P.muted,660);
-    },'Does equal leaf depth alone guarantee efficient use of space?',
-    'No. Nodes can be at equal depth but badly underfilled. Splitting near the middle also supports the usual minimum-occupancy rule for non-root nodes.',
-    'The skewed split is a counterexample, not a valid recommended policy. Typical B+ trees require roughly half-full non-root nodes; the root is an exception. The toy exercise focuses on insertions.');
-
   register('fan-out','More children mean fewer levels',
     'Fan-out is the number of children an internal node can have.',[
       frame('Compare two children','With only 2 children per node, the tree needs many levels.','Set a fully packed capacity model for 100 million distinct keys. Assume fan-out F and F entries per leaf. With F=2 the minimum required height is 27 levels including root and leaf; the path drawing abbreviates those levels.'),
