@@ -590,13 +590,14 @@ const plans = [
     "id": 7,
     "title": "Transactions & Recovery",
     "source": "lectures/lecture-07/wal.html",
-    "date": "2026-10-08",
+    "date": null,
+    "bonus": true,
     "scenes": [
       {
         "title": "Money disappears",
         "minutes": 4,
         "kind": "visual",
-        "notes": "There is no quiz on this Thursday lecture. Ask whether each assignment was valid on its own and where the missing money should be found. Expected: the transfer was only partly applied; individual writes do not establish transaction atomicity. Separate the live RAM image from durable storage in the visual. The missing 50 is a deliberately inconsistent intermediate state, not literal destruction of banknotes.",
+        "notes": "This is an optional bonus deck; no quiz or deadline is attached. Ask whether each assignment was valid on its own and where the missing money should be found. Expected: the transfer was only partly applied; individual writes do not establish transaction atomicity. Separate the live RAM image from durable storage in the visual. The missing 50 is a deliberately inconsistent intermediate state, not literal destruction of banknotes.",
         "id": "money-disappears",
         "steps": 3,
         "states": [
@@ -849,7 +850,7 @@ const plans = [
         "title": "From promise to code",
         "minutes": 3,
         "kind": "recap",
-        "notes": "Have students narrate the WAL order and one recovery example without reading prose. Lab 7 will ask for set_int/set_string, commit, rollback and recover; the supplied logger and lock table provide the supporting pieces. Crash tests cover process termination and repeated recovery, not arbitrary corrupt storage. Tuesday October 13 addresses two correct transactions interfering even when no crash occurs. The full sequence is exactly 60 teaching minutes.",
+        "notes": "Have students narrate the WAL order and one recovery example without reading prose. Lab 7 will ask for set_int/set_string, commit, rollback and recover; the supplied logger and lock table provide the supporting pieces. Crash tests cover process termination and repeated recovery, not arbitrary corrupt storage. The concurrency bonus reading addresses two correct transactions interfering even when no crash occurs. The full sequence is exactly 60 teaching minutes.",
         "id": "from-promise-to-code",
         "steps": 3,
         "states": [
@@ -867,13 +868,14 @@ const plans = [
     "id": 8,
     "title": "Concurrency & MVCC",
     "source": "lectures/lecture-08/concurrency.html",
-    "date": "2026-10-13",
+    "date": null,
+    "bonus": true,
     "scenes": [
       {
         "title": "Concurrency & MVCC",
         "minutes": 2,
         "kind": "title",
-        "notes": "Start with two clients intending to add ten to one account. Ask students to predict the outcome if both transactions complete, then reveal the possibility of 110. Expected: 120 is the intended serial outcome; interleaving can lose an update even without a crash. Keep this unsolved until the scheduler scene. Today students will construct bad schedules and justify lock and snapshot behavior. The scheduled ten-minute Quiz 6 is separate from this sixty-minute teaching deck.",
+        "notes": "Start with two clients intending to add ten to one account. Ask students to predict the outcome if both transactions complete, then reveal the possibility of 110. Expected: 120 is the intended serial outcome; interleaving can lose an update even without a crash. Keep this unsolved until the scheduler scene. Today students will construct bad schedules and justify lock and snapshot behavior. This bonus deck is outside the required midterm scope.",
         "id": "concurrency-mvcc",
         "steps": 2,
         "states": [
@@ -1155,7 +1157,7 @@ const plans = [
         "title": "Exit schedule",
         "minutes": 2,
         "kind": "recap",
-        "notes": "Ask a student to identify the first lock conflict in read/read/compute/compute/write, then another to name what snapshot isolation still allows. Expected: first X upgrade; write skew. Lab 7 joins today’s locks with the WAL protocol, but does not implement MVCC. Next lecture reads and improves the plans built by the engine. The scheduled quiz is separate from this 60-minute teaching deck.",
+        "notes": "Ask a student to identify the first lock conflict in read/read/compute/compute/write, then another to name what snapshot isolation still allows. Expected: first X upgrade; write skew. Lab 7 joins today’s locks with the WAL protocol, but does not implement MVCC. Next lecture reads and improves the plans built by the engine. Quizzes follow the revised schedule; this material also supports optional review.",
         "id": "exit-schedule",
         "steps": 3,
         "states": [
@@ -1173,13 +1175,14 @@ const plans = [
     "id": 9,
     "title": "Query Optimization",
     "source": "lectures/lecture-09/optimizer.html",
-    "date": "2026-10-20",
+    "date": null,
+    "bonus": true,
     "scenes": [
       {
         "title": "Same answer, different work",
         "minutes": 4,
         "kind": "visual",
-        "notes": "No quiz is scheduled today. Ask why two equivalent plans can do radically different amounts of intermediate work. Reuse the Lab 4 setting and make both predicates explicit orally: gpa > 35 and dept = cs, plus the join condition. The pushed plan produces 60 candidate pairs, not automatically 60 final rows. The last twenty minutes are reserved for the scheduled cumulative midterm review.",
+        "notes": "No quiz is scheduled today. Ask why two equivalent plans can do radically different amounts of intermediate work. Reuse the Lab 4 setting and make both predicates explicit orally: gpa > 35 and dept = cs, plus the join condition. The pushed plan produces 60 candidate pairs, not automatically 60 final rows. The last twenty minutes are reserved for an optional engine synthesis.",
         "id": "same-answer-different-work",
         "steps": 3,
         "states": [
@@ -1360,7 +1363,7 @@ const plans = [
         "title": "Diagnose, then review",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Give students one minute to identify the earliest major divergence rather than blaming the slowest top node. Expected investigation: data distribution, stale or correlated statistics, row-width/memory assumptions and alternative plans. Explain why measuring actual behavior matters. Close the optimizer segment by having the class name statistics, costing and search. At elapsed minute 40 transition explicitly to the scheduled twenty-minute midterm review.",
+        "notes": "Give students one minute to identify the earliest major divergence rather than blaming the slowest top node. Expected investigation: data distribution, stale or correlated statistics, row-width/memory assumptions and alternative plans. Explain why measuring actual behavior matters. Close the optimizer segment by having the class name statistics, costing and search. At elapsed minute 40 transition explicitly to an optional twenty-minute engine synthesis.",
         "id": "diagnose-then-review",
         "steps": 3,
         "states": [
@@ -1440,7 +1443,7 @@ const plans = [
         "title": "Exit mechanism",
         "minutes": 4,
         "kind": "recap",
-        "notes": "Use a rapid oral retrieval round: each student explains one mechanism in twenty seconds and names a failure if it is missing. Correct misconceptions rather than reveal assessment answers. Give logistics orally: the scheduled midterm is Thursday October 22, 70 minutes, 39 multiple-choice questions, closed book; Lab 7 is due today. Next Tuesday shifts to analytics. This twenty-minute review completes the 60-minute deck without adding a lab-day deck.",
+        "notes": "Use a rapid oral retrieval round: each student explains one mechanism in twenty seconds and names a failure if it is missing. Correct misconceptions rather than reveal assessment answers. Distinguish optional topics from the required exam: the October 22 midterm covers Lectures 1–6 and Labs 1–6 only. Analytics starts October 8. This twenty-minute synthesis completes the 60-minute deck without adding a lab-day deck.",
         "id": "exit-mechanism",
         "steps": 3,
         "states": [
@@ -1458,13 +1461,13 @@ const plans = [
     "id": 10,
     "title": "The Analytics Stack & In-Database ML",
     "source": "lectures/lecture-10/analytics.html",
-    "date": "2026-10-27",
+    "date": "2026-10-08",
     "scenes": [
       {
         "title": "The Analytics Stack & In-Database ML",
         "minutes": 2,
         "kind": "title",
-        "notes": "Open on a matrix representing the same rides in both workloads. First highlight a complete row, then a numeric column across every row. Ask what changed: the question, not the underlying information. Expected: physical layout should follow the access pattern. This lecture connects bytes moved, compression, execution batches and file metadata to analytical systems. The scheduled ten-minute Quiz 7 is separate from this sixty-minute teaching deck. Extend the same operators to machine learning: fit coefficients with an aggregate, save a model table, and score rows with a query. Reserve ten teaching minutes for the two ML scenes.",
+        "notes": "Open on a matrix representing the same rides in both workloads. First highlight a complete row, then a numeric column across every row. Ask what changed: the question, not the underlying information. Expected: physical layout should follow the access pattern. This lecture connects bytes moved, compression, execution batches and file metadata to analytical systems. The scheduled ten-minute Quiz 6 is separate from this sixty-minute teaching deck. Extend the same operators to machine learning: fit coefficients with an aggregate, save a model table, and score rows with a query. Reserve ten teaching minutes for the two ML scenes.",
         "id": "the-analytics-stack",
         "steps": 2,
         "states": [
@@ -1780,7 +1783,7 @@ const plans = [
         "title": "Choose the shape",
         "minutes": 2,
         "kind": "recap",
-        "notes": "Have students choose the access shape and narrate the savings: fewer unrelated columns, encodings, batches and skipping. Lab 8 uses eight SQL queries and a fixed sample of real 2024 NYC taxi trips; project proposals are due Thursday October 29. Direct setup details to notes or the lab link. Next lecture asks what happens when the column stores an embedding and the query asks for similarity. The scheduled quiz is separate from this 60-minute teaching deck. Add one final retrieval question: which stage learns coefficients and which reuses them? Expected: training aggregates learn them; inference applies the saved model without fitting again.",
+        "notes": "Have students choose the access shape and narrate the savings: fewer unrelated columns, encodings, batches and skipping. Lab 8 uses eight SQL queries and a fixed sample of real 2024 NYC taxi trips; project proposals are due Thursday October 29. Direct setup details to notes or the lab link. Next lecture asks what happens when the column stores an embedding and the query asks for similarity. Quizzes follow the revised schedule; this material also supports optional review. Add one final retrieval question: which stage learns coefficients and which reuses them? Expected: training aggregates learn them; inference applies the saved model without fitting again.",
         "id": "choose-the-shape",
         "steps": 3,
         "states": [

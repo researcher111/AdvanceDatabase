@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The discovery bureau · From city streets to distant worlds</title>
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="story.css">
+</head>
+<body><main>
+<nav aria-label="Course navigation"><a href="../../index.html">Course home</a><a href="../../schedule.html">Schedule</a><a href="../lecture-10/discovery.html">Taxi SQL workbench</a><a href="#setup">Do I need a database?</a></nav>
+<header><p class="eyebrow">Five cases · Four meetings · November 19 – December 3, 2026</p>
+<h1>The discovery bureau</h1><p class="lede">From city streets to distant worlds.</p>
+<p>Your team is a tiny research bureau. A surprising chart arrives on your desk. Your job is to find out what it actually means—and explain the discovery so someone else can reproduce it.</p>
+<p class="notice"><strong>Open a browser and start investigating.</strong> The live examples use databases operated by ClickHouse, NASA’s Exoplanet Archive, and Wikidata. No student database server or new account is required for these public queries. Saved evidence below works without contacting those services.</p>
+</header>
+<section id="story"><h2>One story, five cases</h2>
+<p>Each case unlocks the next question. The city teaches us to count fairly. The weather teaches us to doubt a field. Planets teach us to ask what could be observed. A knowledge graph teaches us to follow a source. The final case is the team’s own discovery.</p>
+<ol class="route">
+<li><a href="#city"><span>Nov 19 · minutes 0–25</span><strong>The city that never sleeps?</strong>Find the missing denominator.</a></li>
+<li><a href="#weather"><span>Nov 19 · minutes 25–75</span><strong>The July that froze?</strong>Interrogate a suspicious zero.</a></li>
+<li><a href="#planets"><span>Nov 24 · 75 min</span><strong>The planet census</strong>Separate discovery from detectability.</a></li>
+<li><a href="#evidence"><span>Dec 1 · 30 + 45 min</span><strong>Who says so?</strong>Follow a claim through a graph.</a></li>
+<li><a href="#finale"><span>Dec 3 · 75 min</span><strong>The discovery hearing</strong>Reproduce, challenge, and present.</a></li>
+</ol>
+<p class="method">Question → prediction → row meaning → query → visual evidence → competing explanation → next test</p>
+<p>A dedicated <a href="../review/midterm.html">midterm review on October 20</a> shifts the later teaching sequence. These five cases now meet on four dates: city and weather share November 19 (25 + 30 minutes), followed by the 20-minute project question swap. December 1 keeps 45 minutes for rehearsal; December 3 is a project work session. These cases add no quizzes or graded labs. The October 22 midterm and all project deadlines stay fixed.</p>
+</section>
+
+<section id="setup"><h2>Do we need to set up a database?</h2>
+<p><strong>For this sequence: no.</strong> The source tables are already loaded and the operators maintain the services. Open the query site, use the supplied query, then export a small result. The existing local DuckDB exercise remains available for learning to create and load a database.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Hosted services and setup requirements"><table>
+<thead><tr><th>Use</th><th>Open data and system</th><th>Student setup</th><th>Who maintains it?</th></tr></thead>
+<tbody>
+<tr><td>City + weather</td><td><a href="https://sql.clickhouse.com/">ClickHouse SQL Playground</a><br><code>nyc_taxi.trips</code> and <code>noaa.noaa</code></td><td>Browser; public read-only queries. No account or import. Shared quotas apply.</td><td>ClickHouse runs the mirror and SQL engine; NYC TLC and NOAA provide the source data. A mirror is not necessarily current.</td></tr>
+<tr><td>Planet census</td><td><a href="https://exoplanetarchive.ipac.caltech.edu/">NASA Exoplanet Archive</a><br><code>pscomppars</code> via TAP</td><td>Browser query link; SQL-like ADQL. No account or server.</td><td>The archive maintains its catalog and query service. It exposes query access, not a classroom database login.</td></tr>
+<tr><td>Claim evidence</td><td><a href="https://query.wikidata.org/">Wikidata Query Service</a><br>TESS entity and operator statements</td><td>Browser; SPARQL, not SQL. No account to read.</td><td>Wikimedia operates the service; contributors maintain the graph. Inspect the references.</td></tr>
+</tbody></table></div>
+<p class="small">Access and example schemas were checked while preparing this outline. Public endpoints have time and usage limits. The <a href="https://clickhouse.com/docs/get-started/sample-datasets/playground">ClickHouse service</a> is read-only; its <a href="https://clickhouse.com/blog/announcing-the-new-sql-playground">published playground description</a> documents per-IP quotas. A classroom may share an IP address: use one instructor run, small group turns, and the saved results for simultaneous analysis.</p>
+<details><summary>Instructor preparation · about 15 minutes, no server administration</summary>
+<ol><li>Open each hosted service from the teaching network. Run one case query and inspect its schema and row count.</li><li>Use the dated JSON/CSV snapshots on this page for a common class baseline. Live results may change; record the retrieval time.</li><li>To refresh them, run <code>python3 lectures/discovery/refresh.py</code> from the course repo. It uses Python’s standard library and four small read-only requests. Run it during preparation, not on every student page load.</li><li>Have students download the evidence before class if internet access is uncertain. The page itself draws the saved charts without a network call.</li><li>Keep a copy of the query, result, source URL, retrieval date, row definition, and any exclusions with each conclusion.</li></ol>
+</details>
+<details><summary>When would we build a database together?</summary>
+<p>Only if we want private uploads, persistent student tables, or dedicated capacity for everyone to experiment at once. Then a small <a href="https://clickhouse.com/cloud">managed ClickHouse Cloud</a> classroom database is a natural continuation of the same SQL. We would choose a budget and account owner together, load a bounded taxi/weather subset, and give students read-only access. The provider runs the infrastructure; we still own the classroom data and access choices. Nothing has been provisioned or billed for this outline.</p>
+<p>For the current public lessons, there is nothing for you to create. The optional local <a href="../lecture-10/discovery.html#setup">DuckDB loader</a> already demonstrates schema creation, import, keys, and views without a cloud account.</p>
+</details>
+</section>
+
+<section id="city" class="case" data-case="city">
+<p class="eyebrow">Case 1 · Thursday November 19 · Minutes 0–25</p><h2>The city that never sleeps?</h2>
+<p class="hook">“More taxi trips happen on weekdays, so New Yorkers go out less on weekends.” The editor wants to publish. Do we sign off?</p>
+<p><strong>Predict:</strong> which hours would change most if we divided by the number of observed weekdays or weekend days? Sketch the two curves before seeing the result.</p>
+<p><strong>Data:</strong> filtered yellow-cab trips in the hosted July 2015 table. This is a different extract from the bundled 2024 teaching sample. We compare day types <em>within this extract</em>, not counts between the two datasets. One result row is an hour/day-type pair; keep its observed-date count beside the total.</p>
+<ol class="beats"><li><b>0–5 · The headline.</b> Recall the <a href="../lecture-10/discovery.html#investigate">taxi sample</a>: why were all months equally busy?</li><li><b>5–10 · Meet the witnesses.</b> Inspect dates, cab type, filters, and observed-date counts. Predict a weekend curve.</li><li><b>10–20 · Follow the query.</b> Filter trips → group by day type/hour → count distinct dates → divide. Reveal totals, then switch to trips per observed day.</li><li><b>20–25 · File the case.</b> Pairs state one finding and one limitation. Propose changing a month or distance band as a follow-up; then turn to the weather clue.</li></ol>
+<div class="query-card"></div>
+<details><summary>Teaching reveal and visual plan</summary><p>Animate one trip entering an hour bucket, then reveal the calendar tiles supplying its denominator. The saved chart switches between totals and per-observed-day rates. In July 2015 the weekday groups contain 23 dates and weekend groups 8; an hour with no records would disappear from this denominator, so audit coverage before describing calendar-day rates. A taxi ride is not a person, and activity is not happiness.</p><p><strong>Systems link:</strong> column scans, filter pushdown, aggregation, and the difference between elapsed time and work done. Ask which columns the engine needs to read.</p><p><strong>Cliffhanger:</strong> perhaps weather explains the pattern. Can we trust the weather table?</p></details>
+</section>
+
+<section id="weather" class="case" data-case="weather">
+<p class="eyebrow">Case 2 · Thursday November 19 · Minutes 25–55, then question swap</p><h2>The July that froze?</h2>
+<p class="hook">The next chart says Central Park’s average temperature was zero every day in July. Did the city freeze—or did something happen between the observations and our database?</p>
+<p><strong>Predict:</strong> list two explanations for zero. Which extra field or source document could distinguish them?</p>
+<p><strong>Data:</strong> NOAA GHCN-Daily observations mirrored by ClickHouse, station <code>USW00094728</code>, July 2015. One row is a station/date. Temperature fields are stored in tenths of °C; the query converts units while preserving the encoded zeros.</p>
+<ol class="beats"><li><b>25–30 · The impossible chart.</b> Reveal only <code>encoded_avg_c</code>. Students predict two explanations.</li><li><b>30–40 · A second witness.</b> Reveal minimum and maximum; inspect the schema and source preparation.</li><li><b>40–50 · Reconstruct the pipeline.</b> Draw observation rows → quality filtering → pivot → station/date row. Explain how an absent element can become a numeric default.</li><li><b>50–55 · Design the next test.</b> Before joining to daily taxi aggregates, name the key, date-coverage, and time-convention checks needed.</li><li><b>55–75 · Project question swap.</b> Exchange the ten evaluation questions already due today; label which need numeric evidence, retrieved text, or an explicit “unknown.”</li></ol>
+<div class="query-card"></div>
+<details><summary>Teaching reveal and visual plan</summary><p>The saved chart first draws the suspicious average, then adds the recorded minimum and maximum. Compare the <a href="https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt">original NOAA missing-value and flag definitions</a> with the <a href="https://clickhouse.com/docs/get-started/sample-datasets/noaa">mirror’s pivot using <code>anyIf</code></a>. Its numeric default can lose the distinction between an absent observation and a real zero. Do not fix all zeros with <code>NULLIF</code>: zero °C and zero precipitation can be real observations.</p><p><strong>Systems link:</strong> sparse observations, wide rows, schema design, defaults, and joins that preserve the intended row unit. An optional taxi/weather scatterplot is a follow-up design, not a causal finding or a chart already computed here. Use the same 2015 dates; never attach this mirror to the 2024 sample by month/day alone.</p><p><strong>Cliffhanger:</strong> if observation rules can change a weather chart, what might they do to a census of planets?</p></details>
+</section>
+
+<section id="planets" class="case" data-case="planets">
+<p class="eyebrow">Case 3 · Tuesday November 24 · 75 minutes</p><h2>The planet census</h2>
+<p class="hook">A catalog contains many more planets found by one method than another. Have we discovered what the universe mostly contains—or what our instruments are good at finding?</p>
+<p><strong>Predict:</strong> should every discovery method have the same proportion of planets with a radius value? What does <code>COUNT(column)</code> leave out?</p>
+<p><strong>Data:</strong> the NASA Exoplanet Archive’s <code>pscomppars</code> table, discovery years 1990–2024. It offers one composite row per planet. Values in a row can come from different references or calculations; a non-null radius is not necessarily a direct measurement. A discovery-year cutoff does not freeze later catalog revisions.</p>
+<ol class="beats"><li><b>0–10 · Choose the headline.</b> Teams predict the most common recorded method and the weakest conclusion one might draw from it.</li><li><b>10–25 · Choose the row.</b> Compare the composite table’s planet grain with the <code>ps</code> table’s multiple parameter sets.</li><li><b>25–40 · Make a census.</b> Run the grouped count. Switch the saved visual from catalog counts to radius-value coverage.</li><li><b>40–60 · Change the lens.</b> In the hosted query, change the year band, or examine one method and its missing values. Outline a period–radius plot with log axes and an explicit eligibility filter.</li><li><b>60–75 · Peer review.</b> Trade a claim and an alternative explanation. Name the detection-efficiency information needed before estimating the underlying population.</li></ol>
+<div class="query-card"></div>
+<details><summary>Teaching reveal and visual plan</summary><p>Start with a full catalog bar. Split it into rows with and without a radius value, then change to percentages. Never fill missing radii with zero. The proposed scatterplot is an extension: state excluded nulls, uncertainty, upper/lower-limit flags, and whether a radius was calculated. Counts in a detected catalog do not estimate the frequency of planets in the universe without a selection model.</p><p><strong>Systems link:</strong> table grain, null-aware aggregation, metadata catalogs, and reproducible snapshots. <a href="https://exoplanetarchive.ipac.caltech.edu/docs/pscp_about.html">Composite-table documentation</a> and <a href="https://exoplanetarchive.ipac.caltech.edu/docs/API_TD_columns.html">column definitions</a> are part of the evidence.</p><p><strong>Cliffhanger:</strong> a name such as TESS appears in our research. How do we connect it to organizations and sources without trusting a name match?</p></details>
+</section>
+
+<section id="evidence" class="case" data-case="evidence">
+<p class="eyebrow">Case 4 · Tuesday December 1 · 30 minutes + 45-minute project rehearsal</p><h2>Who says so?</h2>
+<p class="hook">Our research assistant produces a fluent sentence about TESS. Can we trace each part of the sentence to an identifiable statement and a source?</p>
+<p><strong>Predict:</strong> if a graph lists two operators, is that a contradiction? If one statement has no attached reference, is it false?</p>
+<p><strong>Data:</strong> Wikidata’s TESS entity <a href="https://www.wikidata.org/wiki/Q1323537">Q1323537</a>, its operator statements, and attached references. One output row is a statement/reference combination, not a distinct mission. An optional URL may be empty even when another kind of reference is present.</p>
+<ol class="beats"><li><b>0–10 · Follow one edge.</b> Query mission → operator by entity ID and draw the returned organizations.</li><li><b>10–20 · Open the envelope.</b> Reveal statement IDs and reference nodes. Compare one claim with an <a href="https://science.nasa.gov/mission/tess/">official mission page</a>; a graph edge is a lead to investigate.</li><li><b>20–30 · Audit the answer.</b> Write a sourced sentence and an unanswered question. Explain how optional references can multiply rows.</li><li><b>30–75 · Rehearse the project.</b> Show one supported answer and one retrieval failure. Peers follow the citations and propose a better question.</li></ol>
+<div class="query-card"></div>
+<details><summary>Teaching reveal and visual plan</summary><p>Draw mission → operator first. Then inspect statement IDs and reveal attached-reference presence. Follow any source or import URL in the result table. The <a href="https://www.wikidata.org/wiki/Property:P4656">Wikimedia import URL</a> records where a statement was imported from; it is not an independent scientific source. In the saved example, one reference leads back to a Wikipedia revision. Compare it with the official mission documentation before writing a claim. A missing attached reference does not establish that a relationship is false.</p><p><strong>Systems link:</strong> RDF triples, SPARQL versus SQL, identity resolution, one-to-many joins, and RAG citation quality. The step from an archive’s facility name to Q1323537 is a manually verified mapping, not an automatic string join. This bounded query avoids a scan of the whole graph; see <a href="https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/query_limits">service limits</a>.</p><p><strong>Cliffhanger:</strong> now another team must be able to follow <em>your</em> evidence.</p></details>
+</section>
+
+<section id="finale" class="case"><p class="eyebrow">Case 5 · Thursday December 3 · 75-minute project workshop</p><h2>The discovery hearing</h2>
+<p class="hook">The bureau’s editor has one rule: “Show the query and the uncertainty behind the headline.” Each team brings a discovery from its own project, or uses one of these cases as a practice example.</p>
+<ol class="beats"><li><b>0–10 · Seal the evidence.</b> Record the question, SQL/SPARQL, source, timestamp, filters, row unit, and result.</li><li><b>10–20 · Reproduce it.</b> A partner rebuilds the chart from the CSV. Distinguish a changed live catalog from a changed query.</li><li><b>20–40 · Challenge it.</b> Test one alternative grouping, denominator, missing-value rule, or retrieval configuration.</li><li><b>40–60 · Revise the story.</b> Build a three-panel explanation: initial belief → evidence that changed it → defensible conclusion. Keep a visible limitation.</li><li><b>60–75 · Finish the project.</b> Work on the report and demo with instructor/TA help. The report remains due December 7; presentations remain December 8.</li></ol>
+<div class="deliverable"><h3>The case file</h3><p>One question. One reproducible query or retrieval run. One readable chart. One competing explanation. One qualified conclusion. One next test.</p><p>This is a workshop format for improving the existing project, not a new graded deliverable.</p></div>
+</section>
+
+<section id="runway"><h2>Plant the clues in the earlier lectures</h2><p>Use short callbacks so these sessions feel like the next chapter of the course.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Connections to earlier lectures"><table><thead><tr><th>When</th><th>Story cue</th><th>Database idea</th></tr></thead><tbody>
+<tr><td>Oct 8 · Analytics</td><td>“Every sampled month is equally busy. Why?”</td><td>Scans, groups, sampling, and denominators.</td></tr>
+<tr><td>Oct 13 · DuckDB lab</td><td>Build the small local case file; check keys before a join.</td><td>Load → audit → query → explain.</td></tr>
+<tr><td>Oct 15/29 · Vectors</td><td>Similar descriptions suggest leads; similarity alone does not establish identity.</td><td>Nearest neighbors, recall, and metadata filters.</td></tr>
+<tr><td>Oct 27 / Nov 3 · RAG</td><td>Retrieve the field definition before explaining a suspicious zero.</td><td>Evidence selection, citations, and abstention.</td></tr>
+<tr><td>Nov 5/10 · Distributed compute</td><td>Count city rhythms by partitions; combine counts and denominators correctly.</td><td>Local aggregation, shuffle, and skew.</td></tr>
+<tr><td>Nov 12 · Bigtable</td><td>What would a station/date key make easy? What does an absent field mean?</td><td>Key design, sparse observations, and update history.</td></tr>
+<tr><td>Nov 17 · Graphs</td><td>A mission is connected to organizations and references.</td><td>Traversal, identity, and the meaning of an edge.</td></tr>
+</tbody></table></div>
+</section>
+<section id="sources"><h2>Keep the source with the story</h2>
+<p>Taxi records originate with <a href="https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page">NYC TLC</a>; the hosted table follows <a href="https://clickhouse.com/docs/get-started/sample-datasets/nyc-taxi">ClickHouse’s prepared dataset</a>. NOAA’s <a href="https://doi.org/10.7289/V5D21VHZ">GHCN-Daily dataset</a> is accessed through a transformed mirror. Save the query’s population and preparation notes with each export.</p>
+<p>Planet data come from the NASA Exoplanet Archive, operated by Caltech under contract with NASA. Follow its <a href="https://exoplanetarchive.ipac.caltech.edu/docs/acknowledge.html">acknowledgment and citation guidance</a> and cite specific parameter references when using them. Its <a href="https://exoplanetarchive.ipac.caltech.edu/docs/TAP/usingTAP.html">TAP documentation</a> describes the query interface.</p>
+<p>Wikidata’s structured data are <a href="https://www.wikidata.org/wiki/Wikidata:Licensing">CC0</a>; sources linked by a statement have their own terms. Keep the entity and statement IDs so another reader can audit the claim. These teaching examples are investigations of existing records, not claims of new scientific discoveries.</p>
+</section>
+<footer>DS 6XXX · Advanced Databases for Data Science · Fall 2026 · <a href="../../schedule.html">Back to the schedule</a></footer>
+<noscript><p>For the interactive charts, enable JavaScript. The teaching outlines above still work, and you can download each query and its results: <a href="queries/city.sql">city SQL</a> / <a href="snapshots/city.csv">CSV</a>; <a href="queries/weather.sql">weather SQL</a> / <a href="snapshots/weather.csv">CSV</a>; <a href="queries/planets.sql">planet ADQL</a> / <a href="snapshots/planets.csv">CSV</a>; <a href="queries/evidence.sparql">evidence SPARQL</a> / <a href="snapshots/evidence.csv">CSV</a>.</p></noscript>
+</main><script src="data.js"></script><script src="story.js"></script></body></html>

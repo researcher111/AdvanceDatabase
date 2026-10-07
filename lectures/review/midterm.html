@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Midterm review · Trace a query through microdb</title>
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../discovery/story.css">
+<style>.flow{display:flex;flex-wrap:wrap;gap:12px;font:600 16px var(--sans);color:#30785b}.flow span{background:#e8f0e9;border:1px solid #cbd8ce;border-radius:6px;padding:12px}figure{margin:24px 0}figure img{width:100%;height:auto}figcaption{font:14px/1.6 var(--sans);color:#596a61}code{overflow-wrap:anywhere}details p:last-child{margin-bottom:0}</style>
+</head><body><main>
+<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a></nav>
+<header><p class="eyebrow">Tuesday October 20, 2026 · Full-class review</p><h1>Trace a query through microdb</h1>
+<p class="lede">Explain the next state before revealing it.</p>
+<p>Follow a request from SQL text to the bytes holding a row. At each step, name the data structure, predict what changes, and distinguish the logical result from the work needed to produce it.</p>
+<p class="notice"><strong>Midterm: Thursday October 22.</strong> Review Lectures 1–6 and Labs 1–6: storage, buffers, records, scans, the SQL front end, and B+ trees. Analytics, vectors, and the optional transaction/concurrency/optimizer material are outside this exam’s scope. These are practice examples, not an additional graded assignment.</p>
+<div class="flow" aria-label="SQL becomes a plan; scans request pages; pages contain rows"><span>SQL → plan</span><span>Plan → scans</span><span>Scans → pages</span><span>Pages → rows</span></div>
+</header>
+<section id="agenda"><h2>Use the whole session</h2>
+<ol class="beats">
+<li><b>0–5 · Draw the engine.</b> Put parser, planner, scan, record page, buffer, and file manager in a request path. Collect questions to return to.</li>
+<li><b>5–20 · Blocks and buffers.</b> Trace a hit, a miss, and a dirty eviction; separate pins from recency.</li>
+<li><b>20–35 · Records and addresses.</b> Calculate an offset, delete a row, and explain what a RID identifies.</li>
+<li><b>35–50 · SQL and iterators.</b> Draw the scan tree and narrate one call to <code>next()</code>.</li>
+<li><b>50–70 · B+ trees.</b> Route an equality, scan a range, and repair a split with the existing diagrams.</li>
+<li><b>70–75 · Questions and exit check.</b> Revisit the opening questions. Each student explains one complete lookup and names one topic to review before Thursday.</li>
+</ol>
+<p>For each problem: predict individually, compare with a partner, then reveal the explanation. Bring a diagram or trace from a lab that you want to discuss.</p>
+</section>
+<section id="buffers"><h2>1. Which page can move?</h2>
+<p>A two-frame buffer pool contains block A (pin count 1, clean) and block B (pin count 0, dirty). Block C exists on disk but is not cached. A caller requests C. Assume ordinary page reads and write-back on dirty eviction.</p>
+<p><strong>Predict:</strong> which frame can be reused? How many disk reads and writes does this request need? What changes if B is also pinned?</p>
+<details><summary>Reveal the explanation</summary><p>B is the only unpinned candidate. Write its dirty contents back once, read C once, and pin C for the caller. A remains in place even if it is older. If both frames are pinned, neither is an eligible victim; the request cannot complete until a frame becomes available. A cache hit would not need another disk read.</p><p>A pin count tracks active users. A dirty flag records a modified page. An eviction policy chooses among eligible frames; it cannot make a pinned frame eligible.</p></details>
+<p><a href="../lecture-02/bufferpool.html#pool">Revisit frames and pins</a> · <a href="../lecture-02/bufferpool.html#dirty">Trace dirty-page writes</a> · <a href="../../labs/lab-01/filemanager.html">Lab 1: blocks and files</a></p>
+</section>
+<section id="records"><h2>2. Where are the bytes?</h2>
+<p>Use the lecture’s 128-byte block and 24-byte fixed-size slots. Each slot contains a four-byte flag, a four-byte ID, a name field reserving four length bytes plus eight content bytes, and a four-byte GPA. Slot numbers start at zero.</p>
+<p><strong>Predict:</strong> how many complete slots fit? Where does slot 3’s GPA begin? Does deleting slot 1 move slot 3? Does a RID permanently identify a student?</p>
+<details><summary>Reveal the explanation</summary><p>Five complete slots fit, leaving eight unused bytes. GPA starts at offset 20 inside a slot, so slot 3’s GPA begins at <code>3 × 24 + 20 = 92</code>. Deletion changes the slot’s in-use flag without moving other slots.</p><p>A RID is <code>(block number, slot number)</code>. Reusing a deleted slot can give the same address to a different row; a RID is not a permanent student ID. Any index entries referring to a deleted row must be maintained consistently.</p></details>
+<p><a href="../lecture-03/records.html#try-it">Use the record-page visual</a> · <a href="../lecture-03/records.html#layout">Revisit field offsets and layout</a></p>
+</section>
+<section id="scans"><h2>3. What does one call to next() do?</h2>
+<p>The heap scan visits <code>(ada, 31)</code>, <code>(ben, 34)</code>, then <code>(eli, 36)</code>. Use the Lab 5 scan-based plan for:</p>
+<pre><code>SELECT name FROM students WHERE gpa &gt; 35;</code></pre>
+<p><strong>Predict:</strong> draw the operators. What happens when the caller asks the root for its first result? Which stage recognizes tokens, and which stage constructs scans?</p>
+<details><summary>Reveal the explanation</summary><p>The scan tree is <code>ProjectScan(name) → SelectScan(gpa &gt; 35) → TableScan(students)</code>. Selection advances its child past ada and ben, then accepts eli. Projection exposes the name field. The first successful root call therefore yields <code>eli</code>; the scan has inspected three input rows.</p><p>The lexer recognizes tokens, the parser builds a representation of the statement, and the planner constructs the scan tree. Parsing a statement does not read its result rows.</p></details>
+<p><strong>Follow-up:</strong> a complete nested-loop product has three outer rows and two inner rows, with no early termination. How many candidate pairs are considered?</p>
+<details><summary>Reveal the work count</summary><p>Six candidate pairs. A predicate can reject pairs, so the output count may be smaller. Six comparisons do not imply six disk reads: pages can already be cached, and several rows can share a page.</p></details>
+<p><a href="../lecture-04/iterators.html#try-it">Trace the iterator animation</a> · <a href="../lecture-05/parsing.html#planner">Revisit the supplied planner</a></p>
+</section>
+<section id="trees"><h2>4. Follow the tree all the way to a row</h2>
+<figure><img src="../lecture-06/diagrams/b-tree.svg" alt="A root separator of 36 routes smaller keys to leaf 28, 31, 34 and equality or larger keys to leaf 36, 37, 39. Leaves store RID lists and link in order."><figcaption>Use the same tree as Lecture 6. Name the comparison before following each arrow.</figcaption></figure>
+<p><strong>Predict:</strong> which child receives key 36? For the inclusive range 31–37, where do we start and stop? What extra work follows a matching leaf entry?</p>
+<details><summary>Reveal the lookup and range</summary><p>Equality with separator 36 goes right. The separator is a routing boundary; the leaf entry supplies the RID list, whose addresses lead to heap rows.</p><p>For 31–37, descend to the left leaf, begin at 31, and follow the next-leaf link. Accept keys 31, 34, 36, and 37; stop at 39 because it exceeds the inclusive upper bound. Every RID for a matching key can contribute a row, so the number of matching keys need not equal the number of returned rows.</p><p>Count tree-node visits separately from heap-page access and physical disk reads. A visited page can already be in the buffer pool.</p></details>
+<p><strong>Split practice:</strong> start a separate tree with one full leaf <code>[1, 2, 3, 4]</code>, capacity four distinct keys. Insert 5 using the lecture’s middle-split convention. Draw the temporary overflow, both leaves, their link, and the new root.</p>
+<details><summary>Reveal the split</summary><p>The temporary leaf is <code>[1, 2, 3, 4, 5]</code>. Split it into <code>[1, 2]</code> and <code>[3, 4, 5]</code>, link the left leaf to the right, and create root separator <code>[3]</code>. Key 3 remains in the right leaf with its RID list; the root holds a routing copy. The tree now has two levels.</p><p>Inserting another RID for an existing key extends that key’s RID list in this teaching model; it does not consume another distinct-key slot. When splitting an internal node, distinguish moving a separator upward from copying a leaf boundary.</p></details>
+<p><a href="../lecture-06/btrees.html#worked-example">Replay the code and tree traces</a> · <a href="../lecture-06/btrees.html#split">Replay tree building and splitting</a> · <a href="../lecture-06/btrees.html#try-it">Try your own insertions</a></p>
+</section>
+<section id="exit"><h2>Finish with one complete explanation</h2>
+<p>“The query is parsed into ____. The plan requests rows through ____. The tree locates ____. The RID leads to ____. The buffer decides whether ____. The caller receives ____.”</p>
+<p>Then change one condition: a duplicate key, a cached page, a pinned victim, a missing key, or an inclusive range endpoint. Explain exactly which part of the trace changes.</p>
+<p><strong>Before Thursday:</strong> revisit the public lecture diagrams and Labs 1–6, practice drawing intermediate states, and bring remaining content questions to the course’s usual help channels. Follow the instructor’s separate exam logistics.</p>
+</section>
+<footer>DS 6XXX · Advanced Databases for Data Science · <a href="../../schedule.html#midterm-scope">Midterm scope and schedule</a></footer>
+</main></body></html>

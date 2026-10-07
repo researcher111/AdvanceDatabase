@@ -19,6 +19,7 @@
     <li><a href="#the-data">Understand the sample and cleaning rules</a></li>
     <li><a href="#the-api">Write one SQL statement for each of eight questions</a></li>
     <li><a href="#worked-example">Worked example</a></li>
+    <li><a href="#discovery">Database discovery workbench</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
@@ -27,7 +28,7 @@
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
   </ul>
-  <div class="toc-foot">DS 6XXX · Fall 2026<br>due Thu Nov 5, class start</div>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>due Tue Oct 20, class start</div>
 </aside>
 
 <button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
@@ -38,10 +39,10 @@
 <main>
 
 <header class="hero">
-  <div class="eyebrow">DS 6XXX · Lab 8 · Thursday October 29, 2026 · Act II, lab 1 of 4 · project proposals due today</div>
+  <div class="eyebrow">DS 6XXX · Lab 8 · Tuesday October 13, 2026 · Act II, lab 1 of 4</div>
   <h1>DuckDB + Partitioned Parquet</h1>
   <div class="subtitle">Use DuckDB to answer analytical questions, then measure how file format and query shape affect the work.</div>
-  <div class="byline">Follows Lecture 10 (The Analytics Stack) · in class: 75 min · aim to finish Build + Verify · due Thu Nov 5 at class start</div>
+  <div class="byline">Follows Lecture 10 (The Analytics Stack) · in class: 75 min · aim to finish Build + Verify · due Tue Oct 20 at class start</div>
 </header>
 
 <p class="lede">microSQL supports SELECT-FROM-WHERE, but not grouped revenue, running totals, or top-k results. In this lab you use DuckDB to answer those questions over 60,000 sampled NYC yellow-taxi trips from 2024. You then compare CSV and Parquet, inspect column projection and partition pruning, and use EXPLAIN to understand slow queries. Treat the reference timings as examples, not performance targets.</p>
@@ -182,6 +183,10 @@ questions exactly, unordered ones as sets.</p>
 <p><strong>Implementation checkpoints:</strong> Q4 needs its specified tie-breaker, <code>ride_id ASC</code>. Q5 averages a numeric card indicator; it does not divide card fare by total fare. Q6 windows over monthly totals. Q8 joins each ride to one zone, so an accidentally duplicated dimension key would multiply revenue.</p>
 
 <!-- ============================================================ -->
+<h2 id="discovery">Start with a question about the city</h2>
+<p><a href="../../lectures/lecture-10/discovery.html"><strong>Open the database discovery workbench →</strong></a> Build a local DuckDB database from the bundled 60,000-trip taxi sample, then edit queries and inspect charts. Predict first: does JFK have a higher typical fare than LaGuardia, and does that comparison survive switching to fare per mile?</p>
+<p>The seven investigations cover sampling, recorded tips, airport routes, daily rhythms, trip mix, top destinations, and join cardinality. Save one finding, one limitation, and the next query you would run. These are ungraded discovery exercises; the lab’s required queries stay separate.</p>
+
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
 <p>After each query, use the <a href="#function-tests">query-level checks</a> to test it before completing the rest of the lab.</p>
@@ -197,7 +202,7 @@ questions exactly, unordered ones as sets.</p>
   1.0 ELSE 0.0 END)</code>. The CASE expression assigns 1 to a card payment and 0 otherwise, so the average is the fraction paid by card.</li>
   <li><strong>Q6 stacks a window on a group</strong>: <code>SUM(SUM(fare + tip)) OVER
   (ORDER BY month)</code> uses the inner SUM to calculate each month’s revenue, then the outer window SUM to accumulate those monthly totals in order.</li>
-  <li><strong>Q8 is your first join since Lab 4</strong>, and it connects to Lecture 9’s join algorithms. A hash join can build a table from the 265 zones and probe it with rides. Read the
+  <li><strong>Q8 is your first join since Lab 4</strong>, and reuses the join reasoning from Lab 4. The optional Lecture 9 explains cost-based join selection. A hash join can build a table from the 265 zones and probe it with rides. Read the
   plan with <code>EXPLAIN</code> and find the build and probe sides.</li>
 </ol>
 
@@ -320,10 +325,10 @@ GROUP BY z.Borough ORDER BY revenue DESC LIMIT 5;</code></pre>
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present"><strong>Submit <code>assignment.sql</code> to Gradescope, per the course
-submission instructions, by Thursday Nov 5 at class start.</strong> One file; the harness score you
+submission instructions, by Tuesday Oct 20 at class start.</strong> One file; the harness score you
 see locally is the grade.</p>
 
-<p>(Project proposals are due today; follow the deadline in the project instructions.)</p>
+<p>Project proposals remain due October 29; see the <a href="../../project.html">project instructions</a>.</p>
 
 <h3>Deliverables</h3>
 <ul>
@@ -340,7 +345,7 @@ see locally is the grade.</p>
   <code>slow_queries.py</code> asks about its pairs.</li>
   <li>Reflection (3–5 sentences): (1)&nbsp;Q6's window ran over grouped rows: which of
   Lecture 4's properties (streaming vs materializing) does each stage of that query have?
-  (2)&nbsp;Your microdb could, in principle, add a column layout. Which of its seven layers
+  (2)&nbsp;Your microdb could, in principle, add a column layout. Which of its six required layers
   would change, and which could keep their existing interfaces?</li>
 </ul>
 

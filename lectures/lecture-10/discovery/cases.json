@@ -1,0 +1,120 @@
+[
+  {
+    "id": "sample",
+    "title": "Does December have more taxi trips?",
+    "predict": "Predict which month will have the most rows. What would that count actually measure?",
+    "sql": "SELECT month, count(*) AS rides,\n       round(median(fare), 2) AS median_fare,\n       round(sum(fare + tip), 2) AS sample_fare_tip\nFROM rides\nGROUP BY month ORDER BY month;",
+    "chart": {
+      "type": "bar",
+      "x": "month",
+      "metrics": [
+        "rides",
+        "median_fare",
+        "sample_fare_tip"
+      ]
+    },
+    "interpret": "Every month has 5,000 rows because the course sample was constructed that way. Neither these counts nor these monthly sums estimate citywide demand or revenue without the original monthly sampling fractions. Switch the chart to median_fare: this asks about the sampled trip distribution instead of how many city trips occurred.",
+    "follow": "Change median(fare) to avg(fare). Which months change most? Explain what a few expensive trips can do to the mean."
+  },
+  {
+    "id": "tips",
+    "title": "Do cash passengers never tip?",
+    "predict": "Predict the recorded tip for card versus cash. Is a zero necessarily an observed absence?",
+    "sql": "SELECT payment, count(*) AS rides,\n       round(avg(tip), 2) AS mean_recorded_tip,\n       round(100.0 * avg(CASE WHEN tip = 0 THEN 1 ELSE 0 END), 1)\n         AS zero_recorded_tip_pct\nFROM rides\nGROUP BY payment ORDER BY payment;",
+    "chart": {
+      "type": "bar",
+      "x": "payment",
+      "metrics": [
+        "mean_recorded_tip",
+        "zero_recorded_tip_pct",
+        "rides"
+      ]
+    },
+    "interpret": "Cash tips are not recorded in the TLC tip field. The zero values describe a measurement limitation, not evidence that cash passengers are less generous. A card-only comparison answers a narrower question; it still does not identify a causal effect of payment method.",
+    "follow": "Filter to payment = 'card', group by hour, and include count(*). Which hours have enough observations to compare? Keep the word recorded in your conclusion."
+  },
+  {
+    "id": "airports",
+    "title": "Is a JFK trip more expensive than a LaGuardia trip?",
+    "predict": "Predict the ranking by typical fare. Would you predict the same ranking for fare per mile?",
+    "sql": "SELECT pickup_name AS airport, count(*) AS rides,\n       round(median(fare), 2) AS median_fare,\n       round(median(distance), 2) AS median_miles,\n       round(median(duration_min), 1) AS median_minutes,\n       round(median(fare / nullif(distance, 0)), 2) AS median_fare_per_mile\nFROM trips\nWHERE pickup_zone IN (132, 138)\nGROUP BY pickup_name ORDER BY airport;",
+    "chart": {
+      "type": "bar",
+      "x": "airport",
+      "metrics": [
+        "median_fare",
+        "median_fare_per_mile",
+        "median_minutes",
+        "rides"
+      ]
+    },
+    "interpret": "The unit is a sampled trip picked up at the named airport. A larger fare can accompany a longer route; fare per mile asks a different question. The median of trip-level ratios is not the ratio of two medians. Fare excludes several surcharges and tolls, so it is not the full passenger bill or driver profit.",
+    "follow": "Add AND dropoff_borough = 'Manhattan'. Does the comparison persist for a more similar destination group? Compare the sample sizes before interpreting the change."
+  },
+  {
+    "id": "rhythms",
+    "title": "Do JFK, Times Square, and the East Village share a daily rhythm?",
+    "predict": "Predict each location’s busiest hour. How can you compare a busy zone with a less frequent one?",
+    "sql": "WITH hourly AS (\n  SELECT pickup_name AS zone, hour, count(*) AS rides\n  FROM trips WHERE pickup_zone IN (132, 230, 79)\n  GROUP BY pickup_name, hour\n)\nSELECT zone, hour, rides,\n       round(100.0 * rides / sum(rides) OVER (PARTITION BY zone), 2)\n         AS within_zone_pct\nFROM hourly ORDER BY zone, hour;",
+    "chart": {
+      "type": "heatmap",
+      "x": "hour",
+      "group": "zone",
+      "metrics": [
+        "within_zone_pct",
+        "rides"
+      ]
+    },
+    "interpret": "Each row of the heatmap is one pickup zone. Percentages divide by that zone’s sampled trips, so a large zone does not dominate solely because it has more rows. Hover or focus a cell, then inspect the table for its sample size. Pickup times pool the sampled 2024 months; this is not a count of trips in one particular day.",
+    "follow": "Add AND month IN (6, 7, 8) inside the CTE. Compare the summer profile with winter. A changed profile suggests a new hypothesis; it does not explain its cause."
+  },
+  {
+    "id": "mix",
+    "title": "Which borough has the most expensive typical trip?",
+    "predict": "Rank the boroughs first. Then predict whether the order changes when you compare trips of similar length.",
+    "sql": "WITH cohorts AS (\n  SELECT pickup_borough AS borough, 'All sampled trips' AS cohort, fare\n  FROM trips\n  UNION ALL\n  SELECT pickup_borough, '2–5 miles; no airport pickup', fare\n  FROM trips\n  WHERE distance BETWEEN 2 AND 5 AND pickup_zone NOT IN (132, 138)\n)\nSELECT borough || ' · ' || cohort AS comparison,\n       count(*) AS rides, round(median(fare), 2) AS median_fare\nFROM cohorts\nWHERE borough IN ('Manhattan', 'Queens', 'Brooklyn', 'Bronx', 'Staten Island')\nGROUP BY borough, cohort HAVING count(*) >= 50\nORDER BY borough, cohort;",
+    "chart": {
+      "type": "bar",
+      "x": "comparison",
+      "metrics": [
+        "median_fare",
+        "rides"
+      ]
+    },
+    "interpret": "The two cohorts have different trip mixes. Narrowing the distance and removing airport pickups makes one aspect of the comparison more similar, but it does not control every difference. Groups below 50 rides are omitted explicitly; missing bars do not mean zero fare. A changed ranking is evidence that composition matters, not proof that a borough causes a fare.",
+    "follow": "Try 1–3 miles, then 5–10 miles. Include duration or time of day as another grouping variable. Report the rule you chose before looking at the new rankings."
+  },
+  {
+    "id": "routes",
+    "title": "Where do the trips from each borough go?",
+    "predict": "Does a trip usually stay in its pickup borough? Predict which origin will have a different top destination.",
+    "sql": "WITH routes AS (\n  SELECT pickup_borough, dropoff_borough, count(*) AS rides\n  FROM trips\n  WHERE pickup_borough IN ('Manhattan','Queens','Brooklyn','Bronx','Staten Island')\n    AND dropoff_borough IN ('Manhattan','Queens','Brooklyn','Bronx','Staten Island')\n  GROUP BY pickup_borough, dropoff_borough\n), ranked AS (\n  SELECT *, row_number() OVER (\n    PARTITION BY pickup_borough ORDER BY rides DESC, dropoff_borough\n  ) AS destination_rank,\n  round(100.0 * rides / sum(rides) OVER (PARTITION BY pickup_borough), 1)\n    AS within_origin_pct\n  FROM routes\n)\nSELECT pickup_borough || ' → ' || dropoff_borough AS route,\n       rides, within_origin_pct, destination_rank\nFROM ranked WHERE destination_rank <= 2\nORDER BY pickup_borough, destination_rank;",
+    "chart": {
+      "type": "bar",
+      "x": "route",
+      "metrics": [
+        "within_origin_pct",
+        "rides"
+      ]
+    },
+    "interpret": "Two joins give the pickup and dropoff their names. Grouping makes route counts, and the window ranks destinations within each origin. The denominator includes all five named destination boroughs before the top-two filter, so the two displayed shares need not add to 100%. Low-count origins deserve extra caution.",
+    "follow": "Remove destination_rank <= 2 and inspect every destination. Then count trips excluded by the borough filters. How would including unknown or outside-city destinations change the denominator?"
+  },
+  {
+    "id": "join",
+    "title": "Can a join invent taxi trips?",
+    "predict": "The real zones table has one row per LocationID. Predict what happens if a lookup accidentally contains two Times Square rows.",
+    "sql": "WITH duplicate_zones AS (\n  SELECT * FROM zones\n  UNION ALL SELECT * FROM zones WHERE LocationID = 230\n)\nSELECT 'Correct dimension' AS version, count(*) AS joined_rows,\n       count(DISTINCT ride_id) AS distinct_rides,\n       round(sum(fare + tip), 2) AS sample_fare_tip\nFROM rides JOIN zones ON pickup_zone = LocationID\nUNION ALL\nSELECT 'Deliberately duplicated lookup', count(*), count(DISTINCT ride_id),\n       round(sum(fare + tip), 2)\nFROM rides JOIN duplicate_zones ON pickup_zone = LocationID;",
+    "chart": {
+      "type": "bar",
+      "x": "version",
+      "metrics": [
+        "joined_rows",
+        "distinct_rides",
+        "sample_fare_tip"
+      ]
+    },
+    "interpret": "The extra lookup row is a deliberate experiment, not a flaw in the shipped zones table. The join repeats every matching Times Square ride: joined rows and the sum grow, while distinct ride IDs do not. A credible discovery starts by checking the unit of observation and join cardinality.",
+    "follow": "Compare count(*) and count(DISTINCT ride_id) after both joins in the trips view. Explain why fixing the dimension key is preferable to adding DISTINCT to a revenue query."
+  }
+]

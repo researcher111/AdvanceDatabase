@@ -23,7 +23,7 @@
     <li><a href="#worked-example">Worked example</a></li>
     <li><a href="#spark">Spark records a plan before executing it</a></li>
     <li><a href="#ray">Ray runs Python tasks and stateful actors</a></li>
-    <li><a href="#thursday">Thursday: implement MapReduce and try Spark and Ray</a></li>
+    <li><a href="#thursday">November 10: implement MapReduce and try Spark and Ray</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
@@ -39,13 +39,13 @@
 <main>
 
 <header class="hero">
-  <div class="eyebrow">DS 6XXX · Lecture 13 · Tuesday November 17, 2026</div>
+  <div class="eyebrow">DS 6XXX · Lecture 13 · Thursday November 5, 2026</div>
   <h1>Distributed Compute</h1>
   <div class="subtitle">When one machine cannot process the data fast enough, how do we divide the work, move records between workers, and recover from failures?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Reading 10 TB at 2 GB/s takes roughly 85 minutes before any processing begins. Splitting the input across machines can reduce that time, but the workers must coordinate. Today we study three parts of distributed computation: partitioning the data, grouping records with the same key, and retrying failed tasks. MapReduce defines a common pattern for this work. Spark adds lazy dataflow plans, while Ray runs Python tasks and stateful workers. Thursday’s lab starts with a small MapReduce implementation, then runs examples in Spark and Ray.</p>
+<p class="lede">Reading 10 TB at 2 GB/s takes roughly 85 minutes before any processing begins. Splitting the input across machines can reduce that time, but the workers must coordinate. Today we study three parts of distributed computation: partitioning the data, grouping records with the same key, and retrying failed tasks. MapReduce defines a common pattern for this work. Spark adds lazy dataflow plans, while Ray runs Python tasks and stateful workers. Lab 11’s lab starts with a small MapReduce implementation, then runs examples in Spark and Ray.</p>
 
 <div class="cite">
   Companion reading: Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce: Simplified Data Processing on Large Clusters</em></a> (OSDI 2004, 13 readable pages)<sup class="src"><a href="#src-1" title="MapReduce: Simplified Data Processing on Large Clusters (Google Research publication page)">1</a></sup> ·
@@ -65,7 +65,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p class="keep-in-present"><strong>Quiz 10</strong> first (RAG, 10 min), then partitioning, shuffles, Spark, and Ray.</p>
+<p class="keep-in-present"><strong>Quiz 9</strong> first (RAG, 10 min), then partitioning, shuffles, Spark, and Ray.</p>
 
 <p class="keep-in-present">Counting records per URL uses the same aggregation logic at 10 MB and 10 TB. At the larger size, input reading, memory use, and recovery from a failed task become major design concerns. Distribution changes where the work runs and how intermediate results are combined.</p>
 
@@ -105,7 +105,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
     <tr><td>Rule</td><td><code>owner = hash(key) % n</code></td><td>owner holds a key interval (a–f, g–m, …)</td></tr>
     <tr><td>Strength</td><td>a good hash distributes distinct keys across partitions; the routing rule is simple to compute<sup class="src"><a href="#src-4" title="Hashed Sharding (MongoDB Manual)">4</a></sup></td><td>range queries touch few partitions; sorted neighbors stay together</td></tr>
     <tr><td>Weakness</td><td>range queries touch <em>every</em> partition</td><td>needs split points chosen well; hot ranges overload one machine<sup class="src"><a href="#src-5" title="Design a schema (Google Cloud Bigtable documentation)">5</a></sup></td></tr>
-    <tr><td>You've used it as</td><td>Thursday's shuffle, which sends each key to the machine its hash names; a hash join's build side, where rows with equal keys land in the same bucket by the same rule</td><td>Lab 8's Hive-style folders (<code>month=12/</code>), where each folder holds one interval of the key; a B+ tree, where each leaf holds one sorted interval of keys</td></tr>
+    <tr><td>You've used it as</td><td>Lab 11's shuffle, which sends each key to the machine its hash names; a hash join's build side, where rows with equal keys land in the same bucket by the same rule</td><td>Lab 8's Hive-style folders (<code>month=12/</code>), where each folder holds one interval of the key; a B+ tree, where each leaf holds one sorted interval of keys</td></tr>
   </tbody>
 </table>
 
@@ -167,7 +167,7 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
 
 <h3 class="new-slide" data-kicker="MapReduce">Each reducer receives the values grouped under its key</h3>
 
-<p class="keep-in-present">The shuffle groups every intermediate value with the same key. A reduce call can therefore process one complete group without finding matching records itself. Thursday’s Part A asks you to implement that grouping step.</p>
+<p class="keep-in-present">The shuffle groups every intermediate value with the same key. A reduce call can therefore process one complete group without finding matching records itself. Lab 11’s Part A asks you to implement that grouping step.</p>
 
 <!-- ============================================================ -->
 <h2 id="try-it">Follow records through map, shuffle, and reduce</h2>
@@ -272,7 +272,7 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
    Novel Table Search [Technical Report]
    Toward Multi-Database Query Reasoning for Text2Cypher</code></pre>
 
-<p class="keep-in-present">This example measures Thursday’s Part C workload. Calling <code>ray.get()</code> immediately after each task submission makes the loop wait before submitting the next task. Submit the tasks first, then collect their results so they can overlap. The lab’s launch-order check catches the sequential submission-and-wait pattern.<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup></p>
+<p class="keep-in-present">This example measures Lab 11’s Part C workload. Calling <code>ray.get()</code> immediately after each task submission makes the loop wait before submitting the next task. Submit the tasks first, then collect their results so they can overlap. The lab’s launch-order check catches the sequential submission-and-wait pattern.<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup></p>
 
 <h3 class="new-slide" data-kicker="Ray">Actors hold state on a worker: @ray.remote on a class</h3>
 
@@ -292,7 +292,7 @@ model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors
 </table>
 
 <!-- ============================================================ -->
-<h2 id="thursday">Thursday: implement MapReduce and try Spark and Ray</h2>
+<h2 id="thursday">November 10: implement MapReduce and try Spark and Ray</h2>
 
 <p>In Lab 11, implement a small MapReduce word count first. Then run word count in Spark and parallel nearest-neighbor tasks in Ray:</p>
 
@@ -321,9 +321,9 @@ model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors
 <p class="key-fact keep-in-present"><strong>~85 min</strong> just to read 10 TB once on one machine; 100 machines do it in about 1 min</p>
 <p class="key-fact keep-in-present"><strong>3.5×</strong> from one Ray decorator on a 10-core laptop, identical results</p>
 
-<p class="keep-in-present"><strong>Thursday:</strong> Lab 11. <strong>Next Tuesday:</strong> Bigtable, LSM trees, and storage for write-heavy workloads. Quiz 11 opens class: MapReduce, Spark &amp; Ray.<sup class="src"><a href="#src-16" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006 paper PDF)">16</a></sup></p>
+<p class="keep-in-present"><strong>Tuesday November 10:</strong> Lab 11. <strong>Thursday November 12:</strong> Bigtable, LSM trees, and storage for write-heavy workloads. Quiz 10 opens class: MapReduce, Spark &amp; Ray.<sup class="src"><a href="#src-16" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006 paper PDF)">16</a></sup></p>
 
-<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<p class="keep-in-present"><strong>Before the November 10 lab:</strong></p>
 <ul>
   <li><strong>Read</strong> Dean &amp; Ghemawat, <em>MapReduce: Simplified Data Processing on Large Clusters</em> (OSDI 2004, 13 pages); Lab 11's Part A is that paper's shuffle, built by hand.</li>
   <li><strong>Run</strong> <code>pip install pyspark ray</code>, then confirm <code>java -version</code> works; pyspark will not start without Java.</li>

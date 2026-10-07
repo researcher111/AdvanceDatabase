@@ -104,13 +104,13 @@
 
   <p class="eyebrow">DS 6XXX · Fall 2026 · Tue / Thu · UVA School of Data Science</p>
   <h1>Advanced Databases for Data Science</h1>
-  <p class="subtitle">Daniel G. Graham · Tuesdays: lecture + quiz · Thursdays: lab · 75-minute sessions</p>
+  <p class="subtitle">Daniel G. Graham · Lectures, labs &amp; discovery workshops · follow the revised schedule · 75-minute sessions</p>
 
   <p class="lede">
     Every query you have ever run sat on top of machinery you were never shown: pages on disk,
     a buffer pool deciding what stays in memory, an optimizer guessing row counts, a write-ahead
     log promising your commit survives a crash. This course shows you that machinery the most
-    honest way possible: <strong>you build it</strong>. Over the first nine weeks you write
+    honest way possible: <strong>you build it</strong>. Over the first six teaching weeks you write
     <strong>microdb</strong>, a working relational database engine in Python, one subsystem per
     lab, in the spirit of Edward Sciore's <em>SimpleDB</em>. Then you take the same ideas into the
     systems data scientists live in every day: DuckDB and the columnar world, vector databases,
@@ -121,6 +121,7 @@
   <div class="home-bar">
     <a class="primary" href="schedule.html">Day-by-day schedule</a>
     <a href="slides/index.html">Visual lecture slides</a>
+    <a href="lectures/discovery/index.html">The discovery bureau</a>
     <a href="project.html">Final project: build a RAG pipeline</a>
   </div>
 
@@ -129,10 +130,9 @@
     <div class="act">
       <p class="act-no">Act I</p>
       <h3>Build the engine</h3>
-      <p>Seven labs, one engine. You write microdb's file manager, buffer pool, record pages and
-      catalog, iterator-model operators, SQL front end, B+ tree index, and transaction log,
-      and finish with a database you can crash and watch recover.</p>
-      <span class="act-weeks">Weeks 1–9 · midterm Oct 22</span>
+      <p>Six required labs, one engine. You write microdb's file manager, buffer pool, record pages and
+      catalog, iterator-model operators, SQL front end, and B+ tree index. Transactions and recovery are optional bonus extensions.</p>
+      <span class="act-weeks">Weeks 1–6 · midterm Oct 22</span>
     </div>
     <div class="act">
       <p class="act-no">Act II</p>
@@ -140,7 +140,7 @@
       <p>With the internals in your hands, the modern landscape stops being magic: why DuckDB wins
       scans by 100×, how a vector index trades recall for speed, how MapReduce became Spark and
       Ray, why Bigtable partitions the way it does, and when a graph traversal beats a join.</p>
-      <span class="act-weeks">Weeks 10–15</span>
+      <span class="act-weeks">Analytics starts Oct 8 · discovery workshops in November</span>
     </div>
     <div class="act">
       <p class="act-no">Act III</p>
@@ -153,15 +153,14 @@
   </div>
 
   <h2>microdb: the engine you build</h2>
-  <p>Each Thursday lab adds one layer, bottom-up, and each layer runs on the ones below it.
-  By Lab 5 microdb answers real SQL; by Lab 7 it survives a crash mid-transaction. Starter code
+  <p>Each core lab adds one layer, bottom-up, and each layer runs on the ones below it.
+  By Lab 5 microdb answers real SQL; Lab 6 adds indexed access. The optional Lab 7 explores crash recovery. Starter code
   for each lab ships with a reference implementation of every layer below it, so no one is stuck
   on week 3 because of week 2.</p>
 
   <div class="stack">
     <div class="layer top"><span class="lab-no">Lab 5</span><span class="lname">SQL front end</span><span class="ldesc">guided parser/planner · SQL queries · measured work</span></div>
     <div class="layer top"><span class="lab-no">Lab 4</span><span class="lname">Query operators</span><span class="ldesc">select · project · nested-loop join, iterator style</span></div>
-    <div class="layer txnrow"><span class="lab-no">Lab 7</span><span class="lname">Transactions</span><span class="ldesc">write-ahead log · rollback · crash recovery · locks</span></div>
     <div class="layer mid"><span class="lab-no">Lab 6</span><span class="lname">B+ tree index</span><span class="ldesc">insert · search · range scan · wired into the planner</span></div>
     <div class="layer mid"><span class="lab-no">Lab 3</span><span class="lname">Records &amp; catalog</span><span class="ldesc">slotted pages · schemas · tables about tables</span></div>
     <div class="layer mid"><span class="lab-no">Lab 2</span><span class="lname">Buffer pool</span><span class="ldesc">pin/unpin · LRU eviction · hit-rate you can measure</span></div>
@@ -175,24 +174,24 @@
     <li>Choose the right engine for a workload (row store, column store, vector, graph, wide-column, or warehouse) and defend the choice with measurements.</li>
     <li>Scale past one machine deliberately: partition data (hash vs range), trace the map → shuffle → reduce pattern, and parallelize real work with PySpark and Ray.</li>
     <li>Build and honestly evaluate a production-shaped RAG pipeline: chunking, embedding, ANN retrieval, generation, and retrieval metrics.</li>
-    <li>Reason about transactions, isolation anomalies, replication, and what CAP does and doesn't let you have, from your own WAL up to Bigtable's tablets.</li>
+    <li>Reason about transactions, isolation anomalies, replication, and what CAP does and doesn't let you have, using Bigtable and the optional transaction readings.</li>
   </ul>
 
   <h2>Grading</h2>
   <table class="facts">
     <thead><tr><th>Component</th><th>Details</th><th>Weight</th></tr></thead>
     <tbody>
-      <tr><td><strong>Concept quizzes</strong></td><td>12 ten-minute quizzes at the start of Tuesday lectures; lowest 2 dropped.</td><td class="w">10%</td></tr>
-      <tr><td><strong>Labs</strong></td><td>11 Thursday labs (7 × microdb, plus DuckDB, microvector, micro-rag, Spark &amp; Ray). Due the following Thursday.</td><td class="w">40%</td></tr>
-      <tr><td><strong>Midterm</strong></td><td>Thu Oct 22, in class: the microdb core, storage through recovery.</td><td class="w">20%</td></tr>
+      <tr><td><strong>Concept quizzes</strong></td><td>11 ten-minute quizzes on the dates in the schedule; lowest 2 dropped.</td><td class="w">10%</td></tr>
+      <tr><td><strong>Labs</strong></td><td>10 required labs (Labs 1–6 and 8–11); Lab 7 is optional. Use the revised schedule for dates and deadlines.</td><td class="w">40%</td></tr>
+      <tr><td><strong>Midterm</strong></td><td>Thu Oct 22, in class: the microdb core, storage through B+ trees (Lectures 1–6 and Labs 1–6).</td><td class="w">20%</td></tr>
       <tr><td><strong>Final project</strong></td><td>Team RAG pipeline: <a href="project.html">spec &amp; milestones</a>.</td><td class="w">30%</td></tr>
     </tbody>
   </table>
 
   <h2>Course materials</h2>
-  <p>Every session's page is built and linked from the <a href="schedule.html">schedule</a>; direct links below. Use the <a href="slides/index.html">visual lecture decks</a> for animated, minimal-text presentations with 60-minute teaching guides and tablet drawing tools.</p>
+  <p>Material numbers and URLs remain stable as the teaching order changes. Every session’s page is linked from the <a href="schedule.html">schedule</a>; direct links below. Use the <a href="slides/index.html">visual lecture decks</a> for animated, minimal-text presentations with 60-minute teaching guides and tablet drawing tools.</p>
   <table class="facts">
-    <thead><tr><th>Week</th><th>Tuesday lecture</th><th>Thursday lab</th></tr></thead>
+    <thead><tr><th>Week</th><th>First session / resource</th><th>Second session / resource</th></tr></thead>
     <tbody>
       <tr><td>1</td><td><a href="lectures/lecture-01/anatomy.html">Anatomy of a database</a></td><td><a href="labs/lab-01/filemanager.html">microdb 1 · disk &amp; file manager</a></td></tr>
       <tr><td>2</td><td><a href="lectures/lecture-02/bufferpool.html">The buffer pool</a></td><td><a href="labs/lab-02/buffermanager.html">microdb 2 · buffer manager</a></td></tr>
@@ -200,17 +199,20 @@
       <tr><td>4</td><td><a href="lectures/lecture-04/iterators.html">The iterator model</a></td><td><a href="labs/lab-04/scans.html">microdb 4 · scan operators</a></td></tr>
       <tr><td>5</td><td><a href="lectures/lecture-05/parsing.html">Parsing &amp; planning</a></td><td><a href="labs/lab-05/sqlfrontend.html">microdb 5 · SQL front end</a></td></tr>
       <tr><td>6</td><td><a href="lectures/lecture-06/btrees.html">B+ trees</a></td><td><a href="labs/lab-06/btree.html">microdb 6 · B+ tree index</a></td></tr>
-      <tr><td>7</td><td><a href="lectures/lecture-07/wal.html">Transactions &amp; the WAL</a> (Thu)</td><td>No lab</td></tr>
-      <tr><td>8</td><td><a href="lectures/lecture-08/concurrency.html">Concurrency &amp; MVCC</a></td><td><a href="labs/lab-07/transactions.html">microdb 7 · transactions</a></td></tr>
-      <tr><td>9</td><td><a href="lectures/lecture-09/optimizer.html">The optimizer + midterm review</a></td><td>Midterm (Thu Oct 22)</td></tr>
-      <tr><td>10</td><td><a href="lectures/lecture-10/analytics.html">The analytics stack &amp; in-database ML</a></td><td><a href="labs/lab-08/duckdb.html">DuckDB + partitioned Parquet</a></td></tr>
-      <tr><td>11</td><td><a href="lectures/lecture-11/vectors.html">Vector databases</a></td><td><a href="labs/lab-09/microvector.html">microvector · the IVF index</a></td></tr>
-      <tr><td>12</td><td><a href="lectures/lecture-12/rag.html">RAG as a systems problem</a></td><td><a href="labs/lab-10/microrag.html">micro-rag · wire the pipeline</a></td></tr>
-      <tr><td>13</td><td><a href="lectures/lecture-13/distributed.html">Distributed compute</a></td><td><a href="labs/lab-11/sparkray.html">Spark &amp; Ray</a></td></tr>
-      <tr><td>14</td><td><a href="lectures/lecture-14/bigtable.html">Bigtable, LSM &amp; NoSQL</a></td><td>Thanksgiving: no class</td></tr>
-      <tr><td>15</td><td><a href="lectures/lecture-15/graphs.html">Graph databases &amp; synthesis</a></td><td>Project workshop</td></tr>
+      <tr><td>7 · Oct 8</td><td><a href="lectures/lecture-10/analytics.html">Analytics &amp; in-database ML</a></td><td><a href="lectures/lecture-10/discovery.html">Set up a taxi database and investigate the data</a></td></tr>
+      <tr><td>8 · Oct 13–15</td><td><a href="labs/lab-08/duckdb.html">DuckDB lab (Tue)</a></td><td><a href="lectures/lecture-11/vectors.html">Vector databases (Thu)</a></td></tr>
+      <tr><td>9 · Oct 20–22</td><td><a href="lectures/review/midterm.html">Full-session midterm review (Tue)</a></td><td>Midterm · Thu Oct 22</td></tr>
+      <tr><td>10 · Oct 27–29</td><td><a href="lectures/lecture-12/rag.html">RAG as a systems problem</a></td><td><a href="labs/lab-09/microvector.html">Microvector lab (Thu)</a></td></tr>
+      <tr><td>11 · Nov 3–5</td><td><a href="labs/lab-10/microrag.html">Wire the RAG pipeline (Tue)</a></td><td><a href="lectures/lecture-13/distributed.html">Distributed compute (Thu)</a></td></tr>
+      <tr><td>12 · Nov 10–12</td><td><a href="labs/lab-11/sparkray.html">Spark &amp; Ray (Tue)</a></td><td><a href="lectures/lecture-14/bigtable.html">Bigtable, LSM &amp; NoSQL (Thu)</a></td></tr>
+      <tr><td>13 · Nov 17–19</td><td><a href="lectures/lecture-15/graphs.html">Graphs &amp; synthesis (Tue)</a></td><td><a href="lectures/discovery/index.html#city">City</a> &amp; <a href="lectures/discovery/index.html#weather">weather</a> investigations + question swap (Thu)</td></tr>
+      <tr><td>14 · Nov 24</td><td><a href="lectures/discovery/index.html#planets">The planet census</a></td><td>Thanksgiving · no Thursday class</td></tr>
+      <tr><td>15 · Dec 1–3</td><td><a href="lectures/discovery/index.html#evidence">Who says so? + project rehearsal</a></td><td><a href="lectures/discovery/index.html#finale">The discovery hearing · project workshop</a></td></tr>
     </tbody>
   </table>
+
+  <h2>Follow a discovery from question to evidence</h2>
+  <p><a href="lectures/discovery/index.html">The discovery bureau</a> connects five cases across four meetings: city rhythms, a suspicious weather record, a planet census, a source-tracing graph, and a final discovery hearing. Each includes a timed outline, verified query, saved visual evidence, and a next question. The public databases are already hosted and loaded; see the <a href="lectures/discovery/index.html#setup">setup guide</a>.</p>
 
   <h2>Get the code</h2>
   <p>Every lab page has download buttons for its individual files, but the whole course is one
@@ -228,10 +230,21 @@
   <h2>Logistics</h2>
   <ul class="plain">
     <li><strong>Prerequisites:</strong> comfortable Python and basic SQL (<code>SELECT</code> / <code>JOIN</code> / <code>GROUP BY</code>). No systems background assumed; that's what the course builds.</li>
-    <li><strong>Tools:</strong> Python 3.11+, PostgreSQL, DuckDB, PySpark, Ray, Kuzu (demo). All free, all pip-installable, all on your laptop. Spark and Ray run in local mode; no cluster or cloud account required.</li>
+    <li><strong>Tools:</strong> Python 3.11+, PostgreSQL, DuckDB, PySpark, Ray, Kuzu (demo). Local labs use Python packages and their documented dependencies. Spark and Ray run in local mode. Discovery sessions use public hosted ClickHouse, NASA TAP, and Wikidata queries; no new account or server is required.</li>
     <li><strong>Texts:</strong> no required purchase. Readings drawn from Sciore's <em>Database Design and Implementation</em> (SimpleDB) and course notes; every lab page is self-contained.</li>
-    <li><strong>Sessions:</strong> 75 minutes. Tuesday lectures open with a 10-minute quiz on the prior week. Thursday labs are working sessions; unfinished lab work is homework, due the following Thursday at class start.</li>
+    <li><strong>Sessions:</strong> 75 minutes. Quizzes open the indicated lectures. Labs are working sessions; dates and submission deadlines follow the revised schedule.</li>
   </ul>
+
+  <section id="bonus">
+    <h2>Bonus · go deeper into the engine</h2>
+    <p>Optional, ungraded extensions after the required sequence. These readings, slide decks, and the transaction lab remain available at their original links. They have no scheduled quiz, deadline, or midterm requirement.</p>
+    <ul>
+      <li><a href="lectures/lecture-07/wal.html">Lecture 7 · Transactions, WAL &amp; recovery</a> · <a href="slides/lecture-07.html">slides</a> — commit, rollback, checkpoints, and crash recovery.</li>
+      <li><a href="lectures/lecture-08/concurrency.html">Lecture 8 · Concurrency, locking &amp; MVCC</a> · <a href="slides/lecture-08.html">slides</a> — interleavings, isolation, and visibility.</li>
+      <li><a href="labs/lab-07/transactions.html">Lab 7 · Add transactions to microdb</a> — supplied logger and locks, rollback, and recovery. Self-checks only.</li>
+      <li><a href="lectures/lecture-09/optimizer.html">Lecture 9 · Statistics, costs &amp; join order</a> · <a href="slides/lecture-09.html">slides</a> — a deeper explanation of plan choices.</li>
+    </ul>
+  </section>
 
   <p class="footnote">
     Advanced Databases for Data Science · DS 6XXX · Fall 2026 · University of Virginia School of Data Science ·

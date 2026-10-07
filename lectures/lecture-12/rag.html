@@ -25,7 +25,7 @@
     <li><a href="#eval">Retrieval quality is measurable: two numbers, twelve questions</a></li>
     <li><a href="#failures">Diagnose retrieval and generation failures</a></li>
     <li><a href="#production">Improve retrieval with additional search stages</a></li>
-    <li><a href="#thursday">Thursday you write the retriever and the assembly</a></li>
+    <li><a href="#thursday">November 3: write the retriever and the assembly</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
@@ -41,13 +41,13 @@
 <main>
 
 <header class="hero">
-  <div class="eyebrow">DS 6XXX · Lecture 12 · Tuesday November 10, 2026</div>
+  <div class="eyebrow">DS 6XXX · Lecture 12 · Tuesday October 27, 2026</div>
   <h1>RAG as a Systems Problem</h1>
   <div class="subtitle">How can a language model answer questions about your documents? Retrieve relevant passages, supply them as context, and measure whether the answers are supported.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">A language model cannot reliably answer questions about documents it has not been given. Its <span class="gloss" data-gloss="parametric">parametric knowledge</span> comes from training, and its <span class="gloss" data-gloss="context-window">context window</span> limits how much text you can send in one request. Retrieval-augmented generation (RAG) addresses this by finding relevant passages and adding them to the prompt. This lecture focuses on the database work behind retrieval: storing chunks and metadata, indexing embeddings, ranking results, and evaluating them. Thursday’s lab combines those pieces into a pipeline you can use as a starting point for the project.<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup></p>
+<p class="lede">A language model cannot reliably answer questions about documents it has not been given. Its <span class="gloss" data-gloss="parametric">parametric knowledge</span> comes from training, and its <span class="gloss" data-gloss="context-window">context window</span> limits how much text you can send in one request. Retrieval-augmented generation (RAG) addresses this by finding relevant passages and adding them to the prompt. This lecture focuses on the database work behind retrieval: storing chunks and metadata, indexing embeddings, ranking results, and evaluating them. Lab 10’s lab combines those pieces into a pipeline you can use as a starting point for the project.<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup></p>
 
 <div class="cite">
   Companion reading: Lewis et&nbsp;al., <a href="https://arxiv.org/abs/2005.11401"><em>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</em></a> (the paper that named it)<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup> ·
@@ -67,7 +67,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p class="keep-in-present"><strong>Quiz 9</strong> first (vector search, 10 min), then the pipeline your project is building.</p>
+<p class="keep-in-present"><strong>Quiz 8</strong> first (vector search, 10 min), then the pipeline your project is building.</p>
 
 <p class="keep-in-present">Your project must supply its own evidence. Retrieval selects a small set of relevant passages from the corpus so the model can answer without receiving every document in each prompt.</p>
 
@@ -95,7 +95,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="try-it">Inspect the evidence supplied to the model</h2>
 
-<p>This browser example runs the retrieval stage over 24 documents summarizing the course. It uses the same <span class="gloss" data-gloss="hashed-bag-of-words">hashed bag-of-words</span> embedding method as Thursday’s <code>micro_rag.py</code>. Ask a question to inspect both the retrieved chunks and the prompt that would be sent to a language model.</p>
+<p>This browser example runs the retrieval stage over 24 documents summarizing the course. It uses the same <span class="gloss" data-gloss="hashed-bag-of-words">hashed bag-of-words</span> embedding method as Lab 10’s <code>micro_rag.py</code>. Ask a question to inspect both the retrieved chunks and the prompt that would be sent to a language model.</p>
 
 <div class="viz" id="viz-ask">
   <div class="viz-title">micro-rag · retrieval over 24 course-summary documents</div>
@@ -136,7 +136,7 @@ question ──embed──▶ query vector ──────retrieve (top-k)─
   <div class="viz-title">the pipeline · click a stage · green marks work from earlier labs</div>
   <div class="pipe-flow" id="pipe-flow"></div>
   <div class="pipe-detail" id="pipe-detail"></div>
-  <p class="viz-caption">The green stages use techniques from earlier labs. The orange stage assembles the prompt and calls the generator. In Thursday’s default echo mode, the lab prints the assembled prompt instead of calling a real model, so you can inspect the retrieved evidence directly.</p>
+  <p class="viz-caption">The green stages use techniques from earlier labs. The orange stage assembles the prompt and calls the generator. In Lab 10’s default echo mode, the lab prints the assembled prompt instead of calling a real model, so you can inspect the retrieved evidence directly.</p>
 </div>
 
 <p class="key-fact keep-in-present"><strong>Five stages:</strong> chunk, embed, index, retrieve, then assemble and generate. The lab provides some stages and asks you to implement retrieval and prompt assembly.</p>
@@ -209,7 +209,7 @@ come out of it: <span class="gloss" data-gloss="hit-at-k">hit@k</span> and <span
 
 <h3 class="new-slide" data-kicker="Retrieval is measurable">Embedding width changed hit@3 from 0.50 to 0.92</h3>
 
-<p class="keep-in-present">Thursday’s hashed bag-of-words embedder maps each word to one of <code>DIM</code> vector positions and increments that position. With fewer positions, unrelated words collide more often, making unrelated texts appear similar. The <span class="gloss" data-gloss="eval-set">evaluation set</span> measures how these collisions affect retrieval:<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup></p>
+<p class="keep-in-present">Lab 10’s hashed bag-of-words embedder maps each word to one of <code>DIM</code> vector positions and increments that position. With fewer positions, unrelated words collide more often, making unrelated texts appear similar. The <span class="gloss" data-gloss="eval-set">evaluation set</span> measures how these collisions affect retrieval:<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup></p>
 
 <table>
   <thead><tr><th>Embedding width (DIM)</th><th>hit@3</th><th>MRR@3</th></tr></thead>
@@ -289,7 +289,7 @@ two phrasings, DIM=2048:</p>
 <p class="keep-in-present">Frameworks such as LangChain and LlamaIndex package these stages. Building the small lab pipeline first makes their behavior easier to inspect: you can check chunk boundaries, embedding scores, retrieved ids, and prompt contents separately.</p>
 
 <!-- ============================================================ -->
-<h2 id="thursday">Thursday you write the retriever and the assembly</h2>
+<h2 id="thursday">November 3: write the retriever and the assembly</h2>
 
 <p class="keep-in-present">micro-rag: the full pipeline over the course-summary corpus you just queried. The chunker,
 the embedder, and the LLM call are provided in the starter files; you write the retriever (on top of Lab 9's
@@ -301,7 +301,7 @@ the embedder, and the LLM call are provided in the starter files; you write the 
   12-question eval set.</li>
   <li>☐ <code>python3 ask.py "your question"</code> runs your pipeline end to end; echo mode
   shows the assembled prompt; set <code>LLM_BASE_URL</code> to plug in a real model.</li>
-  <li>☐ Project teams: Thursday’s file structure is a reference architecture for your
+  <li>☐ Project teams: Lab 10’s file structure is a reference architecture for your
   pipeline; bring your corpus questions.</li>
 </ul>
 
@@ -316,15 +316,14 @@ the embedder, and the LLM call are provided in the starter files; you write the 
 
 <p class="key-fact keep-in-present"><strong>Evaluate each change:</strong> the 12-question set measured hit@3 rising from 0.50 to 0.92 when DIM changed from 64 to 2048.</p>
 
-<p class="keep-in-present"><strong>Thursday:</strong> build micro-rag. <strong>Next
-Tuesday:</strong> the data outgrows one machine: partitioning, MapReduce, Spark, and Ray.
-Quiz 10 opens class: RAG.</p>
+<p class="keep-in-present"><strong>Thursday October 29:</strong> build microvector (Lab 9); the project proposal is due that day. <strong>Tuesday November 3:</strong> build micro-rag (Lab 10). <strong>Thursday November 5:</strong> the data outgrows one machine: partitioning, MapReduce, Spark, and Ray.
+Quiz 9 opens class: RAG.</p>
 
-<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<p class="keep-in-present"><strong>Before the November 3 RAG lab:</strong></p>
 <ul>
   <li><strong>Read</strong> the <a href="../../labs/lab-10/microrag.html">Lab 10 page</a> through the pipeline diagram, plus the four-table schema (<code>documents</code>, <code>chunks</code>, <code>embeddings</code>, <code>eval_questions</code>) in <a href="../../project.html#schema">the project spec</a>.</li>
   <li><strong>Run</strong> <code>python3 test_rag.py</code> on the unedited Lab 10 starter files; it should print <strong>0/7</strong>.</li>
-  <li><strong>Bring</strong> Lab 9's <code>microvector</code> working (the retriever builds on it) and, project teams, ten questions a real user of your corpus would ask.</li>
+  <li><strong>Bring</strong> your Lab 9 <code>microvector</code>, or use Lab 10’s supplied working reference if you are still finishing it; Lab 9 is due November 5. Project teams should bring ten questions a real user of the corpus would ask.</li>
 </ul>
 
 <!-- ============================================================ -->

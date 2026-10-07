@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Database detective · Discover a city with SQL</title>
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="discovery/discovery.css">
+</head>
+<body><main>
+<nav><a href="../../index.html">← Course home</a><a href="analytics.html">Analytics reading</a><a href="../../schedule.html">Revised schedule</a></nav>
+<header><p class="eyebrow">Analytics · guided scientific discovery</p><h1>A city hiding in the rows</h1>
+<p class="lede">Load 60,000 real NYC taxi trips. Ask a question, predict an answer, write SQL, and see what the evidence supports. Then change the question.</p>
+<div class="facts"><span><strong>60,000</strong> sampled trips</span><span><strong>265</strong> taxi zones</span><span><strong>2024</strong> twelve equal monthly samples</span><span><strong>7</strong> investigations</span></div></header>
+<p class="notice">Continue the story in <a href="../discovery/index.html">The discovery bureau</a>: five connected cases across four meetings using public hosted databases, with no new server or account setup.</p>
+<section id="setup"><h2>1. Build and load your database</h2>
+<p>Use the course repository and Python 3.11 or newer. The two input files already ship with Lab 8; no data download, account, or API key is needed. Run these commands from the repository root:</p>
+<p><strong>macOS / Linux:</strong></p>
+<pre><code>python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r lectures/lecture-10/discovery/requirements.txt
+python lectures/lecture-10/discovery/discovery.py --serve</code></pre>
+<details><summary>Windows PowerShell commands</summary>
+<pre><code>py -m venv .venv
+.venv\Scripts\python.exe -m pip install -r lectures/lecture-10/discovery/requirements.txt
+.venv\Scripts\python.exe lectures/lecture-10/discovery/discovery.py --serve</code></pre>
+</details>
+<p>Open <a href="http://127.0.0.1:8770/lectures/lecture-10/discovery.html">the local SQL workbench on port 8770</a>. It creates <code>lectures/lecture-10/discovery-data/taxi.duckdb</code>, checks row counts and unique keys, and lets you edit and run the queries below. Press Ctrl-C in the terminal to stop the server; your database stays on disk. Rerunning reuses it. Choose a fresh <code>--database PATH</code> for a separate copy.</p>
+<p>The website version shows results already computed from the same SQL and sample. The local workbench executes your edits against the loaded database. Changes to a result are observations to explain, not automatic evidence of a cause.</p>
+<details><summary>What is in the database?</summary>
+<div class="schema" role="img" aria-label="rides joins zones twice: pickup_zone and dropoff_zone each match the unique LocationID. The trips view has one row per ride.">
+<div><strong>rides · 60,000 rows</strong><code>ride_id · primary key<br>month, day, hour<br>fare, tip, distance, duration_min<br>payment, passengers<br>pickup_zone →<br>dropoff_zone →</code></div>
+<div><strong>zones · 265 rows</strong><code>LocationID · primary key<br>Zone<br>Borough<br>service_zone</code><p>Join once for pickup.<br>Join again for dropoff.</p></div>
+<div><strong>trips · a view</strong><code>all ride fields<br>pickup_name, pickup_borough<br>dropoff_name, dropoff_borough</code><p>Still 60,000 rows.<br>One observation = one ride.</p></div>
+</div>
+<p>There is one RID-like identifier per trip, not one per passenger, driver, or vehicle. This sample contains no driver identity, so it cannot measure driver income or earnings per shift. <code>fare + tip</code> is the recorded fare-and-tip subtotal; it excludes tolls and other charges and is not profit.</p>
+<p>The loader defines primary keys, imports the compressed CSV and zone lookup, and creates a view with two left joins. Inspect the exact setup in <a href="discovery/discovery.py" download>discovery.py</a>. For a Python notebook, connect with <code>duckdb.connect('lectures/lecture-10/discovery-data/taxi.duckdb', read_only=True)</code> from the repo root, then use <code>con.sql("SELECT * FROM trips LIMIT 5").show()</code>.</p>
+</details>
+<details><summary>What was sampled, cleaned, and left out?</summary>
+<p>The bundled course sample contains 5,000 trips per month from the 2024 yellow-taxi files (sampling seed 6042). The course preparation retained 1–6 passengers, 0.1–100 miles, fare $1–$500, recorded tip $0–$200, card or cash payment, and duration 1–180 minutes. These filters define the population represented here. See <a href="../../labs/lab-08/starter/gen_data.py" download>the sample documentation</a>, <a href="../../labs/lab-08/starter/rides_2024_sample.csv.gz" download>the compressed rides</a>, and <a href="../../labs/lab-08/starter/taxi_zone_lookup.csv" download>the zone lookup</a>.</p>
+<p><strong>Equal monthly sample sizes do not preserve citywide monthly counts.</strong> Cash tips are not captured in the recorded tip field. A zero can describe a missing measurement mechanism. These are observational records with cleaning and sampling decisions, not a randomized experiment.</p>
+</details>
+</section>
+<section id="investigate"><h2>2. Follow a question through the evidence</h2>
+<p class="method">Question → prediction → SQL measurement → visual evidence → qualified conclusion → next test</p>
+<p id="mode" class="notice" role="status">Loading the saved example results…</p>
+<div class="controls"><label for="case">Investigation</label><select id="case"></select><button id="previous" class="btn" type="button">Previous</button><button id="next" class="btn" type="button">Next</button></div>
+<article id="case-panel" aria-labelledby="question"><p id="progress" class="eyebrow"></p><h3 id="question"></h3>
+<p id="prediction-prompt"></p><label for="prediction">Your prediction and reason</label><textarea id="prediction" rows="2" placeholder="I expect… because… (your notes stay in this tab)"></textarea>
+<div class="query-head"><h4>Measure with SQL</h4><button class="btn" id="restore" type="button">Restore example SQL</button></div>
+<label for="sql" class="small">Each result row should have a meaning you can describe.</label><textarea id="sql" rows="12" spellcheck="false"></textarea>
+<div class="controls"><button class="btn primary" id="run" type="button">Reveal computed result</button><span id="query-status" role="status" aria-live="polite"></span></div>
+<div id="evidence" hidden>
+<div class="controls"><label for="metric">Visualize</label><select id="metric"></select><span id="metric-unit" class="small"></span></div>
+<div id="chart" class="chart-viewport"></div>
+<p id="chart-note" class="small"></p>
+<details id="result-table"><summary>Inspect the result table</summary><div class="table-viewport"><table><thead id="columns"></thead><tbody id="rows"></tbody></table></div></details>
+<div class="interpretation"><h4>What can we conclude?</h4><p id="interpretation"></p><h4>Change one thing</h4><p id="follow-up"></p></div>
+<label for="conclusion">Record a finding, a limitation, and a next query</label><textarea id="conclusion" rows="3" placeholder="The sample shows… This does not establish… Next I would test…"></textarea>
+<button class="btn" id="download" type="button">Download this investigation</button>
+</div></article>
+<noscript><p>The investigations use JavaScript to reveal saved results and draw charts. You can still build the database above and run <a href="discovery/investigations.sql" download>all seven queries</a> in DuckDB.</p></noscript>
+</section>
+<section id="teach"><h2>3. Turn a result into a discovery</h2>
+<p><strong>First session, 75 minutes:</strong> 10 minutes to load and audit the database; 10 to predict and investigate the monthly sample; 15 to challenge the tipping conclusion; 15 to compare airports and change the metric; 15 for a pair to choose a neighborhood, route, or join investigation; 10 to exchange conclusions and propose a competing explanation.</p>
+<p>During the analytics lecture, use the first two cases as a short opening demonstration. Use the full sequence in the discovery workshop. These investigations are ungraded and do not replace Lab 8’s eight required SQL queries.</p>
+<ol><li><strong>State a unit:</strong> a sampled trip, route, zone, or month. Check that joins preserve it.</li><li><strong>Show the denominator:</strong> count the records behind a percentage or comparison.</li><li><strong>Try to break your explanation:</strong> change a distance range, destination, payment filter, or aggregation.</li><li><strong>Write a cautious claim:</strong> “In this cleaned sample…” is different from “New Yorkers always…”</li><li><strong>Make it reproducible:</strong> save the SQL, result, units, and next question. Do not keep only the chart.</li></ol>
+<p><a href="discovery/investigations.sql" download>Download all example queries</a> · <a href="../../labs/lab-08/duckdb.html">Continue to the DuckDB lab</a></p>
+</section>
+<section id="sources"><h2>Sources and measurement notes</h2><p>The <a href="https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page">NYC TLC trip-record page</a> describes the source records and their limitations. The <a href="https://www.nyc.gov/assets/tlc/downloads/pdf/data_dictionary_trip_records_yellow.pdf">yellow-taxi data dictionary</a> explains the tip field. The course’s bundled sample documentation records its cleaning and sampling choices.</p>
+<p>DuckDB documents <a href="https://duckdb.org/docs/current/data/csv/overview">compressed CSV loading</a> and <a href="https://duckdb.org/docs/current/sql/functions/window_functions">window functions</a>. Results below are generated by executing the example SQL against the shipped files, not estimated or invented. Runtime varies by machine. The page keeps full source-file hashes in <a href="discovery/results.js">its saved-result data</a>.</p></section>
+<footer>DS 6XXX · Advanced Databases for Data Science · Daniel G. Graham · Fall 2026</footer>
+</main>
+<!-- live-config -->
+<script src="discovery/results.js"></script><script src="discovery/discovery.js"></script>
+</body></html>

@@ -36,15 +36,16 @@
 </button>
 
 <main>
+<div class="callout note"><strong>Bonus material.</strong> This topic is optional and outside the October 22 midterm. Follow the <a href="../../schedule.html">revised schedule</a> for required sessions; analytics now follows B+ trees.</div>
 
 <header class="hero">
-  <div class="eyebrow">DS 6XXX · Lecture 7 · Thursday October 8, 2026 · (lecture in the lab slot; Tuesday fell during Reading Days)</div>
+  <div class="eyebrow">DS 6XXX · Lecture 7 · Bonus reading · optional, self-paced</div>
   <h1>Transactions &amp; the Write-Ahead Log</h1>
   <div class="subtitle">A transaction can change several pages. How can the database preserve committed changes and undo unfinished work when a crash interrupts those writes?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">A committed transaction must survive a crash, even though data pages may be flushed at different times. Write-ahead logging makes this possible by preserving recovery information before data reaches disk. Next Thursday you implement a simple FORCE/STEAL design, then test it with an abrupt process exit. We will also compare it with production designs that defer data-page writes.</p>
+<p class="lede">A committed transaction must survive a crash, even though data pages may be flushed at different times. Write-ahead logging makes this possible by preserving recovery information before data reaches disk. In the optional transaction lab, you implement a simple FORCE/STEAL design, then test it with an abrupt process exit. We will also compare it with production designs that defer data-page writes.</p>
 
 <div class="cite">
   Companion reading: Sciore,<sup class="src"><a href="#src-1" title="Database Design and Implementation: Second Edition (Google Books)">1</a></sup> <em>Database Design and Implementation</em>, ch. 5 (transactions) ·
@@ -64,7 +65,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p class="keep-in-present">No quiz today because of the short week; Quiz 6 is on Tuesday. Today we will trace the writes needed for atomicity and durability.</p>
+<p class="keep-in-present">This is an optional bonus reading with no quiz. Today we will trace the writes needed for atomicity and durability.</p>
 
 <p class="keep-in-present">Account A held $60 and account B held $90. A $50 transfer debited A, and that page reached disk. The power failed before B was credited. The stored balances are now $10 and $90, totaling $100 instead of $150. Recovery must undo the incomplete transfer.</p>
 
@@ -83,7 +84,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <tbody>
     <tr><td><strong>A</strong>tomic</td><td>all of the transaction, or none of it</td><td>the log, plus rollback while the engine runs and recovery after a crash</td><td><strong>today</strong></td></tr>
     <tr><td><strong>C</strong>onsistent</td><td>integrity rules still hold afterward</td><td>declared constraints and correct transaction logic, supported by atomicity and isolation</td><td>also requires correct transaction logic</td></tr>
-    <tr><td><strong>I</strong>solated</td><td>concurrent execution provides the guarantees of the chosen isolation level</td><td>locks, or <span class="gloss" data-gloss="mvcc">MVCC</span> (multi-version concurrency control)</td><td>Tuesday</td></tr>
+    <tr><td><strong>I</strong>solated</td><td>concurrent execution provides the guarantees of the chosen isolation level</td><td>locks, or <span class="gloss" data-gloss="mvcc">MVCC</span> (multi-version concurrency control)</td><td>bonus concurrency reading</td></tr>
     <tr><td><strong>D</strong>urable</td><td>once COMMIT succeeds, the work survives a process or system crash, assuming the storage honors durability requests<sup class="src"><a href="#src-3" title="Principles of Transaction-Oriented Database Recovery (Haerder and Reuter, ACM Computing Surveys 15(4), 1983)">3</a></sup></td><td>durable recovery information and the required data/log flushes</td><td><strong>today</strong></td></tr>
   </tbody>
 </table>
@@ -260,10 +261,10 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="Next Thursday">Prepare for Thursday’s lab</h3>
+<h3 class="new-slide" data-kicker="Optional extension">Prepare for the optional transaction lab</h3>
 
 <ul class="checklist">
-  <li>☐ Lab 6 due at class start Thursday. microdb so far is six layers stacked on each other; Lab 7 adds the last one.</li>
+  <li>☐ The six required labs build the core engine; optional Lab 7 adds transaction support.</li>
   <li>☐ Download the eight starter files from the Lab 7 page.</li>
   <li>☐ Harness runs: <code>python3 test_tx.py</code> prints <strong>0/9 passed</strong>
   (two tests spawn a subprocess and kill it; that's supposed to happen).</li>
@@ -283,16 +284,13 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 
 <p class="key-fact keep-in-present"><strong>FORCE/STEAL in Lab 7:</strong> sync log records, flush dirty data pages, then sync COMMIT.</p>
 
-<p class="keep-in-present"><strong>Tuesday:</strong> the I in ACID: lost updates and
-phantoms live, two-phase locking, and how Postgres snapshot reads avoid conflicting row locks (MVCC).<sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 13.1 Introduction (Concurrency Control)">9</a></sup>
-Quiz 6 opens class: B+ trees. <strong>Next Thursday:</strong> Lab 7: implement transactions, then test an abrupt process exit with
-<code>kill -9</code>.</p>
+<p class="keep-in-present">Continue with the optional <a href="../lecture-08/concurrency.html">concurrency reading</a>, then use the bonus transaction lab to combine WAL, locks, rollback, and recovery. These extensions have no required quiz or deadline.</p>
 
-<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<p class="keep-in-present"><strong>Before Optional lab:</strong></p>
 <ul>
   <li><strong>Read</strong> Sciore ch. 5 (transactions) and Postgres's WAL introduction, linked above.</li>
   <li><strong>Run</strong> <code>python3 test_tx.py</code> on the eight Lab 7 starter files; it should print <strong>0/9 passed</strong>.</li>
-  <li><strong>Bring</strong> Lab 6 finished (due at class start Thursday) and the WAL rule by heart: old value to the log before the page changes.</li>
+  <li><strong>Bring</strong> your Lab 6 understanding and the WAL rule by heart: old value to the log before the page changes.</li>
 </ul>
 
 <!-- ============================================================ -->

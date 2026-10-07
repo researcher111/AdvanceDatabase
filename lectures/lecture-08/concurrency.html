@@ -22,7 +22,7 @@
     <li><a href="#levels">Isolation levels provide different guarantees</a></li>
     <li><a href="#mvcc">Postgres keeps row versions for snapshot reads</a></li>
     <li><a href="#worked-example">Worked example</a></li>
-    <li><a href="#thursday">Prepare for Thursday’s transaction lab</a></li>
+    <li><a href="#thursday">Prepare for the optional transaction lab</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
@@ -36,9 +36,10 @@
 </button>
 
 <main>
+<div class="callout note"><strong>Bonus material.</strong> This topic is optional and outside the October 22 midterm. Follow the <a href="../../schedule.html">revised schedule</a> for required sessions; analytics now follows B+ trees.</div>
 
 <header class="hero">
-  <div class="eyebrow">DS 6XXX · Lecture 8 · Tuesday October 13, 2026</div>
+  <div class="eyebrow">DS 6XXX · Lecture 8 · Bonus reading · optional, self-paced</div>
   <h1>Concurrency: Locks, Isolation &amp; MVCC</h1>
   <div class="subtitle">Two transactions can each be correct when run alone but lose an update when run together. How do locks and row versions prevent these conflicts?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
@@ -64,7 +65,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p class="keep-in-present"><strong>Quiz 6</strong> first (B+ trees, 10 min), then the I in ACID.</p>
+<p class="keep-in-present">Optional exploration: build a bad interleaving, then explain how locks or snapshots change it.</p>
 
 <p class="keep-in-present">Account A holds $100. Both cashiers read 100 before either writes, then each adds 10 and stores 110. Both transactions commit, but the balance should be $120. This is a lost update.</p>
 
@@ -223,7 +224,7 @@ conflict table:        S      X
 <p><strong>Connection to Lab 7:</strong> its provided <code>LockTable</code> holds locks until completion and raises <code>LockAbortError</code> on conflict. It does not implement snapshots or waiting. A buffer pin prevents eviction; a transaction lock controls conflicting access. One does not replace the other.</p>
 
 <!-- ============================================================ -->
-<h2 id="thursday">Prepare for Thursday’s transaction lab</h2>
+<h2 id="thursday">Prepare for the optional transaction lab</h2>
 
 <p>Lab 7 completes microdb with WAL, commit, rollback, recovery, and the provided lock table controlling reads and writes at block granularity. Then you kill the process partway through a transaction and confirm that recovery brings the database back intact.</p>
 
@@ -245,11 +246,9 @@ conflict table:        S      X
 
 <p class="key-fact keep-in-present"><strong>About 896 BTC</strong> lost in the Flexcoin concurrency failure · <strong>2 stamps</strong> xmin and xmax: inputs to MVCC visibility, alongside the snapshot</p>
 
-<p class="keep-in-present"><strong>Thursday:</strong> Lab 7, the kill -9 lab.
-<strong>Next Tuesday:</strong> the optimizer: statistics, selectivity, and how a planner chooses among equivalent execution plans, plus midterm review. Quiz 7 (transactions &amp; MVCC) lands
-Tuesday Oct 27, after the exam.</p>
+<p class="keep-in-present">Try the optional <a href="../../labs/lab-07/transactions.html">transaction lab</a>, then the bonus <a href="../lecture-09/optimizer.html">optimizer reading</a>. No quiz or submission is required for these extensions.</p>
 
-<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<p class="keep-in-present"><strong>Before trying the bonus lab:</strong></p>
 <ul>
   <li><strong>Read</strong> Sciore ch. 5 and Postgres's isolation docs (linked above); be able to retell the FAQ's write-skew story.</li>
   <li><strong>Run</strong> the lost-update interleaving on paper (read, read, write, write) and mark the step where strict 2PL refuses it; then run the Lab 7 harness on the eight starter files and see <strong>0/9</strong>.</li>

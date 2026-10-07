@@ -24,7 +24,7 @@
     <li><a href="#worked-example">Worked example</a></li>
     <li><a href="#recall">Measure agreement with exact search using recall@k</a></li>
     <li><a href="#landscape">Where to run a vector index</a></li>
-    <li><a href="#thursday">Thursday: build and measure an IVF index</a></li>
+    <li><a href="#thursday">October 29: build and measure an IVF index</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
@@ -40,13 +40,13 @@
 <main>
 
 <header class="hero">
-  <div class="eyebrow">DS 6XXX · Lecture 11 · Tuesday November 3, 2026</div>
+  <div class="eyebrow">DS 6XXX · Lecture 11 · Thursday October 15, 2026</div>
   <h1>Vector Databases</h1>
   <div class="subtitle">How do we find vectors closest to a question, and how much search quality do we lose when we examine only part of the dataset?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Your project retrieves chunks whose <span class="gloss" data-gloss="embedding-recall">embeddings</span> are closest to the question vector. The B+ tree and hash indexes you built support equality and range queries, but they do not directly rank high-dimensional vectors by similarity to a new query. <span class="gloss" data-gloss="ann">Approximate nearest-neighbor</span> indexes reduce the number of vectors searched. They may miss some of the exact nearest neighbors, so you must measure recall as well as speed. In Thursday’s lab, you will build an <span class="gloss" data-gloss="ivf">IVF</span> index and compare its search settings with brute-force search.</p>
+<p class="lede">Your project retrieves chunks whose <span class="gloss" data-gloss="embedding-recall">embeddings</span> are closest to the question vector. The B+ tree and hash indexes you built support equality and range queries, but they do not directly rank high-dimensional vectors by similarity to a new query. <span class="gloss" data-gloss="ann">Approximate nearest-neighbor</span> indexes reduce the number of vectors searched. They may miss some of the exact nearest neighbors, so you must measure recall as well as speed. In Lab 9 on October 29, you will build an <span class="gloss" data-gloss="ivf">IVF</span> index and compare its search settings with brute-force search.</p>
 
 <div class="cite">
   Companion reading: pgvector's <a href="https://github.com/pgvector/pgvector">README</a> (index types and search settings) ·
@@ -68,7 +68,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p class="keep-in-present">Given a question vector, return the 10 most similar chunk vectors. Scoring every stored vector gives the exact result. Today we examine how an index can reduce that work, and how to measure the neighbors it misses.</p>
 
-<p class="keep-in-present"><strong>Quiz 8</strong> first (columnar &amp; the analytics stack, 10 min), then the index your project depends on.</p>
+<p class="keep-in-present"><strong>Quiz 7</strong> first (columnar &amp; the analytics stack, 10 min), then the index your project depends on.</p>
 
 
 <p class="keep-in-present">Today’s main idea: <strong>approximate search trades recall for less work.</strong> Choose search settings by measuring both on queries representative of your application.</p>
@@ -133,7 +133,7 @@ vectors cosine similarity is just the dot product<sup class="src"><a href="#src-
 <table>
   <thead><tr><th>Scale</th><th>Exact cost per query</th><th>Verdict</th></tr></thead>
   <tbody>
-    <tr><td>4k × 64-d (Thursday's lab)</td><td>256k multiplications; measure elapsed time on your machine</td><td>a useful baseline at this size; measure its time and compare it with IVF</td></tr>
+    <tr><td>4k × 64-d (Lab 9)</td><td>256k multiplications; measure elapsed time on your machine</td><td>a useful baseline at this size; measure its time and compare it with IVF</td></tr>
     <tr><td>100k × 768-d (a real project corpus)</td><td>\(7.7 \times 10^{7}\) multiplications</td><td>measure latency and throughput on the intended hardware; concurrent queries add to the workload</td></tr>
     <tr><td>10M × 1536-d, 100 queries per second (production <span class="gloss" data-gloss="rag">RAG</span>)</td><td>\(1.5 \times 10^{12}\) mults/sec</td><td>1.5 trillion multiplications every second is a substantial workload; batching, hardware, memory bandwidth, and latency targets determine whether exact search is practical</td></tr>
   </tbody>
@@ -227,7 +227,7 @@ quarter of the real neighbors, on that measured query set<sup class="src"><a hre
   </tbody>
 </table>
 
-<p class="key-fact keep-in-present"><strong>0.917 at 4.3×</strong> IVF probe 4 on Thursday's 4,000 vectors: nine of ten true neighbors for under a quarter of the comparisons</p>
+<p class="key-fact keep-in-present"><strong>0.917 at 4.3×</strong> IVF probe 4 on Lab 9's 4,000 vectors: nine of ten true neighbors for under a quarter of the comparisons</p>
 
 <p class="keep-in-present">At probe 1, this experiment misses about one in three true neighbors while using about 16× fewer comparisons than brute force. At probe 4, it misses about one in twelve and uses about 4.3× fewer comparisons. These are work reductions; elapsed-time speedups must be measured separately.</p>
 
@@ -243,7 +243,7 @@ quarter of the real neighbors, on that measured query set<sup class="src"><a hre
   returns, in order: 1, 2, 3, 5, 6, 8, 9, 11, 14, 20. Compute recall@10, and then explain
   where ids 4, 7, and 10 must be, physically, for this result to have happened.</p>
   <details><summary>Show answer</summary>
-  <p>Seven true neighbors appear: {1, 2, 3, 5, 6, 8, 9}, so recall@10 = 0.7. In this lab’s IVF search, ids 4, 7, and 10 must be in unsearched lists: vectors in the searched lists are scored exactly. Increasing probe adds lists without removing previous candidates. With fixed scores and consistent tie handling, recall therefore cannot decrease. Thursday’s harness checks that property.<sup class="src"><a href="#src-4" title="FAISS wiki: Faster search">4</a></sup></p>
+  <p>Seven true neighbors appear: {1, 2, 3, 5, 6, 8, 9}, so recall@10 = 0.7. In this lab’s IVF search, ids 4, 7, and 10 must be in unsearched lists: vectors in the searched lists are scored exactly. Increasing probe adds lists without removing previous candidates. With fixed scores and consistent tie handling, recall therefore cannot decrease. Lab 9’s harness checks that property.<sup class="src"><a href="#src-4" title="FAISS wiki: Faster search">4</a></sup></p>
   </details>
 </div>
 
@@ -268,7 +268,7 @@ quarter of the real neighbors, on that measured query set<sup class="src"><a hre
 <p class="keep-in-present">The project permits microvector, pgvector, or FAISS. Use an actual index and report the measurements that justify its search settings, including its comparison with the brute-force baseline.</p>
 
 <!-- ============================================================ -->
-<h2 id="thursday">Thursday: build and measure an IVF index</h2>
+<h2 id="thursday">October 29: build and measure an IVF index</h2>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">microvector</span><span>two search paths over the same data: brute force (the exact baseline) and IVF (the index), in pure Python over a seeded 4,000-vector dataset with realistic topic overlap.</span></div>
@@ -295,11 +295,9 @@ quarter of the real neighbors, on that measured query set<sup class="src"><a hre
 
 <p class="key-fact keep-in-present"><strong>1.5 trillion · 0.917 at 4.3×</strong> exact search at production scale needs 1.5 trillion multiplications a second; IVF at probe 4 keeps nine of ten true neighbors for under a quarter of the work</p>
 
-<p class="keep-in-present"><strong>Thursday:</strong> build microvector.
-<strong>Next Tuesday:</strong> RAG as a systems problem: chunking, retrieval, and evaluating
-the whole pipeline your project is building. Quiz 9 opens class: vector search.</p>
+<p class="keep-in-present"><strong>Tuesday October 20:</strong> <a href="../review/midterm.html">midterm review</a>. <strong>Thursday October 22:</strong> the midterm. <strong>Tuesday October 27:</strong> RAG as a systems problem: chunking, retrieval, and evaluating the whole pipeline your project is building. Quiz 8 opens that class on vector search. <strong>Thursday October 29:</strong> build microvector in Lab 9.</p>
 
-<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<p class="keep-in-present"><strong>Before the October 29 vector lab:</strong></p>
 <ul>
   <li><strong>Read</strong> pgvector's <a href="https://github.com/pgvector/pgvector">README</a> (index types and search settings), watching for where the IVFFlat and HNSW options control search effort, and the <a href="../../labs/lab-09/microvector.html">Lab 9 page</a> through Part 1 · Build.</li>
   <li><strong>Run</strong> <code>python3 gen_embeddings.py</code> once in a folder with the four Lab 9 starter files, then <code>python3 test_vector.py</code> against the unedited starter and confirm it prints <strong>0/7</strong>.</li>

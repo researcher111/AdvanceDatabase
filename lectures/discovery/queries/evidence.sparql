@@ -1,0 +1,23 @@
+# Wikidata SPARQL. Start with one verified entity, TESS, not a name join.
+# One output row = a mission/operator statement and an optional reference URL.
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX p: <http://www.wikidata.org/prop/>
+PREFIX ps: <http://www.wikidata.org/prop/statement/>
+PREFIX pr: <http://www.wikidata.org/prop/reference/>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX wikibase: <http://wikiba.se/ontology#>
+PREFIX bd: <http://www.bigdata.com/rdf#>
+SELECT ?mission ?missionLabel ?operator ?operatorLabel ?statement ?reference ?referenceURL ?importURL
+WHERE {
+  VALUES ?mission { wd:Q1323537 }
+  ?mission p:P137 ?statement.
+  ?statement ps:P137 ?operator.
+  OPTIONAL {
+    ?statement prov:wasDerivedFrom ?reference.
+    OPTIONAL { ?reference pr:P854 ?referenceURL. }
+    OPTIONAL { ?reference pr:P4656 ?importURL. }
+  }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}
+ORDER BY ?operator ?statement ?reference
+LIMIT 30

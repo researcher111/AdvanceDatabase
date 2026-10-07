@@ -16,6 +16,7 @@
   <div class="toc-title">Lecture 10</div>
   <p><a href="../../slides/lecture-10.html">Visual slide deck ↗</a></p>
   <ul>
+    <li><a href="#discovery">Database discovery workbench</a></li>
     <li><a href="#plan">Today's plan</a></li>
     <li><a href="#flip">Analytics often reads many rows and a few columns</a></li>
     <li><a href="#try-it">Which bytes move depends on the layout, not just the query</a></li>
@@ -24,7 +25,7 @@
     <li><a href="#duckdb">Use DuckDB to query Parquet directly</a></li>
     <li><a href="#warehouse">The cloud separates where data rests from where queries run</a></li>
     <li><a href="#in-database-ml">Train and score a model inside the database</a></li>
-    <li><a href="#thursday">Thursday: query a real engine and measure performance</a></li>
+    <li><a href="#thursday">Tuesday: query a real engine and measure performance</a></li>
     <li><a href="#recap">Recap &amp; next time</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
@@ -40,13 +41,13 @@
 <main>
 
 <header class="hero">
-  <div class="eyebrow">DS 6XXX · Lecture 10 · Tuesday October 27, 2026 · Act II begins</div>
+  <div class="eyebrow">DS 6XXX · Lecture 10 · Thursday October 8, 2026 · Act II begins</div>
   <h1>The Analytics Stack</h1>
   <div class="subtitle">Column storage supports analytical scans. Those same scans can prepare features, fit a model, and score new rows inside the database.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">microdb stores the fields of each row together. That layout suits small record lookups and updates. Many analytical queries instead read a few columns across a large number of rows. Column storage lets them skip unused columns, compress similar values, and process batches efficiently. Today we will connect those choices to <span class="gloss" data-gloss="vectorized">vectorized execution</span>, DuckDB, Parquet, and cloud <span class="gloss" data-gloss="warehouse">warehouses</span>, then use SQL to train and evaluate a small machine-learning model without exporting its training rows. Thursday’s lab measures the effects of file format, column selection, and partition pruning.</p>
+<p class="lede">microdb stores the fields of each row together. That layout suits small record lookups and updates. Many analytical queries instead read a few columns across a large number of rows. Column storage lets them skip unused columns, compress similar values, and process batches efficiently. Today we will connect those choices to <span class="gloss" data-gloss="vectorized">vectorized execution</span>, DuckDB, Parquet, and cloud <span class="gloss" data-gloss="warehouse">warehouses</span>, then use SQL to train and evaluate a small machine-learning model without exporting its training rows. Tuesday’s lab measures the effects of file format, column selection, and partition pruning.</p>
 
 <div class="cite">
   Companion reading: Abadi et&nbsp;al., <a href="https://www.nowpublishers.com/article/Details/DBS-024"><em>The Design and Implementation of Modern Column-Oriented Database Systems<sup class="src"><a href="#src-1" title="The Design and Implementation of Modern Column-Oriented Database Systems (Foundations and Trends in Databases)">1</a></sup></em></a> ·
@@ -64,9 +65,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
+<h2 id="discovery">Start with a question about the city</h2>
+<p><a href="discovery.html"><strong>Open the database discovery workbench →</strong></a> Build a local DuckDB database from the bundled 60,000-trip taxi sample, then edit queries and inspect charts. Predict first: does JFK have a higher typical fare than LaGuardia, and does that comparison survive switching to fare per mile?</p>
+<p>The seven investigations cover sampling, recorded tips, airport routes, daily rhythms, trip mix, top destinations, and join cardinality. Save one finding, one limitation, and the next query you would run. These are ungraded discovery exercises; the lab’s required queries stay separate.</p>
+
 <h2 id="plan">Today's plan</h2>
 
-<p class="keep-in-present"><strong>Quiz 7</strong> first (transactions &amp; MVCC, revisiting the material after the midterm). Then the analytics side of the course: a new workload, the storage layout that fits it, and an in-database machine-learning example.</p>
+<p class="keep-in-present"><strong>Quiz 6</strong> first (B+ trees and indexing). Then the analytics side of the course: a new workload, the storage layout that fits it, and an in-database machine-learning example.</p>
 
 <p class="keep-in-present">A query for average fare needs the fare values from every matching ride. With a row layout, those values share pages with fields the query does not use. A column layout can read the fare column separately.</p>
 
@@ -82,7 +87,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
     <tr><td>Typical query</td><td>fetch/update one ride by id</td><td>aggregate two columns of all rides</td></tr>
     <tr><td>Touches</td><td>a few rows, all columns</td><td>all rows, a few columns</td></tr>
     <tr><td>Typical layout</td><td><strong>rows together</strong> (one block has your whole record)</td><td><strong>columns together</strong> (unused columns can be skipped)</td></tr>
-    <tr><td>Writes</td><td>a constant stream of small ones, each needing the WAL and locks from Act I</td><td>large batch loads, such as a day's rides appended at once; once written, the data is rarely changed</td></tr>
+    <tr><td>Writes</td><td>a constant stream of small ones, requiring concurrency and recovery mechanisms in a full DBMS; those mechanisms are in the bonus readings</td><td>large batch loads, such as a day's rides appended at once; once written, the data is rarely changed</td></tr>
     <tr><td>Engines</td><td>Postgres, MySQL, your microdb</td><td>DuckDB, Snowflake, BigQuery, Spark</td></tr>
   </tbody>
 </table>
@@ -200,7 +205,7 @@ smaller files = fewer blocks = faster scans: compression IS performance here.</c
 <h2 id="duckdb">Use DuckDB to query Parquet directly</h2>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">DuckDB</span><span>a full columnar OLAP engine in a Python library, "SQLite for analytics." No server, queries CSV/Parquet/pandas frames in place<sup class="src"><a href="#src-5" title="Why DuckDB">5</a></sup>. Thursday's lab engine.</span></div>
+  <div class="lc-row"><span class="lc-k">DuckDB</span><span>a full columnar OLAP engine in a Python library, "SQLite for analytics." No server, queries CSV/Parquet/pandas frames in place<sup class="src"><a href="#src-5" title="Why DuckDB">5</a></sup>. Tuesday's lab engine.</span></div>
   <div class="lc-row"><span class="lc-k">Parquet</span><span>a widely supported columnar <em>file format</em>: column chunks + per-chunk stats + dictionary/RLE compression, self-describing schema<sup class="src"><a href="#src-6" title="Apache Parquet File Format">6</a></sup>. It plays the role CSV once played as the universal exchange format, but with types, compression, and per-chunk statistics built in.</span></div>
 </div>
 
@@ -245,7 +250,7 @@ smaller files = fewer blocks = faster scans: compression IS performance here.</c
   ... WHERE month = 12  (partitioned) scans 1/12 of that      ¢
 
 the columnar lessons are literally line items. Schema design just became
-a budgeting skill; Thursday's measurement is your first invoice audit.</code></pre>
+a budgeting skill; Tuesday's measurement is your first invoice audit.</code></pre>
 
 <p class="key-fact keep-in-present"><strong>$ ∝ bytes scanned</strong> in BigQuery-style billing: every column or partition a query skips is money not spent</p>
 
@@ -389,7 +394,7 @@ FROM ML.PREDICT(
 </div>
 
 <!-- ============================================================ -->
-<h2 id="thursday">Thursday: query a real engine and measure performance</h2>
+<h2 id="thursday">Tuesday: query a real engine and measure performance</h2>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The queries</span><span>eight SQL queries against the 60k-row rides dataset, using GROUP BY, window functions, and LIMIT: extending beyond microSQL’s supported syntax. This week you will write queries and compare execution measurements using DuckDB.</span></div>
@@ -404,7 +409,7 @@ FROM ML.PREDICT(
   <li>☐ Download the Lab 8 starter files; <code>python3 gen_data.py</code> builds your
   dataset (deterministic data; query results match, but timings vary by machine).</li>
   <li>☐ Harness prints <strong>0/8</strong> until your queries exist.</li>
-  <li>☐ <strong>Project proposals due Thursday</strong>: one page, per the
+  <li>☐ <strong>Project proposals due October 29</strong>: one page, per the
   <a href="../../project.html">project spec</a>: corpus in hand, questions, planned index,
   evaluation sketch.</li>
 </ul>
@@ -424,17 +429,17 @@ FROM ML.PREDICT(
 <p class="key-fact keep-in-present"><strong>Compare CSV and Parquet</strong> using the same query and dataset</p>
 <p class="key-fact keep-in-present"><strong>$ ∝ bytes scanned</strong> in BigQuery-style billing: skipped columns and partitions are money not spent</p>
 
-<p class="keep-in-present"><strong>Thursday:</strong> Lab 8 + proposals due.
-<strong>Next Tuesday:</strong> vector databases: what happens when the column is an
-embedding and the query is "what's <em>similar</em>?" Quiz 8 opens class: columnar &amp; the
+<p class="keep-in-present"><strong>Tuesday October 13:</strong> Lab 8. Project proposals remain due October 29.
+<strong>Thursday October 15:</strong> vector databases: what happens when the column is an
+embedding and the query is "what's <em>similar</em>?" Quiz 7 opens class: columnar &amp; the
 analytics stack.</p>
 
-<p class="keep-in-present"><strong>Before Thursday:</strong></p>
+<p class="keep-in-present"><strong>Before the analytics lab:</strong></p>
 <ul>
   <li><strong>Read</strong> the <a href="https://duckdb.org/why_duckdb">Why DuckDB</a> page and skim Parquet's <a href="https://parquet.apache.org/docs/file-format/">file-format docs</a>, both linked above.</li>
   <li><strong>Run</strong> <code>pip install duckdb</code>, verify with <code>python3 -c "import duckdb"</code>, then download the Lab 8 starter and run <code>python3 gen_data.py</code>; the harness should print <strong>0/8</strong>.</li>
   <li><strong>Optional replay:</strong> run <a href="in_database_ml.py" download><code>in_database_ml.py --explain</code></a> and identify the filter that keeps test rows out of training. It uses the same DuckDB installation as Lab 8.</li>
-  <li><strong>Bring</strong> your one-page project proposal (due Thursday, per the <a href="../../project.html">project spec</a>) and your predicted (a)-to-(c) ratio from the exercise above.</li>
+  <li><strong>Bring</strong> your predicted (a)-to-(c) ratio and one question about the taxi data. The <a href="../../project.html">project proposal</a> is due October 29.</li>
 </ul>
 
 <!-- ============================================================ -->

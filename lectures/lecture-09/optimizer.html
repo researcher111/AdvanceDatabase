@@ -23,7 +23,7 @@
     <li><a href="#cost">Estimate a plan’s block accesses before execution</a></li>
     <li><a href="#worked-example">Worked example</a></li>
     <li><a href="#joins">Choose both the join algorithm and the join order</a></li>
-    <li><a href="#review">Midterm review: explain each measurement</a></li>
+    <li><a href="#review">Bonus synthesis: explain each measurement</a></li>
     <li><a href="#recap">Recap &amp; next steps</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
@@ -37,15 +37,16 @@
 </button>
 
 <main>
+<div class="callout note"><strong>Bonus material.</strong> This topic is optional and outside the October 22 midterm. Follow the <a href="../../schedule.html">revised schedule</a> for required sessions; analytics now follows B+ trees.</div>
 
 <header class="hero">
-  <div class="eyebrow">DS 6XXX · Lecture 9 · Tuesday October 20, 2026 · midterm Thursday</div>
+  <div class="eyebrow">DS 6XXX · Lecture 9 · Bonus reading · optional, self-paced</div>
   <h1>The Query Optimizer</h1>
   <div class="subtitle">For the example join, the supplied Lab 5 planner examines 900 pairs. In Lab 4, you found a plan that examines 60. How can an optimizer choose between them before execution?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">The supplied Lab 5 planner builds the join plan that examines 900 pairs. In Lab 4, you rearranged that plan to examine just 60 pairs and return the same answer. Today we will see how an optimizer searches for such improvements automatically. It uses <span class="gloss" data-gloss="statistics">statistics</span> about the data, a <span class="gloss" data-gloss="cost-model">cost model</span> to estimate work, and a search through equivalent plans. We will use <span class="gloss" data-gloss="explain-analyze">EXPLAIN ANALYZE</span> output to compare estimates with measurements. Lab 7 is due today, and the final third of class reviews material for Thursday’s midterm.</p>
+<p class="lede">The supplied Lab 5 planner builds the join plan that examines 900 pairs. In Lab 4, you rearranged that plan to examine just 60 pairs and return the same answer. Today we will see how an optimizer searches for such improvements automatically. It uses <span class="gloss" data-gloss="statistics">statistics</span> about the data, a <span class="gloss" data-gloss="cost-model">cost model</span> to estimate work, and a search through equivalent plans. We will use <span class="gloss" data-gloss="explain-analyze">EXPLAIN ANALYZE</span> output to compare estimates with measurements. The final section offers a synthesis of the engine; only the six required microdb topics appear on the October 22 midterm.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 10 &amp; 15 ·
@@ -65,7 +66,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="plan">Today's plan</h2>
 
-<p>Lab 7 is due today, and the midterm is Thursday. We will finish the first part of the course by connecting the storage engine from Labs 1–7 to query optimization, then review the midterm topics.</p>
+<p>This optional extension connects the query operators to statistics, cost estimates, and plan search. It has no associated deadline or quiz.</p>
 
 <p class="keep-in-present">Lab 4’s two join plans return the same 20 rows, but one examines 900 pairs and the other only 60. The supplied Lab 5 planner always builds the first plan. A cost-based optimizer estimates the work of alternatives and selects one before executing the query.</p>
 
@@ -259,11 +260,11 @@ from statistics, before running anything.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="review">Midterm review: explain each measurement</h2>
+<h2 id="review">Bonus synthesis: explain each measurement</h2>
 
-<p class="keep-in-present">The midterm is Thursday in class: 70 minutes, 39 multiple-choice questions, closed book. Prepare by explaining the mechanisms behind the lab measurements below, then reviewing the discussion questions and lecture examples.</p>
+<p class="keep-in-present">This table includes optional transactions and concurrency. The <a href="../../schedule.html#midterm-scope">required midterm scope</a> is Lectures 1–6 and Labs 1–6 only. Prepare by explaining the mechanisms behind the lab measurements below, then reviewing the discussion questions and lecture examples.</p>
 
-<h3 class="new-slide" data-kicker="The midterm">Eight topics and the measurements to explain</h3>
+<h3 class="new-slide" data-kicker="Engine synthesis">Eight topics and the measurements to explain</h3>
 
 <table>
   <thead><tr><th>Week</th><th>The one idea</th><th>The number to explain</th></tr></thead>
@@ -279,7 +280,7 @@ from statistics, before running anything.</p>
   </tbody>
 </table>
 
-<h3 class="new-slide" data-kicker="The midterm">Prepare by explaining mechanisms and measurements</h3>
+<h3 class="new-slide" data-kicker="Engine synthesis">Prepare by explaining mechanisms and measurements</h3>
 
 <ul class="checklist">
   <li>☐ Re-run each lab's <code>measure_*.py</code> and explain how the implementation produces each printed result. Use the review table to guide your study.</li>
@@ -302,27 +303,18 @@ from statistics, before running anything.</p>
 <ul class="recap-list">
   <li><strong>The optimizer = statistics + cost model + search.</strong> Statistics describe the data, the cost model estimates work, and search compares alternatives. EXPLAIN ANALYZE lets you check row-count estimates against execution<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</li>
   <li><strong>Selectivity determines estimated intermediate row counts</strong>: inaccurate distribution or independence assumptions can lead to poor cost estimates and plan choices.</li>
-  <li><strong>Act I is complete.</strong> You built a storage engine and practiced interpreting execution plans. After the midterm, we will apply these ideas to column stores, vector databases, and distributed systems.</li>
+  <li><strong>Act I is complete.</strong> You built a storage engine and practiced interpreting execution plans. The required sequence applies these ideas to analytics, vector search, and distributed systems starting October 8.</li>
 </ul>
 
 <p class="key-fact keep-in-present"><strong>~1%</strong> selectivity at the crossover in this example · <strong>17 billion</strong> ways to join 10 tables, why the search is dynamic programming</p>
 
-<p class="keep-in-present"><strong>Thursday: midterm.</strong> <strong>Next Tuesday:</strong>
-Act II opens with the analytics stack: DuckDB, Parquet, and why column storage suits many analytical queries. Quiz 7 (transactions &amp; MVCC) opens that class.</p>
-
-<p class="keep-in-present"><strong>Before Thursday:</strong></p>
-<ul>
-  <li><strong>Read</strong> each lab's discussion prompts again and answer them without your notes, then review the FAQs for topics that need more practice.</li>
-  <li><strong>Run</strong> each lab's <code>measure_*.py</code> again and explain every printed line; use the eight measurements in the review table to organize your preparation.</li>
-  <li><strong>Bring</strong> a pencil (scratch paper is provided and not collected) and the mechanism behind each of those eight numbers, ready to explain: Thursday, in class, 70 minutes, 39 multiple-choice questions, closed book.</li>
-</ul>
+<p class="keep-in-present">Continue to the <a href="../lecture-10/discovery.html">database discovery session</a> to use queries and plans on real taxi data. The <a href="../../schedule.html#midterm-scope">schedule</a> lists the separate required exam scope.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Will microdb get an optimizer in a later lab?</h3>
-<p class="keep-in-present">No: Act II begins after the midterm, and microdb stays at its seven
-layers. The Going-Further path exists (Lab 6 wired an index into the planner; add
+<p class="keep-in-present">No required optimizer implementation is assigned. The core microdb sequence stops at B+ trees; transactions and optimization remain optional extensions. The Going-Further path exists (Lab 6 wired an index into the planner; add
 statistics to the catalog and a cost comparison between candidate plans, and you have a small version of the System R optimizer). You could include such an extension in a final-project appendix if it supports your project’s goals.</p>
 
 <h3 class="keep-in-present">Why do plans change when I add LIMIT 10?</h3>
@@ -332,12 +324,10 @@ one with a big setup cost (hash join) when only 10 are wanted. Cost models track
 startup and total cost for exactly this reason<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</p>
 
 <h3 class="keep-in-present">Is the exam cumulative with the quizzes? Same style?</h3>
-<p class="keep-in-present">The midterm uses multiple-choice questions like the quizzes and covers the lecture concepts, lab discussion prompts, measurements, and FAQs from the first part of the course. Bring a pencil; scratch paper is provided and not collected.</p>
+<p class="keep-in-present">The October 22 midterm covers the concepts, traces, measurements, and discussion prompts from Lectures 1–6 and Labs 1–6. This optimizer reading and the transaction extensions are optional.</p>
 
 <h3 class="keep-in-present">Which examples should I prioritize for review?</h3>
-<p class="keep-in-present">The measured outputs. Every one of the eight numbers in the review
-table has a mechanism behind it, and mechanisms are what get asked. Second place: the
-force/steal grid and the WAL ordering; practice explaining why those writes must occur in that order.</p>
+<p class="keep-in-present">For the exam, use the six required topics listed on the <a href="../../schedule.html#midterm-scope">schedule</a>. Use the extra WAL and concurrency examples here for optional study.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
