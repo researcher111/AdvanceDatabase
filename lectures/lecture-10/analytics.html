@@ -360,6 +360,7 @@ December, average fare → read fares in December's partition</code></pre>
 <h2 id="in-database-ml">Train a model with SQL</h2>
 
 <p class="keep-in-present">Can trip distance help predict fare? We will use SQL to fit a line, save its slope and intercept in a table, and predict a new fare. DuckDB does the calculations. This is <strong>in-database machine learning</strong>.</p>
+<p><a href="../../slides/lecture-10.html#s=17&amp;b=1">Step through these queries in the slides →</a> The slides use the same six rides and saved model as the examples below.</p>
 
 <table>
   <thead><tr><th>Stage</th><th>What we do</th><th>Result</th></tr></thead>
@@ -402,7 +403,7 @@ WHERE distance &gt; 0 AND fare &gt;= 0;</code></pre>
   <p>For a forecasting task, train on earlier data and test on later data. If preprocessing learns a mean, scale, or category mapping, learn it from training rows only. Keep test data out of every fitting step.</p>
 </details>
 
-<h3 class="new-slide" data-kicker="In-database ML · train">2. Fit the line with an aggregate query</h3>
+<h3 id="train-sql" class="new-slide" data-kicker="In-database ML · train">2. Fit the line with an aggregate query</h3>
 
 <pre><code class="language-sql">CREATE TABLE fare_model AS
 SELECT regr_intercept(fare, distance) AS intercept,
@@ -422,7 +423,7 @@ Scoring:   scan new distances   → combine with model row → project predictio
 
 <p>These are familiar query operations: scan, filter, aggregate, and join. This simple model can be trained with one aggregate query; more complex models may need many passes through the data.</p>
 
-<h3 class="new-slide" data-kicker="In-database ML · evaluate">3. Check the line on the test rides</h3>
+<h3 id="evaluate-sql" class="new-slide" data-kicker="In-database ML · evaluate">3. Check the line on the test rides</h3>
 
 <p><code>CROSS JOIN</code> pairs each test ride with the one model row. We then calculate its predicted fare and compare it with the actual fare.</p>
 
@@ -459,7 +460,7 @@ CROSS JOIN fare_model AS m;
 
 <p class="keep-in-present">For 3.5 miles, the saved model predicts <strong>3 + 2 × 3.5 = $10</strong>. We need the distance, not the actual fare. This query uses the saved model without training it again.</p>
 
-<h3 class="new-slide" data-kicker="In-database ML · managed systems">The same steps in a cloud warehouse</h3>
+<h3 id="managed-ml" class="new-slide" data-kicker="In-database ML · managed systems">The same steps in a cloud warehouse</h3>
 
 <p class="keep-in-present">BigQuery ML gives these steps names: <code>CREATE MODEL</code> trains, <code>ML.EVALUATE</code> checks errors, and <code>ML.PREDICT</code> makes predictions.<sup class="src"><a href="#src-18" title="BigQuery CREATE MODEL for generalized linear models">18</a></sup><sup class="src"><a href="#src-19" title="BigQuery ML.EVALUATE">19</a></sup><sup class="src"><a href="#src-20" title="BigQuery ML.PREDICT">20</a></sup></p>
 

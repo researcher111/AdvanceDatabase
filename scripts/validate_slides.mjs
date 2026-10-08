@@ -12,7 +12,9 @@ let scenes=0,builds=0,animated=0;const warnings=[];
 for(const id of lectureIds){
   const deck=decks[id];assert(deck,`Lecture ${id} exists`);assert.equal(deck.id,id);
   assert.equal(deck.scenes.reduce((n,s)=>n+s.minutes,0),60,`Lecture ${id}: 60 teaching minutes`);
-  assert(deck.scenes.length>=14&&deck.scenes.length<=20,`Lecture ${id}: 14–20 scenes`);
+  // Lecture 10 adds a separate managed-ML SQL example while retaining 60 minutes.
+  const maxScenes=id===10?21:20;
+  assert(deck.scenes.length>=14&&deck.scenes.length<=maxScenes,`Lecture ${id}: 14–${maxScenes} scenes`);
   assert(fs.existsSync(deck.source),`Lecture ${id}: source exists`);
   const ids=new Set();
   for(const [i,sc]of deck.scenes.entries()){

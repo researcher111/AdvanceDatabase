@@ -845,16 +845,19 @@ window.CourseClarityCaptions = {
       "New readers can use B while existing readers continue with A."
     ],
     "train-inside-the-query-engine": [
-      "Only the four training rows participate in fitting the line.",
-      "SQL aggregates estimate intercept and slope from target and feature values.",
-      "Store the learned coefficients b = 3 and w = 2.",
-      "The saved model predicts fare as 3 + 2 × distance."
+      "Distance is the input and fare is the outcome. The split column marks train and test rides.",
+      "WHERE split = 'train' lets only the four training rides influence the model.",
+      "The regression aggregates learn a line from the training pairs: outcome first, input second.",
+      "CREATE TABLE saves intercept 3, slope 2, and the count of 4 training rides.",
+      "The saved numbers give a prediction rule: fare = 3 + 2 × distance."
     ],
     "evaluate-and-apply-the-model": [
-      "Held-out rows stay separate from model fitting.",
-      "Apply the saved coefficients to predict fares 8 and 12.",
-      "Both absolute errors are 1; a new 3.5-mile input predicts 10.",
-      "Managed ML statements also distinguish fitting, evaluation, and inference."
+      "WHERE split = 'test' selects the two rides kept out of training.",
+      "CROSS JOIN pairs each test ride with the model row. Use it to predict each fare.",
+      "The predictions are $8 and $12. The view gives these results a name for the next query.",
+      "Both predictions miss by $1. AVG(ABS(actual − predicted)) gives a mean absolute error of $1.",
+      "VALUES (7, 3.5) supplies ride ID 7 and a new distance. Predict its fare with the same model.",
+      "The new ride receives a $10 prediction. The query reuses the model without fitting it again."
     ],
     "performance-becomes-cost": [
       "Reading more data can increase both data movement and compute work.",
@@ -871,6 +874,11 @@ window.CourseClarityCaptions = {
       "Inside a Parquet row group, each field has its own column chunk.",
       "DuckDB runs the query. It can read the fare chunk and skip pickup and payment.",
       "The result is still $30. Parquet stores the values; DuckDB calculates the average."
+    ],
+    "managed-model-sql": [
+      "CREATE MODEL fits a line using only training rides and saves it as a managed model.",
+      "ML.EVALUATE applies the saved model to separate test rides and measures prediction error.",
+      "ML.PREDICT applies the saved model to a new distance and returns predicted_fare."
     ]
   },
   "11": {

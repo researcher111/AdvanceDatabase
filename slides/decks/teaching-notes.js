@@ -1507,25 +1507,28 @@
       ]
     },
     "train-inside-the-query-engine": {
-      "idea": "SQL aggregates can learn coefficients and save them as a model for later queries.",
-      "question": "Which rows may influence the fitted line?",
-      "answer": "Only the training rows. Including held-out rows would contaminate their evaluation.",
+      "idea": "A SQL aggregate query learns the intercept and slope, then saves them in a model table.",
+      "question": "Which SQL expressions learn the two model numbers, and which clause keeps test rides out?",
+      "answer": "regr_intercept(fare, distance) learns 3 and regr_slope(fare, distance) learns 2. WHERE split = train selects only the four training rides. CREATE TABLE saves the result as one row in fare_model.",
       "builds": [
-        "Filter ml_rides to split = train, keeping evaluation rows separate.",
-        "Aggregate target fare against feature distance, with the target argument first.",
-        "Store the fitted intercept b = 3 and slope w = 2 in one model row.",
-        "Write prediction as b + w × distance and identify the parameters learned from data."
+        "Name the input table before reading the SQL. fare_features is a prepared view of six made-up rides, with positive distances and nonnegative fares. distance is the feature; fare is the label. The setup is in the reading and runnable script.",
+        "Follow the highlighted FROM and WHERE lines. Orange rows have split = train and enter the aggregates; the two test rows stay outside fitting. Explain this logical data flow without claiming the engine must execute clauses in their written order.",
+        "Read both regression functions with outcome first and input second. DuckDB uses all four training pairs to fit a line that minimizes their squared errors. count(*) records how many training rows contributed.",
+        "Highlight CREATE TABLE and read the saved row: intercept 3, slope 2, training_rows 4. SELECT * FROM fare_model lets students inspect what training produced.",
+        "Turn the saved coefficients into predicted fare = 3 + 2 × distance. The intercept is the fitted value at zero miles and the slope adds two dollars per mile in this toy model. Both numbers came from the data."
       ]
     },
     "evaluate-and-apply-the-model": {
-      "idea": "Evaluation and inference apply saved coefficients without fitting them again.",
-      "question": "What are the held-out predictions and their error in this synthetic example?",
-      "answer": "Predictions are 8 and 12 dollars against actual 9 and 11, giving MAE and RMSE of one dollar.",
+      "idea": "SQL can apply the saved model, compare predictions with actual fares, and score a new ride.",
+      "question": "Why do the test query and the new-ride query both use fare_model, but only the test needs actual fares?",
+      "answer": "Both reuse the learned intercept and slope. The two test predictions are $8 and $12; comparing them with $9 and $11 gives a $1 mean absolute error. A new 3.5-mile ride needs only distance and the saved model to predict $10. Its actual fare is needed later to measure error.",
       "builds": [
-        "Keep the two held-out rows outside the training aggregate.",
-        "Cross join the single model row and compute b + w × distance.",
-        "Measure errors, then score a new 3.5-mile ride at ten dollars without retraining.",
-        "Map training, evaluation, and prediction to the managed SQL examples in the reading."
+        "Read WHERE r.split = test and find the two separate test rides. Keep the saved model fixed. Leave the predicted values as question marks.",
+        "Read CROSS JOIN as pairing each test ride with the single model row. Substitute 3 and 2 into the prediction expression, and ask for the two predictions before advancing.",
+        "Reveal 8 and 12. CREATE VIEW names this query held_out_predictions so the next query can use its results. A normal view stores the query definition rather than materializing a new table.",
+        "Read the new SQL query: subtract prediction from actual fare, take abs so both misses count positively, then average. Both absolute errors are $1, giving a $1 MAE. The query also reports test_rows = 2 and RMSE = $1; RMSE takes the square root of the mean squared errors. Two made-up test rides cannot establish real-world accuracy.",
+        "Read VALUES (7, 3.5) as one new ride with ID 7 and distance 3.5. The ID labels the result; only distance contributes to prediction. CROSS JOIN retrieves the same saved model coefficients. Ask for the new prediction before advancing.",
+        "Reveal 3 + 2 × 3.5 = $10. This SELECT applies the model without calling a regression aggregate or changing fare_model. The complete runnable demo also keeps ride IDs and reports RMSE."
       ]
     },
     "performance-becomes-cost": {
@@ -1546,6 +1549,16 @@
         "Choose a layout for a complete-record point lookup.",
         "Explain projection, encoding, and batching for a whole-table aggregate.",
         "Add partition pruning, then connect the same operators to training and inference."
+      ]
+    },
+    "managed-model-sql": {
+      "idea": "BigQuery ML exposes training, evaluation, and prediction as SQL operations on a saved model.",
+      "question": "Why does CREATE MODEL use NO_SPLIT while ML.EVALUATE still receives separate test rides?",
+      "answer": "WHERE split = train already supplies only training rows. NO_SPLIT uses all those supplied rows for fitting. ML.EVALUATE receives the held-out test rows separately, while ML.PREDICT needs only a new distance.",
+      "builds": [
+        "Identify this as optional BigQuery GoogleSQL, with demo.ml_rides already loaded in the project identified by YOUR_PROJECT. Read CREATE MODEL, input_label_cols = fare, and the training-only WHERE filter. NO_SPLIT uses the supplied training rows. The other options specify unregularized least squares. BigQuery saves a managed model object.",
+        "Read ML.EVALUATE with the saved model and a SELECT for split = test. Both distance and actual fare are present because evaluation compares predictions with known outcomes. mean_absolute_error has the same meaning as the DuckDB calculation. BigQuery also returns mean_squared_error; its square root corresponds to RMSE.",
+        "Read ML.PREDICT with the same saved model and SELECT 7 AS ride_id, 3.5 AS distance. The result includes predicted_fare. Point to the reading for setup, permissions, billing, and fully qualified project names; the local DuckDB demo requires no cloud account."
       ]
     }
   },

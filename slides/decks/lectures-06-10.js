@@ -232,6 +232,135 @@ function analyticsByteSavings(d,step) {
   }
   d.text('byte-caveat',640,666,'Value bytes only; metadata, encoding, and compression excluded. This is not a speed ratio.',20,P.muted);
 }
+const analyticsMLSQL={
+  train:[
+    'CREATE TABLE fare_model AS',
+    'SELECT',
+    '  regr_intercept(fare, distance) AS intercept,',
+    '  regr_slope(fare, distance) AS slope,',
+    '  count(*) AS training_rows',
+    'FROM fare_features',
+    "WHERE split = 'train';"
+  ],
+  score:[
+    'CREATE VIEW held_out_predictions AS',
+    'SELECT r.ride_id, r.distance, r.fare,',
+    '  m.intercept + m.slope * r.distance',
+    '    AS predicted_fare',
+    'FROM fare_features AS r',
+    'CROSS JOIN fare_model AS m',
+    "WHERE r.split = 'test';"
+  ],
+  evaluate:[
+    'SELECT count(*) AS test_rows,',
+    '  avg(abs(fare - predicted_fare)) AS mae,',
+    '  sqrt(avg(pow(fare - predicted_fare, 2)))',
+    '    AS rmse',
+    'FROM held_out_predictions;'
+  ],
+  predict:[
+    'SELECT r.ride_id, r.distance,',
+    '  m.intercept + m.slope * r.distance',
+    '    AS predicted_fare',
+    'FROM (VALUES (7, 3.5)) AS r(ride_id, distance)',
+    'CROSS JOIN fare_model AS m;'
+  ],
+  cloudTrain:[
+    'CREATE MODEL `YOUR_PROJECT.demo.fare_model`',
+    'OPTIONS (',
+    "  model_type = 'linear_reg',",
+    "  input_label_cols = ['fare'],",
+    "  data_split_method = 'NO_SPLIT',",
+    "  optimize_strategy = 'NORMAL_EQUATION',",
+    '  l2_reg = 0.0',
+    ') AS',
+    'SELECT distance, fare',
+    'FROM `YOUR_PROJECT.demo.ml_rides`',
+    "WHERE split = 'train'",
+    '  AND distance > 0 AND fare >= 0;'
+  ],
+  cloudEvaluate:[
+    'SELECT mean_absolute_error, mean_squared_error',
+    'FROM ML.EVALUATE(',
+    '  MODEL `YOUR_PROJECT.demo.fare_model`,',
+    '  (SELECT distance, fare',
+    '   FROM `YOUR_PROJECT.demo.ml_rides`',
+    "   WHERE split = 'test'",
+    '     AND distance > 0 AND fare >= 0)',
+    ');'
+  ],
+  cloudPredict:[
+    'SELECT ride_id, distance, predicted_fare',
+    'FROM ML.PREDICT(',
+    '  MODEL `YOUR_PROJECT.demo.fare_model`,',
+    '  (SELECT 7 AS ride_id, 3.5 AS distance)',
+    ');'
+  ]
+};
+function analyticsSQL(d,lines,active=[],spacing=43) {
+  d.rect('ml-sql-background',45,230,740,361,P.white,P.line,10);
+  lines.forEach((text,i)=>{
+    const y=255+i*spacing,selected=active.includes(i);
+    if(selected)d.rect('ml-sql-highlight-'+i,57,y-17,716,35,P.greenLight,'none',4);
+    d.add('ml-sql-line-'+i,'text',{x:67,y,fill:selected?P.green:P.ink,'font-size':23,'font-family':'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace','text-anchor':'start','dominant-baseline':'middle','xml:space':'preserve',style:'white-space: pre; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;'},text);
+  });
+}
+function analyticsTrainSQL(d,step) {
+  d.text('ml-task',640,175,'Can distance help predict fare? Learn a line from four made-up rides.',27,P.ink);
+  d.text('ml-code-title',65,207,'DuckDB SQL',24,P.blue,'start',650);
+  analyticsSQL(d,analyticsMLSQL.train,[[],[5,6],[2,3,4],[0],[2,3]][step]);
+  if(step<3) {
+    d.text('ml-data-heading',1020,207,'fare_features',25,P.ink,'middle',650);
+    d.table('ml-input',825,230,[150,100,155],[['distance','fare','split'],[1,6,'train'],[2,6,'train'],[3,8,'train'],[4,12,'train'],[2.5,9,'test'],[4.5,11,'test']],{rowHeight:47,fontSize:25,highlightRows:step>0?[1,2,3,4]:[]});
+    d.text('ml-kept',1027,582,step===0?'4 training rides + 2 test rides':'Only the four train rows fit the line.',22,step===0?P.muted:P.orange);
+  } else {
+    d.text('ml-data-heading',1020,207,'Saved table: fare_model',25,P.green,'middle',650);
+    d.table('ml-model',825,257,[145,105,155],[['intercept','slope','training_rows'],[3,2,4]],{rowHeight:66,fontSize:22});
+    d.text('ml-model-inspect',1027,421,'SELECT * FROM fare_model;',22,P.muted);
+    d.text('ml-model-meaning',1027,475,'SQL learned 3 and 2 from the rides.',23,P.ink);
+    d.text('ml-model-size',1027,521,'One saved row holds this model.',23,P.muted);
+  }
+  d.text('ml-input-definition',65,622,'Feature = distance (miles). Label = fare (dollars).',25,P.ink,'start');
+  d.text('ml-function-order',65,657,'Regression arguments: outcome first, input second.',22,P.muted,'start');
+  if(step===4)d.text('ml-learned-line',1027,622,'predicted fare = 3 + 2 × distance',25,P.green,'middle',650);
+  else d.text('ml-training-boundary',1027,632,'Test rides stay out of training.',24,P.orange);
+}
+function analyticsScoreSQL(d,step) {
+  const stage=step<3?'score':step===3?'evaluate':'predict';
+  d.text('ml-task',640,175,step<4?'Check the saved line on rides it did not learn from.':'Use the same saved line for a new 3.5-mile ride.',28,P.ink);
+  d.text('ml-code-title',65,207,'DuckDB SQL · '+(stage==='score'?'predict test fares':stage==='evaluate'?'measure error':'predict a new fare'),24,P.blue,'start',650);
+  analyticsSQL(d,analyticsMLSQL[stage],step===0?[4,6]:step===1?[2,3,5]:step===2?[0]:step===3?[1]:step===4?[3,4]:[1,2]);
+  d.text('ml-model-summary',1027,207,'fare_model: intercept 3, slope 2',24,P.green,'middle',650);
+  if(step<3) {
+    d.table('ml-test',825,257,[135,115,155],[['miles','actual $','predicted $'],[2.5,9,step===2?8:'?'],[4.5,11,step===2?12:'?']],{rowHeight:67,fontSize:25});
+    d.text('ml-test-prompt',1027,516,step===2?'The view now holds both predictions.':'Predict both fares before advancing.',23,P.ink);
+    d.text('ml-test-formula',1027,555,'3 + 2 × distance',28,P.green);
+  } else if(step===3) {
+    d.table('ml-error',825,257,[135,135,135],[['actual $','predicted $','miss $'],[9,8,1],[11,12,1]],{rowHeight:67,fontSize:24});
+    d.text('ml-error-name',1027,506,'MAE = mean absolute error',24,P.ink);
+    d.text('ml-error-result',1027,548,'($1 + $1) ÷ 2 = $1',30,P.green,'middle',650);
+    d.text('ml-rmse-result',1027,586,'RMSE is also $1 in this example.',23,P.muted);
+  } else {
+    d.table('ml-new',825,257,[170,235],[['distance','predicted_fare'],[3.5,step===5?10:'?']],{rowHeight:75,fontSize:26});
+    d.text('ml-new-calculation',1027,477,step===5?'3 + 2 × 3.5 = $10':'What will the saved line predict?',27,P.green);
+    d.text('ml-new-input',1027,536,'Only distance is needed as input.',24,P.ink);
+  }
+  d.text('ml-score-takeaway',640,623,step===3?'The toy test error is $1. Two made-up rides do not establish real-world accuracy.':step>=4?'Prediction reuses fare_model. This query does not train it again.':'CROSS JOIN pairs each test ride with the one saved model row.',26,P.ink);
+  d.text('ml-score-source',640,662,'Run the complete example: lectures/lecture-10/in_database_ml.py',21,P.muted);
+}
+function analyticsCloudML(d,step) {
+  d.text('ml-task',640,175,'The same workflow in a managed database: BigQuery ML',28,P.ink);
+  d.text('ml-code-title',65,207,'GoogleSQL · '+['train','evaluate','predict'][step],24,P.blue,'start',650);
+  analyticsSQL(d,analyticsMLSQL[['cloudTrain','cloudEvaluate','cloudPredict'][step]],step===0?[0,3,10]:step===1?[1,5]:[1,3],step===0?29:40);
+  const copy=[
+    ['CREATE MODEL learns','distance is the input.','fare is the outcome to predict.','Use only training rows.','Save the result as fare_model.'],
+    ['ML.EVALUATE checks','Give it the two test rides.','Their fares were kept out of training.','Compare predicted and actual fares.','Return error metrics such as MAE.'],
+    ['ML.PREDICT applies','Give it a new distance: 3.5.','Reuse the saved fare_model.','The output includes predicted_fare.','No actual fare is needed to predict.']
+  ][step];
+  copy.forEach((label,i)=>d.text('ml-cloud-explanation-'+i,1027,267+i*65,label,i===0?28:23,i===0?P.green:P.ink,'middle',i===0?650:500));
+  d.text('ml-cloud-setup',640,623,'Replace YOUR_PROJECT with your project ID. Load demo.ml_rides first.',25,P.ink);
+  d.text('ml-cloud-context',640,662,'Optional cloud example. Setup and billing details are in the reading. Local demo uses DuckDB.',21,P.muted);
+}
 function analyticsBatchPipeline(d,step) {
   const xs=[65,480,895],w=320;
   d.text('pipeline-query',65,176,'SELECT fare FROM rides WHERE fare > 25;',27,P.ink,'start');
@@ -365,23 +494,9 @@ analyticsByteSavings,
 (d,s)=>{d.rect('process',340,150,740,440,P.white,P.blue,22,4);tx(d,'python',720,205,'Python',35);d.box('duck',525,295,370,150,'DuckDB',P.greenLight,P.green,46);['CSV','Parquet','dataframe'].forEach((v,i)=>d.box('src'+i,105,190+i*145,205,85,v,P.white,P.line,27));line(d,'in',325,375,505,375);if(s>0)d.circle('data',s===1?450:935,375,17,P.orange);if(s===2)d.box('df',915,485,250,95,'dataframe',P.blueLight,P.blue,30);},
 (d,s)=>{d.rect('storage',120,475,1040,150,P.greenLight,P.green,16);tx(d,'storelabel',640,565,'object storage',36);for(let i=0;i<(s===0?1:s===1?3:2);i++){d.rect('compute'+i,170+i*340,140,260,185,P.blueLight,P.blue,12);dotgrid(d,'cpu'+i,220+i*340,185,6,3,6,31,9);line(d,'reads'+i,300+i*340,345,300+i*340,455,P.blue);}tx(d,'compute-label',640,100,'compute',32);},
 (d,s)=>{const files=['a','b','c','d'];files.forEach((v,i)=>chip(d,'file'+i,135+i*275,460,v,i<2?P.blueLight:P.greenLight,160,100));d.box('manifestA',145,275,320,95,'A: a, b',P.blueLight,P.blue,34);if(s>0)d.box('manifestB',815,275,320,95,'B: a, c, d',P.greenLight,P.green,34);line(d,'old',305,385,305,445,P.blue);if(s>0){line(d,'new',970,385,805,445);line(d,'new2',970,385,1090,445);}d.circle('head',s<2?305:975,200,27,P.orange);if(s===2)d.circle('reader',305,620,24,P.blue);},
-(d,s)=>{
-  tx(d,'heading',640,100,'Fit inside the query engine',42);
-  tx(d,'train-label',285,195,'training rows',29,P.green);
-  d.table('train',110,230,[170,180],[['distance','fare'],[1,6],[2,6],[3,8],[4,12]],{rowHeight:56,fontSize:28});
-  tx(d,'heldout',285,570,'test rows stay out',26,P.orange);
-  if(s>=1){line(d,'fit-arrow',480,360,550,360);d.box('fit',575,280,270,160,'Aggregate',P.greenLight,P.green,35);tx(d,'func1',710,475,'regr_intercept',25);tx(d,'func2',710,518,'regr_slope',25);}
-  if(s>=2){line(d,'model-arrow',860,360,915,360);d.table('model',935,280,[125,125],[['b','w'],[3,2]],{rowHeight:80,fontSize:34});tx(d,'model-label',1060,475,'model table',28,P.green);}
-  if(s>=3)tx(d,'equation',640,635,'predicted fare = 3 + 2 × distance',38,P.green);
-},
-(d,s)=>{
-  tx(d,'heading',640,90,'Apply the saved model',42);
-  d.table('test',110,175,[175,175,185],[['distance','actual','predicted'],[2.5,9,s>=1?8:'?'],[4.5,11,s>=1?12:'?']],{rowHeight:66,fontSize:29});
-  d.box('model',795,175,365,115,'b = 3     w = 2',P.greenLight,P.green,34);
-  if(s>=1){line(d,'score',775,275,665,275);tx(d,'apply',980,360,'b + w × distance',31);}
-  if(s>=2){d.box('mae',150,445,450,90,'Held-out MAE = $1',P.orangeLight,P.orange,32);d.box('new',720,445,450,90,'3.5 miles → $10',P.blueLight,P.blue,32);}
-  if(s>=3){tx(d,'cloud',640,600,'BigQuery ML: CREATE MODEL → ML.PREDICT',29,P.blue);tx(d,'split',640,653,'ML.EVALUATE uses separate test rows',26,P.muted);}
-},
+analyticsTrainSQL,
+analyticsScoreSQL,
+analyticsCloudML,
 (d,s)=>{const ww=[760,230,60];tx(d,'scan-label',220,150,'bytes',35);d.rect('scan',170,210,ww[s],110,P.greenLight,P.green,10);for(let i=0;i<Math.max(1,6-s*2);i++)d.circle('coin'+i,1050,520-i*45,39,P.orangeLight,P.orange,3);clock(d,'compute',315,505,s*1.3);tx(d,'clocklabel',315,610,'compute time',30);tx(d,'coinlabel',1045,610,'scanned bytes',30);},
 (d,s)=>{for(let r=0;r<6;r++)for(let c=0;c<12;c++){const active=s===0?r===2:s===1?c===5:c===5&&r===5;d.rect('cell'+r+c,140+c*85,170+r*67,70,50,active?P.greenLight:P.white,active?P.green:P.line,5);}tx(d,'q',640,625,['ride #4','AVG(fare)','month = 12'][s],40);}
 ]
@@ -2009,37 +2124,65 @@ const plans = [
         "term": "Lakehouse"
       },
       {
-        "title": "Train a model inside the query engine",
-        "minutes": 5,
+        "title": "SQL learns a fare model",
+        "minutes": 4,
         "kind": "activity",
-        "notes": "Define in-database machine learning as training or applying a model using database execution over stored data. Separate feature preparation, which only produces inputs, from learning parameters. Use the runnable Lecture 10 demo: ml_rides stores four training rows with distance/fare pairs (1,6), (2,6), (3,8), (4,12), and two held-out rows. Ask which operators fit a one-feature line. Expected: scan ml_rides, filter split = train, aggregate regr_intercept(fare, distance) and regr_slope(fare, distance), then store b = 3 and w = 2 in one model row. Emphasize argument order: target first, feature second. These coefficients are estimated from the training rows; SQL is doing the training, not merely fetching data for Python. Show the SQL in the companion reading and run in_database_ml.py; Python dispatches statements and prints results. Ask why test rows must stay outside the aggregate. Expected: evaluating on rows that influenced the fit would contaminate the held-out check. This tiny synthetic example explains execution, not real taxi-fare accuracy.",
+        "notes": "Project the training SQL, not just function names. The prepared fare_features view contains the six made-up rides from in_database_ml.py after filtering positive distances and nonnegative fares. Define distance in miles as the input feature and fare in dollars as the label. First read the six rows, then highlight FROM and WHERE split = train along with the four training rows. Highlight the regression aggregates next: regr_intercept(fare, distance) and regr_slope(fare, distance), with target first and feature second. They fit a least-squares line, learning intercept 3 and slope 2. count(*) records four training rows. CREATE TABLE stores the query result in fare_model. Read the saved row and form predicted fare = 3 + 2 times distance. The intercept is the line value at zero miles, not a verified taxi base fare. Python only submits these SQL statements and prints results; DuckDB performs the fit. Both test rows stay out of training. The exact setup and complete runnable SQL are in the reading and linked script. This tiny synthetic example teaches execution, not real taxi-fare accuracy.",
         "id": "train-inside-the-query-engine",
-        "steps": 4,
+        "steps": 5,
         "states": [
-          "Separate training rows",
-          "Aggregate target and feature",
-          "Store learned coefficients",
-          "A fitted prediction expression"
+          "Identify the feature and label",
+          "Keep only training rides",
+          "Learn the intercept and slope",
+          "Save one model row",
+          "Read the learned prediction rule"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html#in-database-ml"
-        ]
+          "lectures/lecture-10/analytics.html#train-sql",
+          "lectures/lecture-10/in_database_ml.py",
+          "https://duckdb.org/docs/stable/sql/functions/aggregates.html"
+        ],
+        "clarityNative": true
       },
       {
-        "title": "Evaluate and apply the saved model",
-        "minutes": 5,
+        "title": "SQL checks and applies the saved model",
+        "minutes": 4,
         "kind": "activity",
-        "notes": "Have pairs predict fares for the held-out distances 2.5 and 4.5 using b + w * distance. Expected: 8 and 12 dollars; actual fares are 9 and 11, so MAE and RMSE are both one dollar. The two synthetic test rows do not establish real-world generalization. Trace the scoring plan: scan the test rows, cross join the one-row model table, project the prediction, then aggregate errors for evaluation. Keeping more than one model row would multiply results, so a production query selects a specific model version. A new unlabeled 3.5-mile ride scores at ten dollars without retraining. Ask which data crosses into Python: only the requested result, not a training matrix. Finally show the managed BigQuery ML example in the reading: CREATE MODEL with linear_reg learns a model, ML.EVALUATE receives explicit test data, and ML.PREDICT scores new inputs. Its setup requires a cloud dataset and permissions and may incur charges; the local DuckDB demo needs no cloud account. An SQL interface alone does not guarantee that every vendor model executes in the database process; remote models can invoke external services. Discuss saved-model versioning, feature consistency, and the cost of sharing compute with other queries.",
+        "notes": "Keep fare_model fixed at intercept 3 and slope 2. Show CREATE VIEW held_out_predictions with the test-only filter. CROSS JOIN pairs each test ride with the one model row, and the expression m.intercept + m.slope * r.distance calculates its fare. Ask the class to predict results before showing 8 and 12 dollars for distances 2.5 and 4.5. The actual fares 9 and 11 did not influence training. On the next build replace the SQL with avg(abs(fare - predicted_fare)), explain absolute error, and calculate a one-dollar MAE. The query also reports the two test rows and RMSE, which is one dollar here. Explain RMSE as the square root of mean squared error. Then show a separate SELECT for VALUES (3.5), cross joined with the same model, and pause before revealing 10 dollars. The new query needs only distance, not an actual fare, and does not retrain. The projected queries retain ride_id from the reading so each output still identifies its input ride. CROSS JOIN is safe here because fare_model has exactly one row; a multi-version model table requires selecting a model first. Two synthetic test rows demonstrate the mechanics, not generalization.",
         "id": "evaluate-and-apply-the-model",
-        "steps": 4,
+        "steps": 6,
         "states": [
-          "Keep evaluation rows separate",
-          "Apply the learned expression",
-          "Measure error and score a new row",
-          "Map to managed ML statements"
+          "Select the two test rides",
+          "Combine each ride with the model",
+          "Name the test predictions",
+          "Calculate mean absolute error",
+          "Predict a new ride",
+          "Reveal the new fare"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html#in-database-ml"
+          "lectures/lecture-10/analytics.html#evaluate-sql",
+          "lectures/lecture-10/in_database_ml.py"
+        ],
+        "clarityNative": true
+      },
+      {
+        "title": "Training and prediction with BigQuery ML",
+        "minutes": 2,
+        "kind": "visual",
+        "clarityNative": true,
+        "id": "managed-model-sql",
+        "steps": 3,
+        "states": [
+          "CREATE MODEL learns from training rides",
+          "ML.EVALUATE checks separate test rides",
+          "ML.PREDICT applies the saved model"
+        ],
+        "notes": "Show actual GoogleSQL for the same six toy rides. This optional cloud example requires replacing YOUR_PROJECT with a BigQuery project ID, a demo dataset, and demo.ml_rides loaded with the six rows and compatible BigQuery types. Use the setup and permissions instructions in the reading before running it; BigQuery may incur charges. CREATE MODEL with linear_reg learns a distance-to-fare line. input_label_cols identifies fare as the outcome, leaving distance as the feature. NO_SPLIT uses all rows supplied by the training SELECT; WHERE split = train keeps the two test rows out. NORMAL_EQUATION with l2_reg = 0 selects an unregularized least-squares fit. The next build passes explicit test rows to ML.EVALUATE and requests mean_absolute_error. The final build gives ML.PREDICT the saved model and a new distance. The projected code uses the same YOUR_PROJECT placeholder and demo dataset names as the reading. Unlike DuckDB's ordinary one-row coefficient table, BigQuery saves a managed model object. These statements use BigQuery syntax and do not run in DuckDB. The cloud statements are documented examples; projected output values are not presented as results from an executed cloud job.",
+        "sources": [
+          "lectures/lecture-10/analytics.html#managed-ml",
+          "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-create-glm",
+          "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-evaluate",
+          "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-predict"
         ]
       },
       {
