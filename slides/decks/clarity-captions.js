@@ -774,11 +774,12 @@ window.CourseClarityCaptions = {
       "Position 1 in the fare chunk gives $24. The three values rebuild Ride 2."
     ],
     "analytical-workload": [
-      "Start with four trip rows and compute fare plus tip for each.",
-      "GROUP BY produces two monthly rows: revenues 20 and 30.",
-      "The first running window contains only month 1, so its total is 20.",
-      "The next window includes both months, producing 20 + 30 = 50.",
-      "The final output keeps two monthly rows in explicit month order."
+      "Goal: show how much revenue we have collected by the end of each month.",
+      "Combine January’s trips into $20 and February’s trips into $30. Four rows become two.",
+      "The outlined rows form the window for this calculation. For January, include January only.",
+      "For February, include January and February. The running total is $20 + $30 = $50.",
+      "Keep both monthly rows. The new column shows $20 after January and $50 after February.",
+      "A total after each trip gives four rows. A total after each month gives two rows."
     ],
     "read-a-row-layout": [
       "We want the average fare. Pickup location and payment type do not affect the answer.",

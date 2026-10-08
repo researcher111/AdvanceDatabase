@@ -108,22 +108,65 @@
   });
 
   use(10,'analytical-workload',(d,s)=>{
-    label(d,'input-title',230,220,'Trip revenue = fare + tip');
-    const vals=[12,8,24,6];
-    vals.forEach((v,i)=>{
-      const grouped=s>=1,x=grouped?(i<2?520:915):110,y=grouped?294+(i%2)*66:269+i*75;
-      d.box('trip-'+i,x,y,grouped?100:260,53,grouped?String(v):'month '+(i<2?1:2)+' · $'+v,i<2?P.blueLight:P.greenLight,i<2?P.blue:P.green,25);
-    });
-    if(s>=1){
-      label(d,'m1',570,237,'Month 1',P.blue,28);label(d,'m2',965,237,'Month 2',P.green,28);
-      d.line('sum1',508,426,632,426,P.blue,3);d.line('sum2',903,426,1027,426,P.green,3);
-      label(d,'sum1-text',570,465,'revenue = 20',P.blue,26);label(d,'sum2-text',965,465,'revenue = 30',P.green,26);
-      label(d,'group-count',230,351,'4 trips → 2 months',P.ink,25);
+    const {rides,monthly}=window.CourseTraces.fixtures;
+    const amounts=rides.map(r=>r[1]+r[2]),months=['January','February'];
+    const running=monthly.map((_,i)=>monthly.slice(0,i+1).reduce((sum,r)=>sum+r[1],0));
+    if(s===5) {
+      label(d,'comparison-task',640,182,'Two questions: how much so far after each trip, or after each month?',P.ink,27);
+      label(d,'trip-output-title',320,253,'Without monthly grouping',P.ink,28);
+      label(d,'month-output-title',941,253,'After monthly grouping',P.ink,28);
+      let total=0;
+      d.table('trip-output',65,285,[125,160,230],[['Trip','Revenue','Running total'],...amounts.map((v,i)=>['Trip '+(i+1),'$'+v,'$'+(total+=v)])],{rowHeight:51,fontSize:25});
+      d.table('month-output',665,285,[170,155,225],[['Month','Revenue','Running total'],...monthly.map(([month,value],i)=>[months[month-1],'$'+value,'$'+running[i]])],{rowHeight:76,fontSize:25});
+      label(d,'trip-output-count',322,578,'4 output rows: one per trip',P.blue,27);
+      label(d,'month-output-count',940,578,'2 output rows: one per month',P.green,27);
+      label(d,'comparison-result',640,621,'Same final $50; different meaning for each row.',P.ink,30);
+      label(d,'trip-order',640,655,'Trip totals use the shown order: trip 1, then 2, then 3, then 4.',P.muted,23);
+      return;
     }
-    if(s>=2){d.rect('window',443,270,s>=3?650:255,237,'none',P.orange,12,3);label(d,'window-label',s>=3?768:570,540,s>=3?'Window includes months 1 and 2':'Window includes month 1',P.orange,24);}
-    if(s>=2)label(d,'run1',570,592,'running = 20',P.blue,27);
-    if(s>=3)label(d,'run2',965,592,'running = 50',P.green,27);
-    foot(d,s===4?'ORDER BY month returns (1, 20, 20), then (2, 30, 50).':'GROUP BY collapses trips; the window operates on the resulting monthly rows.');
+    if(s>=2) {
+      d.rect('window-definition-box',65,166,1150,69,P.orangeLight,'none',9);
+      label(d,'window-definition',640,186,'Window: the rows included in this running-total calculation.',P.ink,27);
+      label(d,'frame-definition',640,218,'Here, include the first month through the current month.',P.ink,23);
+    } else label(d,'revenue-definition',640,194,'Revenue = fare + tip. Four made-up trips from two months.',P.muted,27);
+    label(d,'input-title',278,260,'Trips before grouping',P.ink,28);
+    d.table('trips',65,283,[100,175,150],[['Trip','Month','Revenue'],...rides.map((r,i)=>[i+1,months[r[0]-1],'$'+amounts[i]])],{rowHeight:51,fontSize:25});
+    if(s>=1) {
+      d.arrow('group-arrow',510,397,598,397,P.green,4);
+      label(d,'group-label',554,363,'Group',P.green,22);
+      label(d,'monthly-title',920,260,'After GROUP BY month',P.ink,28);
+      const widths=[180,165,230];let x=625;
+      ['Month','Revenue','Running total'].forEach((heading,i)=>{
+        d.rect('monthly-head-'+i,x,283,widths[i],53,P.greenLight,P.line,0,1);
+        label(d,'monthly-heading-'+i,x+widths[i]/2,309.5,heading,P.ink,25);x+=widths[i];
+      });
+      monthly.forEach(([month,value],i)=>{
+        const y=336+i*78,current=s===i+2;let cx=625;
+        const values=[months[month-1],'$'+value,s>=i+2?'$'+running[i]:'—'];
+        values.forEach((v,c)=>{
+          d.rect('monthly-'+i+'-'+c,cx,y,widths[c],78,current&&c===2?P.greenLight:P.white,P.line,0,1);
+          label(d,'monthly-'+i+'-'+c+'-value',cx+widths[c]/2,y+39,v,c===2&&s>=i+2?P.green:P.ink,28);cx+=widths[c];
+        });
+      });
+      if(s===2||s===3) {
+        d.rect('window',620,331,355,s===2?88:166,'none',P.orange,8,4);
+        label(d,'window-label',912,537,s===2?'Current month: January':'Current month: February',P.orange,27);
+      } else label(d,'monthly-count',912,537,'2 rows: one per month',P.green,27);
+    } else {
+      d.rect('goal',625,302,575,190,P.white,P.line,10);
+      label(d,'goal-heading',912,343,'Our question',P.ink,28);
+      label(d,'goal-line1',912,394,'How much revenue have we collected',P.ink,25);
+      label(d,'goal-line2',912,434,'by the end of each month?',P.ink,25);
+    }
+    label(d,'step-result',640,587,[
+      'Start with one revenue value per trip.',
+      'January: $12 + $8 = $20. February: $24 + $6 = $30.',
+      'January so far: $20.',
+      'February so far: $20 + $30 = $50.',
+      'Grouping combines rows. The running total adds a column.'
+    ][s],P.ink,28);
+    if(s>=2)label(d,'window-sql',640,637,'SUM(revenue) OVER (ORDER BY month ROWS UNBOUNDED PRECEDING)',P.muted,23);
+    else label(d,'grouping-takeaway',640,637,s===0?'Next, combine the trips that belong to the same month.':'The running-total calculation will use these two monthly rows.',P.muted,25);
   });
 
   use(11,'probe-the-lists',(d,s)=>{

@@ -256,19 +256,20 @@
   const rides = [[1,10,2], [1,8,0], [2,20,4], [2,6,0]];
   const monthly = [1,2].map(month => [month, rides.filter(r => r[0] === month).reduce((s,r) => s+r[1]+r[2],0)]);
   add('analytics', {
-    title: 'Grouping changes the rows a window sees',
-    premise: 'Four toy trips, shown as (month, fare, tip): (1,10,2), (1,8,0), (2,20,4), (2,6,0). Revenue means fare + tip. These values are separate from the full taxi dataset.',
-    codeLabel: 'SQL shape for a worked example',
+    title: 'From monthly revenue to a running total',
+    premise: 'Four toy trips, shown as (month, fare, tip): (1,10,2), (1,8,0), (2,20,4), (2,6,0). Revenue means fare + tip. First combine trips into monthly totals, then calculate revenue collected so far. These values are separate from the full taxi dataset.',
+    codeLabel: 'SQL: monthly totals, then a running total',
     code: ['WITH monthly AS (', '    SELECT month, SUM(fare + tip) AS revenue', '    FROM toy_rides GROUP BY month', ')', 'SELECT month, revenue,', '    SUM(revenue) OVER (ORDER BY month', '        ROWS UNBOUNDED PRECEDING) AS running', 'FROM monthly ORDER BY month'],
     frames: [
-      frame('Begin with one row per trip', [], [['month 1 trips', '12 and 8 dollars'], ['month 2 trips', '24 and 6 dollars'], ['input row count', '4']], 'First calculate each trip’s fare + tip. The row grain is one trip: state what one row represents before choosing an aggregate.'),
-      frame('Group into one row per month', [1, 2, 3, 4], [['month 1 revenue', '20'], ['month 2 revenue', '30'], ['monthly row count', '2']], 'GROUP BY collapses the four trips into two monthly totals. This intermediate table is what the window consumes.'),
-      frame('The first window contains January', [5, 6, 7], [['month', '1'], ['revenue', '20'], ['running', '20']], 'ROWS UNBOUNDED PRECEDING includes every earlier row and the current row. The first row has no earlier rows.'),
-      frame('The next window includes both months', [5, 6, 7], [['month', '2'], ['revenue', '30'], ['running', '20 + 30 = 50']], 'The window adds a value to each monthly row. It preserves the two rows rather than collapsing them into one total.'),
-      frame('Order the returned rows', [8], [['month 1: revenue / running', '20 / 20'], ['month 2: revenue / running', '30 / 50'], ['output row count', '2']], 'The ORDER BY inside OVER defines the calculation. The outer ORDER BY guarantees the order shown to the caller. Use both when the requested output order matters.')
+      frame('Start with four trips', [], [['January trips', '$12 and $8'], ['February trips', '$24 and $6'], ['input row count', '4']], 'Calculate fare + tip for each trip. We have four rows, and each row represents one trip. The goal is a running total by month: revenue collected so far at the end of each month.'),
+      frame('Combine trips into monthly totals', [1, 2, 3, 4], [['January revenue', '$20'], ['February revenue', '$30'], ['monthly row count', '2']], 'GROUP BY month combines the two January trips and the two February trips. Four trip rows become two monthly rows. We have monthly revenue, but have not yet calculated the running total.'),
+      frame('January: include January only', [5, 6, 7], [['current month', 'January'], ['included months', 'January'], ['running total', '$20']], 'A window describes the rows a window function works with; its frame selects rows for the current calculation. Here the frame runs from the first month through the current month. For January, include January only: $20. Point to the outlined row. The calculation adds a value to the row; it does not remove the row.'),
+      frame('February: include both months', [5, 6, 7], [['current month', 'February'], ['included months', 'January + February'], ['running total', '$20 + $30 = $50']], 'For February, extend the highlighted frame to include January and February. Add $20 and $30 to get $50 collected so far. ROWS UNBOUNDED PRECEDING means all rows from the start through the current row. The January result stays $20.'),
+      frame('Keep one result per month', [8], [['January: revenue / running', '$20 / $20'], ['February: revenue / running', '$30 / $50'], ['output row count', '2']], 'GROUP BY changed four trip rows into two monthly rows. The running-total calculation kept those two rows and added a column. ORDER BY inside OVER sets the calculation order; the final ORDER BY sets the displayed result order.'),
+      frame('Compare a running total per trip', [], [['trip revenues, shown order', '12, 8, 24, 6'], ['running totals per trip', '12, 20, 44, 50'], ['running totals per month', '20, 50'], ['output row counts', '4 trips or 2 months']], 'Now consider a different query: calculate a running total after every trip, without monthly grouping. Using trip order 1, 2, 3, 4 gives $12, $20, $44, $50, with four output rows. The monthly query gives $20 and $50, with two output rows. Both end at $50, but each row answers a different question. A trip-level SQL query must specify a deterministic order, such as trip time plus a unique trip ID; ordering by month alone leaves same-month trips tied.')
     ],
-    question: 'What happens if the window runs over the four trips before grouping?',
-    answer: 'It produces a running value for each trip, so four rows remain. That is a different result grain. For Lab 8 Q6, form one monthly total first, then compute a cumulative total over those monthly rows.'
+    question: 'What changes if we calculate a running total after each trip, instead of first combining the trips into monthly totals?',
+    answer: 'We get four results, one per trip, instead of two results, one per month. In the shown trip order, the totals are $12, $20, $44, $50; the monthly totals are $20, $50. Both end at $50. For Lab 8 Q6, combine trips into one total per month first, then calculate the running total over those monthly rows.'
   });
   // Unit vectors chosen so a top-2 neighbor lies across a centroid boundary.
   const vectors = [[1,0], [.6,.8], [0,1], [-1,0]];

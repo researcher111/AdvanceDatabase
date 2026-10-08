@@ -36,7 +36,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,231);assert.equal(builds,843);
+assert.equal(slides,231);assert.equal(builds,844);
 const draw=(lecture,id,step)=>V.sceneDrawing(decks[lecture].scenes.find(s=>s.id===id),step);
 const text=(items,key)=>{const a=items.find(i=>i.key===key);assert(a,'missing '+key);return a.text;};
 const strings=items=>items.filter(i=>i.tag==='text').map(i=>i.text).join('\n');
@@ -114,8 +114,35 @@ assert.equal(text(draw(2,'lecture-02-scene-03',2),'frame-0-detail'),'contains bl
 assert.equal(text(draw(3,'lecture-03-scene-07',3),'flag'),'1');
 const product=[];for(let i=1;i<=4;i++)product.push(text(draw(4,'lecture-04-scene-09',i),'pair-label'));
 assert.deepEqual(product,['(ada, ds)','(ada, stat)','(ada, econ)','(ben, ds)']);
-for(let i=0;i<4;i++)assert.equal(text(draw(10,'analytical-workload',1),'trip-'+i+'-label'),String(fixtures.rides[i][1]+fixtures.rides[i][2]));
-assert.equal(text(draw(10,'analytical-workload',4),'run2'),'running = '+fixtures.monthly.reduce((s,r)=>s+r[1],0));
+const runningScene=decks[10].scenes.find(s=>s.id==='analytical-workload');
+assert.equal(runningScene.steps,6);
+assert.match(runningScene.teaching.question,/after each trip.*monthly totals/);
+const tripRevenue=Array.from(fixtures.rides,r=>r[1]+r[2]);
+for(let i=0;i<4;i++)assert.equal(text(draw(10,'analytical-workload',1),'trips-'+(i+1)+'-2-text'),'$'+tripRevenue[i]);
+const january=draw(10,'analytical-workload',2),february=draw(10,'analytical-workload',3);
+assert.match(text(january,'window-definition'),/rows included.*running-total/);
+assert.match(text(january,'frame-definition'),/first month through the current month/);
+assert.equal(text(january,'monthly-0-2-value'),'$20');
+assert.equal(text(january,'monthly-1-2-value'),'—','February has no running total before its calculation');
+assert.equal(text(february,'monthly-0-2-value'),'$20','January result survives when the frame expands');
+assert.equal(text(february,'monthly-1-2-value'),'$50');
+// The orange outline encloses monthly inputs through the current row, excluding output values.
+for(const [items,rows] of [[january,1],[february,2]]) {
+ const frame=items.find(a=>a.key==='window').attrs;
+ for(let i=0;i<2;i++) {
+  const value=items.find(a=>a.key==='monthly-'+i+'-1-value').attrs;
+  assert.equal(value.y>frame.y&&value.y<frame.y+frame.height,i<rows);
+ }
+ assert(items.find(a=>a.key==='monthly-0-2-value').attrs.x>frame.x+frame.width);
+}
+const comparison=draw(10,'analytical-workload',5);
+let runningTrip=0;
+tripRevenue.forEach((v,i)=>assert.equal(text(comparison,'trip-output-'+(i+1)+'-2-text'),'$'+(runningTrip+=v)));
+let runningMonth=0;
+fixtures.monthly.forEach((r,i)=>assert.equal(text(comparison,'month-output-'+(i+1)+'-2-text'),'$'+(runningMonth+=r[1])));
+assert.equal(runningTrip,runningMonth);
+assert.match(text(comparison,'trip-output-count'),/4 output rows/);
+assert.match(text(comparison,'month-output-count'),/2 output rows/);
 assert.match(strings(draw(9,'price-the-work',2)),new RegExp('= '+models.cost(100).index+' page accesses'));
 assert.match(strings(draw(9,'price-the-work',3)),/= 2,003 page accesses/);
 assert.match(strings(draw(9,'price-the-work',4)),/Equal cost at 0.997%/);
