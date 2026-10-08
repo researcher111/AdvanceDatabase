@@ -1563,9 +1563,51 @@
       "idea": "DuckDB supplies the data and calls a prediction function; PyTorch trains and runs the neural network.",
       "question": "Does SELECT predict_fare_nn(distance) train a new model for each ride? When do we use the recorded test fares?",
       "answer": "No. The SQL function calls the trained PyTorch model with fixed weights. It receives only distances. We compare its predictions with the recorded test fares afterward to measure error. Those fares never helped fit the network or its scaling.",
+      "checks": [
+        {
+          "question": "Why sort the training rides by hash(ride_id)?",
+          "answer": "It mixes rides before forming batches so they do not follow date order. It is optional, and this example repeats the same mixed order on every pass. The month filter still excludes test rides."
+        },
+        {
+          "question": "What do 1, 16, and 1 count in the network?",
+          "answer": "One input feature per ride, 16 hidden units, and one output value per ride. These numbers describe the network, not the number of rides in a batch."
+        },
+        {
+          "question": "Why does the 5-mile ride become 1 after scaling?",
+          "answer": "The training mean is 3 miles and the std is 2 miles: (5 - 3) / 2 = 1. This means one standard deviation above the training average, not a one-mile ride."
+        },
+        {
+          "question": "The model returns 0.8. Is that an 80-cent fare?",
+          "answer": "No. It is a scaled fare prediction. We first compare it with the scaled recorded fare for training, and later use the saved fare mean and std to convert it to dollars."
+        },
+        {
+          "question": "Do the positive 0.2 error and negative 0.2 error cancel?",
+          "answer": "No. MSE squares each error first. Both become 0.04, and the mean is 0.04. Squaring prevents opposite signs from canceling."
+        },
+        {
+          "question": "What dollar prediction does 0.8 represent with fare mean $20 and std $10?",
+          "answer": "0.8 times $10 plus $20 is $28. This conversion uses saved training statistics and does not require the new ride’s actual fare."
+        },
+        {
+          "question": "Does registering predict_fare_nn train another network?",
+          "answer": "No. It connects a SQL function name to a Python callback that reuses the trained model and its saved scaling statistics."
+        },
+        {
+          "question": "Do these recorded test fares enter the prediction function?",
+          "answer": "No. The function receives distances. The recorded fares remain available to check the predictions afterward."
+        },
+        {
+          "question": "Can we compare the toy loss of 0.04 directly with this dollar MAE?",
+          "answer": "No. The 0.04 was mean squared error on scaled fares for an invented two-ride batch. This MAE is the average absolute dollar error on 10,000 real reserved rides."
+        }
+      ],
       "builds": [
         "Introduce the real taxi sample, replacing the earlier six made-up rides. The month filter keeps 50,000 January–October rides for training. DuckDB selects distance and fare before sending Arrow batches of up to 1,024 rows to Python. Define a tensor as a numeric array. Distances become x and fares become y. November–December rides remain reserved for testing. ORDER BY hash(ride_id) mixes the training rides so batches do not follow the file’s date order. The hash maps each ride ID to a scrambled numeric value, and sorting those values gives a repeatable mixed order within this run. Mixing is helpful for batch training but is not required by DuckDB or PyTorch. This example repeats the same mixed order on every pass. Many training pipelines reshuffle on each pass. The WHERE filter still keeps test rides out.",
         "Trace the nodes from left to right: one distance input connects to all 16 hidden nodes, and all 16 hidden nodes connect to the one fare output. Match the blue connections to nn.Linear(1, 16) and the green connections to nn.Linear(16, 1). Each line represents a learned weight. Each hidden node combines its weighted input with a learned bias, then applies ReLU. The output combines the 16 hidden values with another learned bias. The diagram omits biases and scaling for readability. The code standardizes distance and fare using training statistics, and the prediction callback converts the output back to dollars. ReLU keeps positive values and sets negative ones to zero, letting the fitted relationship bend. The network is created once. Within each batch, predict, measure error, clear old gradients, calculate new gradients with backward, and update weights with optimizer.step. PyTorch performs this learning. The excerpt omits setup and loops, which are in the lab script. x_mean, x_std, y_mean, and y_std come only from training rows.",
+        "Pause at the first line. x is a batch of recorded distances, one per ride. x_mean and x_std are the average and population standard deviation of all training distances, calculated once before training. Standard deviation measures spread. Subtracting the mean centers the values; dividing by std expresses them in units of that spread. In this invented example, assume the full training set gave mean 3 miles and std 2 miles. A 3-mile ride becomes 0, and a 5-mile ride becomes 1. The displayed batch does not determine those statistics. Scaling often helps optimization by keeping typical values near zero. It does not add information or guarantee better predictions. The same training statistics are reused for later rides.",
+        "Now follow both lines. model receives only the scaled distances and returns one scaled fare prediction per ride using its current weights. y contains the recorded training fares. The second line scales y using the fare mean and fare std so prediction and target have matching units. Distance and fare have separate means and standard deviations. Assume fare mean 20 dollars and std 10 dollars: recorded fares 20 and 30 become targets 0 and 1. For illustration, suppose the network outputs 0.2 and 0.8. These outputs are made up, not results from fitting the two shown rides. They are not dollar amounts. Negative scaled values are also valid: they mean below the training average. Actual fares serve as training targets; they are not inputs to model.",
+        "In the script, loss_fn is nn.MSELoss with its default mean reduction. For each ride, subtract the scaled target from the prediction and square that difference. The errors are 0.2 and minus 0.2. Squaring gives 0.04 for each, and their average is 0.04. This one number scores the whole batch in squared standardized-fare units. A lower value means closer predictions on this batch. It is different from the MAE in dollars shown later. The prediction and loss lines do not change weights. optimizer.zero_grad clears previous gradients, loss.backward calculates how each weight and bias affects loss, and optimizer.step uses those gradients to update the parameters.",
+        "Undo the fare scaling when returning predictions to SQL. Multiply the network output by the saved training fare std, then add the saved training fare mean. Here 0.2 times 10 plus 20 gives 22 dollars, and 0.8 times 10 plus 20 gives 28 dollars. The recorded fares were 20 and 30, so each toy prediction has a 2-dollar absolute error and their MAE is 2 dollars. The scaled training loss was 0.04, not 0.04 dollars. This conversion only needs the prediction and saved training statistics. It does not need the actual fare of a new ride. The real predict_fare callback applies this conversion to every returned batch.",
         "Connect the SQL name predict_fare_nn to the Python callback predict_fare. The callback converts a batch of distances to tensors, runs the trained PyTorch network under inference_mode, undoes fare scaling, and returns Arrow values. The function is registered on this local DuckDB connection. It is not available automatically in a different SQL terminal.",
         "Read the filter month >= 11 and the SQL function call. These are 10,000 rides the model did not train on. Read the first two example predictions from the completed lab run: 15.17 versus 20.50 dollars, then 9.50 versus 10.00 dollars. SQL sends distances to PyTorch; the recorded fares are available for comparison but do not enter the prediction function. The network weights remain fixed.",
         "The lab script saves both models’ outputs in predictions. Read avg(abs(fare - prediction)) as the average size of the dollar error. Compare 3.53 dollars for the straight line with 3.26 dollars for the network on the same reserved rides. This is one measured run, with 30 epochs and seed 6042; more complexity need not improve every distance group. Point to the optional lab for the plots, then introduce BigQuery ML as Google’s managed SQL alternative."

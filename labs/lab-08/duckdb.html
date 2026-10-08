@@ -408,6 +408,28 @@ model = nn.Sequential(
 <p>The network takes one distance, passes it through 16 hidden units, and returns one fare prediction. <code>ReLU</code> keeps positive intermediate values and replaces negative ones with zero, allowing the fitted curve to bend. PyTorch compares predictions with training fares and updates the weights. One <strong>epoch</strong> is one pass through all training rides; the example uses 30.</p>
 <p>Find <code>loss.backward()</code> and <code>optimizer.step()</code> in the script: these are the PyTorch operations that calculate gradients and update weights. DuckDB does the selection and ordering. Converting Arrow values to tensors allocates memory, so this handoff is not free. The script also learns the scaling of distances and fares from training rows only.</p>
 
+<h4 id="pytorch-scaling">What do the prediction and loss lines mean?</h4>
+<pre><code class="language-python">prediction = model((x - x_mean) / x_std)
+loss = loss_fn(prediction, (y - y_mean) / y_std)</code></pre>
+<p><code>x</code> contains the distances in one training batch. <code>y</code> contains the recorded fares for those same rides. Each distance gets one prediction. The <code>mean</code> variables hold training averages; the <code>std</code> variables hold standard deviations, which measure spread. Distance and fare each have their own mean and std. The script calculates these statistics once using <strong>all training rows</strong>, then reuses them for every batch and for later predictions.</p>
+<ol>
+  <li><strong>Scale each distance, then predict.</strong> <code>(x - x_mean) / x_std</code> subtracts the average distance and divides by its spread. A value of 0 means an average distance; 1 means one standard deviation above average. Keeping typical values near 0 can help training. <code>model(...)</code> uses the current network weights to predict a <em>scaled fare</em>. It receives distances, not recorded fares.</li>
+  <li><strong>Put the recorded fares on the same scale.</strong> <code>(y - y_mean) / y_std</code> scales the training targets. We can now compare each prediction with its target using matching units. The model's output is not yet a dollar amount. A negative scaled value simply means below the training average.</li>
+  <li><strong>Measure the batch error.</strong> The script defines <code>loss_fn = nn.MSELoss()</code>. It subtracts each target from its prediction, squares each error, then averages across the batch. This <strong>mean squared error</strong> is one number used during training. It differs from the mean absolute error in dollars reported later.</li>
+</ol>
+<p><strong>A made-up example:</strong> assume the full training set gave a distance mean of 3 miles and std of 2 miles, plus a fare mean of $20 and std of $10. These statistics come from the larger training set, not just the two rides below. Suppose the current model returns 0.2 and 0.8.</p>
+<table>
+  <thead><tr><th>Ride</th><th>Distance and scaled input</th><th>Fare and scaled target</th><th>Scaled prediction</th><th>Squared error</th></tr></thead>
+  <tbody>
+    <tr><td>A</td><td>3 miles: (3 − 3) ÷ 2 = 0</td><td>$20: (20 − 20) ÷ 10 = 0</td><td>0.2</td><td>(0.2 − 0)² = 0.04</td></tr>
+    <tr><td>B</td><td>5 miles: (5 − 3) ÷ 2 = 1</td><td>$30: (30 − 20) ÷ 10 = 1</td><td>0.8</td><td>(0.8 − 1)² = 0.04</td></tr>
+  </tbody>
+</table>
+<p>The batch loss is <strong>(0.04 + 0.04) ÷ 2 = 0.04</strong>, measured in squared scaled-fare units. It is not a $0.04 error. These two lines calculate predictions and loss without changing the weights. Next, <code>optimizer.zero_grad()</code> clears previous gradients, <code>loss.backward()</code> calculates gradients, and <code>optimizer.step()</code> updates the weights and biases.</p>
+<p><strong>Convert back to dollars for SQL.</strong> The prediction callback reverses the fare scaling:</p>
+<pre><code class="language-python">fares = model((x - x_mean) / x_std) * y_std + y_mean</code></pre>
+<p>Here, 0.2 × $10 + $20 = <strong>$22</strong>, and 0.8 × $10 + $20 = <strong>$28</strong>. Each toy prediction is $2 away from its recorded fare, so their mean absolute error is $2. Converting a new prediction needs only the saved training statistics, not that ride's actual fare. These invented numbers explain the calculation; the real lab results appear below. See <a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.MSELoss.html">PyTorch's MSELoss definition</a> for the loss formula.</p>
+
 <h3>3. Call the trained network from SQL</h3>
 <p>The script registers <code>predict_fare_nn</code> as an Arrow Python function on its DuckDB connection. DuckDB passes a batch of distances to that function, and PyTorch returns a batch of predicted fares. No weights change during prediction.</p>
 <pre><code class="language-sql">SELECT ride_id, distance, fare,

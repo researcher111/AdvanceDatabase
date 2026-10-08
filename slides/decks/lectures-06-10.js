@@ -389,7 +389,65 @@ const analyticsPyTorchCode=[
     'FROM predictions;'
   ]
 ];
+function analyticsPyTorchScaling(d,step) {
+  // Illustrative batch: these assumed full-training-set statistics are not fitted from these two rows.
+  const xMean=3,xStd=2,yMean=20,yStd=10;
+  const rides=[{id:'A',x:3,y:20,prediction:0.2},{id:'B',x:5,y:30,prediction:0.8}];
+  const target=ride=>(ride.y-yMean)/yStd;
+  const loss=rides.reduce((sum,ride)=>sum+(ride.prediction-target(ride))**2,0)/rides.length;
+  d.text('torch-example-context',640,175,'Made-up example. Use statistics already learned from the full training set.',25,P.muted);
+  const code=step===3
+    ? ['# Convert the model output back to dollars', 'fares = model((x - x_mean) / x_std) * y_std + y_mean']
+    : ['prediction = model((x - x_mean) / x_std)', 'loss = loss_fn(prediction, (y - y_mean) / y_std)'];
+  d.rect('torch-detail-code',45,207,1190,110,P.white,P.line,10);
+  code.forEach((text,i)=>{
+    const y=239+i*44,active=step===0?i===0:step===1||i===1;
+    if(active)d.rect('torch-detail-highlight-'+i,57,y-18,1166,36,P.greenLight,'none',4);
+    d.add('torch-detail-line-'+i,'text',{x:70,y,fill:active?P.green:P.muted,'font-size':27,'font-family':'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace','text-anchor':'start','dominant-baseline':'middle','xml:space':'preserve',style:'white-space: pre; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;'},text);
+  });
+  const headers=[
+    ['Ride','Distance x','Subtract the mean','Divide by std'],
+    ['Ride','Recorded fare y','Scaled target','Model prediction'],
+    ['Ride','Prediction','Scaled target','Error','Squared error'],
+    ['Ride','Scaled prediction','Back to dollars','Recorded fare']
+  ][step];
+  const rows=rides.map(ride=>{
+    if(step===0)return [ride.id,ride.x+' miles',`${ride.x} − ${xMean} = ${ride.x-xMean}`,`${ride.x-xMean} ÷ ${xStd} = ${(ride.x-xMean)/xStd}`];
+    if(step===1)return [ride.id,'$'+ride.y,`(${ride.y} − ${yMean}) ÷ ${yStd} = ${target(ride)}`,ride.prediction];
+    if(step===2)return [ride.id,ride.prediction,target(ride),`${ride.prediction} − ${target(ride)} = ${(ride.prediction-target(ride)).toFixed(1)}`,((ride.prediction-target(ride))**2).toFixed(2)];
+    return [ride.id,ride.prediction,`${ride.prediction} × ${yStd} + ${yMean} = $${ride.prediction*yStd+yMean}`,'$'+ride.y];
+  });
+  d.text('torch-detail-stats',640,350,[
+    'x = distance in miles.  x_mean = 3 miles.  x_std = 2 miles.',
+    'y = recorded fare.  y_mean = $20.  y_std = $10.',
+    'loss_fn = nn.MSELoss(): mean squared error across this batch.',
+    'Reuse the saved fare statistics: y_std = $10 and y_mean = $20.'
+  ][step],27,P.ink);
+  d.text('torch-detail-explanation',640,380,[
+    'mean is the training average. std is the standard deviation, a measure of spread.',
+    'The network predicts the scaled fare. Scale the recorded fare to match.',
+    'Subtract the target, square each error, then take the average.',
+    'Multiply by the fare std, then add the fare mean.'
+  ][step],23,P.muted);
+  d.table('torch-detail-table',65,414,step===2?[100,235,235,290,290]:[100,275,420,355],[headers,...rows],{rowHeight:51,fontSize:25});
+  d.text('torch-detail-result',640,603,[
+    '0 means the average distance. 1 means one std above the average.',
+    'Assume this model currently predicts 0.2 and 0.8 for the two rides.',
+    `loss = (0.04 + 0.04) ÷ 2 = ${loss.toFixed(2)}`,
+    'The predictions are $22 and $28. Each is $2 away from the recorded fare.'
+  ][step],step===2?32:25,step===2?P.green:P.ink);
+  d.text('torch-detail-takeaway',640,635,[
+    'Scaling keeps typical inputs near 0 and on a similar scale, which can help training.',
+    'Both values use the same fare scale. The model receives distance as its input.',
+    'Weights change later at optimizer.step(), after loss.backward().',
+    'Training loss was 0.04 on scaled fares. The later MAE measures dollar errors.'
+  ][step],23,P.muted);
+  d.link('torch-lab-link',65,668,'Read the line-by-line explanation','../labs/lab-08/duckdb.html#pytorch-scaling',22);
+}
 function analyticsPyTorch(d,step) {
+  // Pause after the network diagram to unpack prediction, loss, and conversion to dollars.
+  if(step>=2&&step<=5){analyticsPyTorchScaling(d,step-2);return;}
+  if(step>5)step-=4;
   d.text('ml-task',640,175,'Lab 8: 60,000 real taxi rides. Predict fare from distance.',27,P.ink);
   d.text('ml-code-title',65,207,[
     'Python · DuckDB selects training batches',
@@ -2293,18 +2351,23 @@ const plans = [
         "kind": "visual",
         "clarityNative": true,
         "id": "duckdb-pytorch-fare-model",
-        "steps": 5,
+        "steps": 9,
         "states": [
           "DuckDB selects training batches",
           "PyTorch learns the weights",
+          "Scale the input distances",
+          "Predict and scale the target fares",
+          "Measure the batch loss",
+          "Convert predictions back to dollars",
           "Register the prediction function",
           "Predict the reserved rides",
           "Compare prediction errors"
         ],
-        "notes": "Use the optional Lab 8 activity as a concrete local bridge between the small SQL regression and the managed BigQuery ML example. This example uses the real, cleaned 2024 taxi sample rather than the six made-up rides. Train on 50,000 January–October rides and reserve the 10,000 November–December rides for evaluation. DuckDB filters and projects rows, Arrow carries batches, and Python converts them to tensors. ORDER BY hash(ride_id) gives the training rides a repeatable mixed order so batches do not follow date order. This mixing is useful but optional. The same mixed order repeats each epoch, and the month filter still excludes the test rides. In the network diagram, the single distance node connects to all 16 hidden nodes through the first Linear layer, then all 16 hidden nodes connect to the fare output through the second Linear layer. Each line is a learned weight. ReLU acts at the hidden nodes. Biases and scaling are omitted from the diagram. PyTorch trains a one-input, 16-hidden-unit, one-output ReLU network for 30 epochs. The source code also learns scaling from training rows only. Projected Python is an excerpt: imports, tensor conversion, scaling statistics, optimizer setup, and the surrounding loops are in the linked script. Create the network once, then update it on each training batch. The predict_fare callback runs the frozen model under inference_mode and returns an Arrow array. create_function registers it as predict_fare_nn on this connection. It is not a built-in DuckDB function. The test SELECT invokes PyTorch through that callback without retraining. Its first two sample predictions are rounded from the completed run: ride 50000, distance 2.00, actual fare 20.50, neural prediction 15.17; ride 50001, distance 0.94, actual fare 10.00, prediction 9.50. The script materializes predictions with both linear_fare and neural_fare before the final aggregate. In the documented run with seed 6042, DuckDB 1.5.6, and PyTorch 2.14.1, MAE is 3.53 dollars for the straight line and 3.26 for the neural network. Both use only distance and the same training/test split. These are measured results for one sample and configuration, not guaranteed accuracy or evidence that larger models always win. The next slide moves training management into Google Cloud.",
+        "notes": "Use the optional Lab 8 activity as a concrete local bridge between the small SQL regression and the managed BigQuery ML example. This example uses the real, cleaned 2024 taxi sample rather than the six made-up rides. Train on 50,000 January–October rides and reserve the 10,000 November–December rides for evaluation. DuckDB filters and projects rows, Arrow carries batches, and Python converts them to tensors. ORDER BY hash(ride_id) gives the training rides a repeatable mixed order so batches do not follow date order. This mixing is useful but optional. The same mixed order repeats each epoch, and the month filter still excludes the test rides. In the network diagram, the single distance node connects to all 16 hidden nodes through the first Linear layer, then all 16 hidden nodes connect to the fare output through the second Linear layer. Each line is a learned weight. ReLU acts at the hidden nodes. Biases and scaling are omitted from the diagram. PyTorch trains a one-input, 16-hidden-unit, one-output ReLU network for 30 epochs. The source code also learns scaling from training rows only. Four detail builds unpack the two prediction and loss lines. Use two invented rides with distances 3 and 5 miles and recorded fares 20 and 30 dollars. Assume the full training set already gave distance mean 3 and std 2, and fare mean 20 and std 10. Those statistics are not computed from the displayed batch. The scaled distances and targets are 0 and 1. Assume the current model outputs 0.2 and 0.8, giving squared errors 0.04 and 0.04 and mean loss 0.04. This loss is in squared standardized-fare units, not dollars. Conversion back to dollars gives 22 and 28, each two dollars away from the recorded fare. The toy values illustrate the calculation and are separate from the measured lab results later. The forward prediction and loss calculation do not update weights; optimizer.step does that after backward computes gradients. Projected Python is an excerpt: imports, tensor conversion, scaling statistics, optimizer setup, and the surrounding loops are in the linked script. Create the network once, then update it on each training batch. The predict_fare callback runs the frozen model under inference_mode and returns an Arrow array. create_function registers it as predict_fare_nn on this connection. It is not a built-in DuckDB function. The test SELECT invokes PyTorch through that callback without retraining. Its first two sample predictions are rounded from the completed run: ride 50000, distance 2.00, actual fare 20.50, neural prediction 15.17; ride 50001, distance 0.94, actual fare 10.00, prediction 9.50. The script materializes predictions with both linear_fare and neural_fare before the final aggregate. In the documented run with seed 6042, DuckDB 1.5.6, and PyTorch 2.14.1, MAE is 3.53 dollars for the straight line and 3.26 for the neural network. Both use only distance and the same training/test split. These are measured results for one sample and configuration, not guaranteed accuracy or evidence that larger models always win. The next slide moves training management into Google Cloud.",
         "sources": [
           "labs/lab-08/duckdb.html#pytorch",
           "labs/lab-08/starter/pytorch_fares.py",
+          "https://docs.pytorch.org/docs/stable/generated/torch.nn.MSELoss.html",
           "https://duckdb.org/2023/07/07/python-udf#predicting-taxi-fare-costs-ibis--pyarrow-udf"
         ]
       },

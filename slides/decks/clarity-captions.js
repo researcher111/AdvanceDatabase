@@ -881,6 +881,10 @@ window.CourseClarityCaptions = {
     "duckdb-pytorch-fare-model": [
       "DuckDB mixes January–October training rides, then sends distances and fares to Python in batches.",
       "One distance feeds 16 hidden units. Their outputs combine into one predicted fare.",
+      "First, express each distance relative to the training average and spread.",
+      "The model predicts a scaled fare. Compare it with the recorded fare on the same scale.",
+      "Loss measures how far the predictions are from the targets across the batch.",
+      "Convert the network’s output back to dollars before returning it to SQL.",
       "Register a SQL function that calls the trained PyTorch model.",
       "SQL calls the model on November–December rides. Their recorded fares let us check its predictions.",
       "In this run, the neural network has a smaller average prediction error than the straight line."
