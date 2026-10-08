@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
-<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="styles.css?v=3">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
 <body>
@@ -16,6 +16,7 @@
   <div class="toc-title">Lecture 10</div>
   <p><a href="../../slides/lecture-10.html">Visual slide deck ↗</a></p>
   <ul>
+    <li><a href="#storage-layout">Row and column layouts</a></li>
     <li><a href="#discovery">Start with the taxi data</a></li>
     <li><a href="#plan">Today's plan</a></li>
     <li><a href="#flip">Rows or columns?</a></li>
@@ -47,7 +48,77 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">What is the average taxi fare? To answer, we need fares from many rides, but no pickup locations or payment types. microdb stores each fare beside the rest of its row. A column layout stores the fares together, so the query can read just that column.</p>
+<p class="lede">Imagine a table with one row per taxi ride and columns for pickup location, payment type, and fare. What is the average fare across all rides? To answer, we need only the fare column.</p>
+<p>With <strong>row storage</strong>, each ride's fields are stored together. Reading fares can also bring in pickup locations and payment types. With <strong>column storage</strong>, fares are stored together, so the query can read just that column.</p>
+
+<h2 id="storage-layout">Same rides, two storage layouts</h2>
+
+<figure class="storage-compare" aria-labelledby="storage-layout" aria-describedby="storage-caption">
+  <div class="storage-question"><code>SELECT avg(fare) FROM rides;</code><span>Find the highlighted fare values.</span></div>
+  <div class="storage-panels">
+    <section class="storage-panel" aria-labelledby="storage-row-title">
+      <h3 id="storage-row-title">Row storage</h3>
+      <p class="storage-intro">Keep one ride's fields together.</p>
+      <div class="storage-group">
+        <div class="storage-group-label">Ride 1</div>
+        <div class="storage-strip">
+          <span class="storage-value"><small>Pickup</small>JFK</span>
+          <span class="storage-value"><small>Payment</small>card</span>
+          <span class="storage-value storage-fare"><small>Fare</small>$36</span>
+        </div>
+      </div>
+      <div class="storage-group">
+        <div class="storage-group-label">Ride 2</div>
+        <div class="storage-strip">
+          <span class="storage-value"><small>Pickup</small>LGA</span>
+          <span class="storage-value"><small>Payment</small>card</span>
+          <span class="storage-value storage-fare"><small>Fare</small>$24</span>
+        </div>
+      </div>
+      <div class="storage-group">
+        <div class="storage-group-label">Ride 3</div>
+        <div class="storage-strip">
+          <span class="storage-value"><small>Pickup</small>JFK</span>
+          <span class="storage-value"><small>Payment</small>cash</span>
+          <span class="storage-value storage-fare"><small>Fare</small>$30</span>
+        </div>
+      </div>
+      <p class="storage-takeaway">Fares are mixed in with each ride's other fields.</p>
+    </section>
+    <section class="storage-panel" aria-labelledby="storage-column-title">
+      <h3 id="storage-column-title">Column storage</h3>
+      <p class="storage-intro">Keep one field's values together.</p>
+      <div class="storage-group">
+        <div class="storage-group-label">Pickup locations</div>
+        <div class="storage-strip">
+          <span class="storage-value"><small>Ride 1</small>JFK</span>
+          <span class="storage-value"><small>Ride 2</small>LGA</span>
+          <span class="storage-value"><small>Ride 3</small>JFK</span>
+        </div>
+      </div>
+      <div class="storage-group">
+        <div class="storage-group-label">Payment types</div>
+        <div class="storage-strip">
+          <span class="storage-value"><small>Ride 1</small>card</span>
+          <span class="storage-value"><small>Ride 2</small>card</span>
+          <span class="storage-value"><small>Ride 3</small>cash</span>
+        </div>
+      </div>
+      <div class="storage-group">
+        <div class="storage-group-label">Fares</div>
+        <div class="storage-strip storage-fare-strip">
+          <span class="storage-value storage-fare"><small>Ride 1</small>$36</span>
+          <span class="storage-value storage-fare"><small>Ride 2</small>$24</span>
+          <span class="storage-value storage-fare"><small>Ride 3</small>$30</span>
+        </div>
+      </div>
+      <p class="storage-takeaway">Read the fare group. Skip pickup and payment.</p>
+    </section>
+  </div>
+  <div class="storage-result">Same values, same answer: <strong>($36 + $24 + $30) ÷ 3 = $30</strong></div>
+  <figcaption id="storage-caption">Three made-up rides. The strips show which values are stored together; real engines read data in pages or chunks. The highlighted values are the fares the query needs.</figcaption>
+</figure>
+
 <p>That is today's starting point: <strong>read less data, then process it efficiently.</strong> We will use DuckDB and Parquet to explore this idea, connect it to cloud databases, and finish by training a small model with SQL.</p>
 
 <div class="cite">
