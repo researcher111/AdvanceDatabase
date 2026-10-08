@@ -1560,11 +1560,11 @@
       ]
     },
     "managed-model-sql": {
-      "idea": "BigQuery ML exposes training, evaluation, and prediction as SQL operations on a saved model.",
+      "idea": "BigQuery ML is Google’s cloud service for training and using machine-learning models through SQL.",
       "question": "Why does CREATE MODEL use NO_SPLIT while ML.EVALUATE still receives separate test rides?",
       "answer": "WHERE split = train already supplies only training rows. NO_SPLIT uses all those supplied rows for fitting. ML.EVALUATE receives the held-out test rows separately, while ML.PREDICT needs only a new distance.",
       "builds": [
-        "Identify this as optional BigQuery GoogleSQL, with demo.ml_rides already loaded in the project identified by YOUR_PROJECT. Read CREATE MODEL, input_label_cols = fare, and the training-only WHERE filter. NO_SPLIT uses the supplied training rows. The other options specify unregularized least squares. BigQuery saves a managed model object.",
+        "Define the name before reading the code: BigQuery is Google’s cloud database for analytics, and ML means machine learning. BigQuery ML lets us train and use supported models through SQL while Google manages the computing infrastructure. This optional GoogleSQL example has demo.ml_rides already loaded in the project identified by YOUR_PROJECT. Read CREATE MODEL, input_label_cols = fare, and the training-only WHERE filter. NO_SPLIT uses the supplied training rows. The other options specify unregularized least squares. BigQuery saves a managed model object.",
         "Read ML.EVALUATE with the saved model and a SELECT for split = test. Both distance and actual fare are present because evaluation compares predictions with known outcomes. mean_absolute_error has the same meaning as the DuckDB calculation. BigQuery also returns mean_squared_error; its square root corresponds to RMSE.",
         "Read ML.PREDICT with the same saved model and SELECT 7 AS ride_id, 3.5 AS distance. The result includes predicted_fare. Point to the reading for setup, permissions, billing, and fully qualified project names; the local DuckDB demo requires no cloud account."
       ]

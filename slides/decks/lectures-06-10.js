@@ -349,7 +349,7 @@ function analyticsScoreSQL(d,step) {
   d.text('ml-score-source',640,662,'Run the complete example: lectures/lecture-10/in_database_ml.py',21,P.muted);
 }
 function analyticsCloudML(d,step) {
-  d.text('ml-task',640,175,'The same workflow in a managed database: BigQuery ML',28,P.ink);
+  d.text('ml-task',640,175,'BigQuery ML is Google’s service for training models through SQL.',28,P.ink);
   d.text('ml-code-title',65,207,'GoogleSQL · '+['train','evaluate','predict'][step],24,P.blue,'start',650);
   analyticsSQL(d,analyticsMLSQL[['cloudTrain','cloudEvaluate','cloudPredict'][step]],step===0?[0,3,10]:step===1?[1,5]:[1,3],step===0?29:40);
   const copy=[
@@ -2195,6 +2195,7 @@ const plans = [
         "notes": "Show actual GoogleSQL for the same six toy rides. This optional cloud example requires replacing YOUR_PROJECT with a BigQuery project ID, a demo dataset, and demo.ml_rides loaded with the six rows and compatible BigQuery types. Use the setup and permissions instructions in the reading before running it; BigQuery may incur charges. CREATE MODEL with linear_reg learns a distance-to-fare line. input_label_cols identifies fare as the outcome, leaving distance as the feature. NO_SPLIT uses all rows supplied by the training SELECT; WHERE split = train keeps the two test rows out. NORMAL_EQUATION with l2_reg = 0 selects an unregularized least-squares fit. The next build passes explicit test rows to ML.EVALUATE and requests mean_absolute_error. The final build gives ML.PREDICT the saved model and a new distance. The projected code uses the same YOUR_PROJECT placeholder and demo dataset names as the reading. Unlike DuckDB's ordinary one-row coefficient table, BigQuery saves a managed model object. These statements use BigQuery syntax and do not run in DuckDB. The cloud statements are documented examples; projected output values are not presented as results from an executed cloud job.",
         "sources": [
           "lectures/lecture-10/analytics.html#managed-ml",
+          "https://docs.cloud.google.com/bigquery/docs/bqml-introduction",
           "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-create-glm",
           "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-evaluate",
           "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-predict"
