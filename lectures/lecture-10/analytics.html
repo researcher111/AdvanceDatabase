@@ -119,6 +119,12 @@
   <figcaption id="storage-caption">Three made-up rides. The strips show which values are stored together; real engines read data in pages or chunks. The highlighted values are the fares the query needs.</figcaption>
 </figure>
 
+<h3 id="row-slots" class="new-slide" data-kicker="Finding one ride">How do slots change?</h3>
+<p class="keep-in-present">In <a href="../../labs/lab-03/recordpages.html#big-idea">microdb's row pages</a>, each slot holds a complete record. If Ride 2 is in block 7, slot 1, the RID <code>(7, 1)</code> locates its pickup, payment, and fare together.</p>
+<p class="keep-in-present">In a simple column layout, each column keeps the same row order. To rebuild Ride 2, read <strong>position 1</strong> from each column: <strong>LGA</strong> from pickup, <strong>card</strong> from payment, and <strong>$24</strong> from fare. We count positions from zero.</p>
+<p><a href="../../slides/lecture-10.html#s=2&amp;b=1"><strong>Step through the slot comparison →</strong></a></p>
+<p>For Parquet, a batch of rows is a <strong>row group</strong>. Each column has its own <strong>chunk</strong> within that group, and each chunk contains encoded pages. A position identifies a row within the group; locating its value may require decoding. It is not necessarily a fixed byte offset.<sup class="src"><a href="#src-23" title="Apache Parquet Concepts">23</a></sup></p>
+
 <p>That is today's starting point: <strong>read less data, then process it efficiently.</strong> We will use DuckDB and Parquet to explore this idea, connect it to cloud databases, and finish by training a small model with SQL.</p>
 
 <div class="cite">
@@ -153,7 +159,7 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
 <!-- ============================================================ -->
 <h2 id="flip">One ride or many rides?</h2>
 
-<p>Updating one fare and calculating the average fare need different parts of the data. The names below describe these two kinds of work.</p>
+<p><strong>A workload is the mix of queries a database runs.</strong> Showing all of Ride 2 needs its pickup, payment, and fare. Calculating the average fare needs just the fare from every ride. Row storage keeps the first set together; column storage keeps the second set together. Both layouts can answer both questions.</p>
 
 <table>
   <thead><tr><th></th><th>Transactions · OLTP</th><th>Analytics · OLAP</th></tr></thead>
@@ -165,6 +171,8 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
     <tr><td>Examples</td><td>Postgres, MySQL; microdb models row storage.</td><td>DuckDB, Snowflake, BigQuery.</td></tr>
   </tbody>
 </table>
+
+<p><strong>The point:</strong> choose storage for the queries you run most. The database does not rotate its storage each time the query changes. <a href="../../slides/lecture-10.html#s=5&amp;b=1">Compare the two requests in the slides →</a></p>
 
 <h3 class="new-slide" data-kicker="Rows and columns">Many systems use both layouts</h3>
 
@@ -567,6 +575,7 @@ FROM ML.PREDICT(
   <li id="src-20"><a href="https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-predict">BigQuery ML.PREDICT</a></li>
   <li id="src-21"><a href="https://docs.cloud.google.com/bigquery/docs/linear-regression-tutorial">BigQuery ML linear regression tutorial</a> <span class="src-note">Cloud setup, permissions, and billable components.</span></li>
   <li id="src-22"><a href="https://cloud.google.com/bigquery/pricing#bqml">BigQuery ML pricing</a></li>
+  <li id="src-23"><a href="https://parquet.apache.org/docs/concepts/">Apache Parquet Concepts: row groups, column chunks, and pages</a></li>
 </ol>
 
 </main>

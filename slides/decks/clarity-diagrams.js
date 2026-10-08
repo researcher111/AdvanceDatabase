@@ -227,12 +227,6 @@
   });
   repair(9,'optimizer',d=>label(d,'statistics-legend',640,217,'N = row count · V = number of distinct values',P.muted,25));
   repair(9,'watch-the-access-path-flip',d=>label(d,'bar-units',640,623,'Estimated page accesses · logarithmic bar lengths',P.muted,25));
-  repair(10,'read-a-row-layout',d=>{
-    ['id','month','fare','flag'].forEach((name,i)=>label(d,'field-'+i,322.5+i*210,91,name,i===2?P.green:P.muted,24));
-  });
-  repair(10,'read-a-column-layout',d=>{
-    ['id','month','fare','flag'].forEach((name,i)=>label(d,'field-'+i,63,212+i*100,name,i===2?P.green:P.muted,24));
-  });
   repair(10,'a-table-over-files',(d,s)=>{
     label(d,'head-label',s<2?440:1110,200,'current',P.orange,24);
     if(s>0)d.path('shared-file-a','M 820 370 L 740 410 L 214 410 L 214 450','none',P.green,2);

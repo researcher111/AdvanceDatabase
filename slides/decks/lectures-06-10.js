@@ -17,8 +17,9 @@ function bars(d,k,labels,vals,step,x=180,y=210,w=780,max=null){const m=max||Math
 function clock(d,k,x,y,angle){d.circle(k,x,y,54,P.white,P.line,3);d.line(k+'hand',x,y,x+34*Math.cos(angle),y+34*Math.sin(angle),P.orange,5);}
 function title(d,words,visual){words.forEach((w,i)=>tx(d,'title'+i,640,120+i*60,w,52));visual();}
 function versions(d,step,y=295){const vv=[120,70,50];vv.forEach((v,i)=>{d.rect('v'+i,130+i*350,y,290,170,i===step?P.greenLight:P.white,i===step?P.green:P.line,14,3);tx(d,'balance'+i,275+i*350,y+62,v,44);tx(d,'xmin'+i,275+i*350,y+113,'xmin '+[100,103,107][i],24);tx(d,'xmax'+i,275+i*350,y+146,'xmax '+[103,107,'—'][i],24);if(i<2)line(d,'chain'+i,432+i*350,y+85,466+i*350,y+85);});d.circle('reader',275+step*350,y+230,25,P.blue);line(d,'read',275+step*350,y+200,275+step*350,y+180,P.blue);}
+const analyticsRides=[['JFK','card','$36'],['LGA','card','$24'],['JFK','cash','$30']];
 function analyticsStorageLayout(d,step) {
-  const rides=[['JFK','card','$36'],['LGA','card','$24'],['JFK','cash','$30']];
+  const rides=analyticsRides;
   const fields=['Pickup','Payment','Fare'];
   d.text('storage-query',65,174,'SELECT avg(fare) FROM rides;',29,P.ink,'start');
   d.text('storage-example',1215,174,'Three made-up rides',23,P.muted,'end');
@@ -48,6 +49,92 @@ function analyticsStorageLayout(d,step) {
     d.rect('storage-answer',65,623,1150,42,P.greenLight,'none',7);
     d.text('storage-average',640,644,'Same answer: ($36 + $24 + $30) ÷ 3 = $30',28,P.ink,'middle',650);
   }
+}
+function analyticsSlotLookup(d,step) {
+  const fields=['Pickup','Payment','Fare'];
+  d.text('lookup-task',640,174,'Find Ride 2: we count slots and positions from 0.',28,P.ink);
+  d.rect('row-page',45,207,520,337,P.white,P.line,12);
+  d.rect('column-group',615,207,620,337,P.white,P.line,12);
+  d.text('row-page-title',305,237,'Row page · block 7',29,P.ink,'middle',650);
+  d.text('column-group-title',925,237,'Column chunks · row group 0',29,P.ink,'middle',650);
+  d.text('slot-header',91,280,'Slot',23,P.muted);
+  fields.forEach((field,i)=>d.text('row-field-'+i,206.5+i*133,280,field,22,P.muted));
+  for(let pos=0;pos<3;pos++)d.text('position-'+pos,847.5+pos*145,280,'Position '+pos,22,step>=2&&pos===1?P.blue:P.muted,'middle',step>=2&&pos===1?700:500);
+  if(step>=2)d.line('position-guide',992.5,297,992.5,534,P.blue,3,'5 6');
+  analyticsRides.forEach((ride,r)=>{
+    const y=305+r*79,active=step>=1&&r===1;
+    d.text('slot-'+r,91,y+31,r,29,active?P.orange:P.muted,'middle',active?700:500);
+    ride.forEach((value,f)=>{
+      d.box('row-slot-'+r+'-field-'+f,140+f*133,y,133,62,value,active?P.orangeLight:P.bg,active?P.orange:P.line,28);
+    });
+  });
+  fields.forEach((field,f)=>{
+    const y=305+f*79;
+    d.text('chunk-label-'+f,690,y+31,field,23,P.muted);
+    analyticsRides.forEach((ride,r)=>{
+      const active=r===1&&step>=f+2;
+      d.box('chunk-'+f+'-position-'+r,780+r*145,y,135,62,ride[f],active?P.blueLight:P.bg,active?P.blue:P.line,28);
+    });
+  });
+  d.text('row-address',305,571,step>=1?'RID (7, 1): block 7, slot 1':'A slot holds a complete record.',25,step>=1?P.orange:P.muted);
+  d.text('column-address',925,571,step>=2?'Position 1 in each column chunk':'Positions align within this row group.',25,step>=2?P.blue:P.muted);
+  if(step>=2) {
+    d.rect('reconstructed-row',190,598,900,42,step===4?P.greenLight:P.blueLight,'none',7);
+    d.text('reconstructed-label',640,619,'Ride 2:  '+analyticsRides[1].map((v,i)=>step>=i+2?v:'?').join('   |   '),29,P.ink,'middle',650);
+  }
+  d.text('position-caveat',640,656,'Positions describe row order. Encoded values may need decoding to locate them.',22,P.muted);
+}
+// Reuse one tiny dataset so only the query and grouping change.
+function analyticsFareScan(d,step,column) {
+  const fields=['Pickup','Payment','Fare'];
+  d.text('fare-query',640,177,'SELECT avg(fare) FROM rides;',29,P.ink);
+  d.rect('scan-storage',45,212,735,332,P.white,P.line,12);
+  d.text('scan-heading',412.5,244,column?'Column storage: group by field':'Row storage: group by ride',29,P.ink,'middle',650);
+  for(let i=0;i<3;i++)d.text('scan-header-'+i,338.5+i*159,289,column?'Ride '+(i+1):fields[i],23,P.muted);
+  for(let group=0;group<3;group++) {
+    const y=312+group*74;
+    d.text('scan-group-'+group,145,y+31,column?fields[group]:'Ride '+(group+1),25,P.muted);
+    for(let slot=0;slot<3;slot++) {
+      const ride=column?slot:group,field=column?group:slot,needed=field===2;
+      const fill=step===0?P.bg:needed?P.greenLight:column?P.bg:P.orangeLight;
+      d.box('scan-ride-'+ride+'-field-'+field,259+slot*159,y,159,62,analyticsRides[ride][field],fill,step>0&&needed?P.green:P.line,28);
+    }
+  }
+  d.rect('scan-calculation',820,212,415,332,P.white,P.line,12);
+  d.text('calculation-heading',1027.5,244,'Compute the average',28,P.ink,'middle',650);
+  if(step===0) {
+    d.text('scan-predict-1',1027.5,340,'Which values',29,P.ink);
+    d.text('scan-predict-2',1027.5,382,'does the query need?',29,P.ink);
+  } else {
+    d.text('fare-inputs',1027.5,318,'$36 + $24 + $30',31,P.green);
+    d.text('fare-divisor',1027.5,366,'Divide by 3 rides',26,P.muted);
+    if(step===2)d.box('fare-average',886,418,283,73,'Average = $30',P.greenLight,P.green,31);
+    else d.text('scan-predict-result',1027.5,452,'Predict the result.',25,P.muted);
+  }
+  d.text('scan-legend',640,570,step===0?'Same three rides. Only the fare contributes to this query.':column?'Green: fares used. Gray: other column chunks skipped.':'Green: fares used. Orange: other fields stored beside them.',25,P.muted);
+  d.text('scan-takeaway',640,618,column?'Read the fare chunk; skip pickup and payment.':'Reading row data can bring along fields the query does not use.',28,P.ink,'middle',650);
+  d.text('scan-caveat',640,656,'This shows value grouping. Actual reads depend on pages, caches, and indexes.',21,P.muted);
+}
+function analyticsQueryChoice(d,step) {
+  d.text('workload-meaning',640,177,'A workload is the mix of queries a database runs.',28,P.muted);
+  for(const [name,x,column] of [['one',45,false],['many',655,true]]) {
+    const active=step===2||(column?step===1:step===0),color=column?P.green:P.orange;
+    d.rect(name+'-question',x,216,580,337,P.white,active?color:P.line,12,active?3:2);
+    d.text(name+'-heading',x+290,248,column?'Average fares for all rides':'Show all fields of Ride 2',29,P.ink,'middle',650);
+    d.text(name+'-needs',x+290,290,column?'Need one field from many rows.':'Need several fields from one row.',25,P.muted);
+    ['Pickup','Payment','Fare'].forEach((field,f)=>d.text(name+'-field-'+f,x+173+f*151,337,field,21,P.muted));
+    analyticsRides.forEach((ride,r)=>{
+      const y=361+r*55;
+      d.text(name+'-ride-label-'+r,x+53,y+23,'Ride '+(r+1),21,P.muted);
+      ride.forEach((value,f)=>{
+        const selected=active&&(column?f===2:r===1);
+        d.box(name+'-ride-'+r+'-field-'+f,x+100+f*151,y,146,46,value,selected?(column?P.greenLight:P.orangeLight):P.bg,selected?color:P.line,25);
+      });
+    });
+    d.text(name+'-fit',x+290,588,column?'Columns keep the needed fares together.':'Rows keep the needed fields together.',25,active?color:P.muted,'middle',650);
+  }
+  d.text('workload-takeaway',640,633,['One ride: row storage keeps its fields together.','Many fares: column storage can skip unrelated fields.','Choose the layout for the queries you run most.'][step],30,P.ink,'middle',650);
+  d.text('workload-caveat',640,667,'Both layouts can answer both queries. These are advantages, not a speed guarantee.',20,P.muted);
 }
 const draws={
 6:[
@@ -128,11 +215,11 @@ const draws={
 ],
 10:[
 analyticsStorageLayout,
-(d,s)=>{for(let r=0;r<7;r++)for(let c=0;c<12;c++){const x=s===2?170+r*140:125+c*86,y=s===2?165+c*36:185+r*60;d.rect('cell'+r+c,x,y,s===2?120:70,s===2?26:45,s===0?(r===3?P.orangeLight:P.white):(c===5?P.greenLight:P.white),P.line,4);}if(s===2)tx(d,'rotate',1060,625,'90°',38,P.green);},
+analyticsSlotLookup,
 (d,s)=>{dotgrid(d,'events',140,265,100,10,s?100:0,29,8);line(d,'agg',550,420,790,420);[3,6,4,8].forEach((n,i)=>d.rect('group'+i,840+i*85,550-n*30,60,s?n*30:5,P.green,'none',6));if(s===2)tx(d,'avg',990,625,'AVG',38);},
-(d,s)=>{const values=[[1,3,12.4,0],[2,3,8.1,1],[3,4,22,0],[4,4,9.7,0],[5,5,15.2,1],[6,5,31.9,0]];values.forEach((row,r)=>row.forEach((v,c)=>{chip(d,'c'+r+c,235+c*210,125+r*76,v,s===0?P.white:c===2?P.greenLight:P.orangeLight,175,60);}));if(s===2)tx(d,'used',640,635,'24 → 6',45);},
-(d,s)=>{const vals=[[1,2,3,4,5,6],[3,3,4,4,5,5],[12.4,8.1,22,9.7,15.2,31.9],[0,1,0,0,1,0]];vals.forEach((row,r)=>row.forEach((v,c)=>chip(d,'c'+r+c,125+c*177,175+r*100,v,r===2&&s?P.greenLight:P.white,150,74)));if(s===2)tx(d,'ratio',640,635,'6 → 6',45,P.green);},
-(d,s)=>{[0,1,2,3].forEach(r=>{for(let c=0;c<6;c++)chip(d,'c'+r+c,135+c*176,130+r*106,r===0?c+1:'•',c===3?P.orangeLight:P.white,145,78);});if(s>0){[0,1,2,3].forEach(r=>line(d,'collect'+r,845,169+r*106,1100,590,P.orange));}if(s===2)d.box('row',400,590,520,65,'4   4   9.7   0',P.greenLight,P.green,34);},
+(d,s)=>analyticsFareScan(d,s,false),
+(d,s)=>analyticsFareScan(d,s,true),
+analyticsQueryChoice,
 (d,s)=>{for(let i=0;i<12;i++)chip(d,'raw'+i,135+i*82,270,'A',P.blueLight,66,70);if(s>0){line(d,'compress',250,410,1030,410);d.box('packed',s===1?495:175,485,s===1?290:930,80,s===1?'A × 12':'A A A A A A A A A A A A',P.greenLight,P.green,32);}if(s===2)tx(d,'equal',640,625,'=',50,P.green);},
 (d,s)=>{for(let i=0;i<24;i++){const v=1+Math.floor(i/8);if(s===0||i%8===0)chip(d,'value'+i,s===0?125+(i%12)*87:270+Math.floor(i/8)*280,s===0?185+Math.floor(i/12)*95:335,v,s===0?P.white:[P.greenLight,P.blueLight,P.orangeLight][v-1],s===0?70:150,65);}if(s>0){['1 × 8','2 × 8','3 × 8'].forEach((v,i)=>d.box('run'+i,210+i*340,470,220,95,v,P.greenLight,P.green,36));}if(s===2)tx(d,'bytes',640,635,'96 B → 24 B',40);},
 (d,s)=>{if(s<2){const vals=['card','card','cash','card','cash','card'];vals.forEach((v,i)=>chip(d,'value'+i,150+i*166,230,s===0?v:v==='card'?0:1,P.blueLight,145,80));if(s===1){d.box('dict0',210,440,330,90,'card → 0',P.white,P.line,34);d.box('dict1',740,440,330,90,'cash → 1',P.white,P.line,34);}}else{[4000,4001,4002,4003,4004].forEach((v,i)=>chip(d,'value'+i,150+i*205,200,v,P.blueLight,175,80));d.box('start',165,440,275,100,'4000',P.greenLight,P.green,38);d.box('delta',650,440,440,100,'+1 × 4',P.greenLight,P.green,38);line(d,'deltaa',455,490,620,490);}},
@@ -1515,19 +1602,25 @@ const plans = [
         ]
       },
       {
-        "title": "The workload rotates",
+        "title": "Row slots and column positions",
         "minutes": 2,
         "kind": "visual",
-        "notes": "Ask students to describe the two access patterns without using OLTP or OLAP first. Expected: one complete record versus a small number of attributes across many records. The same dataset can support both, but the physical layout changes which bytes move. Avoid saying one layout is universally wrong; the choice follows workload and engine features.",
+        "clarityNative": true,
+        "notes": "Compare the fixed-size row slots from Lab 3 with a simplified columnar layout for the same three made-up rides. Ride 2 occupies slot 1 in the illustrated block 7; RID (7, 1) identifies the whole row. On the right, locate logical position 1 within each column chunk of row group 0. Gather LGA, card, and $24. Parquet row groups contain one chunk per column; each chunk contains encoded pages. Positions preserve row correspondence but do not promise constant byte offsets or equal page boundaries across columns. Status flags, null encoding, headers, and other metadata are omitted. Other column engines may use different addressing structures; this is a conceptual comparison, not a universal on-disk format.",
         "id": "the-workload-rotates",
-        "steps": 3,
+        "steps": 5,
         "states": [
-          "One complete row",
-          "One complete column",
-          "Rotate physical grouping"
+          "Slots versus positions",
+          "Find row slot 1",
+          "Read pickup at position 1",
+          "Read payment at position 1",
+          "Read fare and rebuild the ride"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html"
+          "lectures/lecture-10/analytics.html#row-slots",
+          "labs/lab-03/recordpages.html#big-idea",
+          "https://parquet.apache.org/docs/concepts/",
+          "https://parquet.apache.org/docs/file-format/"
         ]
       },
       {
@@ -1549,55 +1642,55 @@ const plans = [
         "term": "Analytical workload"
       },
       {
-        "title": "Read a row layout",
+        "title": "Average fares in row storage",
         "minutes": 3,
-        "kind": "activity",
-        "notes": "Ask how many of the 24 toy values contribute to avg(fare). Expected: six; the other eighteen move because they share the row-oriented storage. Explain that the widget is a cell-level illustration, not literal disk page boundaries. Real reads operate in pages or ranges, so the visual demonstrates projection waste rather than an exact measured I/O count. Reuse lecture-10/styles.css and viz.js. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "kind": "visual",
+        "notes": "Keep the same three made-up rides used in the opening and slot comparison. First ask which fields avg(fare) needs. Highlight the three fares in green and the neighboring pickup and payment fields in orange. Orange means stored alongside the fares, not an exact count of measured I/O. Reveal the average of $30 only after a prediction. With row storage, a scan can bring unrelated fields into memory because the fields share row pages. Pages, caching, indexes, and encodings affect real costs. Compare the next slide with the same query and same data.",
         "id": "read-a-row-layout",
         "steps": 3,
         "states": [
-          "Row-organized cells",
-          "Read and waste",
-          "Six useful of twenty-four"
+          "Predict which values matter",
+          "Identify fares and neighboring fields",
+          "Compute the average"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html"
+          "lectures/lecture-10/analytics.html#storage-layout"
         ],
-        "demo": "viz-layout"
+        "clarityNative": true
       },
       {
-        "title": "Read a column layout",
+        "title": "Average fares in column storage",
         "minutes": 3,
-        "kind": "activity",
-        "notes": "Let a student predict the new number of useful and total values read. Expected: six used, six read in this model. Same logical query and answer, different physical movement. If all columns were requested, projection savings would disappear. Ask why typed, adjacent values might also reduce CPU and storage work; this leads into encodings. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "kind": "visual",
+        "notes": "Keep the same three rides and avg(fare) query from the preceding slide. The data is now grouped by field. Highlight the fare chunk in green; pickup and payment stay gray because this query can skip those chunks. Reveal the same $30 result. The benefit is less unrelated data to read, not a different calculation or guaranteed speedup. These cell groups are conceptual, not literal disk page boundaries. Do not equate three values with three disk operations. If the query needs other fields for filtering or grouping, those columns must also be accessed.",
         "id": "read-a-column-layout",
         "steps": 3,
         "states": [
-          "Column-organized cells",
-          "Read only fare",
-          "Six useful of six"
+          "Keep the same query and rides",
+          "Read fares; skip other chunks",
+          "Get the same average"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html"
+          "lectures/lecture-10/analytics.html#storage-layout"
         ],
-        "demo": "viz-layout"
+        "clarityNative": true
       },
       {
-        "title": "The point lookup reverses it",
+        "title": "Different queries need different data",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Ask where row storage retains an advantage. Expected: reconstructing one full row can require accessing multiple column regions. Avoid claiming every real column store must read all values or perform exactly four disk operations; indexing, caches and encoding affect access. Layout tradeoffs are illustrated here, not universally benchmarked. Reinforce that an architecture can keep both operational and analytical copies. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Define workload as the mix of queries a database runs. Use two requests about the same rides: show all of Ride 2, and calculate the average fare for all rides. Highlight the three fields of Ride 2, then all three fares, then both patterns. The small tables show values the queries need, not physical page layouts. A row layout keeps one ride together; a column layout keeps fares from many rides together. Both layouts can answer both questions. Their benefit depends on the query mix and physical execution, not an automatic rotation of storage whenever a query changes. Some systems maintain separate operational and analytical copies.",
         "id": "the-point-lookup-reverses-it",
         "steps": 3,
         "states": [
-          "One ride across columns",
-          "Gather dispersed values",
-          "Reconstruct the row"
+          "One complete ride",
+          "Fares from many rides",
+          "Match storage to the query mix"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html"
+          "lectures/lecture-10/analytics.html#flip"
         ],
-        "demo": "viz-layout"
+        "clarityNative": true
       },
       {
         "title": "Compression",
@@ -1837,6 +1930,11 @@ const plans = [
 for (const deck of plans) {
  deck.scenes.forEach((scene, i) => { scene.draw = draws[deck.id][i]; });
  const lectureSixTeaching = deck.id === 6 ? new Map(deck.scenes.map(scene => [scene.id, scene.teaching])) : null;
+ if (deck.id === 10) {
+   const groupingIndex = deck.scenes.findIndex(scene => scene.id === 'analytical-workload');
+   const [grouping] = deck.scenes.splice(groupingIndex, 1);
+   deck.scenes.splice(5, 0, grouping);
+ }
  window.CourseTraceSlides.apply(deck);
  if (deck.id === 6) {
    for (const scene of deck.scenes) {

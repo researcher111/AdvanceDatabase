@@ -767,9 +767,11 @@ window.CourseClarityCaptions = {
       "Both layouts give $30. Column storage lets this query skip pickup and payment values."
     ],
     "the-workload-rotates": [
-      "Row layout groups the fields of each record.",
-      "Column layout groups one attribute across records.",
-      "The logical table stays the same while physical grouping changes."
+      "A row slot holds a record. Column chunks keep each field separately, in matching row order.",
+      "In the row page, slot 1 contains all of Ride 2: LGA, card, and $24.",
+      "In the pickup chunk, position 1 gives Ride 2’s pickup: LGA.",
+      "The same position in the payment chunk gives card.",
+      "Position 1 in the fare chunk gives $24. The three values rebuild Ride 2."
     ],
     "analytical-workload": [
       "Start with four trip rows and compute fare plus tip for each.",
@@ -779,19 +781,19 @@ window.CourseClarityCaptions = {
       "The final output keeps two monthly rows in explicit month order."
     ],
     "read-a-row-layout": [
-      "Four fields from each ride sit together in row order.",
-      "A fare-only aggregate can fetch neighboring fields it does not need.",
-      "The model reads 24 values to use six fares."
+      "We want the average fare. Pickup location and payment type do not affect the answer.",
+      "The three fares sit beside pickup and payment values in the stored rows.",
+      "The average is $30. Reading row data can bring along fields this query does not need."
     ],
     "read-a-column-layout": [
-      "Each field is stored with values from the other rides.",
-      "The aggregate selects only the fare region.",
-      "All six fetched values are useful fares in this model."
+      "Ask the same question about the same rides. This time, fares are stored together.",
+      "Read $36, $24, and $30 from the fare chunk. Skip pickup and payment chunks.",
+      "The average is still $30. The benefit is reading less unrelated data."
     ],
     "the-point-lookup-reverses-it": [
-      "The complete fourth ride is spread across four column regions.",
-      "Gather the value at row position 4 from each region.",
-      "Reconstruct the same logical row: 4, 4, 9.7, 0."
+      "To show Ride 2, we need its pickup, payment, and fare. A row layout keeps them together.",
+      "To average fares, we need one field from every ride. A column layout keeps them together.",
+      "The query changes which values we need. That is why different layouts suit different jobs."
     ],
     "compression": [
       "Repeated values contain redundant information.",

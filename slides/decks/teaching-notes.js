@@ -1348,43 +1348,45 @@
       ]
     },
     "the-workload-rotates": {
-      "idea": "Rows group a record's fields together; columns group one field across records.",
-      "question": "Which access pattern benefits from keeping one attribute together?",
-      "answer": "Reading a few attributes across many records, as in an aggregate.",
+      "idea": "In microdb, a slot holds a whole record. In a columnar row group, matching logical positions connect the fields of a row.",
+      "question": "How do we rebuild Ride 2 from the column chunks? Does position 1 mean byte offset 1?",
+      "answer": "Take logical position 1 from each chunk in the same row group: LGA, card, and $24. Position is a row ordinal, not a byte offset. Encoding, compression, and variable-length values affect how the engine locates it.",
       "builds": [
-        "Read one complete record.",
-        "Read one column across the dataset.",
-        "Rotate physical grouping and compare which bytes the workload needs."
+        "Use the same three rides as the opening slide. On the left, slots 0, 1, and 2 are in a toy row page. On the right, a row group holds the same rows as three separate column chunks. Define a row group as a batch of rows represented across the columns.",
+        "Highlight slot 1 in block 7. RID (7, 1) identifies Ride 2, whose fields are stored together. This is the fixed-slot model from Lab 3, with status flags and headers omitted.",
+        "Find position 1 in the pickup chunk. LGA enters the reconstructed row; payment and fare are still unknown. The dashed guide marks the shared logical position.",
+        "Stay at position 1 and read the payment chunk. Add card. Each chunk follows the same row order; sorting the columns independently would break that correspondence.",
+        "Read $24 from position 1 in the fare chunk. The rebuilt ride matches the left-hand slot. A chunk can contain several encoded pages, and page boundaries need not align across columns. Position 1 may require decoding; it is not necessarily a fixed-width physical slot."
       ]
     },
     "read-a-row-layout": {
-      "idea": "Row storage can move unrelated fields when an aggregate needs just one column.",
-      "question": "How many of these 24 toy values contribute to avg(fare)?",
-      "answer": "Six; eighteen other values move with them in this cell-level illustration.",
+      "idea": "An average-fare query needs three fares; row storage keeps them beside other ride fields.",
+      "question": "Which values contribute to the average? What else is stored beside them?",
+      "answer": "Only $36, $24, and $30 contribute. Pickup and payment values are stored beside the fares. The average is $30.",
       "builds": [
-        "Identify each row's neighboring fields.",
-        "Read the row-organized cells and mark the unrelated values.",
-        "Count six useful values out of twenty-four read."
+        "Use the same rides as the opening. Ask students to select the fields before advancing.",
+        "Follow the three green fare cells. Orange marks unrelated neighboring fields; it does not count measured disk reads.",
+        "Reveal $30. Row pages can bring along unrelated fields when a scan reaches the fares. Keep the query and data fixed for the next slide."
       ]
     },
     "read-a-column-layout": {
-      "idea": "Column storage can avoid reading unrelated attributes for a projected aggregate.",
-      "question": "How many values are read and used in this toy column scan?",
-      "answer": "Six read and six used. The projection saving would disappear if every column were requested.",
+      "idea": "Column storage puts the needed fares together, allowing this query to skip unrelated column chunks.",
+      "question": "Did we change the answer, the required fares, or the unrelated data accessed?",
+      "answer": "The answer is still $30 and the same three fares contribute. The layout lets the query avoid the pickup and payment chunks.",
       "builds": [
-        "Identify the contiguous fare column.",
-        "Read only its six values.",
-        "Compare useful values with total movement while keeping the query and answer fixed."
+        "Point out that only grouping has changed; all nine values are unchanged.",
+        "Read the three green fares. Pickup and payment chunks stay gray because neither is needed by this query.",
+        "Reveal the same $30 result. Emphasize less unrelated data, not an exact disk-read count or speed multiplier."
       ]
     },
     "the-point-lookup-reverses-it": {
-      "idea": "Reconstructing a complete record can require gathering several column regions.",
-      "question": "Where can row storage retain an advantage?",
-      "answer": "A lookup needing all fields of one record can benefit from storing those fields together.",
+      "idea": "Choose storage for the queries you run: row layouts group a record; column layouts group a field across records.",
+      "question": "Why does neither layout win for every query?",
+      "answer": "A complete-ride lookup benefits from fields stored together. A fare-only aggregate benefits from skipping other fields. Both layouts can answer both queries, and actual performance depends on execution.",
       "builds": [
-        "Locate one ride's fields across separate columns.",
-        "Gather the required values from their regions.",
-        "Reconstruct the row and qualify the illustrated access costs."
+        "Define workload as the mix of queries the database runs. Highlight only Ride 2: LGA, card, and $24. These are the fields the first request needs.",
+        "Highlight fares for every ride. The second request needs many rows but only one field. The tables depict needed values, not physical page layouts.",
+        "Show both highlighted patterns together. Nothing needs to rotate when a query runs. Storage design should fit the query mix; some systems keep both row and column copies."
       ]
     },
     "compression": {

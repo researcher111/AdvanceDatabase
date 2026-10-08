@@ -36,7 +36,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,231);assert.equal(builds,841);
+assert.equal(slides,231);assert.equal(builds,843);
 const draw=(lecture,id,step)=>V.sceneDrawing(decks[lecture].scenes.find(s=>s.id===id),step);
 const text=(items,key)=>{const a=items.find(i=>i.key===key);assert(a,'missing '+key);return a.text;};
 const strings=items=>items.filter(i=>i.tag==='text').map(i=>i.text).join('\n');
@@ -55,6 +55,49 @@ for(let step=0;step<5;step++) {
  assert.equal(items.some(a=>a.key==='storage-average'),step===4,'let the class predict before the answer');
 }
 assert.match(text(draw(10,opening.id,4),'storage-average'),/\$30$/);
+// Row 2 uses slot/position 1; gather that ordinal across columns without mixing rows.
+const slotScene=decks[10].scenes[1];
+assert.equal(slotScene.id,'the-workload-rotates');
+assert.equal(slotScene.title,'Row slots and column positions');
+for(let step=0;step<5;step++) {
+ const items=draw(10,slotScene.id,step);
+ taxiRides.forEach((ride,r)=>ride.forEach((value,f)=>{
+  const rowKey='row-slot-'+r+'-field-'+f,colKey='chunk-'+f+'-position-'+r;
+  assert.equal(text(items,rowKey+'-label'),value);
+  assert.equal(text(items,colKey+'-label'),value);
+  assert.equal(items.find(a=>a.key===rowKey).attrs.fill===V.palette.orangeLight,step>=1&&r===1);
+  assert.equal(items.find(a=>a.key===colKey).attrs.fill===V.palette.blueLight,r===1&&step>=f+2);
+ }));
+ if(step>=2)assert.equal(text(items,'reconstructed-label'),'Ride 2:  '+taxiRides[1].map((v,i)=>step>=i+2?v:'?').join('   |   '));
+ else assert(!items.some(a=>a.key==='reconstructed-label'));
+}
+// Storage examples hold data and the answer fixed; only grouping and needed fields differ.
+const storageOrder=['the-analytics-stack','the-workload-rotates','read-a-row-layout','read-a-column-layout','the-point-lookup-reverses-it','analytical-workload'];
+assert.deepEqual(Array.from(decks[10].scenes.slice(0,6),s=>s.id),storageOrder);
+for(const [id,column] of [['read-a-row-layout',false],['read-a-column-layout',true]]) {
+ for(let step=0;step<3;step++) {
+  const items=draw(10,id,step);
+  taxiRides.forEach((ride,r)=>ride.forEach((value,f)=>{
+   const key='scan-ride-'+r+'-field-'+f;
+   assert.equal(text(items,key+'-label'),value);
+   const fill=items.find(a=>a.key===key).attrs.fill;
+   assert.equal(fill===V.palette.greenLight,step>0&&f===2,'only fares contribute to the average');
+   assert.equal(fill===V.palette.orangeLight,step>0&&!column&&f!==2,'only row layout highlights unused neighbors');
+  }));
+  assert.equal(items.some(a=>a.key==='fare-average-label'),step===2,'predict before revealing the average');
+ }
+ assert.equal(text(draw(10,id,2),'fare-average-label'),'Average = $30');
+}
+for(let step=0;step<3;step++) {
+ const items=draw(10,'the-point-lookup-reverses-it',step);
+ for(const side of ['one','many'])taxiRides.forEach((ride,r)=>ride.forEach((value,f)=>{
+  const key=side+'-ride-'+r+'-field-'+f;
+  assert.equal(text(items,key+'-label'),value);
+  const fill=items.find(a=>a.key===key).attrs.fill;
+  assert.equal(fill===V.palette.orangeLight,side==='one'&&r===1&&step!==1,'complete-ride query needs one row');
+  assert.equal(fill===V.palette.greenLight,side==='many'&&f===2&&step!==0,'average query needs fares from every row');
+ }));
+}
 // Recovery must replay changes backward, preserving committed work, and flush last.
 let value=10;const finished=new Set(),restored=[];
 for(const rec of fixtures.undoLog.slice().reverse()){
