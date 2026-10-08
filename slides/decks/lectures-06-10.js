@@ -353,6 +353,7 @@ const analyticsPyTorchCode=[
     'reader = con.execute("""',
     '    SELECT distance, fare FROM features',
     '    WHERE month <= 10',
+    '    -- Mix rides before forming batches.',
     '    ORDER BY hash(ride_id)',
     '""").to_arrow_reader(batch_size=1024)'
   ],
@@ -397,13 +398,28 @@ function analyticsPyTorch(d,step) {
     'DuckDB SQL · predict fares for test rides',
     'DuckDB SQL · compare the two models'
   ][step],24,P.blue,'start',650);
-  analyticsSQL(d,analyticsPyTorchCode[step],[[1,2,4],[5,6,8,9],[1,2,4],[1,3],[1,2]][step],step===1?33:55);
-  if(step<3) {
-    const boxes=[
-      [['DuckDB','50,000 training rides'],['Arrow batches','Up to 1,024 rows per batch'],['PyTorch tensors','Distances x and fares y']],
-      [['Input','One distance'],['Hidden layer','16 units with ReLU'],['Output','One predicted fare']],
-      [['SQL function name','predict_fare_nn'],['Python function','predict_fare'],['Trained PyTorch model','Return predicted fares']]
-    ][step];
+  analyticsSQL(d,analyticsPyTorchCode[step],[[2,4,5],[1,2,5,6,8,9],[1,2,4],[1,3],[1,2]][step],step===1?33:55);
+  if(step===1) {
+    const input={x:862,y:417.5},output={x:1192,y:417.5};
+    const hidden=Array.from({length:16},(_,i)=>({x:1027,y:290+i*17}));
+    // Draw every weighted connection behind the nodes, matching Linear(1,16) and Linear(16,1).
+    hidden.forEach((node,i)=>{
+      d.line('torch-input-weight-'+i,input.x,input.y,node.x,node.y,P.blue,1.5);
+      d.line('torch-output-weight-'+i,node.x,node.y,output.x,output.y,P.green,1.5);
+    });
+    d.circle('torch-input-node',input.x,input.y,19,P.blueLight,P.blue,2);
+    hidden.forEach((node,i)=>d.circle('torch-hidden-node-'+i,node.x,node.y,7.5,P.blueLight,P.blue,2));
+    d.circle('torch-output-node',output.x,output.y,19,P.greenLight,P.green,2);
+    [['1 input','Distance',input.x,P.blue],['16 hidden','ReLU',1027,P.blue],['1 output','Fare',output.x,P.green]].forEach(([count,label,x,color],i)=>{
+      d.text('torch-layer-count-'+i,x,232,count,23,color,'middle',650);
+      d.text('torch-layer-label-'+i,x,259,label,22,P.ink);
+    });
+    d.text('torch-weight-meaning',1027,573,'Each line is a learned weight.',22,P.ink);
+    d.text('torch-network-detail',1027,597,'Scaling and biases are omitted here.',18,P.muted);
+  } else if(step<3) {
+    const boxes=step===0
+      ? [['DuckDB','50,000 training rides'],['Arrow batches','Up to 1,024 rows per batch'],['PyTorch tensors','Distances x and fares y']]
+      : [['SQL function name','predict_fare_nn'],['Python function','predict_fare'],['Trained PyTorch model','Return predicted fares']];
     boxes.forEach(([heading,detail],i)=>{
       const y=245+i*119;
       d.rect('torch-flow-'+i,825,y,405,85,i===1?P.blueLight:P.greenLight,i===1?P.blue:P.green,10);
@@ -411,11 +427,7 @@ function analyticsPyTorch(d,step) {
       d.text('torch-flow-detail-'+i,1027,y+61,detail,24,P.ink);
       if(i<2)d.arrow('torch-flow-arrow-'+i,1027,y+90,1027,y+113,P.green,3);
     });
-    d.text('torch-flow-note',1027,594,[
-      'Reserve Nov–Dec for testing.',
-      'Train for 30 passes through the rows.',
-      'This function reuses the learned weights.'
-    ][step],22,P.muted);
+    d.text('torch-flow-note',1027,594,step===0?'Reserve Nov–Dec for testing.':'This function reuses the learned weights.',22,P.muted);
   } else if(step===3) {
     d.text('torch-test-heading',1027,232,'Two of the 10,000 test rides',24,P.ink,'middle',650);
     d.table('torch-test',825,272,[115,135,155],[['miles','actual $','predicted $'],['2.00','20.50','15.17'],['0.94','10.00','9.50']],{rowHeight:69,fontSize:24});
@@ -433,7 +445,7 @@ function analyticsPyTorch(d,step) {
     d.text('torch-error-caveat',1027,594,'One run; a larger model may not win.',22,P.muted);
   }
   d.text('torch-takeaway',65,626,[
-    'SQL filters the rows before they cross into Python.',
+    'Hash order mixes training rides so batches do not follow date order.',
     'Create the model once. PyTorch then updates its weights for each batch.',
     'predict_fare converts distances to tensors and calls the trained network.',
     'SQL calls the Python function. PyTorch predicts without training again.',
@@ -2289,7 +2301,7 @@ const plans = [
           "Predict the reserved rides",
           "Compare prediction errors"
         ],
-        "notes": "Use the optional Lab 8 activity as a concrete local bridge between the small SQL regression and the managed BigQuery ML example. This example uses the real, cleaned 2024 taxi sample rather than the six made-up rides. Train on 50,000 January–October rides and reserve the 10,000 November–December rides for evaluation. DuckDB filters and projects rows, Arrow carries batches, and Python converts them to tensors. PyTorch trains a one-input, 16-hidden-unit, one-output ReLU network for 30 epochs. The source code also learns scaling from training rows only. Projected Python is an excerpt: imports, tensor conversion, scaling statistics, optimizer setup, and the surrounding loops are in the linked script. Create the network once, then update it on each training batch. The predict_fare callback runs the frozen model under inference_mode and returns an Arrow array. create_function registers it as predict_fare_nn on this connection. It is not a built-in DuckDB function. The test SELECT invokes PyTorch through that callback without retraining. Its first two sample predictions are rounded from the completed run: ride 50000, distance 2.00, actual fare 20.50, neural prediction 15.17; ride 50001, distance 0.94, actual fare 10.00, prediction 9.50. The script materializes predictions with both linear_fare and neural_fare before the final aggregate. In the documented run with seed 6042, DuckDB 1.5.6, and PyTorch 2.14.1, MAE is 3.53 dollars for the straight line and 3.26 for the neural network. Both use only distance and the same training/test split. These are measured results for one sample and configuration, not guaranteed accuracy or evidence that larger models always win. The next slide moves training management into Google Cloud.",
+        "notes": "Use the optional Lab 8 activity as a concrete local bridge between the small SQL regression and the managed BigQuery ML example. This example uses the real, cleaned 2024 taxi sample rather than the six made-up rides. Train on 50,000 January–October rides and reserve the 10,000 November–December rides for evaluation. DuckDB filters and projects rows, Arrow carries batches, and Python converts them to tensors. ORDER BY hash(ride_id) gives the training rides a repeatable mixed order so batches do not follow date order. This mixing is useful but optional. The same mixed order repeats each epoch, and the month filter still excludes the test rides. In the network diagram, the single distance node connects to all 16 hidden nodes through the first Linear layer, then all 16 hidden nodes connect to the fare output through the second Linear layer. Each line is a learned weight. ReLU acts at the hidden nodes. Biases and scaling are omitted from the diagram. PyTorch trains a one-input, 16-hidden-unit, one-output ReLU network for 30 epochs. The source code also learns scaling from training rows only. Projected Python is an excerpt: imports, tensor conversion, scaling statistics, optimizer setup, and the surrounding loops are in the linked script. Create the network once, then update it on each training batch. The predict_fare callback runs the frozen model under inference_mode and returns an Arrow array. create_function registers it as predict_fare_nn on this connection. It is not a built-in DuckDB function. The test SELECT invokes PyTorch through that callback without retraining. Its first two sample predictions are rounded from the completed run: ride 50000, distance 2.00, actual fare 20.50, neural prediction 15.17; ride 50001, distance 0.94, actual fare 10.00, prediction 9.50. The script materializes predictions with both linear_fare and neural_fare before the final aggregate. In the documented run with seed 6042, DuckDB 1.5.6, and PyTorch 2.14.1, MAE is 3.53 dollars for the straight line and 3.26 for the neural network. Both use only distance and the same training/test split. These are measured results for one sample and configuration, not guaranteed accuracy or evidence that larger models always win. The next slide moves training management into Google Cloud.",
         "sources": [
           "labs/lab-08/duckdb.html#pytorch",
           "labs/lab-08/starter/pytorch_fares.py",
