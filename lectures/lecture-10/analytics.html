@@ -379,6 +379,7 @@ December, average fare → read fares in December's partition</code></pre>
 <h3 class="new-slide" data-kicker="In-database ML · prepare">1. Keep training and test rows separate</h3>
 
 <p><code>distance</code> is the <strong>feature</strong>: the input to the model. <code>fare</code> is the <strong>label</strong>: the outcome we want to predict. The <code>split</code> column marks each row for training or testing.</p>
+<p>A <strong>test ride</strong> is a recorded taxi trip we reserve before training to check the model afterward. Four rides help the model learn its line. The other two rides check its predictions on data it did not learn from. Their recorded fares become the answers we compare the predictions with.</p>
 
 <pre><code class="language-sql">CREATE TABLE ml_rides (
     ride_id INTEGER, distance DOUBLE, fare DOUBLE, split VARCHAR
@@ -418,6 +419,9 @@ SELECT * FROM fare_model;
 
 <p class="keep-in-present">The regression functions take <code>(fare, distance)</code>: outcome first, input second. They find the line that minimizes squared errors on the training rows.<sup class="src"><a href="#src-17" title="DuckDB Aggregate Functions: regression aggregates">17</a></sup> The result is <strong>predicted fare = 3 + 2 × distance</strong>. SQL learned 3 and 2 from the four training rides and saved them in <code>fare_model</code>.</p>
 
+<p><strong>Why does <code>regr_intercept(fare, distance)</code> need both columns?</strong> It must learn how fare changes with distance to locate the fitted line's crossing at distance zero. Each training row supplies a pair: a known fare and its distance. The aggregate uses all four pairs and returns one number, the intercept. <code>regr_slope(fare, distance)</code> uses those same pairs and returns the slope of the same line.</p>
+<p>For this fit, <strong>intercept = average fare − slope × average distance</strong>. The training rides have average fare $8 and average distance 2.5 miles. With a learned slope of $2 per mile, the intercept is <strong>$8 − ($2 per mile × 2.5 miles) = $3</strong>. None of our training rides traveled zero miles; the model estimates that crossing. It does not establish the taxi's actual base fare.</p>
+
 <pre class="equation"><code>Training:  scan feature columns → filter split = 'train' → aggregate → model row
 Scoring:   scan new distances   → combine with model row → project predictions</code></pre>
 
@@ -446,7 +450,7 @@ FROM held_out_predictions;
 -- test_rows | mae | rmse
 --         2 | 1.0 |  1.0</code></pre>
 
-<p>The predictions are $8 and $12. The actual fares are $9 and $11, so both miss by $1. <strong>MAE</strong> (mean absolute error) is therefore $1. <strong>RMSE</strong> (root mean squared error) is also $1 here.</p>
+<p>For the 2.5-mile ride reserved for checking the model, the prediction is $8 and the recorded fare is $9: a $1 error. For the 4.5-mile ride, the prediction is $12 and the recorded fare is $11: another $1 error. <strong>MAE</strong> (mean absolute error) is therefore $1. <strong>RMSE</strong> (root mean squared error) is also $1 here.</p>
 <p><strong>Why use separate test rows?</strong> We want to check predictions on data the model did not learn from. Two made-up rows show how this works; a real evaluation needs representative test data and a baseline for comparison.</p>
 
 <h3 class="new-slide" data-kicker="In-database ML · infer">4. Predict the fare for a new ride</h3>
