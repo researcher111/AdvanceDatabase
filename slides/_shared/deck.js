@@ -22,7 +22,14 @@
   const elapsed=()=>state.elapsed+(state.running?(Date.now()-clockStart)/1000:0);
   const time=n=>Math.floor(n/60)+':'+pad(Math.floor(n%60));
   function sourceLink(src) {return /^https?:/.test(src)?src:'../'+src;}
-  function render(target,sc,step,animate=false){V.mount(target,V.sceneDrawing(sc,step),{animate,label:sc.title,description:sc.states?.[step]||`Build ${step+1} of ${sc.steps}`});}
+  function render(target,sc,step,animate=false,links=true){
+    const items=V.sceneDrawing(sc,step).map(item=>{
+      // Overview thumbnails select a slide; only the full slide follows its links.
+      if(links||item.tag!=='a')return item;
+      const {href,...attrs}=item.attrs;return {...item,tag:'text',attrs};
+    });
+    V.mount(target,items,{animate,label:sc.title,description:sc.states?.[step]||`Build ${step+1} of ${sc.steps}`});
+  }
   function button(text,label,fn){const b=el('button','',text);b.type='button';b.setAttribute('aria-label',label);b.title=label;b.addEventListener('click',fn);return b;}
   function announce(text){const s=$('status');if(!s)return;s.textContent=text;clearTimeout(toastTimer);toastTimer=setTimeout(()=>s.textContent='',2200);}
   function safePost(win,msg){try{if(win&&!win.closed)win.postMessage({scope:'course-visual-deck',id,...msg},origin);}catch(_) {}}
@@ -139,7 +146,7 @@
       const help=el('div','help');help.innerHTML='<p>One build at a time. Pause to let the class predict what moves next.</p><dl><dt>→ or Space</dt><dd>Next build, then next slide</dd><dt>←</dt><dd>Previous build</dd><dt>Page Down / Page Up</dt><dd>Next / previous slide</dd><dt>R</dt><dd>Reset this scene</dd><dt>A</dt><dd>Play / pause this animation</dd><dt>N</dt><dd>Open separate presenter view</dd><dt>F</dt><dd>Full screen</dd><dt>B</dt><dd>Blank / restore audience screen</dd><dt>D / H / E</dt><dd>Pen / highlighter / eraser</dd><dt>L</dt><dd>Laser pointer</dd><dt>U / C</dt><dd>Undo / clear this slide’s ink</dd><dt>O</dt><dd>Slide overview</dd><dt>?</dt><dd>These controls</dd></dl><p>Each deck contains 60 minutes of teaching. Start the lecture clock in presenter view. Notes, discussion prompts, answers, and sources appear there. Keep the audience window on the projector.</p><p>On a tablet, use landscape orientation. Swipe left or right while drawing is off, or tap the navigation controls. Pen mode keeps swipes from changing slides. After a stylus is detected, finger touches on the ink layer are ignored. Ink saves with each slide in this browser. Clear is undoable. Animation playback stops at the end of the current scene. Reduced-motion preferences are respected.</p>';
       wrap.append(help);
     }else{
-      const grid=el('div');grid.id='overview-list';deck.scenes.forEach((sc,i)=>{const b=button('','Go to slide '+(i+1)+': '+sc.title,()=>{command('jump',i);closeOverlay();});b.setAttribute('aria-current',i===state.slide);const s=svg();render(s,sc,sc.steps-1);const caption=el('div','caption');caption.append(el('span','',pad(i+1)),el('strong','',sc.title));b.append(s,caption);grid.append(b);});wrap.append(grid);
+      const grid=el('div');grid.id='overview-list';deck.scenes.forEach((sc,i)=>{const b=button('','Go to slide '+(i+1)+': '+sc.title,()=>{command('jump',i);closeOverlay();});b.setAttribute('aria-current',i===state.slide);const s=svg();render(s,sc,sc.steps-1,false,false);const caption=el('div','caption');caption.append(el('span','',pad(i+1)),el('strong','',sc.title));b.append(s,caption);grid.append(b);});wrap.append(grid);
     }
     document.body.append(wrap);header.querySelector('button').focus();
     wrap.addEventListener('keydown',e=>{if(e.key!=='Tab')return;const focusable=[...wrap.querySelectorAll('a,button,input,select')],first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}});

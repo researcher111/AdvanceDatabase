@@ -875,6 +875,9 @@ window.CourseClarityCaptions = {
       "DuckDB runs the query. It can read the fare chunk and skip pickup and payment.",
       "The result is still $30. Parquet stores the values; DuckDB calculates the average."
     ],
+    "more-models-with-duckdb": [
+      "DuckDB prepares the rows. A PyTorch model can learn from them and return predictions to SQL."
+    ],
     "managed-model-sql": [
       "CREATE MODEL fits a line using only training rides and saves it as a managed model.",
       "ML.EVALUATE applies the saved model to separate test rides and measures prediction error.",

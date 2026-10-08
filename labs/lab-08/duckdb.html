@@ -26,6 +26,7 @@
     <li><a href="#slow">Part 4 · Fix the slow query</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
+    <li><a href="#pytorch">Optional · DuckDB + PyTorch</a></li>
     <li><a href="#faq">FAQ</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>due Tue Oct 20, class start</div>
@@ -375,6 +376,73 @@ which changes, the fitted coefficients or the evaluation error? Explain why. Thi
 the data and which stayed put? Re-declare the money columns as
 <span class="gloss" data-gloss="decimal-type"><code>DECIMAL(10,2)</code></span> and re-run everything (what changed, what didn't, and why is exact decimal representation useful for currency?). Or partition by <code>payment</code> instead of month and explain (with numbers)
 how useful that partitioning is for these queries (consider the two folder sizes and which queries filter on payment). Use scan counts and timings to compare the designs.</p>
+
+<!-- ============================================================ -->
+<h2 id="pytorch">Can a neural network predict taxi fares? <span class="part-time">optional · ~25 min</span></h2>
+
+<p><strong>Our question:</strong> does a model that can learn a curve predict fares better than a straight line? Use the same real taxi sample and the same input, distance, for both models. Keep November and December rides out of training, then compare predictions with their recorded fares.</p>
+<p>DuckDB selects the data. <strong>PyTorch trains the neural network.</strong> Then a SQL function calls that trained network, and DuckDB groups its errors. Everything runs in one local Python process on your CPU. This activity is ungraded and needs no cloud account or database server.</p>
+
+<h3>1. Run the local example</h3>
+<p>In the Lab 8 <code>starter</code> folder, use Python 3.11 or later. Get <a href="starter/pytorch_fares.py" download><code>pytorch_fares.py</code></a> and <a href="starter/requirements-pytorch.txt" download><code>requirements-pytorch.txt</code></a> if they are missing from your copy. The extra packages are only for this optional activity.</p>
+<pre><code class="language-bash">python3 -m venv .venv-pytorch
+# macOS / Linux:
+source .venv-pytorch/bin/activate
+# Windows PowerShell: .venv-pytorch\Scripts\Activate.ps1
+
+python -m pip install -r requirements-pytorch.txt
+python gen_data.py
+python pytorch_fares.py</code></pre>
+<p>The script reads <code>data/rides.parquet</code> from the lab setup. It saves a chart, all test predictions, and the network weights in <code>data/pytorch-results/</code>. Open <code>fare-models.png</code> to see the results. Package installation may take longer than the small training run.</p>
+
+<h3>2. Follow a batch from SQL into the network</h3>
+<p>The script uses 50,000 January–October rides for training. This query selects only the two columns training needs. Arrow carries the query result in batches of up to 1,024 rows. A tensor is a numeric array: each input batch becomes one column of distances, and its targets become one column of fares.</p>
+<pre><code class="language-python">reader = con.execute("""
+    SELECT distance, fare FROM features
+    WHERE month &lt;= 10 ORDER BY hash(ride_id)
+""").to_arrow_reader(batch_size=1024)
+
+model = nn.Sequential(
+    nn.Linear(1, 16), nn.ReLU(), nn.Linear(16, 1)
+)</code></pre>
+<p>The network takes one distance, passes it through 16 hidden units, and returns one fare prediction. <code>ReLU</code> keeps positive intermediate values and replaces negative ones with zero, allowing the fitted curve to bend. PyTorch compares predictions with training fares and updates the weights. One <strong>epoch</strong> is one pass through all training rides; the example uses 30.</p>
+<p>Find <code>loss.backward()</code> and <code>optimizer.step()</code> in the script: these are the PyTorch operations that calculate gradients and update weights. DuckDB does the selection and ordering. Converting Arrow values to tensors allocates memory, so this handoff is not free. The script also learns the scaling of distances and fares from training rows only.</p>
+
+<h3>3. Call the trained network from SQL</h3>
+<p>The script registers <code>predict_fare_nn</code> as an Arrow Python function on its DuckDB connection. DuckDB passes a batch of distances to that function, and PyTorch returns a batch of predicted fares. No weights change during prediction.</p>
+<pre><code class="language-sql">SELECT ride_id, distance, fare,
+       predict_fare_nn(distance) AS predicted_fare
+FROM features
+WHERE month &gt;= 11;</code></pre>
+<p>These 10,000 later rides are our <strong>test rides</strong>: records reserved for checking the model. Their fares were excluded from training and scaling. The function exists in the script's Python connection; it is not a built-in DuckDB function or a function automatically available in a separate SQL terminal. To try more queries, edit the script after <code>register_predictor</code>.</p>
+<p>The script also fits the lecture's straight-line baseline with <code>regr_intercept(fare, distance)</code> and <code>regr_slope(fare, distance)</code> on the same training rows. Both models get the same single feature and the same test rides.</p>
+
+<h3>4. Discover where the models struggle</h3>
+<p>Start with mean absolute error (MAE): how many dollars does a prediction miss by, on average? Then group the errors by trip distance. Does the overall score hide a group with much larger errors?</p>
+<pre><code class="language-sql">SELECT CASE WHEN distance &lt; 2 THEN '1. Under 2 miles'
+            WHEN distance &lt; 5 THEN '2. 2 to under 5'
+            WHEN distance &lt; 10 THEN '3. 5 to under 10'
+            ELSE '4. 10 miles or more' END AS distance_group,
+       count(*) AS test_rides,
+       avg(abs(fare - linear_fare)) AS linear_mae,
+       avg(abs(fare - neural_fare)) AS neural_mae
+FROM predictions
+GROUP BY distance_group ORDER BY distance_group;</code></pre>
+<details>
+  <summary>See one completed run and its charts</summary>
+  <p>On the bundled sample, with seed 6042 and 30 epochs, our run gave a $3.53 MAE for the straight line and $3.26 for the neural network. For rides of 10 miles or more, those errors were $8.74 and $7.67. For rides from 5 to under 10 miles, both rounded to $4.75. More complexity did not improve every group equally.</p>
+  <figure>
+    <a href="pytorch-fares-example.png"><img src="pytorch-fares-example.png" alt="Three charts: training error falls over 30 epochs; predicted versus recorded test fares show misses; long trips have larger average errors for both models." style="width:100%;height:auto" loading="lazy"></a>
+    <figcaption>Example run with DuckDB 1.5.6 and PyTorch 2.14.1. The scatter shows 600 test rides; all 10,000 test rides contribute to the error metrics. The training curve measures batches while weights are changing. Values can vary with software versions.</figcaption>
+  </figure>
+</details>
+<ul>
+  <li><strong>Read the plots:</strong> on the scatter plot, points above the diagonal are overpredictions; points below it are underpredictions. Does lower training error guarantee better predictions on later rides?</li>
+  <li><strong>Investigate a miss:</strong> query the largest errors, then join <code>predictions.ride_id</code> back to <code>rides.ride_id</code> to inspect pickup zones. Could airport trips help explain some errors? A pattern suggests a follow-up question, not a proven cause.</li>
+  <li><strong>Trace the system:</strong> which work happens in DuckDB, which happens in PyTorch, and where do batches cross between them?</li>
+</ul>
+<p>If you change the model after looking at test errors, those rides become development feedback. Reserve a separate final test period before making a new accuracy claim. The dataset contains 5,000 sampled rides per month, so these scores describe this cleaned sample, not every NYC trip.</p>
+<p>Read more: <a href="https://duckdb.org/2023/07/07/python-udf#predicting-taxi-fare-costs-ibis--pyarrow-udf">DuckDB's PyTorch taxi example</a> demonstrates the function connection using a pretrained linear model. Our exercise uses that idea with a small neural network. See also <a href="https://docs.pytorch.org/tutorials/beginner/basics/optimization_tutorial.html">PyTorch's training-loop tutorial</a>, the <a href="https://duckdb.org/community_extensions/extensions/ml">community ML extension</a>, and <a href="https://arxiv.org/abs/2312.17355">The Duck's Brain</a>, a research paper about expressing neural-network training in SQL.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>

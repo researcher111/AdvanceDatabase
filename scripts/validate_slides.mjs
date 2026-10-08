@@ -12,8 +12,8 @@ let scenes=0,builds=0,animated=0;const warnings=[];
 for(const id of lectureIds){
   const deck=decks[id];assert(deck,`Lecture ${id} exists`);assert.equal(deck.id,id);
   assert.equal(deck.scenes.reduce((n,s)=>n+s.minutes,0),60,`Lecture ${id}: 60 teaching minutes`);
-  // Lecture 10 adds a separate managed-ML SQL example while retaining 60 minutes.
-  const maxScenes=id===10?21:20;
+  // Lecture 10 includes managed-ML SQL and a final resources slide within 60 minutes.
+  const maxScenes=id===10?22:20;
   assert(deck.scenes.length>=14&&deck.scenes.length<=maxScenes,`Lecture ${id}: 14–${maxScenes} scenes`);
   assert(fs.existsSync(deck.source),`Lecture ${id}: source exists`);
   const ids=new Set();
@@ -37,7 +37,7 @@ for(const id of lectureIds){
       const items=V.sceneDrawing(sc,step);assert(items.length>0,name+' not empty');const keys=new Set();
       for(const item of items){assert(!keys.has(item.key),name+' duplicate key');keys.add(item.key);
         for(const [attr,value]of Object.entries(item.attrs))if(typeof value==='number')assert(Number.isFinite(value),name+' finite '+attr);
-        if(item.tag==='text'){
+        if(item.tag==='text'||item.tag==='a'){
           assert(item.attrs['font-size']>=16,name+' label too small: '+item.text);
           const a={...item.attrs};
           const transform=/translate\(([-.\d]+) ([-.\d]+)\) scale\(([-.\d]+)\)/.exec(a.transform||'');

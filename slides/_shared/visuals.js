@@ -10,6 +10,7 @@
     }
     rect(k,x,y,w,h,fill=palette.white,stroke=palette.line,r=8,sw=2) { return this.add(k,'rect',{x,y,width:w,height:h,rx:r,fill,stroke,'stroke-width':sw}); }
     text(k,x,y,text,size=28,fill=palette.ink,anchor='middle',weight=500) { return this.add(k,'text',{x,y,fill,'font-size':size,'text-anchor':anchor,'font-weight':weight,'dominant-baseline':'middle'},String(text)); }
+    link(k,x,y,text,href,size=30) { return this.add(k,'a',{x,y,href,'font-size':size,fill:palette.green,'text-anchor':'start','font-weight':650,'dominant-baseline':'middle'},String(text)); }
     circle(k,cx,cy,r,fill=palette.green,stroke='none',sw=2) { return this.add(k,'circle',{cx,cy,r,fill,stroke,'stroke-width':sw}); }
     line(k,x1,y1,x2,y2,stroke=palette.line,width=3,dash='') { return this.add(k,'line',{x1,y1,x2,y2,stroke,'stroke-width':width,'stroke-dasharray':dash,'stroke-linecap':'round'}); }
     arrow(k,x1,y1,x2,y2,stroke=palette.green,width=3) {
@@ -46,11 +47,17 @@
         if(animate&&!fresh&&typeof v==='number'&&prev!==null&&Number.isFinite(Number(prev))&&Number(prev)!==v)tracks.push({el,a,from:Number(prev),to:v});
         else el.setAttribute(a,v);
       }
-      if(item.text!==undefined)el.textContent=item.text;
+      if(item.tag==='a') {
+        let label=el.querySelector('text');
+        if(!label){label=document.createElementNS(NS,'text');el.append(label);}
+        for(const attr of ['x','y','font-size','font-weight','text-anchor','dominant-baseline','fill'])label.setAttribute(attr,item.attrs[attr]);
+        label.setAttribute('style','pointer-events:auto;cursor:pointer;text-decoration:underline');
+        label.textContent=item.text;
+      } else if(item.text!==undefined)el.textContent=item.text;
       if(animate&&fresh){el.style.opacity='0';tracks.push({el,a:'opacity',from:0,to:1,style:true});}
       else el.style.opacity='1';
     }
-    svg.setAttribute('aria-label',label);svg.setAttribute('role','img');
+    svg.setAttribute('aria-label',label);svg.setAttribute('role',items.some(item=>item.tag==='a')?'group':'img');
     let desc=svg.querySelector('desc');if(!desc){desc=document.createElementNS(NS,'desc');svg.prepend(desc);}desc.textContent=description;
     if(tracks.length){const start=performance.now();function frame(t){const p=Math.min(1,(t-start)/520),ease=1-Math.pow(1-p,3);for(const a of tracks){const v=a.from+(a.to-a.from)*ease;if(a.style)a.el.style[a.a]=v;else a.el.setAttribute(a.a,v);}if(p<1)runs.set(svg,requestAnimationFrame(frame));else runs.delete(svg);}runs.set(svg,requestAnimationFrame(frame));}
   }

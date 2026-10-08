@@ -152,6 +152,7 @@ window.CourseClarityLayout = {
   "10/evaluate-and-apply-the-model": [45,155,1235,677],
   "10/managed-model-sql": [45,155,1235,677],
   "10/performance-becomes-cost": [167,121,1145,627],
+  "10/more-models-with-duckdb": [65,180,1215,660],
   "10/choose-the-shape": [137,167,1148,647],
   "11/meaning-becomes-geometry": [185,248,1107,563],
   "11/embedding": [127,272,1083,652],

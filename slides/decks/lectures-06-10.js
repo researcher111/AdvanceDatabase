@@ -361,6 +361,20 @@ function analyticsCloudML(d,step) {
   d.text('ml-cloud-setup',640,623,'Replace YOUR_PROJECT with your project ID. Load demo.ml_rides first.',25,P.ink);
   d.text('ml-cloud-context',640,662,'Optional cloud example. Setup and billing details are in the reading. Local demo uses DuckDB.',21,P.muted);
 }
+function analyticsMLResources(d) {
+  const links=[
+    ['DuckDB + PyTorch: predictions in SQL', 'Official example: a SQL function calls a trained PyTorch model.', 'https://duckdb.org/2023/07/07/python-udf#predicting-taxi-fare-costs-ibis--pyarrow-udf'],
+    ['DuckDB ML extension', 'Community project: train models through SQL, including a small neural network.', 'https://duckdb.org/community_extensions/extensions/ml'],
+    ["The Duck’s Brain", 'Research paper: neural-network training and prediction expressed in SQL.', 'https://arxiv.org/abs/2312.17355'],
+    ['Try it in Lab 8: can a neural network predict fares?', 'Optional local activity with the taxi data, a straight-line baseline, and plots.', '../labs/lab-08/duckdb.html#pytorch']
+  ];
+  links.forEach(([label,description,href],i)=>{
+    const y=205+i*115;
+    d.link('ml-resource-'+i,85,y,label,href,30);
+    d.text('ml-resource-description-'+i,85,y+43,description,24,P.muted,'start');
+  });
+  d.text('ml-resource-hint',640,641,'Select an underlined title to open it. Lab 8 runs on a CPU with no cloud account.',23,P.ink);
+}
 function analyticsBatchPipeline(d,step) {
   const xs=[65,480,895],w=320;
   d.text('pipeline-query',65,176,'SELECT fare FROM rides WHERE fare > 25;',27,P.ink,'start');
@@ -498,7 +512,8 @@ analyticsTrainSQL,
 analyticsScoreSQL,
 analyticsCloudML,
 (d,s)=>{const ww=[760,230,60];tx(d,'scan-label',220,150,'bytes',35);d.rect('scan',170,210,ww[s],110,P.greenLight,P.green,10);for(let i=0;i<Math.max(1,6-s*2);i++)d.circle('coin'+i,1050,520-i*45,39,P.orangeLight,P.orange,3);clock(d,'compute',315,505,s*1.3);tx(d,'clocklabel',315,610,'compute time',30);tx(d,'coinlabel',1045,610,'scanned bytes',30);},
-(d,s)=>{for(let r=0;r<6;r++)for(let c=0;c<12;c++){const active=s===0?r===2:s===1?c===5:c===5&&r===5;d.rect('cell'+r+c,140+c*85,170+r*67,70,50,active?P.greenLight:P.white,active?P.green:P.line,5);}tx(d,'q',640,625,['ride #4','AVG(fare)','month = 12'][s],40);}
+(d,s)=>{for(let r=0;r<6;r++)for(let c=0;c<12;c++){const active=s===0?r===2:s===1?c===5:c===5&&r===5;d.rect('cell'+r+c,140+c*85,170+r*67,70,50,active?P.greenLight:P.white,active?P.green:P.line,5);}tx(d,'q',640,625,['ride #4','AVG(fare)','month = 12'][s],40);},
+analyticsMLResources
 ]
 };
 
@@ -2203,7 +2218,7 @@ const plans = [
       },
       {
         "title": "Choose the shape",
-        "minutes": 2,
+        "minutes": 1,
         "kind": "recap",
         "notes": "Have students choose the access shape and narrate the savings: fewer unrelated columns, encodings, batches and skipping. Lab 8 uses eight SQL queries and a fixed sample of real 2024 NYC taxi trips; project proposals are due Thursday October 29. Direct setup details to notes or the lab link. Next lecture asks what happens when the column stores an embedding and the query asks for similarity. Quizzes follow the revised schedule; this material also supports optional review. Add one final retrieval question: which stage learns coefficients and which reuses them? Expected: training aggregates learn them; inference applies the saved model without fitting again.",
         "id": "choose-the-shape",
@@ -2215,6 +2230,24 @@ const plans = [
         ],
         "sources": [
           "lectures/lecture-10/analytics.html"
+        ]
+      },
+      {
+        "title": "More models with DuckDB",
+        "minutes": 1,
+        "kind": "visual",
+        "clarityNative": true,
+        "id": "more-models-with-duckdb",
+        "steps": 1,
+        "states": [
+          "Links and optional Lab 8 activity"
+        ],
+        "notes": "End with clickable resources for students who want to go further. Start with the official DuckDB article: its PyTorch taxi example uses a pretrained linear model through a Python function. Our optional Lab 8 activity builds on that integration with a small neural network. DuckDB selects training batches and later calls the trained model; PyTorch learns and applies the network weights in the same local Python process. The ML extension is a separate community project that exposes model training through SQL. The Duck’s Brain is a research paper about expressing neural-network calculations in SQL, with historical benchmarks using DuckDB 0.8.1. These are three different execution arrangements. The lab uses the existing taxi sample, no cloud service, and adds no graded deliverable. Ask which component updates the neural-network weights in the lab.",
+        "sources": [
+          "https://duckdb.org/2023/07/07/python-udf#predicting-taxi-fare-costs-ibis--pyarrow-udf",
+          "https://duckdb.org/community_extensions/extensions/ml",
+          "https://arxiv.org/abs/2312.17355",
+          "labs/lab-08/duckdb.html#pytorch"
         ]
       }
     ]

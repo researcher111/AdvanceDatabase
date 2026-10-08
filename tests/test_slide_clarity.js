@@ -36,7 +36,15 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,232);assert.equal(builds,854);
+assert.equal(slides,233);assert.equal(builds,855);
+const resources=decks[10].scenes.at(-1);
+assert.equal(resources.id,'more-models-with-duckdb');
+const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');
+assert.equal(resourceLinks.length,4,'final slide exposes three resources and the optional lab');
+assert(resourceLinks.some(item=>item.attrs.href==='../labs/lab-08/duckdb.html#pytorch'));
+assert(resourceLinks.some(item=>item.attrs.href==='https://duckdb.org/community_extensions/extensions/ml'));
+assert(resourceLinks.some(item=>item.attrs.href.includes('python-udf')));
+assert(resourceLinks.some(item=>item.attrs.href==='https://arxiv.org/abs/2312.17355'));
 const draw=(lecture,id,step)=>V.sceneDrawing(decks[lecture].scenes.find(s=>s.id===id),step);
 const text=(items,key)=>{const a=items.find(i=>i.key===key);assert(a,'missing '+key);return a.text;};
 const strings=items=>items.filter(i=>i.tag==='text').map(i=>i.text).join('\n');
