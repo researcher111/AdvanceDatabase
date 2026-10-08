@@ -7,7 +7,6 @@
     7: {'two-writes-reverse-undo':'undo'},
     8: {'statement-or-transaction-snapshot':'snapshots'},
     9: {'price-the-work':'optimizer', 'review-sql-and-indexes':'sql-plan'},
-    10: {'analytical-workload':'analytics'},
     11: {'probe-the-lists':'ivf'},
     12: {'keep-the-source-identity':'rag'},
     13: {'reduce-sees-the-complete-group':'shuffle'},

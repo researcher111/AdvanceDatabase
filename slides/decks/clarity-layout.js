@@ -134,7 +134,6 @@ window.CourseClarityLayout = {
   "9/exit-mechanism": [117,142,1233,573],
   "10/the-analytics-stack": [45,156,1235,665],
   "10/the-workload-rotates": [45,155,1235,670],
-  "10/analytical-workload": [65,166,1215,668],
   "10/read-a-row-layout": [45,155,1235,677],
   "10/read-a-column-layout": [45,155,1235,677],
   "10/the-point-lookup-reverses-it": [45,155,1235,677],

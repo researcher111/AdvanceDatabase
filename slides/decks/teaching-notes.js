@@ -1394,7 +1394,7 @@
       "question": "How can decoding still make a scan faster overall?",
       "answer": "The reduction in bytes fetched can outweigh the decoding work.",
       "builds": [
-        "Identify repeated information in the values.",
+        "Connect to column storage: values of the same field often have patterns. Identify the repeated values in this example.",
         "Replace it with a compact encoding.",
         "Reconstruct the original values and compare bytes saved with decode cost."
       ]

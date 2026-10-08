@@ -123,5 +123,5 @@ for (const deck of Object.values(context.window.COURSE_DECKS)) {
     }
   }
 }
-assert.equal(scenes,13);
+assert.equal(scenes,12);
 console.log(`${pageCount} pages, ${scenes} shared slide scenes, ${builds} builds: teaching examples and arithmetic pass.`);

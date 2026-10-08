@@ -36,7 +36,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,231);assert.equal(builds,845);
+assert.equal(slides,230);assert.equal(builds,838);
 const draw=(lecture,id,step)=>V.sceneDrawing(decks[lecture].scenes.find(s=>s.id===id),step);
 const text=(items,key)=>{const a=items.find(i=>i.key===key);assert(a,'missing '+key);return a.text;};
 const strings=items=>items.filter(i=>i.tag==='text').map(i=>i.text).join('\n');
@@ -72,7 +72,7 @@ for(let step=0;step<5;step++) {
  else assert(!items.some(a=>a.key==='reconstructed-label'));
 }
 // Storage examples hold data and the answer fixed; only grouping and needed fields differ.
-const storageOrder=['the-analytics-stack','the-workload-rotates','read-a-row-layout','read-a-column-layout','the-point-lookup-reverses-it','analytical-workload'];
+const storageOrder=['the-analytics-stack','the-workload-rotates','read-a-row-layout','read-a-column-layout','the-point-lookup-reverses-it','compression'];
 assert.deepEqual(Array.from(decks[10].scenes.slice(0,6),s=>s.id),storageOrder);
 for(const [id,column] of [['read-a-row-layout',false],['read-a-column-layout',true]]) {
  for(let step=0;step<3;step++) {
@@ -114,50 +114,8 @@ assert.equal(text(draw(2,'lecture-02-scene-03',2),'frame-0-detail'),'contains bl
 assert.equal(text(draw(3,'lecture-03-scene-07',3),'flag'),'1');
 const product=[];for(let i=1;i<=4;i++)product.push(text(draw(4,'lecture-04-scene-09',i),'pair-label'));
 assert.deepEqual(product,['(ada, ds)','(ada, stat)','(ada, econ)','(ben, ds)']);
-const runningScene=decks[10].scenes.find(s=>s.id==='analytical-workload');
-assert.equal(runningScene.steps,7);
-assert.match(runningScene.teaching.question,/which trip.*above \$40/);
-const tripRevenue=Array.from(fixtures.rides,r=>r[1]+r[2]);
-for(let i=0;i<4;i++)assert.equal(text(draw(10,'analytical-workload',1),'trips-'+(i+1)+'-2-text'),'$'+tripRevenue[i]);
-const january=draw(10,'analytical-workload',2),february=draw(10,'analytical-workload',3);
-assert.match(text(january,'window-definition'),/rows included.*running-total/);
-assert.match(text(january,'frame-definition'),/first month through the current month/);
-assert.equal(text(january,'monthly-0-2-value'),'$20');
-assert.equal(text(january,'monthly-1-2-value'),'—','February has no running total before its calculation');
-assert.equal(text(february,'monthly-0-2-value'),'$20','January result survives when the frame expands');
-assert.equal(text(february,'monthly-1-2-value'),'$50');
-// The orange outline encloses monthly inputs through the current row, excluding output values.
-for(const [items,rows] of [[january,1],[february,2]]) {
- const frame=items.find(a=>a.key==='window').attrs;
- for(let i=0;i<2;i++) {
-  const value=items.find(a=>a.key==='monthly-'+i+'-1-value').attrs;
-  assert.equal(value.y>frame.y&&value.y<frame.y+frame.height,i<rows);
- }
- assert(items.find(a=>a.key==='monthly-0-2-value').attrs.x>frame.x+frame.width);
-}
-const comparison=draw(10,'analytical-workload',5);
-let runningTrip=0;
-tripRevenue.forEach((v,i)=>assert.equal(text(comparison,'trip-output-'+(i+1)+'-2-text'),'$'+(runningTrip+=v)));
-let runningMonth=0;
-fixtures.monthly.forEach((r,i)=>assert.equal(text(comparison,'month-output-'+(i+1)+'-2-text'),'$'+(runningMonth+=r[1])));
-assert.equal(runningTrip,runningMonth);
-assert.match(text(comparison,'trip-output-count'),/4 output rows/);
-assert.match(text(comparison,'month-output-count'),/2 output rows/);
-// Let the class discover the crossing before highlighting it in each result.
-const discovery=draw(10,'analytical-workload',6);
-const firstTrip=tripRevenue.findIndex((_,i)=>tripRevenue.slice(0,i+1).reduce((sum,v)=>sum+v,0)>40)+1;
-const firstMonth=fixtures.monthly.findIndex((_,i)=>fixtures.monthly.slice(0,i+1).reduce((sum,r)=>sum+r[1],0)>40)+1;
-for(const [name,count,first] of [['trip-output',4,firstTrip],['month-output',2,firstMonth]]) {
- for(let row=1;row<=count;row++)for(let col=0;col<3;col++) {
-  const key=name+'-'+row+'-'+col;
-  assert.notEqual(comparison.find(a=>a.key===key).attrs.fill,V.palette.orangeLight,'ask before revealing');
-  assert.equal(discovery.find(a=>a.key===key).attrs.fill===V.palette.orangeLight,row===first,'highlight the first crossing, not every later total');
- }
-}
-assert.match(text(discovery,'threshold-trip'),/Trip 3: \$44 > \$40/);
-assert.match(text(discovery,'threshold-month'),/February: \$50 > \$40/);
-assert.match(runningScene.teaching.answer,/monthly totals.*February.*cannot identify the trip/);
-
+assert(!decks[10].scenes.some(s=>s.id==='analytical-workload'),'monthly running-total scene is removed');
+assert.equal(decks[10].scenes[5].title,'Lossless compression');
 assert.match(strings(draw(9,'price-the-work',2)),new RegExp('= '+models.cost(100).index+' page accesses'));
 assert.match(strings(draw(9,'price-the-work',3)),/= 2,003 page accesses/);
 assert.match(strings(draw(9,'price-the-work',4)),/Equal cost at 0.997%/);

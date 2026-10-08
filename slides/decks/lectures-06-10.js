@@ -216,7 +216,6 @@ const draws={
 10:[
 analyticsStorageLayout,
 analyticsSlotLookup,
-(d,s)=>{dotgrid(d,'events',140,265,100,10,s?100:0,29,8);line(d,'agg',550,420,790,420);[3,6,4,8].forEach((n,i)=>d.rect('group'+i,840+i*85,550-n*30,60,s?n*30:5,P.green,'none',6));if(s===2)tx(d,'avg',990,625,'AVG',38);},
 (d,s)=>analyticsFareScan(d,s,false),
 (d,s)=>analyticsFareScan(d,s,true),
 analyticsQueryChoice,
@@ -1624,24 +1623,6 @@ const plans = [
         ]
       },
       {
-        "title": "Analytical workload",
-        "minutes": 3,
-        "kind": "definition",
-        "notes": "Introduce analytics as aggregating many records, often over a few columns. Operational systems frequently need short lookups and updates, while analytical systems often scan, group and join large datasets. These are workload tendencies, not a law that analytic systems cannot update rows or row stores cannot aggregate. Ask students to name one application with both workloads.",
-        "definition": "An analytical workload summarizes many records, often using only a few columns.",
-        "id": "analytical-workload",
-        "steps": 3,
-        "states": [
-          "Event records",
-          "Group many records",
-          "Aggregate the groups"
-        ],
-        "sources": [
-          "lectures/lecture-10/analytics.html"
-        ],
-        "term": "Analytical workload"
-      },
-      {
         "title": "Average fares in row storage",
         "minutes": 3,
         "kind": "visual",
@@ -1693,8 +1674,8 @@ const plans = [
         "clarityNative": true
       },
       {
-        "title": "Compression",
-        "minutes": 3,
+        "title": "Lossless compression",
+        "minutes": 4,
         "kind": "definition",
         "notes": "Define lossless compression and ask why it can make scans faster despite decode work. Expected: fewer bytes to fetch can outweigh decompression cost. The pattern and type distribution drive suitable encoding choices; no fixed compression factor is guaranteed. Distinguish encoding from a general-purpose compression codec, while noting they can combine.",
         "definition": "Lossless compression stores the same information using fewer bytes.",
@@ -1712,7 +1693,7 @@ const plans = [
       },
       {
         "title": "Runs",
-        "minutes": 3,
+        "minutes": 4,
         "kind": "activity",
         "notes": "Before the reveal ask how to represent eight 1s, eight 2s and eight 3s. Expected: three runs. In the widget the teaching byte model changes 96 bytes into 24, a factor of four. Ask what happens if the same months alternate randomly. Expected: runs become short and the benefit can collapse. Sorting can improve compression but has a write and ordering cost. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
         "id": "runs",
@@ -1729,7 +1710,7 @@ const plans = [
       },
       {
         "title": "Dictionary and deltas",
-        "minutes": 3,
+        "minutes": 4,
         "kind": "visual",
         "notes": "Ask which patterns justify each encoding: low-cardinality strings favor a dictionary; smooth numeric sequences favor deltas. The widget assumes a tiny dictionary and bit-packed codes, and its delta example also compresses repeated differences. These are illustrative byte counts, not a promise of exact Parquet output size. Have students recover one original value from the encoded form before moving on. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
         "id": "dictionary-and-deltas",
@@ -1930,11 +1911,6 @@ const plans = [
 for (const deck of plans) {
  deck.scenes.forEach((scene, i) => { scene.draw = draws[deck.id][i]; });
  const lectureSixTeaching = deck.id === 6 ? new Map(deck.scenes.map(scene => [scene.id, scene.teaching])) : null;
- if (deck.id === 10) {
-   const groupingIndex = deck.scenes.findIndex(scene => scene.id === 'analytical-workload');
-   const [grouping] = deck.scenes.splice(groupingIndex, 1);
-   deck.scenes.splice(5, 0, grouping);
- }
  window.CourseTraceSlides.apply(deck);
  if (deck.id === 6) {
    for (const scene of deck.scenes) {

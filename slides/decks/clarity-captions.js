@@ -773,15 +773,6 @@ window.CourseClarityCaptions = {
       "The same position in the payment chunk gives card.",
       "Position 1 in the fare chunk gives $24. The three values rebuild Ride 2."
     ],
-    "analytical-workload": [
-      "Goal: show how much revenue we have collected by the end of each month.",
-      "Combine January’s trips into $20 and February’s trips into $30. Four rows become two.",
-      "The outlined rows form the window for this calculation. For January, include January only.",
-      "For February, include January and February. The running total is $20 + $30 = $50.",
-      "Keep both monthly rows. The new column shows $20 after January and $50 after February.",
-      "Both finish at $50. Can both results identify the trip that first pushed revenue above $40?",
-      "Trip totals identify trip 3. Monthly totals identify February, but cannot identify the trip."
-    ],
     "read-a-row-layout": [
       "We want the average fare. Pickup location and payment type do not affect the answer.",
       "The three fares sit beside pickup and payment values in the stored rows.",
