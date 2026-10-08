@@ -779,7 +779,8 @@ window.CourseClarityCaptions = {
       "The outlined rows form the window for this calculation. For January, include January only.",
       "For February, include January and February. The running total is $20 + $30 = $50.",
       "Keep both monthly rows. The new column shows $20 after January and $50 after February.",
-      "A total after each trip gives four rows. A total after each month gives two rows."
+      "Both finish at $50. Can both results identify the trip that first pushed revenue above $40?",
+      "Trip totals identify trip 3. Monthly totals identify February, but cannot identify the trip."
     ],
     "read-a-row-layout": [
       "We want the average fare. Pickup location and payment type do not affect the answer.",

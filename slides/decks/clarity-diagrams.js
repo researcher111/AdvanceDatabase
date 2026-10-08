@@ -111,17 +111,19 @@
     const {rides,monthly}=window.CourseTraces.fixtures;
     const amounts=rides.map(r=>r[1]+r[2]),months=['January','February'];
     const running=monthly.map((_,i)=>monthly.slice(0,i+1).reduce((sum,r)=>sum+r[1],0));
-    if(s===5) {
-      label(d,'comparison-task',640,182,'Two questions: how much so far after each trip, or after each month?',P.ink,27);
+    if(s>=5) {
+      label(d,'comparison-task',640,182,'Find the first running total above $40 in each result.',P.ink,27);
       label(d,'trip-output-title',320,253,'Without monthly grouping',P.ink,28);
       label(d,'month-output-title',941,253,'After monthly grouping',P.ink,28);
       let total=0;
-      d.table('trip-output',65,285,[125,160,230],[['Trip','Revenue','Running total'],...amounts.map((v,i)=>['Trip '+(i+1),'$'+v,'$'+(total+=v)])],{rowHeight:51,fontSize:25});
-      d.table('month-output',665,285,[170,155,225],[['Month','Revenue','Running total'],...monthly.map(([month,value],i)=>[months[month-1],'$'+value,'$'+running[i]])],{rowHeight:76,fontSize:25});
-      label(d,'trip-output-count',322,578,'4 output rows: one per trip',P.blue,27);
-      label(d,'month-output-count',940,578,'2 output rows: one per month',P.green,27);
-      label(d,'comparison-result',640,621,'Same final $50; different meaning for each row.',P.ink,30);
-      label(d,'trip-order',640,655,'Trip totals use the shown order: trip 1, then 2, then 3, then 4.',P.muted,23);
+      d.table('trip-output',65,285,[125,160,230],[['Trip','Revenue','Running total'],...amounts.map((v,i)=>['Trip '+(i+1),'$'+v,'$'+(total+=v)])],{rowHeight:51,fontSize:25,highlightRows:s===6?[3]:[]});
+      d.table('month-output',665,285,[170,155,225],[['Month','Revenue','Running total'],...monthly.map(([month,value],i)=>[months[month-1],'$'+value,'$'+running[i]])],{rowHeight:76,fontSize:25,highlightRows:s===6?[2]:[]});
+      label(d,'trip-output-count',322,558,'4 output rows: one per trip',P.blue,23);
+      label(d,'month-output-count',940,558,'2 output rows: one per month',P.green,23);
+      label(d,'threshold-trip',322,595,s===6?'Trip 3: $44 > $40':'Which trip crossed $40?',s===6?P.orange:P.ink,27);
+      label(d,'threshold-month',940,595,s===6?'February: $50 > $40':'Which month crossed $40?',s===6?P.orange:P.ink,27);
+      label(d,'comparison-result',640,632,s===6?'Monthly totals identify the month, but not the trip.':'Same final total. Do we still have the same detail?',P.ink,28);
+      label(d,'trip-order',640,662,'Trip totals use the shown order: trip 1, then 2, then 3, then 4.',P.muted,21);
       return;
     }
     if(s>=2) {
