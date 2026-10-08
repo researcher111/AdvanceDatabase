@@ -136,6 +136,102 @@ function analyticsQueryChoice(d,step) {
   d.text('workload-takeaway',640,633,['One ride: row storage keeps its fields together.','Many fares: column storage can skip unrelated fields.','Choose the layout for the queries you run most.'][step],30,P.ink,'middle',650);
   d.text('workload-caveat',640,667,'Both layouts can answer both queries. These are advantages, not a speed guarantee.',20,P.muted);
 }
+function analyticsParquetFile(d,step) {
+  d.text('parquet-definition',640,178,'Parquet is a file format that stores table data by column.',30,P.ink,'middle',650);
+  d.text('parquet-table-title',267,234,'Our three rides',28,P.ink,'middle',650);
+  d.table('parquet-table',65,264,[145,145,115],[['Pickup','Payment','Fare'],...analyticsRides],{rowHeight:57,fontSize:25});
+  d.arrow('parquet-save',510,379,665,379,P.green,3);
+  d.text('parquet-save-label',586,350,'save as',23,P.muted);
+  d.rect('parquet-file',685,218,550,335,P.white,P.green,12,3);
+  d.text('parquet-filename',960,250,'rides.parquet',31,P.green,'middle',650);
+  if(step>=1) {
+    d.text('parquet-row-group',960,292,'One row group · the same three rides',23,P.muted);
+    ['Pickup','Payment','Fare'].forEach((field,f)=>{
+      const y=320+f*57,active=step>=2&&f===2;
+      d.rect('parquet-chunk-'+f,710,y,500,48,active?P.greenLight:P.bg,active?P.green:P.line,5);
+      d.text('parquet-field-'+f,724,y+24,field,23,P.ink,'start',600);
+      analyticsRides.forEach((ride,r)=>d.text('parquet-value-'+r+'-'+f,906+r*112,y+24,ride[f],25,P.ink));
+    });
+    d.box('parquet-metadata',710,505,500,30,'Metadata: field types and where chunks start',P.blueLight,P.blue,20);
+  } else {
+    d.text('parquet-file-purpose',960,371,'A file that holds the ride data',29,P.ink);
+    d.text('parquet-file-location',960,424,'On your laptop or in cloud storage',23,P.muted);
+  }
+  if(step>=2) {
+    d.box('parquet-engine',685,580,350,59,'DuckDB runs AVG(fare)',P.blueLight,P.blue,28);
+    d.arrow('parquet-read',860,556,860,575,P.green,3);
+    d.text('parquet-read-label',1130,609,'reads fares',23,P.green);
+    if(step===3) {
+      d.arrow('parquet-result',665,609,385,609,P.blue,3);
+      d.text('parquet-result-label',525,587,'calculates',23,P.blue);
+      d.box('parquet-answer',65,580,300,59,'Answer: $30',P.greenLight,P.green,29);
+    }
+  } else {
+    d.text('parquet-role',640,610,'The file stores the data. A query engine will read it.',29,P.ink);
+  }
+  d.text('parquet-takeaway',640,666,step===3?'Column chunks can also be compressed. Next: store the same values in fewer bytes.':'Simplified file: one row group shown. Larger files can contain many row groups.',21,P.muted);
+}
+function analyticsMonthPartitions(d,step) {
+  d.text('partition-query',640,179,'Goal: average fare for December',29,P.ink,'middle',650);
+  d.text('partition-definition',640,222,'A partition groups rows by a value. Here, each month gets a folder.',25,P.muted);
+  for(let month=0;month<12;month++) {
+    const x=70+(month%6)*193,y=271+Math.floor(month/6)*158,active=step===0||month===11;
+    d.path('month-folder-'+month,`M ${x} ${y+22} v -22 h 54 l 16 22 h 105 v 114 h -175 z`,active?P.greenLight:P.bg,active?P.green:P.line,2.5);
+    d.text('month-folder-'+month+'-name',x+87.5,y+48,'month='+String(month+1).padStart(2,'0'),24,active?P.ink:P.muted,'middle',600);
+    d.box('month-file-'+month,x+13,y+68,149,35,'data.parquet',P.white,active?P.green:P.line,20);
+    d.text('month-status-'+month,x+87.5,y+121,step===0?'ride data':month!==11?'skip':step===2?'read fare only':'open',20,active?P.green:P.muted);
+  }
+  d.text('partition-path',640,603,'rides / month=12 / data.parquet',29,P.green,'middle',650);
+  d.text('partition-role',640,644,'Partition = group of rows. Folder = how this example stores that group.',24,P.ink);
+}
+function analyticsByteSavings(d,step) {
+  d.text('byte-query',65,176,'Goal: average fare for December',27,P.ink,'start',650);
+  d.text('byte-assumption',1215,176,'Toy data · 12 equal months',23,P.muted,'end');
+  d.text('byte-columns',395,226,'12 columns: fare + 11 other fields',25,P.ink);
+  d.text('byte-month-header',118,263,'Month',21,P.muted,'end');
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for(let c=0;c<12;c++)d.text('byte-column-'+c,168+c*40,263,c===0?'Fare':String(c+1),19,P.muted);
+  months.forEach((month,r)=>{
+    d.text('byte-month-'+r,118,296+r*25,month,20,step>=3&&r===11?P.green:P.muted,'end');
+    for(let c=0;c<12;c++) {
+      const active=step===1||step===2&&c===0||step>=3&&r===11&&c===0;
+      const color=step===1?P.orange:step===2?P.blue:P.green;
+      const fill=step===1?P.orangeLight:step===2?P.blueLight:P.greenLight;
+      d.rect('payload-month-'+r+'-column-'+c,151+c*40,285+r*25,34,22,active?fill:P.white,active?color:P.line,2,active?2:1);
+    }
+  });
+  d.text('byte-square-meaning',385,610,'One square = one month of one column',23,P.ink);
+  d.text('byte-square-size',385,642,'5,000 values × 8 bytes = 40 KB',25,P.muted);
+  const cards=[
+    ['1. All table values','5.76 MB','60,000 rows × 12 columns × 8 bytes','144 squares · full-table starting point',P.orange],
+    ['2. Keep only fare','480 KB','60,000 rows × 1 column × 8 bytes','12 squares · divide bytes by 12',P.blue],
+    ['3. Keep December','40 KB','5,000 rows × 1 column × 8 bytes','1 square · divide bytes by 12 again',P.green]
+  ];
+  cards.forEach(([heading,bytes,formula,count,color],i)=>{
+    if(step<i+1)return;
+    const y=231+i*112;
+    d.rect('byte-card-'+i,700,y,535,101,P.white,color,9);
+    d.text('byte-card-'+i+'-heading',720,y+24,heading,24,P.ink,'start',650);
+    d.text('byte-card-'+i+'-bytes',1215,y+24,bytes,28,color,'end',650);
+    d.text('byte-card-'+i+'-formula',720,y+56,formula,23,P.ink,'start');
+    d.text('byte-card-'+i+'-count',720,y+83,count,21,P.muted,'start');
+  });
+  if(step===0) {
+    d.text('byte-setup-rows',968,295,'60,000 rides across 12 months',27,P.ink);
+    d.text('byte-setup-month',968,343,'5,000 rides in every month',27,P.ink);
+    d.text('byte-setup-value',968,391,'Each field value uses 8 bytes',27,P.ink);
+    d.text('byte-setup-prompt',968,489,'How much data is in all 144 squares?',25,P.blue);
+  }
+  if(step===4) {
+    d.text('byte-question',968,593,'We kept 1 of 144 equal squares.',27,P.green,'middle',650);
+    d.text('byte-question-detail',968,632,'What fraction of the data is left?',25,P.ink);
+  }
+  if(step===5) {
+    d.text('byte-ratio',968,593,'5,760 KB ÷ 40 KB = 144',29,P.green,'middle',650);
+    d.text('byte-ratio-meaning',968,632,'1/144 of the full value data remains.',25,P.ink);
+  }
+  d.text('byte-caveat',640,666,'Value bytes only; metadata, encoding, and compression excluded. This is not a speed ratio.',20,P.muted);
+}
 function analyticsBatchPipeline(d,step) {
   const xs=[65,480,895],w=320;
   d.text('pipeline-query',65,176,'SELECT fare FROM rides WHERE fare > 25;',27,P.ink,'start');
@@ -258,13 +354,14 @@ analyticsSlotLookup,
 (d,s)=>analyticsFareScan(d,s,false),
 (d,s)=>analyticsFareScan(d,s,true),
 analyticsQueryChoice,
+analyticsParquetFile,
 (d,s)=>{for(let i=0;i<12;i++)chip(d,'raw'+i,135+i*82,270,'A',P.blueLight,66,70);if(s>0){line(d,'compress',250,410,1030,410);d.box('packed',s===1?495:175,485,s===1?290:930,80,s===1?'A × 12':'A A A A A A A A A A A A',P.greenLight,P.green,32);}if(s===2)tx(d,'equal',640,625,'=',50,P.green);},
 (d,s)=>{for(let i=0;i<24;i++){const v=1+Math.floor(i/8);if(s===0||i%8===0)chip(d,'value'+i,s===0?125+(i%12)*87:270+Math.floor(i/8)*280,s===0?185+Math.floor(i/12)*95:335,v,s===0?P.white:[P.greenLight,P.blueLight,P.orangeLight][v-1],s===0?70:150,65);}if(s>0){['1 × 8','2 × 8','3 × 8'].forEach((v,i)=>d.box('run'+i,210+i*340,470,220,95,v,P.greenLight,P.green,36));}if(s===2)tx(d,'bytes',640,635,'96 B → 24 B',40);},
 (d,s)=>{if(s<2){const vals=['card','card','cash','card','cash','card'];vals.forEach((v,i)=>chip(d,'value'+i,150+i*166,230,s===0?v:v==='card'?0:1,P.blueLight,145,80));if(s===1){d.box('dict0',210,440,330,90,'card → 0',P.white,P.line,34);d.box('dict1',740,440,330,90,'cash → 1',P.white,P.line,34);}}else{[4000,4001,4002,4003,4004].forEach((v,i)=>chip(d,'value'+i,150+i*205,200,v,P.blueLight,175,80));d.box('start',165,440,275,100,'4000',P.greenLight,P.green,38);d.box('delta',650,440,440,100,'+1 × 4',P.greenLight,P.green,38);line(d,'deltaa',455,490,620,490);}},
 analyticsBatchPipeline,
 (d,s)=>{const bounds=[[1,3],[4,7],[8,12]];bounds.forEach((b,i)=>{d.rect('group'+i,130+i*375,265,295,270,s>0&&i<2?P.bg:P.greenLight,s>0&&i<2?P.line:P.green,14);tx(d,'bounds'+i,278+i*375,335,`[${b[0]}, ${b[1]}]`,36);if(s>0&&i<2){d.line('skip'+i,180+i*375,405,380+i*375,480,P.line,5);}else dotgrid(d,'rows'+i,185+i*375,390,8,4,s===2?8:0,31,9);});tx(d,'q',640,150,'x = 10',46);if(s===2)line(d,'open',1050,205,1050,245,P.orange);},
-(d,s)=>{for(let i=0;i<12;i++){const x=130+(i%6)*178,y=210+Math.floor(i/6)*215;d.path('folder'+i,`M ${x} ${y+25} v -25 h 55 l 15 25 h 85 v 125 h -155 z`,s&&i!==11?P.bg:P.greenLight,s&&i!==11?P.line:P.green,3);tx(d,'month'+i,x+77,y+88,i+1,32);if(s===2&&i===11)d.rect('fare',x+90,y+45,26,85,P.orange,'none',3);}tx(d,'filter',640,125,'month = 12',44);if(s)tx(d,'files',640,635,'1 / 12',40,P.green);},
-(d,s)=>{const widths=[980,980/12,Math.max(7,980/144)];d.rect('bytes',150,250,widths[s],180,P.greenLight,P.green,10);tx(d,'n',640,150,['5.76 MB','0.48 MB','40 KB'][s],60);tx(d,'math',640,545,['60,000 × 12 × 8','60,000 × 8','60,000 × 8 / 12'][s],40);if(s===2)tx(d,'ratio',640,640,'144×',52,P.orange);},
+analyticsMonthPartitions,
+analyticsByteSavings,
 (d,s)=>{d.rect('process',340,150,740,440,P.white,P.blue,22,4);tx(d,'python',720,205,'Python',35);d.box('duck',525,295,370,150,'DuckDB',P.greenLight,P.green,46);['CSV','Parquet','dataframe'].forEach((v,i)=>d.box('src'+i,105,190+i*145,205,85,v,P.white,P.line,27));line(d,'in',325,375,505,375);if(s>0)d.circle('data',s===1?450:935,375,17,P.orange);if(s===2)d.box('df',915,485,250,95,'dataframe',P.blueLight,P.blue,30);},
 (d,s)=>{d.rect('storage',120,475,1040,150,P.greenLight,P.green,16);tx(d,'storelabel',640,565,'object storage',36);for(let i=0;i<(s===0?1:s===1?3:2);i++){d.rect('compute'+i,170+i*340,140,260,185,P.blueLight,P.blue,12);dotgrid(d,'cpu'+i,220+i*340,185,6,3,6,31,9);line(d,'reads'+i,300+i*340,345,300+i*340,455,P.blue);}tx(d,'compute-label',640,100,'compute',32);},
 (d,s)=>{const files=['a','b','c','d'];files.forEach((v,i)=>chip(d,'file'+i,135+i*275,460,v,i<2?P.blueLight:P.greenLight,160,100));d.box('manifestA',145,275,320,95,'A: a, b',P.blueLight,P.blue,34);if(s>0)d.box('manifestB',815,275,320,95,'B: a, c, d',P.greenLight,P.green,34);line(d,'old',305,385,305,445,P.blue);if(s>0){line(d,'new',970,385,805,445);line(d,'new2',970,385,1090,445);}d.circle('head',s<2?305:975,200,27,P.orange);if(s===2)d.circle('reader',305,620,24,P.blue);},
@@ -1713,8 +1810,28 @@ const plans = [
         "clarityNative": true
       },
       {
+        "title": "Parquet is a file format",
+        "minutes": 2,
+        "kind": "visual",
+        "clarityNative": true,
+        "notes": "Define a file format as rules for how data is stored in a file. Use the same three rides from the opening. Parquet is an open, binary, column-oriented format; rides.parquet holds the table data, while DuckDB is software that executes SQL. Reveal one row group with three column chunks, preserving the order of rides within each chunk. A larger file can contain many row groups, each with one chunk per column. The metadata records field types and chunk locations. For avg(fare), DuckDB can read the fare chunk and skip pickup and payment; metadata still needs reading. Reveal the same $30 average. This is a simplified logical picture, not a byte-accurate file layout. Column chunks contain pages that can use encodings and compression, which the next slides explain.",
+        "id": "parquet-is-a-file-format",
+        "steps": 4,
+        "states": [
+          "Meet the file format",
+          "Look inside one row group",
+          "Let DuckDB read the fares",
+          "Compute the same average"
+        ],
+        "sources": [
+          "lectures/lecture-10/analytics.html#parquet-format",
+          "https://parquet.apache.org/docs/overview/",
+          "https://parquet.apache.org/docs/file-format/"
+        ]
+      },
+      {
         "title": "Lossless compression",
-        "minutes": 4,
+        "minutes": 3,
         "kind": "definition",
         "notes": "Define lossless compression and ask why it can make scans faster despite decode work. Expected: fewer bytes to fetch can outweigh decompression cost. The pattern and type distribution drive suitable encoding choices; no fixed compression factor is guaranteed. Distinguish encoding from a general-purpose compression codec, while noting they can combine.",
         "definition": "Lossless compression stores the same information using fewer bytes.",
@@ -1749,7 +1866,7 @@ const plans = [
       },
       {
         "title": "Dictionary and deltas",
-        "minutes": 4,
+        "minutes": 3,
         "kind": "visual",
         "notes": "Ask which patterns justify each encoding: low-cardinality strings favor a dictionary; smooth numeric sequences favor deltas. The widget assumes a tiny dictionary and bit-packed codes, and its delta example also compresses repeated differences. These are illustrative byte counts, not a promise of exact Parquet output size. Have students recover one original value from the encoded form before moving on. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
         "id": "dictionary-and-deltas",
@@ -1804,36 +1921,42 @@ const plans = [
         ]
       },
       {
-        "title": "Skip eleven partitions",
+        "title": "Skip eleven month folders",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Ask what makes the folder filter available without inspecting all values. Expected: the partition value is encoded in the directory layout. Contrast skipping files using partition metadata with checking row-group statistics inside files. Partition keys should suit common filters; many tiny partitions can impose overhead. Keep the month label as meaningful data rather than a paragraph.",
+        "notes": "Start with one year of taxi rides. A partition is a group of rows selected by a rule; here, all rides with the same month belong together. In this Hive-style file layout, rides/month=12/data.parquet stores December rides. The directory name supplies the month value. A partition can contain several files; one file is drawn per folder for clarity. A folder is one way to represent a partition, not the general definition: other database systems manage partitions internally. For the December query, DuckDB can skip files in the other eleven folders, then read fare column chunks inside the December files. Distinguish a partition folder, a Parquet file inside it, and row groups inside each file. Equal month sizes are only an assumption for the next arithmetic example.",
         "id": "skip-eleven-partitions",
         "steps": 3,
         "states": [
-          "Twelve month folders",
-          "Choose December",
-          "Project within that partition"
+          "Group rides into month folders",
+          "Skip the other eleven folders",
+          "Read fare inside December"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html"
-        ]
+          "lectures/lecture-10/analytics.html#partitions",
+          "https://duckdb.org/docs/stable/data/partitioning/hive_partitioning.html"
+        ],
+        "clarityNative": true
       },
       {
-        "title": "Predict the byte ratio",
+        "title": "How much data can we skip?",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Give pairs one minute with the assumptions: 60,000 rows, 12 columns, eight bytes per value, twelve equal partitions, reading only fare. The row-to-projected-partition ratio is 144. This estimates payload bytes before metadata, encodings and compression; it is not a wall-clock speedup guarantee. A month filter supplied by the directory need not read a separate month data column. Ask what changes if December contains half the rows.",
+        "notes": "Keep one question throughout: average fare for December. Use a toy year with 60,000 rides, twelve stored data columns including fare, and exactly eight bytes per field value. Each of twelve monthly partitions contains 5,000 rides. Month comes from the directory, not an additional scanned data column. Each grid square represents one month of one column: 5,000 values times eight bytes, or 40,000 bytes. Squares are equal pieces of value data, not disk pages or measured reads. Highlight all 144 squares as the full-table value-data baseline: 5,760,000 bytes. Keep the fare column across all months: twelve squares, 480,000 bytes. Keep December fares: one square, 40,000 bytes. Let pairs predict the fraction before revealing 1/144. The two factors of twelve describe independent choices: which columns and which months. Use decimal units: KB = 1,000 bytes and MB = 1,000,000 bytes. Exclude metadata, encoding, and compression; this is not a latency prediction or a claim that every row engine must read the full table. Optional extension: if December holds half the rides, the second saving is a factor of two, giving 1/24 of the full value data.",
         "id": "predict-the-byte-ratio",
-        "steps": 3,
+        "steps": 6,
         "states": [
-          "All row payload",
-          "One column",
-          "One column in one partition"
+          "Define the equal-size pieces",
+          "Count all table values",
+          "Keep only the fare column",
+          "Keep only December fares",
+          "Predict the fraction left",
+          "Explain the two factors of twelve"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html"
-        ]
+          "lectures/lecture-10/analytics.html#byte-ratio"
+        ],
+        "clarityNative": true
       },
       {
         "title": "An engine inside the process",

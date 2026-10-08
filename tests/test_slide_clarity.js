@@ -36,7 +36,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,230);assert.equal(builds,841);
+assert.equal(slides,231);assert.equal(builds,848);
 const draw=(lecture,id,step)=>V.sceneDrawing(decks[lecture].scenes.find(s=>s.id===id),step);
 const text=(items,key)=>{const a=items.find(i=>i.key===key);assert(a,'missing '+key);return a.text;};
 const strings=items=>items.filter(i=>i.tag==='text').map(i=>i.text).join('\n');
@@ -72,8 +72,8 @@ for(let step=0;step<5;step++) {
  else assert(!items.some(a=>a.key==='reconstructed-label'));
 }
 // Storage examples hold data and the answer fixed; only grouping and needed fields differ.
-const storageOrder=['the-analytics-stack','the-workload-rotates','read-a-row-layout','read-a-column-layout','the-point-lookup-reverses-it','compression'];
-assert.deepEqual(Array.from(decks[10].scenes.slice(0,6),s=>s.id),storageOrder);
+const storageOrder=['the-analytics-stack','the-workload-rotates','read-a-row-layout','read-a-column-layout','the-point-lookup-reverses-it','parquet-is-a-file-format','compression'];
+assert.deepEqual(Array.from(decks[10].scenes.slice(0,7),s=>s.id),storageOrder);
 for(const [id,column] of [['read-a-row-layout',false],['read-a-column-layout',true]]) {
  for(let step=0;step<3;step++) {
   const items=draw(10,id,step);
@@ -101,7 +101,7 @@ for(let step=0;step<3;step++) {
 // The batch example preserves the microdb query result and reveals each stage in order.
 const batchScene=decks[10].scenes.find(s=>s.id==='batches-through-the-pipeline');
 assert.equal(batchScene.steps,6);
-assert.equal(decks[10].scenes[8].id,batchScene.id);
+assert.equal(decks[10].scenes[9].id,batchScene.id);
 const fares=taxiRides.map(r=>Number(r[2].slice(1))),matchingFares=fares.filter(f=>f>25);
 for(let step=0;step<6;step++) {
  const items=draw(10,batchScene.id,step);
@@ -120,6 +120,47 @@ assert.equal(text(draw(10,batchScene.id,1),'row-operator-2-value'),'get_val: '+m
 assert.equal(text(draw(10,batchScene.id,2),'row-operator-2-value'),'get_val: '+matchingFares[1]);
 assert.match(text(draw(10,batchScene.id,2),'row-operator-1-value'),/24 fails; 30 passes/);
 assert.match(batchScene.notes,/one row per successful call does not mean one disk read/);
+// The file-format introduction preserves the opening's data and separates storage from computation.
+for(let step=0;step<4;step++) {
+ const items=draw(10,'parquet-is-a-file-format',step);
+ assert.equal(text(items,'parquet-filename'),'rides.parquet');
+ assert.equal(items.some(a=>a.key==='parquet-answer-label'),step===3,'predict the result before revealing it');
+ if(step>=1)taxiRides.forEach((ride,r)=>ride.forEach((value,f)=>assert.equal(text(items,'parquet-value-'+r+'-'+f),value)));
+ if(step>=2) {
+  assert.equal(text(items,'parquet-engine-label'),'DuckDB runs AVG(fare)');
+  for(let f=0;f<3;f++)assert.equal(items.find(a=>a.key==='parquet-chunk-'+f).attrs.fill===V.palette.greenLight,f===2);
+ }
+}
+assert.equal(text(draw(10,'parquet-is-a-file-format',3),'parquet-answer-label'),'Answer: $30');
+// Pruning keeps only the December files; a folder represents the partition in this example.
+for(let step=0;step<3;step++) {
+ const items=draw(10,'skip-eleven-partitions',step);
+ for(let month=0;month<12;month++) {
+  assert.equal(text(items,'month-folder-'+month+'-name'),'month='+String(month+1).padStart(2,'0'));
+  assert.equal(text(items,'month-status-'+month),step===0?'ride data':month!==11?'skip':step===2?'read fare only':'open');
+ }
+ assert.match(text(items,'partition-role'),/Partition = group of rows/);
+}
+// The grid keeps all values, one column, then one month's column, without changing cell size.
+const byteScene=decks[10].scenes.find(s=>s.id==='predict-the-byte-ratio');
+assert.equal(byteScene.steps,6);
+const squareBytes=60000/12*8,allBytes=60000*12*8;
+assert.equal(allBytes/squareBytes,144);
+for(let step=0;step<6;step++) {
+ const items=draw(10,byteScene.id,step),cells=items.filter(a=>/^payload-month-\d+-column-\d+$/.test(a.key));
+ assert.equal(cells.length,144);
+ const active=cells.filter(a=>a.attrs.fill!==V.palette.white);
+ assert.equal(active.length,[0,144,12,1,1,1][step]);
+ if(step===2)assert(active.every(a=>a.key.endsWith('-column-0')),'keep fare across all months');
+ if(step>=3)assert.equal(active[0].key,'payload-month-11-column-0','keep only December fares');
+ assert(cells.every(a=>a.attrs.width===34&&a.attrs.height===22),'equal-sized squares make the fraction visible');
+ if(step>=1)assert.equal(text(items,'byte-card-0-bytes'),allBytes/1000000+' MB');
+ if(step>=2)assert.equal(text(items,'byte-card-1-bytes'),60000*8/1000+' KB');
+ if(step>=3)assert.equal(text(items,'byte-card-2-bytes'),squareBytes/1000+' KB');
+ assert.equal(items.some(a=>a.key==='byte-ratio'),step===5,'pause for prediction before revealing the ratio');
+ assert.match(text(items,'byte-caveat'),/not a speed ratio/);
+}
+assert.equal(text(draw(10,byteScene.id,5),'byte-ratio'),'5,760 KB ÷ 40 KB = 144');
 // Recovery must replay changes backward, preserving committed work, and flush last.
 let value=10;const finished=new Set(),restored=[];
 for(const rec of fixtures.undoLog.slice().reverse()){
@@ -137,7 +178,7 @@ assert.equal(text(draw(3,'lecture-03-scene-07',3),'flag'),'1');
 const product=[];for(let i=1;i<=4;i++)product.push(text(draw(4,'lecture-04-scene-09',i),'pair-label'));
 assert.deepEqual(product,['(ada, ds)','(ada, stat)','(ada, econ)','(ben, ds)']);
 assert(!decks[10].scenes.some(s=>s.id==='analytical-workload'),'monthly running-total scene is removed');
-assert.equal(decks[10].scenes[5].title,'Lossless compression');
+assert.equal(decks[10].scenes[6].title,'Lossless compression');
 assert.match(strings(draw(9,'price-the-work',2)),new RegExp('= '+models.cost(100).index+' page accesses'));
 assert.match(strings(draw(9,'price-the-work',3)),/= 2,003 page accesses/);
 assert.match(strings(draw(9,'price-the-work',4)),/Equal cost at 0.997%/);

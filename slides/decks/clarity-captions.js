@@ -817,14 +817,17 @@ window.CourseClarityCaptions = {
       "Open [8, 12] and test its rows; the bounds alone do not prove a match."
     ],
     "skip-eleven-partitions": [
-      "The file layout records one partition value for each month.",
-      "month = 12 rules out the other eleven partitions.",
-      "Within December, projection selects only the needed columns."
+      "A monthly partition contains one month’s rides. Here, a folder holds its Parquet files.",
+      "For December, open month=12. Skip the files in the other eleven folders.",
+      "Inside December’s Parquet files, read the fare column chunks."
     ],
     "predict-the-byte-ratio": [
-      "Full payload: 60,000 rows × 12 columns × 8 bytes = 5.76 MB.",
-      "Reading one column reduces that modeled payload to 0.48 MB.",
-      "One equal-sized partition reduces it to 40 KB, a 144-fold payload ratio."
+      "Imagine 60,000 rides: 5,000 in each month, with 12 fields of 8 bytes each.",
+      "First count all the values: 60,000 rides × 12 fields × 8 bytes = 5.76 MB.",
+      "Keep fare and skip the other 11 columns. The value data shrinks from 5.76 MB to 480 KB.",
+      "Keep December and skip the other 11 months. The value data shrinks from 480 KB to 40 KB.",
+      "The green square is December’s fares. Compare it with the whole grid.",
+      "One of 12 columns × one of 12 equal months leaves 1/144 of the original value data."
     ],
     "an-engine-inside-the-process": [
       "The query engine executes within the application’s process.",
@@ -862,6 +865,12 @@ window.CourseClarityCaptions = {
       "A point lookup reconstructs one complete ride.",
       "A whole-table aggregate benefits from reading its selected column.",
       "A partitioned aggregate first rules out irrelevant partitions."
+    ],
+    "parquet-is-a-file-format": [
+      "A file format defines how data is stored. Save the same rides in a file named rides.parquet.",
+      "Inside a Parquet row group, each field has its own column chunk.",
+      "DuckDB runs the query. It can read the fare chunk and skip pickup and payment.",
+      "The result is still $30. Parquet stores the values; DuckDB calculates the average."
     ]
   },
   "11": {

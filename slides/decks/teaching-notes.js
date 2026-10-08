@@ -1389,6 +1389,17 @@
         "Show both highlighted patterns together. Nothing needs to rotate when a query runs. Storage design should fit the query mix; some systems keep both row and column copies."
       ]
     },
+    "parquet-is-a-file-format": {
+      "idea": "Parquet stores table data by column in a file. DuckDB reads the file and runs the query.",
+      "question": "In this example, which part stores the rides, and which part calculates the average fare?",
+      "answer": "rides.parquet stores the data. DuckDB is the query engine: it reads the fare values and calculates (36 + 24 + 30) / 3 = $30. The file format describes how the values are stored.",
+      "builds": [
+        "Start from the same three rides. Explain that a file format defines how values are stored in a file, just as a CSV format has rules for rows and separators. Parquet uses a binary column-oriented layout.",
+        "Open the file conceptually. One row group holds these three rides as three column chunks. Read the pickup chunk, then payment, then fare. Values retain the same ride order. Metadata describes the types and where the chunks are.",
+        "Introduce DuckDB as the program running AVG(fare). Highlight the fare chunk. DuckDB uses the metadata to locate the needed values; pickup and payment chunks can be skipped.",
+        "Reveal $30. The file holds data and the engine computes the result. Connect the column chunks to the next slides: their values can be encoded and compressed without changing the answer."
+      ]
+    },
     "compression": {
       "idea": "Lossless compression saves bytes while preserving the original values exactly.",
       "question": "How can decoding still make a scan faster overall?",
@@ -1443,23 +1454,26 @@
       ]
     },
     "skip-eleven-partitions": {
-      "idea": "Partition metadata can eliminate whole files before inspecting their contents.",
-      "question": "How is the month filter available without reading a month column?",
-      "answer": "The directory layout encodes the partition's month value.",
+      "idea": "A partition groups rows by a value. This example stores each month in a folder of Parquet files.",
+      "question": "Are a partition, a folder, and a Parquet file the same thing?",
+      "answer": "A partition is a group of rows, such as all December rides. Here, the month=12 folder holds that group in Parquet files. A partition can have several files. Other database systems can manage partitions without exposing folders.",
       "builds": [
-        "Show all twelve monthly folders.",
-        "Select December and skip the other eleven.",
-        "Project the required column within the surviving partition."
+        "Define the group first: rides with the same month. Then point to its folder and the Parquet file inside. This is one year of toy data. A folder may contain several files; we draw just one.",
+        "Read the folder label month=12. It tells the engine which files contain December rides, so files in the other eleven folders can be skipped. Call this partition pruning after explaining the action.",
+        "Within December, read only fare chunks from the Parquet files. The month filter comes from the folder name. We have now removed unneeded months and unneeded columns; the next slide counts those two savings."
       ]
     },
     "predict-the-byte-ratio": {
-      "idea": "Projection and partition pruning can multiply payload savings under explicit assumptions.",
-      "question": "What is the modeled byte ratio for one of twelve columns in one of twelve equal partitions?",
-      "answer": "144 to one, before metadata, encoding, and compression; it is not a promised latency ratio.",
+      "idea": "Read fewer columns, then fewer months. These two choices shrink the data in different directions.",
+      "question": "The full table fills 144 equal-size squares. December fares occupy one square. What fraction of the value data do we need?",
+      "answer": "One of 144 squares: 1/144 of the full value data. Each square is 5,000 values × 8 bytes = 40 KB. All 144 squares are 5.76 MB. Keeping fare divides the data by 12; keeping December divides it by 12 again. This compares value bytes before metadata, encoding, and compression, not query speed.",
       "builds": [
-        "Calculate the payload for all 60,000 rows and twelve eight-byte columns.",
-        "Keep only fare and divide the payload by twelve.",
-        "Keep one equal partition and divide again; question the equal-size assumption."
+        "Define every axis before calculating. The grid has twelve columns and twelve months. The toy year has 60,000 rides, exactly 5,000 per month. Every field value is eight bytes. A square represents one month of one column, not a disk page.",
+        "Highlight all 144 squares as the full-table baseline. Multiply 60,000 rows × 12 columns × 8 bytes = 5,760,000 bytes, or 5.76 MB. This counts value data, not measured I/O.",
+        "Keep the fare column and dim the other eleven. Twelve squares remain: 60,000 fare values × 8 bytes = 480,000 bytes, or 480 KB. This is the first division by twelve.",
+        "Keep December at the bottom of the fare column. One square remains: 5,000 fare values × 8 bytes = 40,000 bytes, or 40 KB. The folder label supplies month, so no separate month column is needed.",
+        "Pause for students to compare the one green square with the original 144. Ask for the fraction of data remaining before advancing. The two reductions removed columns and months, respectively.",
+        "Reveal 5,760 KB / 40 KB = 144: the remaining data is 1/144 of the baseline. Two factors of twelve multiply because the choices shrink different dimensions. Real months are unequal, and actual time also includes I/O overhead, metadata, decoding, and computation. Optional extension: December with half the rides leaves 1/24, not 1/144."
       ]
     },
     "an-engine-inside-the-process": {

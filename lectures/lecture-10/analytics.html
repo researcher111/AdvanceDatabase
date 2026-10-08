@@ -119,6 +119,10 @@
   <figcaption id="storage-caption">Three made-up rides. The strips show which values are stored together; real engines read data in pages or chunks. The highlighted values are the fares the query needs.</figcaption>
 </figure>
 
+<h3 id="parquet-format" class="new-slide" data-kicker="Storing the table">What is Parquet?</h3>
+<p class="keep-in-present"><strong>Parquet is a file format for storing table data by column.</strong> A file format defines how values are stored in a file. Our three rides could be saved in <code>rides.parquet</code>. Inside each <strong>row group</strong>, Parquet keeps pickup values, payment values, and fare values in separate column chunks. Metadata describes the field types and where those chunks start.<sup class="src"><a href="#src-6" title="Apache Parquet File Format">6</a></sup></p>
+<p><strong>Parquet stores the data; DuckDB runs the query.</strong> To calculate the average fare, DuckDB can read the fare chunk and skip pickup and payment. The answer is still $30. A larger file can contain many row groups. <a href="../../slides/lecture-10.html#s=6&amp;b=1">Look inside the example file →</a></p>
+
 <h3 id="row-slots" class="new-slide" data-kicker="Finding one ride">How do slots change?</h3>
 <p class="keep-in-present">In <a href="../../labs/lab-03/recordpages.html#big-idea">microdb's row pages</a>, each slot holds a complete record. If Ride 2 is in block 7, slot 1, the RID <code>(7, 1)</code> locates its pickup, payment, and fare together.</p>
 <p class="keep-in-present">In a simple column layout, each column keeps the same row order. To rebuild Ride 2, read <strong>position 1</strong> from each column: <strong>LGA</strong> from pickup, <strong>card</strong> from payment, and <strong>$24</strong> from fare. We count positions from zero.</p>
@@ -244,7 +248,7 @@ Nearby numbers → store the first value and the changes
 <h3 id="batch-execution" class="new-slide" data-kicker="Column optimizations">2. Process a batch at a time</h3>
 
 <p>Recall the scans from <a href="../../lectures/lecture-04/iterators.html">Lecture 4</a>: <code>TableScan</code> finds a row, <code>SelectScan</code> checks the condition, and <code>ProjectScan</code> exposes the requested fields. The caller repeats <code>plan.next()</code>, then reads the current result with <code>plan.get_val(...)</code>.</p>
-<p>For <code>SELECT fare FROM rides WHERE fare &gt; 25</code>, use the toy fares 36, 24, and 30 in that scan order. The first successful call selects 36. The next call skips 24 and selects 30. A batch version could pass <code>[36, 24, 30]</code> to the filter at once, then pass the two matching fares onward together. <strong>Same condition, same answer; more rows per handoff.</strong> <a href="../../slides/lecture-10.html#s=9&amp;b=1">Step through the comparison →</a></p>
+<p>For <code>SELECT fare FROM rides WHERE fare &gt; 25</code>, use the toy fares 36, 24, and 30 in that scan order. The first successful call selects 36. The next call skips 24 and selects 30. A batch version could pass <code>[36, 24, 30]</code> to the filter at once, then pass the two matching fares onward together. <strong>Same condition, same answer; more rows per handoff.</strong> <a href="../../slides/lecture-10.html#s=10&amp;b=1">Step through the comparison →</a></p>
 
 <table>
   <thead><tr><th></th><th>microdb (<span class="gloss" data-gloss="volcano">Volcano</span>)</th><th>DuckDB (vectorized)</th></tr></thead>
@@ -261,24 +265,32 @@ Nearby numbers → store the first value and the changes
 
 <p>Suppose a chunk's fares range from $5 to $20. A query for <code>fare &gt; 100</code> can skip it. The minimum and maximum are enough to rule it out; the engine need not check every fare.</p>
 
-<h3 class="new-slide" data-kicker="Column optimizations">Estimate bytes read before measuring elapsed time</h3>
+<h3 id="partitions" class="new-slide" data-kicker="Skipping files">Are partitions folders?</h3>
+<p><strong>A partition groups rows by a rule.</strong> For one year of rides, we can group all January rides together, all February rides together, and so on. In this example, each month's group lives in a folder of Parquet files:</p>
+<pre><code>rides/
+  month=01/data.parquet   ← January rides
+  month=02/data.parquet   ← February rides
+  ...
+  month=12/data.parquet   ← December rides</code></pre>
+<p>For December's average fare, the engine can use the folder labels to skip the other eleven months. Then it can read only fare chunks inside December's files. This folder convention is called <strong>Hive partitioning</strong>. One partition can contain several files; the example shows one per month. A folder is one way to store a partition; other database systems manage partitions internally.<sup class="src"><a href="#src-24" title="DuckDB Hive Partitioning">24</a></sup></p>
+
+<h3 id="byte-ratio" class="new-slide" data-kicker="Column optimizations">How much data can we skip?</h3>
 
 <p class="key-fact keep-in-present"><strong>Fewer bytes is a prediction. Faster execution is something we measure.</strong></p>
 
 <div class="exercise">
-  <span class="ex-label">Check yourself · compare the bytes read</span>
-  <p>Use a simple model: 60,000 rides, 12 columns, and 8 bytes per value. Ignore compression, metadata, and caching. How many bytes would each query read?</p>
-  <ol type="a">
-    <li>Average fare for all rides, using row storage.</li>
-    <li>The same query, using column storage.</li>
-    <li>Average fare for December only, using column storage split into 12 equal <span class="gloss" data-gloss="partitioning-files">partitions</span> (one folder per month).</li>
-  </ol>
-  <p>How many times more data does (a) read than (c)?</p>
+  <span class="ex-label">Check yourself · keep fewer columns and fewer months</span>
+  <p>Our question is <strong>“What is the average fare for December?”</strong> Imagine a toy year with 60,000 rides, split evenly into 12 months. Each month has 5,000 rides. Each ride has 12 stored fields, including fare, and each value uses 8 bytes. The folder name supplies the month.</p>
+  <p>Draw a grid with 12 columns and 12 months. Each square represents <strong>one month's values for one column</strong>: 5,000 values × 8 bytes = <strong>40 KB</strong>. These are equal pieces of value data, not disk pages.</p>
+  <p>Start with all 144 squares. Keep only the fare column, then only December. <strong>What fraction of the full table's value data remains?</strong> <a href="../../slides/lecture-10.html#s=13&amp;b=1">Step through the grid →</a></p>
   <details><summary>Show answer</summary>
-  <p>(a) All columns: \(60{,}000 \times 12 \times 8 =\) <strong>5.76 MB</strong>.
-  (b) one column: \(60{,}000 \times 8 \approx\) <strong>0.48 MB</strong>, 12× less.
-  (c) one column of one partition: \(0.48\ \text{MB} / 12 \approx\) <strong>40 KB</strong>, <strong>144×</strong>
-  less than (a). The folder name supplies the month, so only the fare values need reading. This predicts 144× fewer data bytes, not a query that runs 144× faster.</p>
+  <ol>
+    <li><strong>All table values:</strong> 60,000 × 12 × 8 = 5,760,000 bytes, or <strong>5.76 MB</strong>. This is our full-table baseline.</li>
+    <li><strong>Keep only fare:</strong> 60,000 × 1 × 8 = 480,000 bytes, or <strong>480 KB</strong>. Twelve squares remain. Divide the starting bytes by 12.</li>
+    <li><strong>Keep only December fares:</strong> 5,000 × 1 × 8 = 40,000 bytes, or <strong>40 KB</strong>. One square remains. Divide by 12 again.</li>
+  </ol>
+  <p><strong>One of 144 equal squares remains: 1/144 of the full value data.</strong> The two savings multiply because one removes columns and the other removes months. Using the same units, 5,760 KB ÷ 40 KB = 144.</p>
+  <p>This model uses decimal units (1 KB = 1,000 bytes) and excludes metadata, encoding, and compression. It compares value bytes, not query speed or measured disk reads. Real months need not be equal: if December held half the rides, keeping that month would divide by 2, leaving 1/24 of the full value data.</p>
   </details>
 </div>
 
@@ -579,6 +591,7 @@ FROM ML.PREDICT(
   <li id="src-21"><a href="https://docs.cloud.google.com/bigquery/docs/linear-regression-tutorial">BigQuery ML linear regression tutorial</a> <span class="src-note">Cloud setup, permissions, and billable components.</span></li>
   <li id="src-22"><a href="https://cloud.google.com/bigquery/pricing#bqml">BigQuery ML pricing</a></li>
   <li id="src-23"><a href="https://parquet.apache.org/docs/concepts/">Apache Parquet Concepts: row groups, column chunks, and pages</a></li>
+  <li id="src-24"><a href="https://duckdb.org/docs/stable/data/partitioning/hive_partitioning.html">DuckDB Hive Partitioning: folders, files, and filter pushdown</a></li>
 </ol>
 
 </main>
