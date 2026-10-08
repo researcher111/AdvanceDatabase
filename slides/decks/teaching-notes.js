@@ -1559,6 +1559,18 @@
         "Start with the DuckDB + PyTorch link and then open the optional Lab 8 activity. Distinguish the official article’s pretrained linear model from the lab’s small neural network. Both use the same integration idea. Point out that the community ML extension and the SQL-only research paper are alternative approaches. Ask students to compare the neural network with the straight-line baseline on the same reserved rides. More model complexity does not guarantee lower error."
       ]
     },
+    "duckdb-pytorch-fare-model": {
+      "idea": "DuckDB supplies the data and calls a prediction function; PyTorch trains and runs the neural network.",
+      "question": "Does SELECT predict_fare_nn(distance) train a new model for each ride? When do we use the recorded test fares?",
+      "answer": "No. The SQL function calls the trained PyTorch model with fixed weights. It receives only distances. We compare its predictions with the recorded test fares afterward to measure error. Those fares never helped fit the network or its scaling.",
+      "builds": [
+        "Introduce the real taxi sample, replacing the earlier six made-up rides. The month filter keeps 50,000 January–October rides for training. DuckDB selects distance and fare before sending Arrow batches of up to 1,024 rows to Python. Define a tensor as a numeric array. Distances become x and fares become y. November–December rides remain reserved for testing.",
+        "Read the network shape: one distance, 16 hidden units, one output. ReLU keeps positive values and sets negative ones to zero, letting the fitted relationship bend. The network is created once. Within each batch, predict, measure error, clear old gradients, calculate new gradients with backward, and update weights with optimizer.step. PyTorch performs this learning. The excerpt omits setup and loops, which are in the lab script. x_mean, x_std, y_mean, and y_std come only from training rows.",
+        "Connect the SQL name predict_fare_nn to the Python callback predict_fare. The callback converts a batch of distances to tensors, runs the trained PyTorch network under inference_mode, undoes fare scaling, and returns Arrow values. The function is registered on this local DuckDB connection. It is not available automatically in a different SQL terminal.",
+        "Read the filter month >= 11 and the SQL function call. These are 10,000 rides the model did not train on. Read the first two example predictions from the completed lab run: 15.17 versus 20.50 dollars, then 9.50 versus 10.00 dollars. SQL sends distances to PyTorch; the recorded fares are available for comparison but do not enter the prediction function. The network weights remain fixed.",
+        "The lab script saves both models’ outputs in predictions. Read avg(abs(fare - prediction)) as the average size of the dollar error. Compare 3.53 dollars for the straight line with 3.26 dollars for the network on the same reserved rides. This is one measured run, with 30 epochs and seed 6042; more complexity need not improve every distance group. Point to the optional lab for the plots, then introduce BigQuery ML as Google’s managed SQL alternative."
+      ]
+    },
     "managed-model-sql": {
       "idea": "BigQuery ML is Google’s cloud service for training and using machine-learning models through SQL.",
       "question": "Why does CREATE MODEL use NO_SPLIT while ML.EVALUATE still receives separate test rides?",

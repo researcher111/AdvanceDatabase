@@ -348,6 +348,100 @@ function analyticsScoreSQL(d,step) {
   d.text('ml-score-takeaway',640,623,step===3?'The toy test error is $1. Two made-up rides do not establish real-world accuracy.':step>=4?'Prediction reuses fare_model. This query does not train it again.':'CROSS JOIN pairs each test ride with the one saved model row.',26,P.ink);
   d.text('ml-score-source',640,662,'Run the complete example: lectures/lecture-10/in_database_ml.py',21,P.muted);
 }
+const analyticsPyTorchCode=[
+  [
+    'reader = con.execute("""',
+    '    SELECT distance, fare FROM features',
+    '    WHERE month <= 10',
+    '    ORDER BY hash(ride_id)',
+    '""").to_arrow_reader(batch_size=1024)'
+  ],
+  [
+    'model = nn.Sequential(',
+    '    nn.Linear(1, 16), nn.ReLU(),',
+    '    nn.Linear(16, 1))',
+    '',
+    '# Repeat these steps for each training batch:',
+    'prediction = model((x - x_mean) / x_std)',
+    'loss = loss_fn(prediction, (y - y_mean) / y_std)',
+    'optimizer.zero_grad()',
+    'loss.backward()',
+    'optimizer.step()'
+  ],
+  [
+    'con.create_function(',
+    '    "predict_fare_nn",',
+    '    predict_fare,',
+    '    ["DOUBLE"], "DOUBLE",',
+    '    type="arrow")'
+  ],
+  [
+    'SELECT ride_id, distance, fare,',
+    '       predict_fare_nn(distance) AS predicted_fare',
+    'FROM features',
+    'WHERE month >= 11;'
+  ],
+  [
+    'SELECT',
+    '  avg(abs(fare - linear_fare)) AS linear_mae,',
+    '  avg(abs(fare - neural_fare)) AS neural_mae',
+    'FROM predictions;'
+  ]
+];
+function analyticsPyTorch(d,step) {
+  d.text('ml-task',640,175,'Lab 8: 60,000 real taxi rides. Predict fare from distance.',27,P.ink);
+  d.text('ml-code-title',65,207,[
+    'Python · DuckDB selects training batches',
+    'Python · PyTorch learns the weights (excerpts)',
+    'Python · register the prediction function',
+    'DuckDB SQL · predict fares for test rides',
+    'DuckDB SQL · compare the two models'
+  ][step],24,P.blue,'start',650);
+  analyticsSQL(d,analyticsPyTorchCode[step],[[1,2,4],[5,6,8,9],[1,2,4],[1,3],[1,2]][step],step===1?33:55);
+  if(step<3) {
+    const boxes=[
+      [['DuckDB','50,000 training rides'],['Arrow batches','Up to 1,024 rows per batch'],['PyTorch tensors','Distances x and fares y']],
+      [['Input','One distance'],['Hidden layer','16 units with ReLU'],['Output','One predicted fare']],
+      [['SQL function name','predict_fare_nn'],['Python function','predict_fare'],['Trained PyTorch model','Return predicted fares']]
+    ][step];
+    boxes.forEach(([heading,detail],i)=>{
+      const y=245+i*119;
+      d.rect('torch-flow-'+i,825,y,405,85,i===1?P.blueLight:P.greenLight,i===1?P.blue:P.green,10);
+      d.text('torch-flow-heading-'+i,1027,y+27,heading,25,P.ink,'middle',650);
+      d.text('torch-flow-detail-'+i,1027,y+61,detail,24,P.ink);
+      if(i<2)d.arrow('torch-flow-arrow-'+i,1027,y+90,1027,y+113,P.green,3);
+    });
+    d.text('torch-flow-note',1027,594,[
+      'Reserve Nov–Dec for testing.',
+      'Train for 30 passes through the rows.',
+      'This function reuses the learned weights.'
+    ][step],22,P.muted);
+  } else if(step===3) {
+    d.text('torch-test-heading',1027,232,'Two of the 10,000 test rides',24,P.ink,'middle',650);
+    d.table('torch-test',825,272,[115,135,155],[['miles','actual $','predicted $'],['2.00','20.50','15.17'],['0.94','10.00','9.50']],{rowHeight:69,fontSize:24});
+    d.text('torch-test-note',1027,527,'Predictions from the completed lab run.',22,P.muted);
+    d.text('torch-test-boundary',1027,569,'These fares did not train the model.',23,P.green);
+  } else {
+    d.text('torch-error-heading',1027,251,'Mean absolute error (MAE)',26,P.ink,'middle',650);
+    [['Straight line',3.53,P.orangeLight,P.orange],['Neural network',3.26,P.greenLight,P.green]].forEach(([name,mae,fill,stroke],i)=>{
+      const y=306+i*128;
+      d.text('torch-error-name-'+i,840,y,name,25,P.ink,'start');
+      d.rect('torch-error-bar-'+i,840,y+26,mae*75,48,fill,stroke,5);
+      d.text('torch-error-value-'+i,1213,y+51,'$'+mae.toFixed(2),28,stroke,'end',650);
+    });
+    d.text('torch-error-sample',1027,558,'Same 10,000 test rides. Lower is better.',22,P.muted);
+    d.text('torch-error-caveat',1027,594,'One run; a larger model may not win.',22,P.muted);
+  }
+  d.text('torch-takeaway',65,626,[
+    'SQL filters the rows before they cross into Python.',
+    'Create the model once. PyTorch then updates its weights for each batch.',
+    'predict_fare converts distances to tensors and calls the trained network.',
+    'SQL calls the Python function. PyTorch predicts without training again.',
+    'Both models use distance. Compare prediction errors on the same reserved rides.'
+  ][step],24,P.ink,'start');
+  d.link('torch-lab-link',65,662,'Open the full Lab 8 example','../labs/lab-08/duckdb.html#pytorch',22);
+  d.text('torch-local-context',1215,662,'Local CPU · no cloud account',22,P.muted,'end');
+}
 function analyticsCloudML(d,step) {
   d.text('ml-task',640,175,'BigQuery ML is Google’s service for training models through SQL.',28,P.ink);
   d.text('ml-code-title',65,207,'GoogleSQL · '+['train','evaluate','predict'][step],24,P.blue,'start',650);
@@ -510,6 +604,7 @@ analyticsByteSavings,
 (d,s)=>{const files=['a','b','c','d'];files.forEach((v,i)=>chip(d,'file'+i,135+i*275,460,v,i<2?P.blueLight:P.greenLight,160,100));d.box('manifestA',145,275,320,95,'A: a, b',P.blueLight,P.blue,34);if(s>0)d.box('manifestB',815,275,320,95,'B: a, c, d',P.greenLight,P.green,34);line(d,'old',305,385,305,445,P.blue);if(s>0){line(d,'new',970,385,805,445);line(d,'new2',970,385,1090,445);}d.circle('head',s<2?305:975,200,27,P.orange);if(s===2)d.circle('reader',305,620,24,P.blue);},
 analyticsTrainSQL,
 analyticsScoreSQL,
+analyticsPyTorch,
 analyticsCloudML,
 (d,s)=>{const ww=[760,230,60];tx(d,'scan-label',220,150,'bytes',35);d.rect('scan',170,210,ww[s],110,P.greenLight,P.green,10);for(let i=0;i<Math.max(1,6-s*2);i++)d.circle('coin'+i,1050,520-i*45,39,P.orangeLight,P.orange,3);clock(d,'compute',315,505,s*1.3);tx(d,'clocklabel',315,610,'compute time',30);tx(d,'coinlabel',1045,610,'scanned bytes',30);},
 (d,s)=>{for(let r=0;r<6;r++)for(let c=0;c<12;c++){const active=s===0?r===2:s===1?c===5:c===5&&r===5;d.rect('cell'+r+c,140+c*85,170+r*67,70,50,active?P.greenLight:P.white,active?P.green:P.line,5);}tx(d,'q',640,625,['ride #4','AVG(fare)','month = 12'][s],40);},
@@ -2140,7 +2235,7 @@ const plans = [
       },
       {
         "title": "SQL learns a fare model",
-        "minutes": 4,
+        "minutes": 3,
         "kind": "activity",
         "notes": "Project the training SQL, not just function names. The prepared fare_features view contains the six made-up rides from in_database_ml.py after filtering positive distances and nonnegative fares. Define distance in miles as the input feature and fare in dollars as the label. First read the six rows, then highlight FROM and WHERE split = train along with the four training rows. Highlight the regression aggregates next: regr_intercept(fare, distance) and regr_slope(fare, distance), with target first and feature second. They fit a least-squares line, learning intercept 3 and slope 2. count(*) records four training rows. CREATE TABLE stores the query result in fare_model. Read the saved row and form predicted fare = 3 + 2 times distance. The intercept is the line value at zero miles, not a verified taxi base fare. Python only submits these SQL statements and prints results; DuckDB performs the fit. Both test rows stay out of training. The exact setup and complete runnable SQL are in the reading and linked script. This tiny synthetic example teaches execution, not real taxi-fare accuracy.",
         "id": "train-inside-the-query-engine",
@@ -2161,7 +2256,7 @@ const plans = [
       },
       {
         "title": "SQL checks and applies the saved model",
-        "minutes": 4,
+        "minutes": 3,
         "kind": "activity",
         "notes": "Keep fare_model fixed at intercept 3 and slope 2. Show CREATE VIEW held_out_predictions with the test-only filter. CROSS JOIN pairs each test ride with the one model row, and the expression m.intercept + m.slope * r.distance calculates its fare. Ask the class to predict results before showing 8 and 12 dollars for distances 2.5 and 4.5. The actual fares 9 and 11 did not influence training. On the next build replace the SQL with avg(abs(fare - predicted_fare)), explain absolute error, and calculate a one-dollar MAE. The query also reports the two test rows and RMSE, which is one dollar here. Explain RMSE as the square root of mean squared error. Then show a separate SELECT for VALUES (3.5), cross joined with the same model, and pause before revealing 10 dollars. The new query needs only distance, not an actual fare, and does not retrain. The projected queries retain ride_id from the reading so each output still identifies its input ride. CROSS JOIN is safe here because fare_model has exactly one row; a multi-version model table requires selecting a model first. Two synthetic test rows demonstrate the mechanics, not generalization.",
         "id": "evaluate-and-apply-the-model",
@@ -2179,6 +2274,27 @@ const plans = [
           "lectures/lecture-10/in_database_ml.py"
         ],
         "clarityNative": true
+      },
+      {
+        "title": "DuckDB + PyTorch: a neural network for fares",
+        "minutes": 3,
+        "kind": "visual",
+        "clarityNative": true,
+        "id": "duckdb-pytorch-fare-model",
+        "steps": 5,
+        "states": [
+          "DuckDB selects training batches",
+          "PyTorch learns the weights",
+          "Register the prediction function",
+          "Predict the reserved rides",
+          "Compare prediction errors"
+        ],
+        "notes": "Use the optional Lab 8 activity as a concrete local bridge between the small SQL regression and the managed BigQuery ML example. This example uses the real, cleaned 2024 taxi sample rather than the six made-up rides. Train on 50,000 January–October rides and reserve the 10,000 November–December rides for evaluation. DuckDB filters and projects rows, Arrow carries batches, and Python converts them to tensors. PyTorch trains a one-input, 16-hidden-unit, one-output ReLU network for 30 epochs. The source code also learns scaling from training rows only. Projected Python is an excerpt: imports, tensor conversion, scaling statistics, optimizer setup, and the surrounding loops are in the linked script. Create the network once, then update it on each training batch. The predict_fare callback runs the frozen model under inference_mode and returns an Arrow array. create_function registers it as predict_fare_nn on this connection. It is not a built-in DuckDB function. The test SELECT invokes PyTorch through that callback without retraining. Its first two sample predictions are rounded from the completed run: ride 50000, distance 2.00, actual fare 20.50, neural prediction 15.17; ride 50001, distance 0.94, actual fare 10.00, prediction 9.50. The script materializes predictions with both linear_fare and neural_fare before the final aggregate. In the documented run with seed 6042, DuckDB 1.5.6, and PyTorch 2.14.1, MAE is 3.53 dollars for the straight line and 3.26 for the neural network. Both use only distance and the same training/test split. These are measured results for one sample and configuration, not guaranteed accuracy or evidence that larger models always win. The next slide moves training management into Google Cloud.",
+        "sources": [
+          "labs/lab-08/duckdb.html#pytorch",
+          "labs/lab-08/starter/pytorch_fares.py",
+          "https://duckdb.org/2023/07/07/python-udf#predicting-taxi-fare-costs-ibis--pyarrow-udf"
+        ]
       },
       {
         "title": "Training and prediction with BigQuery ML",
@@ -2203,7 +2319,7 @@ const plans = [
       },
       {
         "title": "Performance becomes cost",
-        "minutes": 2,
+        "minutes": 1,
         "kind": "activity",
         "notes": "Ask which changes can lower bytes-scanned billing and which may lower compute duration. BigQuery on-demand commonly prices scanned data; Snowflake-style compute billing is different, so avoid one pricing rule for every warehouse. No actual price quote is needed. In Lab 8 students compare CSV/Parquet, projection and pruning; actual timings depend on machine, caching and data, so the deck must not promise the source’s universal 100× result.",
         "id": "performance-becomes-cost",

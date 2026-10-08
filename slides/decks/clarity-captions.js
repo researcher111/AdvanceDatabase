@@ -878,6 +878,13 @@ window.CourseClarityCaptions = {
     "more-models-with-duckdb": [
       "DuckDB prepares the rows. A PyTorch model can learn from them and return predictions to SQL."
     ],
+    "duckdb-pytorch-fare-model": [
+      "DuckDB selects January–October rides and sends their distances and fares to Python in batches.",
+      "PyTorch learns a curved relationship between distance and fare by updating the network weights.",
+      "Register a SQL function that calls the trained PyTorch model.",
+      "SQL calls the model on November–December rides. Their recorded fares let us check its predictions.",
+      "In this run, the neural network has a smaller average prediction error than the straight line."
+    ],
     "managed-model-sql": [
       "CREATE MODEL fits a line using only training rides and saves it as a managed model.",
       "ML.EVALUATE applies the saved model to separate test rides and measures prediction error.",

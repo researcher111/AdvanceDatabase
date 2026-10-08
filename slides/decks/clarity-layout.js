@@ -150,6 +150,7 @@ window.CourseClarityLayout = {
   "10/a-table-over-files": [132,170,1152,647],
   "10/train-inside-the-query-engine": [45,155,1235,677],
   "10/evaluate-and-apply-the-model": [45,155,1235,677],
+  "10/duckdb-pytorch-fare-model": [45,155,1235,677],
   "10/managed-model-sql": [45,155,1235,677],
   "10/performance-becomes-cost": [167,121,1145,627],
   "10/more-models-with-duckdb": [65,180,1215,660],

@@ -12,8 +12,8 @@ let scenes=0,builds=0,animated=0;const warnings=[];
 for(const id of lectureIds){
   const deck=decks[id];assert(deck,`Lecture ${id} exists`);assert.equal(deck.id,id);
   assert.equal(deck.scenes.reduce((n,s)=>n+s.minutes,0),60,`Lecture ${id}: 60 teaching minutes`);
-  // Lecture 10 includes managed-ML SQL and a final resources slide within 60 minutes.
-  const maxScenes=id===10?22:20;
+  // Lecture 10 includes the PyTorch example, managed-ML SQL, and final resources within 60 minutes.
+  const maxScenes=id===10?23:20;
   assert(deck.scenes.length>=14&&deck.scenes.length<=maxScenes,`Lecture ${id}: 14–${maxScenes} scenes`);
   assert(fs.existsSync(deck.source),`Lecture ${id}: source exists`);
   const ids=new Set();

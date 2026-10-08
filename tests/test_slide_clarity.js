@@ -36,7 +36,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,233);assert.equal(builds,855);
+assert.equal(slides,234);assert.equal(builds,860);
 const resources=decks[10].scenes.at(-1);
 assert.equal(resources.id,'more-models-with-duckdb');
 const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');
@@ -174,7 +174,7 @@ const mlReading=fs.readFileSync(path.join(root,'lectures/lecture-10/analytics.ht
 const normalizeSQL=sql=>sql.replace(/&gt;/g,'>').replace(/&lt;/g,'<').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
 const sqlOnSlide=(id,step)=>draw(10,id,step).filter(a=>/^ml-sql-line-\d+$/.test(a.key)).map(a=>a.text).join('\n');
 const mlTrain='train-inside-the-query-engine',mlScore='evaluate-and-apply-the-model';
-assert.deepEqual(Array.from(decks[10].scenes.slice(16,19),s=>s.id),[mlTrain,mlScore,'managed-model-sql']);
+assert.deepEqual(Array.from(decks[10].scenes.slice(16,20),s=>s.id),[mlTrain,mlScore,'duckdb-pytorch-fare-model','managed-model-sql']);
 for(const [id,step] of [[mlTrain,0],[mlScore,0],[mlScore,3],[mlScore,4],['managed-model-sql',0],['managed-model-sql',1],['managed-model-sql',2]]) {
  const sql=sqlOnSlide(id,step);
  assert(normalizeSQL(mlReading).includes(normalizeSQL(sql)),'projected query matches analytics.html: '+id+'/'+step);
