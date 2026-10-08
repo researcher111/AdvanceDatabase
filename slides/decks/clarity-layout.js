@@ -140,7 +140,7 @@ window.CourseClarityLayout = {
   "10/compression": [132,267,1108,652],
   "10/runs": [122,182,1155,657],
   "10/dictionary-and-deltas": [147,197,1148,543],
-  "10/batches-through-the-pipeline": [157,160,1153,620],
+  "10/batches-through-the-pipeline": [65,155,1215,677],
   "10/skip-a-row-group": [127,114,1178,538],
   "10/skip-eleven-partitions": [127,90,1178,657],
   "10/predict-the-byte-ratio": [147,104,1133,668],

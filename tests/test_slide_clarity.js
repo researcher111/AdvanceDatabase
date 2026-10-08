@@ -36,7 +36,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,230);assert.equal(builds,838);
+assert.equal(slides,230);assert.equal(builds,841);
 const draw=(lecture,id,step)=>V.sceneDrawing(decks[lecture].scenes.find(s=>s.id===id),step);
 const text=(items,key)=>{const a=items.find(i=>i.key===key);assert(a,'missing '+key);return a.text;};
 const strings=items=>items.filter(i=>i.tag==='text').map(i=>i.text).join('\n');
@@ -98,6 +98,28 @@ for(let step=0;step<3;step++) {
   assert.equal(fill===V.palette.greenLight,side==='many'&&f===2&&step!==0,'average query needs fares from every row');
  }));
 }
+// The batch example preserves the microdb query result and reveals each stage in order.
+const batchScene=decks[10].scenes.find(s=>s.id==='batches-through-the-pipeline');
+assert.equal(batchScene.steps,6);
+assert.equal(decks[10].scenes[8].id,batchScene.id);
+const fares=taxiRides.map(r=>Number(r[2].slice(1))),matchingFares=fares.filter(f=>f>25);
+for(let step=0;step<6;step++) {
+ const items=draw(10,batchScene.id,step);
+ assert.equal(text(items,'pipeline-query'),'SELECT fare FROM rides WHERE fare > 25;');
+ assert.equal(text(items,'row-operator-0-name'),'TableScan');
+ assert.equal(text(items,'row-operator-1-name'),'SelectScan');
+ assert.equal(text(items,'row-operator-2-name'),'ProjectScan');
+ assert.equal(items.some(a=>a.key==='batch-operator-0-value'),step>=3);
+ if(step>=3) {
+  assert.equal(text(items,'batch-operator-0-value'),'['+fares.join(', ')+']');
+  assert.equal(text(items,'batch-operator-1-value'),step>=4?'['+fares.map(f=>f>25?'keep':'drop').join(', ')+']':'—');
+  assert.equal(text(items,'batch-operator-2-value'),step===5?'['+matchingFares.join(', ')+']':'—');
+ }
+}
+assert.equal(text(draw(10,batchScene.id,1),'row-operator-2-value'),'get_val: '+matchingFares[0]);
+assert.equal(text(draw(10,batchScene.id,2),'row-operator-2-value'),'get_val: '+matchingFares[1]);
+assert.match(text(draw(10,batchScene.id,2),'row-operator-1-value'),/24 fails; 30 passes/);
+assert.match(batchScene.notes,/one row per successful call does not mean one disk read/);
 // Recovery must replay changes backward, preserving committed work, and flush last.
 let value=10;const finished=new Set(),restored=[];
 for(const rec of fixtures.undoLog.slice().reverse()){

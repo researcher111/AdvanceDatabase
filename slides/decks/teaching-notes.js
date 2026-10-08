@@ -1420,13 +1420,16 @@
       ]
     },
     "batches-through-the-pipeline": {
-      "idea": "Processing batches amortizes per-call work across many values.",
-      "question": "Which cost does batching reduce compared with one-row calls?",
-      "answer": "Repeated dispatch overhead, while also improving opportunities for locality; useful computation still remains.",
+      "idea": "Batching changes the size of a handoff between operators. It builds on the scan, filter, and projection jobs from microdb.",
+      "question": "If we pass the three fares as one batch, do we still test all three against fare > 25? What work can batching reduce?",
+      "answer": "Yes: 36 passes, 24 fails, and 30 passes. The same two fare values are returned. Batching reduces repeated calls between operators; it does not remove the predicate checks or imply one disk read per row.",
       "builds": [
-        "Recall the row-at-a-time pull interface.",
-        "Send a batch into the operator.",
-        "Move the batch onward and distinguish batching from SIMD or multicore execution."
+        "Recall Labs 4 and 5: plan = ProjectScan(SelectScan(TableScan(...), predicate), fields). The caller invokes plan.next(), then plan.get_val(\"fare\"). next() returns a Boolean, not a row object. Green arrows show conceptual value flow; the request chain runs inward from ProjectScan.",
+        "Walk the first successful next() through ProjectScan, SelectScan, and TableScan. Fare 36 satisfies fare > 25. get_val(\"fare\") delegates down to the current row and returns 36.",
+        "The second SelectScan.next() first examines 24 and rejects it, then advances the child again to find 30. One successful call exposes one match even when several input rows are inspected. A later next() returns False at exhaustion; that final call is omitted.",
+        "Introduce a hypothetical batch interface using only three rows so every value is visible. These are execution batches in memory, not disk pages or Parquet row groups. Microdb already buffers pages; its scan API is still row-at-a-time.",
+        "Apply the same condition to all three fare values. A real vectorized engine can track matching positions with a selection vector. The drawing shows a keep/drop mask, not three parallel workers.",
+        "Pass the matching fares together. The answer stays 36 and 30, and the predicate still runs for each input value; the repeated per-row operator-call overhead is shared. DuckDB uses column vectors grouped in DataChunks, with a default standard vector size of 2048; this toy batch is deliberately small."
       ]
     },
     "skip-a-row-group": {

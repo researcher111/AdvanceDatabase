@@ -804,9 +804,12 @@ window.CourseClarityCaptions = {
       "A smooth numeric sequence can use one starting value and repeated deltas."
     ],
     "batches-through-the-pipeline": [
-      "Row-at-a-time calls repeat dispatch work for each value.",
-      "This example processes a batch of 2,048 values together.",
-      "Operators pass the batch onward, amortizing per-call overhead."
+      "Microdb already has a pipeline: find a row, test it, and expose the requested fields.",
+      "The first call finds fare 36. It passes the filter, so the caller reads 36.",
+      "The next call skips fare 24 and finds fare 30. The caller reads the second match.",
+      "Now imagine passing three rows at once, using the same operators and condition.",
+      "Test all three fares in the batch. Keep 36 and 30; reject 24.",
+      "Both plans give fares 36 and 30. The batch version shares call overhead across rows."
     ],
     "skip-a-row-group": [
       "For x = 10, inspect each row group’s minimum and maximum.",

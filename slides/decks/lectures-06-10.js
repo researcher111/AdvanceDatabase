@@ -136,6 +136,45 @@ function analyticsQueryChoice(d,step) {
   d.text('workload-takeaway',640,633,['One ride: row storage keeps its fields together.','Many fares: column storage can skip unrelated fields.','Choose the layout for the queries you run most.'][step],30,P.ink,'middle',650);
   d.text('workload-caveat',640,667,'Both layouts can answer both queries. These are advantages, not a speed guarantee.',20,P.muted);
 }
+function analyticsBatchPipeline(d,step) {
+  const xs=[65,480,895],w=320;
+  d.text('pipeline-query',65,176,'SELECT fare FROM rides WHERE fare > 25;',27,P.ink,'start');
+  d.text('pipeline-example',1215,176,'Three made-up rides',22,P.muted,'end');
+  d.text('microdb-label',65,222,'microdb · Labs 4–5 · one current row per successful next()',26,P.ink,'start',650);
+  const rowStates=[
+    ['36, 24, 30','fare > 25?','Only expose fare'],
+    ['Current fare: 36','36 > 25: keep','get_val: 36'],
+    ['24, then 30','24 fails; 30 passes','get_val: 30'],
+    ['Read 36, 24, 30','Keep 36 and 30','36, then 30']
+  ];
+  ['TableScan','SelectScan','ProjectScan'].forEach((name,i)=>{
+    const x=xs[i],active=step===1||step===2;
+    d.rect('row-operator-'+i,x,250,w,130,active?P.orangeLight:P.white,active?P.orange:P.line,10);
+    d.text('row-operator-'+i+'-name',x+w/2,278,name,28,P.ink,'middle',650);
+    d.text('row-operator-'+i+'-job',x+w/2,311,['Find a row','Test the condition','Expose chosen fields'][i],23,P.muted);
+    d.text('row-operator-'+i+'-value',x+w/2,348,rowStates[Math.min(step,3)][i],27,P.ink);
+    if(i<2)d.arrow('row-values-'+i,x+w+12,332,xs[i+1]-16,332,P.green,3);
+  });
+  d.text('pull-call',640,407,'Caller: ProjectScan.next() → SelectScan.next() → TableScan.next()',23,P.muted);
+  if(step>=3) {
+    d.text('batch-label',65,447,'Batch version of the same plan · illustration',26,P.blue,'start',650);
+    ['Read batch','Filter batch','Project fare'].forEach((name,i)=>{
+      const x=xs[i],ready=step>=i+3;
+      d.rect('batch-operator-'+i,x,474,w,125,ready?P.blueLight:P.white,ready?P.blue:P.line,10);
+      d.text('batch-operator-'+i+'-name',x+w/2,501,name,28,P.ink,'middle',650);
+      d.text('batch-operator-'+i+'-job',x+w/2,533,['Several rows at once','Test fare > 25 for each','Expose the fare values'][i],22,P.muted);
+      d.text('batch-operator-'+i+'-value',x+w/2,570,ready?['[36, 24, 30]','[keep, drop, keep]','[36, 30]'][i]:'—',i===1?25:29,ready?P.blue:P.muted);
+      if(i<2&&step>=i+4)d.arrow('batch-values-'+i,x+w+12,551,xs[i+1]-16,551,P.blue,4);
+    });
+  } else {
+    d.rect('microdb-explanation',65,476,1150,123,P.white,P.line,10);
+    d.text('microdb-result',640,509,['Before iteration: no current result row.','First successful next(): read fare 36.','Second successful next(): skip 24, then read fare 30.'][step],28,P.ink);
+    d.text('microdb-pages',640,547,'TableScan reads pages, but its scan interface exposes one row at a time.',25,P.muted);
+    d.text('microdb-prompt',640,581,'What if these operators handled several rows in each call?',25,P.blue);
+  }
+  d.text('batch-takeaway',640,634,step===5?'Same fares: 36 and 30. Batching shares the call overhead.':step>=3?'Same scan, filter, and projection jobs; more rows per handoff.':"next() selects one match; get_val('fare') reads its value.",27,P.ink,'middle',650);
+  if(step>=3)d.text('batch-scale',640,664,'Toy batch: 3 rows. Batch processing still tests each fare.',21,P.muted);
+}
 const draws={
 6:[
 (d,s)=>title(d,['B+ trees'],()=>{heap(d,'h',120,300,5,8,s? [14]:[]);treeNode(d,'r',920,290,[36]);treeNode(d,'l',800,460,[28,31],true);treeNode(d,'rr',1060,460,[36,39],true);branch(d,'bl',920,352,800,460);branch(d,'br',920,352,1060,460);if(s)line(d,'link',790,520,435,360,P.orange);}),
@@ -222,7 +261,7 @@ analyticsQueryChoice,
 (d,s)=>{for(let i=0;i<12;i++)chip(d,'raw'+i,135+i*82,270,'A',P.blueLight,66,70);if(s>0){line(d,'compress',250,410,1030,410);d.box('packed',s===1?495:175,485,s===1?290:930,80,s===1?'A × 12':'A A A A A A A A A A A A',P.greenLight,P.green,32);}if(s===2)tx(d,'equal',640,625,'=',50,P.green);},
 (d,s)=>{for(let i=0;i<24;i++){const v=1+Math.floor(i/8);if(s===0||i%8===0)chip(d,'value'+i,s===0?125+(i%12)*87:270+Math.floor(i/8)*280,s===0?185+Math.floor(i/12)*95:335,v,s===0?P.white:[P.greenLight,P.blueLight,P.orangeLight][v-1],s===0?70:150,65);}if(s>0){['1 × 8','2 × 8','3 × 8'].forEach((v,i)=>d.box('run'+i,210+i*340,470,220,95,v,P.greenLight,P.green,36));}if(s===2)tx(d,'bytes',640,635,'96 B → 24 B',40);},
 (d,s)=>{if(s<2){const vals=['card','card','cash','card','cash','card'];vals.forEach((v,i)=>chip(d,'value'+i,150+i*166,230,s===0?v:v==='card'?0:1,P.blueLight,145,80));if(s===1){d.box('dict0',210,440,330,90,'card → 0',P.white,P.line,34);d.box('dict1',740,440,330,90,'cash → 1',P.white,P.line,34);}}else{[4000,4001,4002,4003,4004].forEach((v,i)=>chip(d,'value'+i,150+i*205,200,v,P.blueLight,175,80));d.box('start',165,440,275,100,'4000',P.greenLight,P.green,38);d.box('delta',650,440,440,100,'+1 × 4',P.greenLight,P.green,38);line(d,'deltaa',455,490,620,490);}},
-(d,s)=>{[0,1,2].forEach(i=>{d.rect('op'+i,160+i*380,220,230,230,P.white,P.line,15);tx(d,'oplabel'+i,275+i*380,185,['scan','filter','sum'][i],30);});if(s===0)d.circle('single',230,330,20,P.orange);else{const x=s===1?185:945;d.rect('tray',x,265,160,135,P.greenLight,P.green,10);for(let i=0;i<12;i++)d.circle('dot'+i,x+25+(i%4)*36,288+Math.floor(i/4)*41,9,P.green);}line(d,'a',415,335,515,335);line(d,'b',795,335,895,335);tx(d,'batch',640,590,s===0?'1':'2,048',58);},
+analyticsBatchPipeline,
 (d,s)=>{const bounds=[[1,3],[4,7],[8,12]];bounds.forEach((b,i)=>{d.rect('group'+i,130+i*375,265,295,270,s>0&&i<2?P.bg:P.greenLight,s>0&&i<2?P.line:P.green,14);tx(d,'bounds'+i,278+i*375,335,`[${b[0]}, ${b[1]}]`,36);if(s>0&&i<2){d.line('skip'+i,180+i*375,405,380+i*375,480,P.line,5);}else dotgrid(d,'rows'+i,185+i*375,390,8,4,s===2?8:0,31,9);});tx(d,'q',640,150,'x = 10',46);if(s===2)line(d,'open',1050,205,1050,245,P.orange);},
 (d,s)=>{for(let i=0;i<12;i++){const x=130+(i%6)*178,y=210+Math.floor(i/6)*215;d.path('folder'+i,`M ${x} ${y+25} v -25 h 55 l 15 25 h 85 v 125 h -155 z`,s&&i!==11?P.bg:P.greenLight,s&&i!==11?P.line:P.green,3);tx(d,'month'+i,x+77,y+88,i+1,32);if(s===2&&i===11)d.rect('fare',x+90,y+45,26,85,P.orange,'none',3);}tx(d,'filter',640,125,'month = 12',44);if(s)tx(d,'files',640,635,'1 / 12',40,P.green);},
 (d,s)=>{const widths=[980,980/12,Math.max(7,980/144)];d.rect('bytes',150,250,widths[s],180,P.greenLight,P.green,10);tx(d,'n',640,150,['5.76 MB','0.48 MB','40 KB'][s],60);tx(d,'math',640,545,['60,000 × 12 × 8','60,000 × 8','60,000 × 8 / 12'][s],40);if(s===2)tx(d,'ratio',640,640,'144×',52,P.orange);},
@@ -1726,20 +1765,27 @@ const plans = [
         "demo": "viz-enc"
       },
       {
-        "title": "Batches through the pipeline",
+        "title": "From microdb rows to batches",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Connect to Lecture 4’s pull interface. DuckDB commonly processes chunks with vectors of around 2048 values; batch processing amortizes dispatch and improves locality. Vectorized execution is not identical to SIMD or multicore parallelism, though either may help. Do not say overhead vanishes: operators still perform useful work, and selection vectors, nulls and types introduce machinery. Ask which cost is reduced by batching.",
+        "notes": "Use the same made-up fares 36, 24, and 30 in the illustrated scan order. This SELECT-FROM-WHERE query matches the microdb operators students implemented: ProjectScan wraps SelectScan, which wraps TableScan. next() returns a Boolean and positions a current row; get_val reads a field. One SelectScan.next() call can make multiple child next() calls while rejecting rows. A final unsuccessful call detects exhaustion and is omitted from the animation. Arrows between boxes indicate conceptual value flow, not copied row objects; the text below gives the inward request chain. TableScan already reads buffered pages, so one row per successful call does not mean one disk read per row. The second pipeline is an illustrative batched counterpart, not an existing microdb API or an exact DuckDB physical plan. Filter selection can be represented by a mask or selection vector rather than copying matching rows. DuckDB operates on DataChunks made of column vectors; its default standard vector size is 2048, but actual chunks can be smaller. Batching spreads call overhead across rows while each predicate still needs evaluation. It does not require changing the disk layout, and it is distinct from multicore parallelism and CPU SIMD. SQL without ORDER BY does not promise this illustrated output order.",
         "id": "batches-through-the-pipeline",
-        "steps": 3,
+        "steps": 6,
         "states": [
-          "One row per call",
-          "A batch enters",
-          "A batch moves onward"
+          "Recall the microdb scans",
+          "Get the first matching row",
+          "Skip a row; get the next match",
+          "Read a toy batch",
+          "Filter the values in the batch",
+          "Pass the matching fares together"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html"
-        ]
+          "lectures/lecture-10/analytics.html#batch-execution",
+          "lectures/lecture-04/iterators.html",
+          "labs/lab-05/starter/query_engine.py",
+          "https://duckdb.org/docs/current/internals/vector.html"
+        ],
+        "clarityNative": true
       },
       {
         "title": "Skip a row group",

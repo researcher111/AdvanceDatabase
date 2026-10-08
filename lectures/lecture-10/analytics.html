@@ -241,18 +241,21 @@ Nearby numbers → store the first value and the changes
   <p class="viz-caption">Encodings can be combined. Parquet can dictionary-encode labels, then compress runs of their codes.<sup class="src"><a href="#src-2" title="Parquet Encodings">2</a></sup> The byte counts here illustrate the idea; actual file sizes vary.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Column optimizations">2. Process a batch at a time</h3>
+<h3 id="batch-execution" class="new-slide" data-kicker="Column optimizations">2. Process a batch at a time</h3>
+
+<p>Recall the scans from <a href="../../lectures/lecture-04/iterators.html">Lecture 4</a>: <code>TableScan</code> finds a row, <code>SelectScan</code> checks the condition, and <code>ProjectScan</code> exposes the requested fields. The caller repeats <code>plan.next()</code>, then reads the current result with <code>plan.get_val(...)</code>.</p>
+<p>For <code>SELECT fare FROM rides WHERE fare &gt; 25</code>, use the toy fares 36, 24, and 30 in that scan order. The first successful call selects 36. The next call skips 24 and selects 30. A batch version could pass <code>[36, 24, 30]</code> to the filter at once, then pass the two matching fares onward together. <strong>Same condition, same answer; more rows per handoff.</strong> <a href="../../slides/lecture-10.html#s=9&amp;b=1">Step through the comparison →</a></p>
 
 <table>
   <thead><tr><th></th><th>microdb (<span class="gloss" data-gloss="volcano">Volcano</span>)</th><th>DuckDB (vectorized)</th></tr></thead>
   <tbody>
-    <tr><td>Unit of work</td><td>One row per <code>next()</code> call.</td><td>A batch of values; the standard vector size is 2,048.<sup class="src"><a href="#src-4" title="DuckDB Internals: Vectors">4</a></sup></td></tr>
-    <tr><td>Example: add fares</td><td>Fetch a row, add its fare, repeat.</td><td>Fetch a batch, loop over its fares, repeat.</td></tr>
+    <tr><td>Unit of work</td><td>One current row per successful <code>next()</code>; <code>get_val()</code> reads its fields.</td><td>A batch of values; the standard vector size is 2,048.<sup class="src"><a href="#src-4" title="DuckDB Internals: Vectors">4</a></sup></td></tr>
+    <tr><td>Example: filter fares</td><td>Advance until one row matches, then read its fare.</td><td>Test the fares in a batch, then pass matching positions onward.</td></tr>
     <tr><td>Call overhead</td><td>Paid for each row.</td><td>Shared across the batch.</td></tr>
   </tbody>
 </table>
 
-<p>Operators still pass data to other operators. Batching changes how much they pass at once. Loops over arrays can also use the CPU efficiently.<sup class="src"><a href="#src-1" title="The Design and Implementation of Modern Column-Oriented Database Systems">1</a></sup></p>
+<p>Batching reduces repeated calls between operators; each fare still needs its condition checked. Microdb already reads disk pages into buffers, so one row per successful scan call does not mean one disk read per row. An execution batch groups values for processing in memory. Loops over arrays can also use the CPU efficiently.<sup class="src"><a href="#src-1" title="The Design and Implementation of Modern Column-Oriented Database Systems">1</a></sup></p>
 
 <h3 class="new-slide" data-kicker="Column optimizations">3. Skip data that cannot match</h3>
 
