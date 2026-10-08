@@ -1336,12 +1336,15 @@
   },
   "10": {
     "the-analytics-stack": {
-      "idea": "The access pattern determines which physical layout makes useful data cheap to read.",
-      "question": "What changes between a ride lookup and an aggregate over fares?",
-      "answer": "The question changes which fields and rows are needed, although the underlying information stays the same.",
+      "idea": "The same taxi rides can be stored by row or by column. An average-fare query needs only the fares.",
+      "question": "What is the average fare, and which fields can this query skip?",
+      "answer": "The average is (36 + 24 + 30) / 3 = $30. Pickup and payment do not contribute; column storage keeps the fares together so the query can skip those other fields.",
       "builds": [
-        "Highlight a complete ride for a point lookup.",
-        "Highlight fare across rides and introduce the analytical access pattern."
+        "Introduce three made-up rides. Read Ride 1 aloud: JFK, card, $36. Point out that its values also appear in the column layout, under the Ride 1 labels.",
+        "Follow the orange strip across Ride 1. Its pickup, payment, and fare sit together. The next strip contains Ride 2.",
+        "Follow the blue outlines on the right. Each strip now holds one field across all three rides. The Ride 1, Ride 2, and Ride 3 labels preserve which values belong together.",
+        "Find the six green cells: the same three fares shown once in each layout. Ask students to add 36, 24, and 30 and divide by three before advancing.",
+        "Reveal $30 and compare the grouping. The result stays the same; the fare column lets the engine skip pickup and payment. Explain that these strips show groups of values, while real reads operate on pages or chunks."
       ]
     },
     "the-workload-rotates": {

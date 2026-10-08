@@ -132,7 +132,7 @@ window.CourseClarityLayout = {
   "9/review-sql-and-indexes": [105,180,1178,658],
   "9/review-recovery-and-isolation": [127,187,1153,568],
   "9/exit-mechanism": [117,142,1233,573],
-  "10/the-analytics-stack": [197,297,1070,555],
+  "10/the-analytics-stack": [45,156,1235,665],
   "10/the-workload-rotates": [122,162,1144,646],
   "10/analytical-workload": [102,200,1096,658],
   "10/read-a-row-layout": [232,71,1043,659],

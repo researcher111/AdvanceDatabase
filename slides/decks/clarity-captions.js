@@ -760,8 +760,11 @@ window.CourseClarityCaptions = {
   },
   "10": {
     "the-analytics-stack": [
-      "A point lookup needs the fields of one row together.",
-      "An aggregate often needs one field from many rows."
+      "Each ride has a pickup location, payment type, and fare. Both layouts store the same values.",
+      "Row storage keeps Ride 1’s pickup, payment, and fare together.",
+      "Column storage groups pickup locations, payment types, and fares separately.",
+      "The average needs only the three fares: $36, $24, and $30.",
+      "Both layouts give $30. Column storage lets this query skip pickup and payment values."
     ],
     "the-workload-rotates": [
       "Row layout groups the fields of each record.",

@@ -17,6 +17,38 @@ function bars(d,k,labels,vals,step,x=180,y=210,w=780,max=null){const m=max||Math
 function clock(d,k,x,y,angle){d.circle(k,x,y,54,P.white,P.line,3);d.line(k+'hand',x,y,x+34*Math.cos(angle),y+34*Math.sin(angle),P.orange,5);}
 function title(d,words,visual){words.forEach((w,i)=>tx(d,'title'+i,640,120+i*60,w,52));visual();}
 function versions(d,step,y=295){const vv=[120,70,50];vv.forEach((v,i)=>{d.rect('v'+i,130+i*350,y,290,170,i===step?P.greenLight:P.white,i===step?P.green:P.line,14,3);tx(d,'balance'+i,275+i*350,y+62,v,44);tx(d,'xmin'+i,275+i*350,y+113,'xmin '+[100,103,107][i],24);tx(d,'xmax'+i,275+i*350,y+146,'xmax '+[103,107,'—'][i],24);if(i<2)line(d,'chain'+i,432+i*350,y+85,466+i*350,y+85);});d.circle('reader',275+step*350,y+230,25,P.blue);line(d,'read',275+step*350,y+200,275+step*350,y+180,P.blue);}
+function analyticsStorageLayout(d,step) {
+  const rides=[['JFK','card','$36'],['LGA','card','$24'],['JFK','cash','$30']];
+  const fields=['Pickup','Payment','Fare'];
+  d.text('storage-query',65,174,'SELECT avg(fare) FROM rides;',29,P.ink,'start');
+  d.text('storage-example',1215,174,'Three made-up rides',23,P.muted,'end');
+  for (const [side,x] of [['row',45],['column',655]]) {
+    const column=side==='column';
+    d.rect(side+'-panel',x,204,580,404,P.white,P.line,12);
+    d.text(side+'-heading',x+24,235,column?'Column storage':'Row storage',31,P.ink,'start',650);
+    d.text(side+'-intro',x+24,269,column?"Keep one field’s values together.":"Keep one ride’s fields together.",24,P.muted,'start');
+    for(let group=0;group<3;group++) {
+      const y=313+group*96;
+      d.text(side+'-group-'+group,x+24,y-17,column?['Pickup locations','Payment types','Fares'][group]:'Ride '+(group+1),22,P.muted,'start',600);
+      for(let slot=0;slot<3;slot++) {
+        const ride=column?slot:group,field=column?group:slot;
+        const key=side+'-ride-'+ride+'-field-'+field;
+        const fare=step>=3&&field===2,row=step===1&&!column&&ride===0;
+        const fill=fare?P.greenLight:row?P.orangeLight:P.bg;
+        const stroke=fare?P.green:row?P.orange:step===2&&column?P.blue:P.line;
+        const cx=x+24+slot*177;
+        d.rect(key,cx,y,177,60,fill,stroke,0,fare||row?3:1.5);
+        d.text(key+'-label',cx+88.5,y+14,column?'Ride '+(ride+1):fields[field],19,P.muted);
+        d.text(key+'-value',cx+88.5,y+43,rides[ride][field],28,P.ink,'middle',650);
+      }
+    }
+    d.text(side+'-takeaway',x+290,587,column?'Read fares; skip pickup and payment.':'Fares sit beside other fields.',23,P.ink,'middle',600);
+  }
+  if(step===4) {
+    d.rect('storage-answer',65,623,1150,42,P.greenLight,'none',7);
+    d.text('storage-average',640,644,'Same answer: ($36 + $24 + $30) ÷ 3 = $30',28,P.ink,'middle',650);
+  }
+}
 const draws={
 6:[
 (d,s)=>title(d,['B+ trees'],()=>{heap(d,'h',120,300,5,8,s? [14]:[]);treeNode(d,'r',920,290,[36]);treeNode(d,'l',800,460,[28,31],true);treeNode(d,'rr',1060,460,[36,39],true);branch(d,'bl',920,352,800,460);branch(d,'br',920,352,1060,460);if(s)line(d,'link',790,520,435,360,P.orange);}),
@@ -95,7 +127,7 @@ const draws={
 (d,s)=>{const names=['files','buffers','records','iterators','SQL','indexes','WAL','isolation'];names.forEach((v,i)=>{const x=120+(i%4)*290,y=145+Math.floor(i/4)*285;d.box('layer'+i,x,y,240,140,v,i%3===s?P.greenLight:P.white,P.line,28);if(i<3||i>3&&i<7)line(d,'edge'+i,x+245,y+70,x+280,y+70);});}
 ],
 10:[
-(d,s)=>title(d,['The analytics stack','In-database machine learning'],()=>{for(let r=0;r<5;r++)for(let c=0;c<9;c++){d.rect('cell'+r+c,200+c*98,300+r*53,83,40,s===0?(r===2?P.orangeLight:P.white):(c===4?P.greenLight:P.white),P.line,5);}}),
+analyticsStorageLayout,
 (d,s)=>{for(let r=0;r<7;r++)for(let c=0;c<12;c++){const x=s===2?170+r*140:125+c*86,y=s===2?165+c*36:185+r*60;d.rect('cell'+r+c,x,y,s===2?120:70,s===2?26:45,s===0?(r===3?P.orangeLight:P.white):(c===5?P.greenLight:P.white),P.line,4);}if(s===2)tx(d,'rotate',1060,625,'90°',38,P.green);},
 (d,s)=>{dotgrid(d,'events',140,265,100,10,s?100:0,29,8);line(d,'agg',550,420,790,420);[3,6,4,8].forEach((n,i)=>d.rect('group'+i,840+i*85,550-n*30,60,s?n*30:5,P.green,'none',6));if(s===2)tx(d,'avg',990,625,'AVG',38);},
 (d,s)=>{const values=[[1,3,12.4,0],[2,3,8.1,1],[3,4,22,0],[4,4,9.7,0],[5,5,15.2,1],[6,5,31.9,0]];values.forEach((row,r)=>row.forEach((v,c)=>{chip(d,'c'+r+c,235+c*210,125+r*76,v,s===0?P.white:c===2?P.greenLight:P.orangeLight,175,60);}));if(s===2)tx(d,'used',640,635,'24 → 6',45);},
@@ -1464,18 +1496,22 @@ const plans = [
     "date": "2026-10-08",
     "scenes": [
       {
-        "title": "The Analytics Stack & In-Database ML",
+        "title": "Same rides, two storage layouts",
         "minutes": 2,
-        "kind": "title",
-        "notes": "Open on a matrix representing the same rides in both workloads. First highlight a complete row, then a numeric column across every row. Ask what changed: the question, not the underlying information. Expected: physical layout should follow the access pattern. This lecture connects bytes moved, compression, execution batches and file metadata to analytical systems. The scheduled ten-minute Quiz 6 is separate from this sixty-minute teaching deck. Extend the same operators to machine learning: fit coefficients with an aggregate, save a model table, and score rows with a query. Reserve ten teaching minutes for the two ML scenes.",
+        "kind": "visual",
+        "clarityNative": true,
+        "notes": "Start with the same three made-up taxi rides as the reading. Introduce pickup, payment, and fare before comparing how storage groups the values. Highlight one complete ride, then the column groups, then only the three fares. Ask students to calculate the average before revealing $30. These strips show grouping, not disk-page boundaries or measured reads. The ten-minute Quiz 6 is separate from this sixty-minute teaching deck. Later scenes connect the layout to compression, execution batches, file metadata, and training a model with SQL.",
         "id": "the-analytics-stack",
-        "steps": 2,
+        "steps": 5,
         "states": [
-          "Rows serve a lookup",
-          "Columns serve an aggregate"
+          "Meet the three rides",
+          "Keep each ride together",
+          "Group values by field",
+          "Read only the fares",
+          "Calculate the same average"
         ],
         "sources": [
-          "lectures/lecture-10/analytics.html"
+          "lectures/lecture-10/analytics.html#storage-layout"
         ]
       },
       {

@@ -36,10 +36,25 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,231);assert.equal(builds,838);
+assert.equal(slides,231);assert.equal(builds,841);
 const draw=(lecture,id,step)=>V.sceneDrawing(decks[lecture].scenes.find(s=>s.id===id),step);
 const text=(items,key)=>{const a=items.find(i=>i.key===key);assert(a,'missing '+key);return a.text;};
 const strings=items=>items.filter(i=>i.tag==='text').map(i=>i.text).join('\n');
+// The lecture opens with the reading's taxi example and delays the answer.
+const opening=decks[10].scenes[0];
+assert.equal(opening.id,'the-analytics-stack');
+assert.equal(opening.title,'Same rides, two storage layouts');
+const taxiRides=[['JFK','card','$36'],['LGA','card','$24'],['JFK','cash','$30']];
+for(let step=0;step<5;step++) {
+ const items=draw(10,opening.id,step);
+ for(const side of ['row','column'])taxiRides.forEach((ride,r)=>ride.forEach((value,f)=>{
+  const key=side+'-ride-'+r+'-field-'+f;
+  assert.equal(text(items,key+'-value'),value,'both layouts retain the same ride data');
+  assert.equal(items.find(a=>a.key===key).attrs.fill===V.palette.greenLight,step>=3&&f===2,'highlight only the fares at the query step');
+ }));
+ assert.equal(items.some(a=>a.key==='storage-average'),step===4,'let the class predict before the answer');
+}
+assert.match(text(draw(10,opening.id,4),'storage-average'),/\$30$/);
 // Recovery must replay changes backward, preserving committed work, and flush last.
 let value=10;const finished=new Set(),restored=[];
 for(const rec of fixtures.undoLog.slice().reverse()){
