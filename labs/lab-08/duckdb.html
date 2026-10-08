@@ -431,7 +431,34 @@ loss = loss_fn(prediction, (y - y_mean) / y_std)</code></pre>
 <p>Here, 0.2 × $10 + $20 = <strong>$22</strong>, and 0.8 × $10 + $20 = <strong>$28</strong>. Each toy prediction is $2 away from its recorded fare, so their mean absolute error is $2. Converting a new prediction needs only the saved training statistics, not that ride's actual fare. These invented numbers explain the calculation; the real lab results appear below. See <a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.MSELoss.html">PyTorch's MSELoss definition</a> for the loss formula.</p>
 
 <h3>3. Call the trained network from SQL</h3>
-<p>The script registers <code>predict_fare_nn</code> as an Arrow Python function on its DuckDB connection. DuckDB passes a batch of distances to that function, and PyTorch returns a batch of predicted fares. No weights change during prediction.</p>
+<h4 id="pytorch-arrow">What is an Arrow function?</h4>
+<p>Here, <strong>Arrow</strong> means <strong>Apache Arrow</strong>, a format for storing columns of values in memory. An <strong>Arrow Python UDF</strong> is a function we provide to DuckDB that accepts and returns batches in this format. UDF means <em>user-defined function</em>.</p>
+<p>We register the lab's prediction function like this:</p>
+<pre><code class="language-python">con.create_function(
+    "predict_fare_nn", predict_fare,
+    ["DOUBLE"], "DOUBLE",
+    type="arrow")</code></pre>
+<table>
+  <thead><tr><th>Argument</th><th>What it tells DuckDB</th></tr></thead>
+  <tbody>
+    <tr><td><code>"predict_fare_nn"</code></td><td>The function name to use in SQL.</td></tr>
+    <tr><td><code>predict_fare</code></td><td>The Python function to call. Passing its name without parentheses gives DuckDB the function itself.</td></tr>
+    <tr><td><code>["DOUBLE"], "DOUBLE"</code></td><td>One numeric SQL argument and one numeric result per row. <code>DOUBLE</code> is a floating-point number. These declarations describe row values, not batch sizes.</td></tr>
+    <tr><td><code>type="arrow"</code></td><td>Send column batches to Python and expect an Arrow batch back.</td></tr>
+  </tbody>
+</table>
+<p><strong>SQL still gets one fare per ride.</strong> DuckDB groups distances into a batch before calling Python. The <code>distances</code> parameter receives a PyArrow <code>ChunkedArray</code>, a column that can hold multiple chunks. The lab's callback converts it to a tensor and applies the saved model:</p>
+<pre><code class="language-python">def predict_fare(distances):
+    x = torch.tensor(
+        distances.to_numpy(), dtype=torch.float32
+    ).reshape(-1, 1)
+    with torch.inference_mode():
+        fares = model((x - x_mean) / x_std) * y_std + y_mean
+    return pa.array(fares.flatten().numpy().astype(np.float64))</code></pre>
+<p><code>pa</code> is the <code>pyarrow</code> module. <code>pa.array(...)</code> packages the predictions for DuckDB. Reusing the previous made-up example, the input batch <code>[3.0, 5.0]</code> returns fares <code>[22.0, 28.0]</code>. Return the <strong>same number of values in matching positions</strong>: the first fare belongs to the first distance. Sorting the predictions would attach them to the wrong rides. No weights change during prediction.</p>
+<p><strong>Why use batches?</strong> One Python call can process many distances, reducing call overhead. The model can also work on the whole tensor at once. This script uses <code>torch.tensor</code>, which copies data, so the conversion still has a cost. See <a href="https://duckdb.org/docs/stable/clients/python/function.html#arrow">DuckDB's Arrow function documentation</a>.</p>
+<p><strong>Two uses of Arrow in this lab:</strong> <code>to_arrow_reader(batch_size=1024)</code> sends query results to our Python <em>training loop</em>. <code>type="arrow"</code> lets a SQL query call our Python <em>prediction function</em> with batches. DuckDB controls the prediction batch sizes; the earlier 1,024 setting does not set them.</p>
+<h4>Use the registered function in SQL</h4>
 <pre><code class="language-sql">SELECT ride_id, distance, fare,
        predict_fare_nn(distance) AS predicted_fare
 FROM features

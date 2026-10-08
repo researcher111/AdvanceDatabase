@@ -444,11 +444,50 @@ function analyticsPyTorchScaling(d,step) {
   ][step],23,P.muted);
   d.link('torch-lab-link',65,668,'Read the line-by-line explanation','../labs/lab-08/duckdb.html#pytorch-scaling',22);
 }
+function analyticsPyTorchArrow(d,step) {
+  d.text('torch-arrow-definition',640,175,'Apache Arrow is a format for columns of values in memory.',27,P.ink);
+  d.rect('torch-arrow-code-panel',45,207,1190,127,P.white,P.line,10);
+  [
+    'con.create_function("predict_fare_nn", predict_fare,',
+    '                    ["DOUBLE"], "DOUBLE",',
+    '                    type="arrow")'
+  ].forEach((text,i)=>{
+    const y=235+i*38,active=i===(step===0?2:0);
+    if(active)d.rect('torch-arrow-code-highlight-'+i,57,y-18,1166,36,P.greenLight,'none',4);
+    d.add('torch-arrow-code-line-'+i,'text',{x:70,y,fill:active?P.green:P.ink,'font-size':27,'font-family':'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace','text-anchor':'start','dominant-baseline':'middle','xml:space':'preserve',style:'white-space: pre; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;'},text);
+  });
+  d.text('torch-arrow-example',640,355,'Illustrative batch from the previous example',22,P.muted);
+  d.text('torch-arrow-input-title',217,388,'Arrow input',27,P.blue,'middle',650);
+  d.text('torch-arrow-callback-title',640,388,'Python callback',27,P.ink,'middle',650);
+  d.text('torch-arrow-output-title',1062,388,'Arrow output',27,P.green,'middle',650);
+  d.table('torch-arrow-input',65,414,[120,185],[['Position','Distance (mi)'],['0','3.0'],['1','5.0']],{rowHeight:51,fontSize:23});
+  d.arrow('torch-arrow-to-python',381,490,428,490,P.blue,3);
+  d.rect('torch-arrow-callback',440,414,400,153,step?P.greenLight:P.white,step?P.green:P.line,10);
+  [
+    'predict_fare(distances)',
+    'Convert distances to tensors',
+    'Apply the trained model',
+    'Return pa.array(...)'
+  ].forEach((text,i)=>d.text('torch-arrow-callback-line-'+i,640,440+i*35,text,i===0?25:23,i===0?P.ink:step?P.green:P.muted,'middle',i===0?650:500));
+  d.arrow('torch-arrow-to-sql',852,490,899,490,step?P.green:P.line,3);
+  d.table('torch-arrow-output',910,414,[120,185],[['Position','Fare ($)'],['0',step?'22.0':'?'],['1',step?'28.0':'?']],{rowHeight:51,fontSize:23});
+  d.text('torch-arrow-contract',640,610,step
+    ? 'Return one fare per input distance, in the same batch position.'
+    : 'type="arrow" sends many values to Python in one function call.',26,P.ink);
+  d.text('torch-arrow-benefit',640,642,step
+    ? 'SQL gets one result per ride. This callback reuses the trained model.'
+    : 'Batch calls reduce Python call overhead. DuckDB chooses the batch size.',23,P.muted);
+  d.link('torch-lab-link',65,670,'Read about Arrow functions','../labs/lab-08/duckdb.html#pytorch-arrow',22);
+}
 function analyticsPyTorch(d,step) {
   // Pause after the network diagram to unpack prediction, loss, and conversion to dollars.
   if(step>=2&&step<=5){analyticsPyTorchScaling(d,step-2);return;}
-  if(step>5)step-=4;
-  d.text('ml-task',640,175,'Lab 8: 60,000 real taxi rides. Predict fare from distance.',27,P.ink);
+  if(step===7||step===8){analyticsPyTorchArrow(d,step-7);return;}
+  if(step>=9)step-=6;
+  else if(step===6)step=2;
+  d.text('ml-task',640,175,step===2
+    ? 'Apache Arrow stores columns in memory. type="arrow" enables batch calls.'
+    : 'Lab 8: 60,000 real taxi rides. Predict fare from distance.',27,P.ink);
   d.text('ml-code-title',65,207,[
     'Python · DuckDB selects training batches',
     'Python · PyTorch learns the weights (excerpts)',
@@ -477,7 +516,7 @@ function analyticsPyTorch(d,step) {
   } else if(step<3) {
     const boxes=step===0
       ? [['DuckDB','50,000 training rides'],['Arrow batches','Up to 1,024 rows per batch'],['PyTorch tensors','Distances x and fares y']]
-      : [['SQL function name','predict_fare_nn'],['Python function','predict_fare'],['Trained PyTorch model','Return predicted fares']];
+      : [['SQL function name','predict_fare_nn'],['Python function','predict_fare'],['Batch interface','Arrow inputs and outputs']];
     boxes.forEach(([heading,detail],i)=>{
       const y=245+i*119;
       d.rect('torch-flow-'+i,825,y,405,85,i===1?P.blueLight:P.greenLight,i===1?P.blue:P.green,10);
@@ -2351,7 +2390,7 @@ const plans = [
         "kind": "visual",
         "clarityNative": true,
         "id": "duckdb-pytorch-fare-model",
-        "steps": 9,
+        "steps": 11,
         "states": [
           "DuckDB selects training batches",
           "PyTorch learns the weights",
@@ -2360,14 +2399,17 @@ const plans = [
           "Measure the batch loss",
           "Convert predictions back to dollars",
           "Register the prediction function",
+          "Send an Arrow batch to Python",
+          "Return a fare for each batch position",
           "Predict the reserved rides",
           "Compare prediction errors"
         ],
-        "notes": "Use the optional Lab 8 activity as a concrete local bridge between the small SQL regression and the managed BigQuery ML example. This example uses the real, cleaned 2024 taxi sample rather than the six made-up rides. Train on 50,000 January–October rides and reserve the 10,000 November–December rides for evaluation. DuckDB filters and projects rows, Arrow carries batches, and Python converts them to tensors. ORDER BY hash(ride_id) gives the training rides a repeatable mixed order so batches do not follow date order. This mixing is useful but optional. The same mixed order repeats each epoch, and the month filter still excludes the test rides. In the network diagram, the single distance node connects to all 16 hidden nodes through the first Linear layer, then all 16 hidden nodes connect to the fare output through the second Linear layer. Each line is a learned weight. ReLU acts at the hidden nodes. Biases and scaling are omitted from the diagram. PyTorch trains a one-input, 16-hidden-unit, one-output ReLU network for 30 epochs. The source code also learns scaling from training rows only. Four detail builds unpack the two prediction and loss lines. Use two invented rides with distances 3 and 5 miles and recorded fares 20 and 30 dollars. Assume the full training set already gave distance mean 3 and std 2, and fare mean 20 and std 10. Those statistics are not computed from the displayed batch. The scaled distances and targets are 0 and 1. Assume the current model outputs 0.2 and 0.8, giving squared errors 0.04 and 0.04 and mean loss 0.04. This loss is in squared standardized-fare units, not dollars. Conversion back to dollars gives 22 and 28, each two dollars away from the recorded fare. The toy values illustrate the calculation and are separate from the measured lab results later. The forward prediction and loss calculation do not update weights; optimizer.step does that after backward computes gradients. Projected Python is an excerpt: imports, tensor conversion, scaling statistics, optimizer setup, and the surrounding loops are in the linked script. Create the network once, then update it on each training batch. The predict_fare callback runs the frozen model under inference_mode and returns an Arrow array. create_function registers it as predict_fare_nn on this connection. It is not a built-in DuckDB function. The test SELECT invokes PyTorch through that callback without retraining. Its first two sample predictions are rounded from the completed run: ride 50000, distance 2.00, actual fare 20.50, neural prediction 15.17; ride 50001, distance 0.94, actual fare 10.00, prediction 9.50. The script materializes predictions with both linear_fare and neural_fare before the final aggregate. In the documented run with seed 6042, DuckDB 1.5.6, and PyTorch 2.14.1, MAE is 3.53 dollars for the straight line and 3.26 for the neural network. Both use only distance and the same training/test split. These are measured results for one sample and configuration, not guaranteed accuracy or evidence that larger models always win. The next slide moves training management into Google Cloud.",
+        "notes": "Use the optional Lab 8 activity as a concrete local bridge between the small SQL regression and the managed BigQuery ML example. This example uses the real, cleaned 2024 taxi sample rather than the six made-up rides. Train on 50,000 January–October rides and reserve the 10,000 November–December rides for evaluation. DuckDB filters and projects rows, Arrow carries batches, and Python converts them to tensors. ORDER BY hash(ride_id) gives the training rides a repeatable mixed order so batches do not follow date order. This mixing is useful but optional. The same mixed order repeats each epoch, and the month filter still excludes the test rides. In the network diagram, the single distance node connects to all 16 hidden nodes through the first Linear layer, then all 16 hidden nodes connect to the fare output through the second Linear layer. Each line is a learned weight. ReLU acts at the hidden nodes. Biases and scaling are omitted from the diagram. PyTorch trains a one-input, 16-hidden-unit, one-output ReLU network for 30 epochs. The source code also learns scaling from training rows only. Four detail builds unpack the two prediction and loss lines. Use two invented rides with distances 3 and 5 miles and recorded fares 20 and 30 dollars. Assume the full training set already gave distance mean 3 and std 2, and fare mean 20 and std 10. Those statistics are not computed from the displayed batch. The scaled distances and targets are 0 and 1. Assume the current model outputs 0.2 and 0.8, giving squared errors 0.04 and 0.04 and mean loss 0.04. This loss is in squared standardized-fare units, not dollars. Conversion back to dollars gives 22 and 28, each two dollars away from the recorded fare. The toy values illustrate the calculation and are separate from the measured lab results later. The forward prediction and loss calculation do not update weights; optimizer.step does that after backward computes gradients. Projected Python is an excerpt: imports, tensor conversion, scaling statistics, optimizer setup, and the surrounding loops are in the linked script. Create the network once, then update it on each training batch. The predict_fare callback runs the frozen model under inference_mode and returns an Arrow array. create_function registers it as predict_fare_nn on this connection. Arrow means Apache Arrow, a format for column data in memory. The SQL function has one DOUBLE input and one DOUBLE output per row, while type=arrow tells DuckDB to call the Python function with a batch of values. The two Arrow builds show distances 3 and 5 entering one callback and illustrative fares 22 and 28 returning at matching positions. The real callback receives a PyArrow ChunkedArray, converts it to tensors, applies the fixed model, and returns a PyArrow array with the same number of entries. Returning values in a different order would attach fares to the wrong rides. DuckDB controls these UDF batch sizes; the earlier to_arrow_reader batch_size=1024 applies only to the training loop. This lab copies values into torch.tensor, so avoid claiming that every conversion is free. It is not a built-in DuckDB function. The test SELECT invokes PyTorch through that callback without retraining. Its first two sample predictions are rounded from the completed run: ride 50000, distance 2.00, actual fare 20.50, neural prediction 15.17; ride 50001, distance 0.94, actual fare 10.00, prediction 9.50. The script materializes predictions with both linear_fare and neural_fare before the final aggregate. In the documented run with seed 6042, DuckDB 1.5.6, and PyTorch 2.14.1, MAE is 3.53 dollars for the straight line and 3.26 for the neural network. Both use only distance and the same training/test split. These are measured results for one sample and configuration, not guaranteed accuracy or evidence that larger models always win. The next slide moves training management into Google Cloud.",
         "sources": [
           "labs/lab-08/duckdb.html#pytorch",
           "labs/lab-08/starter/pytorch_fares.py",
           "https://docs.pytorch.org/docs/stable/generated/torch.nn.MSELoss.html",
+          "https://duckdb.org/docs/stable/clients/python/function.html#arrow",
           "https://duckdb.org/2023/07/07/python-udf#predicting-taxi-fare-costs-ibis--pyarrow-udf"
         ]
       },

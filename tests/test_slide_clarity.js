@@ -36,7 +36,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,234);assert.equal(builds,864);
+assert.equal(slides,234);assert.equal(builds,866);
 const resources=decks[10].scenes.at(-1);
 assert.equal(resources.id,'more-models-with-duckdb');
 const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');

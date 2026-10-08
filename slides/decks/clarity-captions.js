@@ -885,7 +885,9 @@ window.CourseClarityCaptions = {
       "The model predicts a scaled fare. Compare it with the recorded fare on the same scale.",
       "Loss measures how far the predictions are from the targets across the batch.",
       "Convert the network’s output back to dollars before returning it to SQL.",
-      "Register a SQL function that calls the trained PyTorch model.",
+      "Register a SQL function that passes Arrow batches to our Python prediction function.",
+      "DuckDB sends a batch of distances to Python using Apache Arrow.",
+      "Python returns the predicted fares as an Arrow array. Each result matches its input position.",
       "SQL calls the model on November–December rides. Their recorded fares let us check its predictions.",
       "In this run, the neural network has a smaller average prediction error than the straight line."
     ],
