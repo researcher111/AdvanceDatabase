@@ -137,6 +137,11 @@ The legacy SQL grader does not accept these files.
 
 ## Maintainer checks
 
+For lecture-writing revisions, use [the CLEAR explanation guide](<guide for agents/clear-explanations.md>)
+and [the storytelling guide](<guide for agents/lecture-storytelling.md>). They save the source
+transcripts, reusable video-analysis templates, teaching checks, and the examples
+applied to Lecture 11's reading and slides.
+
 Website downloads link directly to the tracked files in this repository;
 GitHub Pages publishes the root of `main`. There is no separate download copy.
 Run `python3 scripts/check_downloads.py` to check download targets locally.

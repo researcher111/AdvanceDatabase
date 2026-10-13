@@ -107,6 +107,81 @@
     }
   });
 
+  // Link the existing geometric construction to a familiar grouping mechanism.
+  // Keep its original animation, IDs, and build count; only add the final mapping.
+  const shelfScene=decks[11]?.scenes.find(s=>s.id==='build-an-ivf-index');
+  if(shelfScene){
+    const original=shelfScene.draw;
+    shelfScene.draw=(d,s)=>{
+      original(d,s);
+      if(s===3)label(d,'shelf-mapping',640,615,'Shelf analogy: centroid = label · list = shelf · vector = book',P.muted,25);
+    };
+  }
+
+  use(11,'meaning-becomes-geometry',(d,s)=>{
+    label(d,'question-heading',330,235,'Maya’s question',P.green,27);
+    label(d,'question-line-1',330,286,'How does a database',P.ink,31);
+    label(d,'question-line-2',330,325,'recover after a crash?',P.ink,31);
+    label(d,'passage-heading',955,235,'Stored passage',P.green,27);
+    label(d,'passage-line-1',955,286,'Replay the durable log',P.ink,31);
+    label(d,'passage-line-2',955,325,'to restore committed writes.',P.ink,29);
+    if(s===0){
+      d.line('word-boundary',640,258,640,356,P.line,2);
+      label(d,'no-match',640,492,'Exact string match: no result',P.orange,35);
+      label(d,'first-question',640,554,'The passage is there. The wording differs.',P.ink,28);
+    }else{
+      label(d,'shared-model',640,402,'Compatible embedding model',P.orange,29);
+      if(s===1){
+        d.arrow('embed-question',330,363,330,468,P.green,3);
+        d.arrow('embed-passage',955,363,955,468,P.green,3);
+        d.circle('question-vector',330,513,17,P.purple);
+        label(d,'question-vector-label',330,562,'question vector q',P.purple,28);
+        d.circle('passage-vector',955,513,17,P.green);
+        label(d,'passage-vector-label',955,562,'passage vector v',P.green,28);
+      }else{
+        d.circle('question-vector',470,510,17,P.purple);
+        d.circle('passage-vector',635,510,17,P.green);
+        d.line('nearby',491,510,614,510,P.orange,3,'6 6');
+        label(d,'question-vector-label',470,557,'q',P.purple,28);
+        label(d,'passage-vector-label',730,557,'passage candidate',P.green,28);
+        [[920,473],[1000,535],[230,515]].forEach(([x,y],i)=>d.circle('other-'+i,x,y,10,P.muted));
+      }
+    }
+    label(d,'story-label',640,633,'Fictional rehearsal · geometry is illustrative',P.muted,23);
+  });
+
+  use(11,'diagnose-the-index',(d,s)=>{
+    label(d,'diagnostic-question',640,235,'Noor opens the passage: “Does it explain recovery?”',P.ink,29);
+    label(d,'index-heading',340,331,'ANN missed useful exact neighbors',P.orange,27);
+    if(s>=1){
+      d.arrow('index-test',340,359,340,438,P.orange,3);
+      label(d,'index-fix',340,485,'Increase search breadth',P.ink,29);
+      label(d,'index-check',340,534,'Compare again with exact IDs',P.muted,25);
+    }
+    if(s>=2){
+      d.line('branches',640,305,640,570,P.line,2);
+      label(d,'representation-heading',951,331,'Even exact neighbors are unhelpful',P.green,27);
+      d.arrow('representation-test',951,359,951,438,P.green,3);
+      label(d,'representation-fix',951,485,'Inspect chunks and embeddings',P.ink,28);
+      label(d,'representation-check',951,534,'Check metadata and ranking too',P.muted,25);
+    }
+    label(d,'diagnostic-foot',640,633,'Neighbor agreement and evidence usefulness need different checks.',P.muted,24);
+  });
+
+  use(11,'rebuild-the-retrieval-contract',(d,s)=>{
+    label(d,'opening-question',640,237,'“How does a database recover after a crash?”',P.ink,32);
+    const names=['Save exact IDs','Search fewer candidates','Compare neighbor IDs','Read the passage'];
+    [180,490,800,1110].forEach((x,i)=>{
+      if(i>s)return;
+      d.circle('decision-'+i,x,400,55,i===3?P.orangeLight:P.greenLight,i===3?P.orange:P.green,3);
+      label(d,'decision-number-'+i,x,412,String(i+1),i===3?P.orange:P.green,34);
+      const lines=i===1?['Search fewer','candidates']:i===2?['Compare','neighbor IDs']:[names[i]];
+      lines.forEach((line,j)=>label(d,'decision-label-'+i+'-'+j,x,505+j*34,line,P.ink,26));
+      if(i<s)d.arrow('next-decision-'+i,x+68,400,x+240,400,P.orange,3);
+    });
+    if(s===3)label(d,'closing-question',640,618,'Maya can defend the search. She still has to check the evidence.',P.muted,25);
+  });
+
   use(11,'probe-the-lists',(d,s)=>{
     // Exact shared fixture: all four vectors and both centroids have unit length.
     const ox=345,oy=430,scale=166,pos=([x,y])=>[ox+x*scale,oy-y*scale];

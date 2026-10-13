@@ -899,93 +899,93 @@ window.CourseClarityCaptions = {
   },
   "11": {
     "meaning-becomes-geometry": [
-      "Documents begin as text with meaning we want to compare.",
-      "The embedding model maps each document to coordinates.",
-      "Search compares those coordinates to find nearby candidates."
+      "Maya asks about crash recovery. The passage uses different words, so an exact string search fails.",
+      "Embed the question and the passage with compatible conventions so their vectors can be compared.",
+      "Nearby vectors suggest candidates. Open the passage to check whether it answers the question."
     ],
     "embedding": [
-      "The same embedding model converts content into a vector.",
-      "This toy embedding has four coordinates.",
-      "Compare vectors only under compatible model, dimension, and preprocessing conventions."
+      "Noor turns the stored passage into coordinates using the embedding model.",
+      "These four coordinates illustrate an embedding; they are not a real model output.",
+      "The question must use a compatible model, version, dimension, and preprocessing."
     ],
     "direction-and-normalization": [
-      "A vector has both a length and a direction.",
-      "Cosine similarity compares directions rather than vector lengths.",
-      "For unit-length vectors, the dot product equals cosine similarity."
+      "Before scoring, Maya separates a vector’s direction from its length.",
+      "Rotating toward q increases cosine similarity; increasing length alone does not.",
+      "Normalize both vectors to unit length so their dot product equals cosine similarity."
     ],
     "the-exact-baseline": [
-      "Exact search starts with every stored vector as a candidate.",
-      "Score the first 24 of 72 vectors.",
-      "Score the next 24; no region has been skipped.",
-      "After all 72 scores, choose the highest-ranked neighbors."
+      "Maya keeps every stored vector in the exact-search candidate set.",
+      "Score the first 24 of 72 vectors and retain the best candidates so far.",
+      "Score the next 24; a better neighbor could still be among the unscored vectors.",
+      "After all 72 scores, save the top neighbors as the reference for testing a shortcut."
     ],
     "price-the-baseline": [
-      "4,000 vectors with 64 coordinates require 256,000 coordinate products per query.",
-      "One million 1,536-dimensional vectors require 1.536 billion products per query.",
-      "At 100 queries per second, the larger example requires 1.536 trillion products per second."
+      "For Lab 9’s 4,000 vectors, one query needs 4,000 × 64 = 256,000 coordinate products.",
+      "At one million vectors with 1,536 coordinates, the same loop needs 1.536 billion products.",
+      "At ten million vectors and 100 queries/s, it needs 1.536 trillion products/s. Measure latency too."
     ],
     "skipping-with-a-contract": [
-      "Probe one region and accept that a true neighbor may be elsewhere.",
-      "Probing another region examines more candidates.",
-      "A larger search budget can improve recall, at the cost of more work."
+      "Noor searches one region. A true neighbor in another region can be skipped.",
+      "Search another region to evaluate more candidates under the same similarity metric.",
+      "Searching fewer candidates can miss true neighbors; measure that loss against exact search."
     ],
     "build-an-ivf-index": [
-      "Begin with a small set of candidate cluster centers.",
-      "Assign each vector to its nearest center under the chosen metric.",
-      "Update the centers and repeat assignment during training.",
-      "Store vector IDs in lists attached to their final centers."
+      "A centroid acts like a shelf label. Choose initial centers for the groups.",
+      "Assign each vector to its nearest centroid, like filing a book on a shelf.",
+      "Update the centers and repeat assignment. The real groups follow vector geometry.",
+      "These lists are the shelves. Search a few lists, then score the vectors inside them."
     ],
     "probe-the-lists": [
-      "Four unit vectors are divided between two centroid lists.",
-      "q is closer to c0, so probing one list scores only v0.",
-      "Only v0 is scored: two centroid comparisons plus one candidate comparison.",
-      "Exact search ranks v1 first, but its list was skipped: Recall@2 = 1 / 2.",
-      "Probing both lists finds the exact top two, with six comparisons versus four for exact search."
+      "Maya’s whiteboard has four toy vectors in two lists. Build-time assignment is fixed.",
+      "The query prefers c0. Predict which vector a one-list search can score.",
+      "Probe 1 returns only v0: two centroid comparisons plus one candidate comparison.",
+      "The skipped v1 scores 0.96, above v0’s 0.80. Recall@2 is only 1 / 2.",
+      "Probe both lists to recover v1, paying six comparisons versus four for exact search."
     ],
     "count-the-saved-work": [
-      "Exact search scores all 4,000 stored vectors.",
-      "IVF first scores 20 centroids.",
-      "Four balanced lists contribute about 800 candidate vectors.",
-      "Estimated work is 20 + 800 = 820 comparisons; real list sizes can differ."
+      "Maya’s exact baseline evaluates all 4,000 stored vectors.",
+      "IVF still has to compare the query with 20 centroids.",
+      "With balanced lists, four probes evaluate about 4 × 200 = 800 candidate vectors.",
+      "Estimate 20 + 800 = 820 evaluations. The measured lists need not be balanced."
     ],
     "navigate-a-graph": [
-      "Start from the graph’s entry point in the upper layer.",
-      "Follow a useful upper-layer connection toward the query.",
-      "A longer connection crosses the space with fewer local steps.",
+      "Noor tries a graph instead of centroid lists, starting at its upper-layer entry point.",
+      "Follow an upper-layer connection toward the query.",
+      "A long connection crosses the space before local refinement.",
       "Descend to the denser lower layer.",
-      "Follow local connections to refine the candidate set.",
-      "A broader candidate search spends more work to reduce missed neighbors."
+      "Follow local links to refine the candidates.",
+      "Increase ef_search to explore more candidates, then measure the change in recall."
     ],
     "measure-a-miss": [
-      "The exact top ten define the reference set.",
-      "Seven returned IDs overlap with the exact set; three do not.",
-      "Recall@10 is 7 / 10 = 0.70, regardless of the returned order."
+      "Maya puts the approximate result beside the saved exact top ten.",
+      "Count seven shared IDs. The shortcut missed three exact neighbors.",
+      "Recall@10 = 7 / 10 = 0.70. This measures neighbor agreement, not passage usefulness."
     ],
     "choose-an-operating-point": [
-      "Each plotted setting has a comparison count and recall value.",
-      "Require recall of at least 0.90; P = 4 is the first qualifying setting.",
-      "P = 4 also stays below the 1,000-comparison budget in these example results."
+      "These Lab 9 measurements put recall beside comparison counts for each probe setting.",
+      "Noor asks for at least 0.90 mean recall. Which settings remain?",
+      "With at most 1,000 average comparisons too, choose P = 4: recall 0.9175, count 924."
     ],
     "memory-and-update-budgets": [
-      "IVF stores centroids, list membership, and vector data.",
-      "A graph index also stores neighbor links and must build them.",
-      "Compressed coordinates save memory but introduce another accuracy tradeoff."
+      "Before keeping the shortcut, Maya counts IVF’s centroids, lists, and vector payload.",
+      "HNSW also needs neighbor links and work to construct them.",
+      "Compression can save memory but adds another accuracy trade to measure."
     ],
     "where-the-index-lives": [
-      "A database can manage vectors alongside rows and transactions.",
-      "A library inside the process leaves persistence and synchronization to the application.",
-      "A separate service adds a network boundary and a data-synchronization responsibility."
+      "Maya asks who updates the index when a source changes. A database can keep it beside rows.",
+      "An embedded library leaves persistence and synchronization to the application.",
+      "A separate service adds a network boundary and responsibility for synchronized copies."
     ],
     "diagnose-the-index": [
-      "First measure whether ANN missed neighbors found by exact search.",
-      "If exact search fixes recall, tune the index or search budget.",
-      "If exact neighbors are still irrelevant, investigate the representation and task."
+      "If ANN misses useful exact neighbors, investigate the search budget.",
+      "Increase probes or graph-search breadth and compare again with exact search.",
+      "If even exact neighbors are unhelpful, inspect chunks, embeddings, metadata, or ranking."
     ],
     "rebuild-the-retrieval-contract": [
-      "Build an exact baseline before adding a shortcut.",
-      "Use the index to skip candidates under an explicit search budget.",
-      "Compare the returned IDs with the exact reference set.",
-      "Defend a setting using quality, work, memory, and update requirements."
+      "Return to Maya’s question. Establish exact neighbors before taking a shortcut.",
+      "Use an index to reduce candidate work under an explicit search budget.",
+      "Measure missed neighbor IDs across representative questions.",
+      "Searching fewer candidates can miss true neighbors; measure that loss against exact search. Check evidence too."
     ]
   },
   "12": {

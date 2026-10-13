@@ -161,7 +161,7 @@ window.CourseClarityLayout = {
   "11/the-exact-baseline": [185,248,1110,621],
   "11/price-the-baseline": [127,287,1092,608],
   "11/skipping-with-a-contract": [157,237,1107,621],
-  "11/build-an-ivf-index": [97,248,1163,569],
+  "11/build-an-ivf-index": [97,248,1163,642],
   "11/probe-the-lists": [102,198,1148,641],
   "11/count-the-saved-work": [148,246,1123,644],
   "11/navigate-a-graph": [30,260,1138,626],
