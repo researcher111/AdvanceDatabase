@@ -396,4 +396,5 @@
     },'What must survive every split?',
     'Every actual key and its RID list, sorted leaf order, correct routing, the leaf chain, and equal depth for all leaves.',
     'Toy capacity four distinct keys. Letters a–e stand for RID lists. Lab 6 nodes are in memory; the provided scan handles heap-row fetches.');
+  window.CourseClearLearning?.(deck);
 })();

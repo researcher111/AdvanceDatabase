@@ -2464,3 +2464,166 @@
     }
   }
 })();
+
+/* CLEAR applications for the existing early-course diagrams and worked examples.
+ * Apply after their native teaching cues are installed; drawings and pacing stay fixed. */
+(function () {
+  'use strict';
+  const topics = {
+    1: {
+      story: 'At a lab desk, Maya runs the student query twice and gets ada, cyd, and eli both times. Noor opens the counters: “Same question, same answer. What work changed?” This is a fictional classroom investigation.',
+      calibrate: 'Does SELECT name with a GPA condition request matching names, or prescribe which stored blocks the engine must read?',
+      answer: 'It requests a result. The engine chooses and executes a plan; matching names and block reads describe different things.',
+      opening: 'Keep the repeated query and answer visible. Ask for a reason the second run could do less work before following either route.',
+      analogy: ['lecture-01-scene-09','Use a workshop order to map responsibilities: SQL states the request, the plan supplies work instructions, operators request rows, and lower layers obtain their bytes. The actual interfaces determine what each station can do.'],
+      closing: 'Explain the same request again: SQL to plan, plan to rows, rows to bytes, bytes to resident or stored blocks. Change one condition by updating a row while its page stays cached.',
+      question: 'If a table changes between two runs while its pages stay cached, can zero new storage reads justify returning the old answer?',
+      expected: 'No. Cached pages are inputs to execution, not a saved answer. Reevaluate the query against the current buffered data; distinguish examined rows, returned rows, and storage reads.',
+      idea: 'A query’s answer and the work needed to produce it are separate properties.'
+    },
+    2: {
+      story: 'Maya requests B7 three times. Noor points to a free frame and asks where its useful copy can stay. A later caller keeps using that frame, so a new block raises the question of safe reuse. This is a fictional classroom investigation.',
+      calibrate: 'Does frame 0 have to contain block 0? What does a pin protect while a caller uses a page?',
+      answer: 'A frame is a reusable memory slot and can contain another numbered block. A positive pin count protects that frame’s current contents from replacement.',
+      opening: 'Use the repeated B7 request as the opening task. Distinguish a cached block from a cached query result before revealing the shorter request path.',
+      analogy: ['lecture-02-scene-03','Map books to blocks, work desks to frames, and active readers to pins. Replacing a book is safe only when its users finish. A reused frame retains its memory address while its bytes change.'],
+      closing: 'Return to B7 and narrate hit or miss, pin, use, unpin, and safe replacement. Keep the pool fixed and change the access order to explain a different hit rate.',
+      question: 'The oldest frame is pinned and a newer one is unpinned and dirty. Which may be reused, and can correct replacement still produce zero scan hits?',
+      expected: 'Only the unpinned frame is eligible, after dirty write-back. A scan larger than the pool can evict each block before reuse. Safety and hit rate are separate checks.',
+      idea: 'Pins and dirty writes make frame reuse safe; access order determines how useful that reuse is.'
+    },
+    3: {
+      story: 'Maya saves cyd’s byte address and renames ben to benjamin in a packed page. Noor asks whether the shifted bytes still leave that address pointing to cyd. This is a fictional classroom investigation; the next scene makes the movement visible.',
+      calibrate: 'What do Page and Buffer already know, and what additional rules are needed to interpret one student’s fields?',
+      answer: 'They manage bytes and blocks. A schema and layout supply field meanings, boundaries, and offsets.',
+      opening: 'Point to the anonymous byte grid before naming its fields. Ask students to identify the missing interpretation rule; use the saved-address failure to motivate slots.',
+      analogy: ['lecture-03-scene-04','Map equal tray compartments to slots and positions within each compartment to field offsets. Count bytes, including string prefixes and reserved content capacity; characters can take different numbers of UTF-8 bytes.'],
+      closing: 'Return to the saved address and trace slot number, field offset, page pin, and catalog lookup. Change the occupant of a deleted slot and ask what the unchanged address identifies now.',
+      question: 'Can a reused RID still be the same physical address while naming a different row? Which rules let a new process interpret its fields?',
+      expected: 'Yes. A RID is a block and slot address, not a permanent identity. The saved schema and layout specify how to interpret the new occupant’s bytes.',
+      idea: 'A layout gives bytes repeatable positions; the catalog preserves their interpretation.'
+    },
+    4: {
+      story: 'Maya asks for the name after ada and expects ben. Noor watches selection skip ben before returning cyd. This is a fictional classroom investigation over the six-row student fixture.',
+      calibrate: 'When TableScan.next() returns True, does it provide a whole result table or position the scan at one current row?',
+      answer: 'It positions the scan at one row. The caller can read that row’s fields; another next call advances again.',
+      opening: 'Start with the idle operator tower. Let the class name the call that starts work and trace the request down before revealing a returned row.',
+      analogy: ['lecture-04-scene-05','Link the interface to nested Python generators: asking for the next item resumes work and a wrapper can skip items. Rewind, field routing, and close remain explicit scan contracts. Blocking operators later qualify the streaming model.'],
+      closing: 'Return to one requested name. Narrate downward demand, skipped input rows, upward field access, and closing the root. Then compare equivalent plans with different candidate counts.',
+      question: 'What can moving an input-only filter below the product change, and what result and cleanup obligations must it preserve?',
+      expected: 'It can reduce candidates while preserving matching rows and duplicates. It must use fields available in that input, and closing the plan still releases all descendant resources. Counts do not by themselves establish timing.',
+      idea: 'One successful result request can cause many input visits; the plan determines that work.'
+    },
+    5: {
+      story: 'At the prompt, Maya circles the keyword FROM and the value “from” inside quotes. Noor asks for the tokens before a plan. This fictional classroom puzzle returns in the quotes scene; the opening first traces the ordinary SELECT request.',
+      calibrate: 'Has constructing a query description already executed the scan? Does a quoted string with keyword letters have to be a keyword token?',
+      answer: 'No to both. Parsing records a request before execution; the lexer distinguishes a quoted string value from a keyword.',
+      opening: 'Follow the visible SELECT through its description and plan. Name each artifact before moving to the next; reserve actual row reads for execution.',
+      analogy: ['lecture-05-scene-06','Link tokens and grammar to words and sentence structure. Recognizing words does not establish legal arrangement, schema validity, or a way to execute the request. Connect each grammar rule to its consuming parser method.'],
+      closing: 'Return to the typed query and trace tokens, QueryData, scan objects, and execution. Explain the 300 visits with sixty returned rows using those boundaries.',
+      question: 'If WHERE returns one fifth as many names, what work can remain unchanged and which observations are still needed before claiming a speedup?',
+      expected: 'The scan still visits all 300 students. Selection adds checks and reduces output work. Compare the operator counters and repeated timings; parsing and planning remain separate from row execution.',
+      idea: 'Tokens describe text, QueryData describes the request, and scans execute it.'
+    },
+    6: {
+      story: 'Maya stops at the root separator 36 and asks whether she has found eli. Noor points to the right leaf and then RID (0, 4): directions first, address next, heap row last. This is a fictional classroom investigation using the existing toy tree.',
+      calibrate: 'What does a RID identify, and must two rows with the same search key share one RID?',
+      answer: 'A RID identifies one heap block and slot. Duplicate search keys can lead to multiple RIDs in a leaf entry.',
+      opening: 'Ask students to distinguish a GPA value, a routing separator, and a row address. Follow the existing drawing through the leaf to the actual heap row.',
+      analogy: ['b-tree','Use an ordered directory: internal signs provide routes, leaf entries provide addresses, and the heap contains the rows. The displayed inequalities and next-leaf links define the actual lookup and range rules.'],
+      closing: 'Return to GPA 36, then explain the existing split-and-lookup sequence. Change the incoming row to a duplicate key and ask which list changes instead of adding a distinct-key slot.',
+      question: 'Does adding a RID for an existing key force a distinct-key overflow, and what must every split preserve?',
+      expected: 'In this lab’s model it extends that key’s RID list. Every split preserves actual keys and whole RID lists, sorted leaf order, routing, leaf links, and equal leaf depth. A returned RID still needs a heap fetch.',
+      idea: 'An index preserves routes to complete RID lists while the heap supplies the rows.'
+    },
+    7: {
+      story: 'Maya reopens the transfer demo and sees the debit without the credit. Noor opens the log beside the balances and asks which transaction completed. This is a fictional classroom investigation; the displayed balances illustrate the recovery rule.',
+      calibrate: 'Does a dirty page in memory prove that a transaction committed durably? What distinction did fsync introduce in Lab 1?',
+      answer: 'No. Working bytes, stored pages, durable recovery records, and completion records are separate states. The required synchronization order depends on the engine’s policy.',
+      opening: 'Let students establish the original account total before applying a debit. Identify the incomplete transfer and the durable evidence available after interruption.',
+      analogy: ['write-ahead-logging','Link WAL to preserving repair information before changing an item. The old value supplies physical undo in this lab; a note in RAM is insufficient. Required log information must reach durable storage before protected data.'],
+      closing: 'Return to the transfer and narrate log, page, commit, and repair boundaries under FORCE/STEAL. Change the crash point to recovery itself.',
+      question: 'Undo repaired the buffer. Why must its flush precede a durable ROLLBACK record?',
+      expected: 'Otherwise another crash could leave damaged data beside a completion record that makes the next recovery skip the repair. Recovery must make its own changes durable before declaring completion.',
+      idea: 'The log and buffer policy determine which durable writes must precede completion.'
+    },
+    8: {
+      story: 'Maya and Noor each deposit ten into one hundred. Both read 100 and write 110. Maya asks where the second deposit went, although no crash occurred. This is a fictional classroom schedule that the later scheduler makes explicit.',
+      calibrate: 'What balance would serial deposits produce, and can durable writes alone establish that result under concurrency?',
+      answer: 'Serial deposits produce 120. Durability can preserve an incorrect 110; isolation must constrain the interleaving.',
+      opening: 'Ask for the intended serial result before running the conflicting schedule. Distinguish this ordering problem from the earlier crash-recovery promise.',
+      analogy: ['shared-and-exclusive','Link locks to compatible or exclusive reservations on an item. A buffer pin protects a frame from reuse; a transaction lock constrains conflicting data access. These protections have different lifetimes and jobs.'],
+      closing: 'Return to the deposits, identify the first incompatible lock upgrade, and then explain the separate reader/writer snapshot example. Change the second read from a statement snapshot to a transaction snapshot.',
+      question: 'After a writer commits 120, what can a reader’s second ordinary PostgreSQL SELECT see at Read Committed and Repeatable Read, and what does snapshot isolation still leave possible?',
+      expected: 'It can see 120 with a new statement snapshot at Read Committed and retains 100 with the existing transaction snapshot at Repeatable Read. A new transaction can see 120. Snapshot isolation can still permit write skew.',
+      idea: 'Lock conflicts and snapshot boundaries constrain different observable schedules.'
+    },
+    9: {
+      story: 'Maya sees twenty rows from each plan and 900 versus sixty candidates. Noor covers the timers and asks her to explain the work before choosing. This is a fictional classroom investigation using the course’s join fixture.',
+      calibrate: 'Does sixty candidate pairs mean sixty result rows? What must agree before comparing two plans?',
+      answer: 'No. The join still checks candidates. Plans must return the same required rows, including duplicates, before their work is comparable.',
+      opening: 'Read both plans as equivalent requests. Point to the input-only filters and predict the product size before discussing elapsed time.',
+      analogy: ['optimizer','Use a route estimate: statistics sketch the terrain, the cost model prices possible steps, and search compares routes. An estimate is not a completed trip. Check actual counts and the assumptions behind the sketch.'],
+      closing: 'Return to the twenty-row answer. Estimate candidate work, compare costs in common units, and check execution. Use the synthesis to explain one assumption whose failure could change the choice.',
+      question: 'With a scan cost of 1,000 page accesses and an index cost of 3 plus the match count, which choice follows at 100 and 2,000 matches? What assumptions could change it?',
+      expected: 'The model gives 103 and 2,003 accesses: index for 100, scan for 2,000. Cache hits, shared heap pages, clustering, CPU costs, and inaccurate counts can change a real comparison.',
+      idea: 'Choose among equivalent results using estimated work, then check the estimate against execution.'
+    },
+    10: {
+      story: 'Maya groups the same three toy rides by ride and by field. Noor first asks for average fare, then every detail of Ride 2. This is a fictional classroom investigation; $36, $24, and $30 are illustrative fares, separate from the real taxi sample.',
+      calibrate: 'Which fields contribute to average fare, and which are needed for a complete ride? Must either layout change the stored facts?',
+      answer: 'The average needs fares across rides; a complete ride needs its fields. Both layouts preserve the same facts and can answer both queries.',
+      opening: 'Read one ride in both layouts. Ask students to identify the values each query needs before revealing the average or discussing file formats.',
+      analogy: ['read-a-column-layout','Link a column to an ordered list of the same entry from each record. Positions align values across lists. Real pages or chunks, compression, and metadata determine which bytes the engine actually reads.'],
+      closingId: 'choose-the-shape',
+      closing: 'Return to the opening ride and average queries, then change the aggregate to one month. Have students identify needed columns and eligible files before naming projection and pruning.',
+      question: 'How would a full-ride lookup, an average fare over all rides, and an average for one month differ in required values and possible skipping?',
+      expected: 'The first needs one ride’s fields, the second needs fares across all rides, and the third can also exclude other months when the layout and query permit pruning. Preserve equal results and measure real work.',
+      idea: 'Storage grouping and query predicates determine which irrelevant data can be skipped.'
+    }
+  };
+  const titles = {
+    1: ['One query, two runs','SQL text and an executable plan','Read blocks, return matching rows','Repeat the scan with resident blocks','Rows share a schema','Keys and physical addresses','Transaction guarantees','Equal results, different access paths','The query’s path through the engine','A model of storage access','Count accesses before pricing them','Schemas stored as catalog rows','Build the storage interfaces first','Integers and strings in page bytes','Buffered writes and durable storage','Explain the second run'],
+    2: ['One block, three requests','Compare your synchronization measurements','Blocks and reusable memory frames','A cyclic scan defeats reuse','A small hot set can stay resident','Pins protect active page users','Hits update recency too','Choose only an unpinned victim','Locate a resident block','Write dirty bytes before frame reuse','Database and operating-system caches','Protect reuse from one-pass scans','Price the misses as well as hits','One frame can change a workload','Buffer-manager responsibilities','Reuse and safe frame replacement'],
+    3: ['Which bytes belong to one row?','A packed update moves later bytes','Fixed slots preserve neighboring addresses','Schema fields become byte offsets','Locate a field by slot and offset','String capacity counts bytes','Deletion changes the slot flag','Reserved capacity changes scan work','Missing values and zero values','Store large values separately','Follow an external value only when needed','Interpret one pinned record page','Scan occupied slots across blocks','A RID identifies a current location','Save schema rules in catalog rows','Find the field after a restart'],
+    4: ['What starts the operator tree?','Materialized intermediates need space','Requests down, rows up','Count input visits and returned rows','The common scan interface','Selection skips rejected rows','Projection exposes selected fields','Predicates test terms in order','Product rewinds its right input','Candidate pairs and matching rows','Empty and exhausted inputs','Close every descendant scan','Filter inputs before forming pairs','Streaming and blocking operators','Compose a product, filter, and projection','Explain one result and its work']
+  };
+  const beats = {
+    1: {'lecture-01-scene-03':'Predict a block read separately from a returned row. Explain why moving a whole block does not yet test its predicate.', 'lecture-01-scene-14':'Predict the bytes for integer 1 and the prefix length of a multibyte string before revealing their storage.'},
+    2: {'lecture-02-scene-08':'Before selecting a victim, remove pinned frames from the eligible set; then predict the oldest remaining frame.', 'lecture-02-scene-13':'Predict whether one expensive miss can dominate several cheap hits before interpreting the average-time model.'},
+    3: {'lecture-03-scene-02':'Keep the saved byte address visible while ben becomes benjamin. Predict which later row no longer starts there.', 'lecture-03-scene-05':'Calculate slot number times slot size plus field offset before revealing the highlighted byte.', 'lecture-03-scene-14':'Change the occupant after deletion and explain which address stays the same while row identity changes.'},
+    4: {'lecture-04-scene-04':'Predict how many child next calls are required to return the next qualifying name, then count rejected inputs.', 'lecture-04-scene-09':'Predict the first pair after the right input ends. Identify which input advances and which rewinds.', 'lecture-04-scene-13':'Predict 300 × 3 versus 60 × 1 candidates before revealing the counts. Explain why both plans still need the join predicate.'},
+    5: {'lecture-05-scene-03':'Return to Maya’s quoted-from puzzle. Ask for token kinds before revealing how identical letters acquire different roles.', 'lecture-05-scene-08':'Predict the returned description and the next unread token before advancing the parser call.', 'lecture-05-scene-12':'Use the same result as the correctness contract. Predict candidate pairs separately from final rows and timing.'},
+    6: {'find-37':'Predict the next child from the separator inequality before following its pointer. Keep the key, leaf entry, and heap address separate.', 'walk-a-range':'Predict whether every RID for key 31 contributes and where the inclusive upper bound stops the scan.', 'the-fifth-key':'Pause before overflow is repaired. Keep the whole RID list beside each key and predict the routing copy that appears in the parent.'},
+    7: {'two-writes-reverse-undo':'Predict the buffer after undoing the newest SET before revealing 40; then predict the earlier restoration to 60. Keep the durable page state separate.', 'repair-can-crash-too':'Place a crash before and after the repair flush, then before and after the completion record. State what a second recovery must see.'},
+    8: {'statement-or-transaction-snapshot':'Name the snapshot boundary before predicting the second read. Use the same reader/writer schedule under both isolation levels.', 'write-skew':'Predict both decisions from the original snapshot. Ask why updating different rows can evade a direct write-write conflict.'},
+    9: {'price-the-work':'Calculate the toy match count before converting it to page accesses. Use the same cost unit for the full scan and index.', 'when-estimates-fail':'Ask which distribution or independence assumption the visible data violates before changing the cost estimate.'},
+    10: {'the-point-lookup-reverses-it':'Return to Noor’s changed request. Predict the values needed for a complete ride versus all fares before comparing their grouping.', 'train-inside-the-query-engine':'Name the training and test rows before fitting. Predict which stage creates coefficients and which later stage only applies them.', 'duckdb-pytorch-fare-model':'Ask for an error pattern before training. Trace SQL selection, Arrow batches, PyTorch weight updates, and the SQL prediction call separately. Compare the same held-out rides and metric.'}
+  };
+  window.CourseClearLearning = function (deck) {
+    const topic=topics[deck.id];if(!topic)return;
+    if(deck.clearLearningApplied)return;
+    deck.clearLearningApplied=true;
+    if(titles[deck.id])deck.scenes.forEach((scene,i)=>{scene.title=titles[deck.id][i];});
+    if(deck.id===7)deck.scenes[0].title='Recover an interrupted transfer';
+    if(deck.id===8){deck.scenes[0].title='Two deposits in one account';deck.scenes.at(-1).title='Locks and snapshot boundaries';}
+    if(deck.id===9){deck.scenes[0].title='Same rows, different candidate work';deck.scenes.at(-1).title='Explain a choice and its assumptions';}
+    if(deck.id===10)deck.scenes.find(s=>s.id==='choose-the-shape').title='Match storage to the query';
+    const opening=deck.scenes[0],close=topic.closingId?deck.scenes.find(s=>s.id===topic.closingId):deck.scenes.at(-1);
+    opening.teaching.builds[0]=topic.opening;
+    opening.teaching.context=[topic.story,opening.teaching.context].filter(Boolean).join(' ');
+    opening.teaching.question=topic.calibrate;opening.teaching.answer=topic.answer;
+    const linked=deck.scenes.find(s=>s.id===topic.analogy[0]);
+    linked.teaching.context=[topic.analogy[1],linked.teaching.context].filter(Boolean).join(' ');
+    close.teaching.idea=topic.idea;close.teaching.question=topic.question;close.teaching.answer=topic.expected;
+    close.teaching.builds[close.steps-1]+=' '+topic.closing;
+    for(const [id,cue] of Object.entries(beats[deck.id]||{})){
+      const scene=deck.scenes.find(s=>s.id===id);if(!scene)throw new Error('Missing CLEAR scene: '+deck.id+'/'+id);
+      scene.teaching.builds[0]=cue+' '+scene.teaching.builds[0];
+    }
+    for(const scene of deck.scenes){
+      const t=scene.teaching;
+      scene.notes=[t.idea,...t.builds,'Ask: '+t.question,'Expected answer: '+t.answer,t.context,t.reference].filter(Boolean).join('\n\n');
+    }
+  };
+})();

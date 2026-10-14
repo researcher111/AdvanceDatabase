@@ -390,6 +390,27 @@
   repair(14,'a-network-partition-forces-a-choice',(d,s)=>{if(s===4)item(d,'response').text='v2';});
   repair(15,'finish-with-measured-decisions',(d,s)=>{if(s===3){item(d,'dates').attrs.y=691;item(d,'dates').attrs['font-size']=27;}});
 
+  // Revisit the same deposits and reader/writer schedule rather than mixing
+  // their balances with a separate version-chain fixture in the final recap.
+  use(8,'exit-schedule',(d,s)=>{
+    if(s<2){
+      label(d,'deposit-question',640,233,'Two deposits of 10 into the same starting balance of 100',P.ink,28);
+      const values=s===0?['read 100','read 100','final 110']:['read 100','read 110','final 120'];
+      const titles=['Maya: +10','Noor: +10',s===0?'Lost update':'Completed deposits'];
+      [85,490,895].forEach((x,i)=>card(d,'deposit-'+i,x,322,300,147,titles[i],values[i],i===2));
+      d.arrow('first-operation',402,395,472,395,s===0?P.red:P.green,3);
+      d.arrow('second-operation',807,395,877,395,s===0?P.red:P.green,3);
+      foot(d,s===0?'Both read the old value and overwrite it with 110. No crash is needed.':'Resolve lock conflicts and retry as required; the second deposit uses the first result.');
+    }else{
+      label(d,'snapshot-schedule',640,230,'Reader sees 100 → writer commits 120 → reader selects again',P.ink,28);
+      card(d,'rc-read',95,322,475,147,'Read Committed','Second read: 120',true);
+      card(d,'rr-read',710,322,475,147,'Repeatable Read','Second read: 100');
+      label(d,'rc-boundary',332,527,'New statement snapshot',P.orange,26);
+      label(d,'rr-boundary',948,527,'Same transaction snapshot',P.green,26);
+      foot(d,'Ordinary PostgreSQL SELECTs · a new transaction can see 120 · snapshot isolation can permit write skew');
+    }
+  });
+
   // Teacher cues for drawings whose sequence now differs from the code/table view.
   function cues(id,sceneId,states,builds){const scene=decks[id]?.scenes.find(s=>s.id===sceneId);if(!scene)return;if(states)scene.states=states;scene.teaching.builds=builds;}
   cues(1,'lecture-01-scene-03',null,[
@@ -424,4 +445,8 @@
     sc.teaching.context=[sc.teaching.context,'Ask for a prediction, reveal the operation, then have a student explain why the result follows.'].filter(Boolean).join(' ');
   }
 
+  for (let lecture=1; lecture<=10; lecture++) {
+    const deck=decks[lecture];
+    if(deck)window.CourseClearLearning?.(deck);
+  }
 })();

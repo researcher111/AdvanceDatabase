@@ -27,6 +27,15 @@ shown in an expandable **Teaching context** section and in full in the printable
 guide. Existing structured notes take precedence. Worked traces derive their
 main idea, step explanations, question, and answer from the shared example data.
 
+The same file defines `CourseClearLearning` for Lectures 1–10. It connects the
+existing diagrams to the CLEAR guide through calibration, fictional classroom
+scenes, mapped analogies, predictions, and closing transfer questions.
+`clarity-diagrams.js` applies it after native cues; Lecture 6 applies it at the
+end of `btree-clarity.js`. Keep these calls after the authored cues so they
+also reach Lecture 5's own notes and Lecture 6's custom sequences.
+Scene IDs, build counts, and timing remain fixed. Keep diagram highlights
+aligned with the operation named in each caption.
+
 Lecture 6 loads `decks/storage-choices.js` and `decks/btree-growth.js` after
 the common notes. These files own the drawings, animation states, and teaching
 cues for `four-storage-choices` and `the-fifth-key`. Edit their frame sequences

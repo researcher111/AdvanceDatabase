@@ -350,7 +350,7 @@
     if(s>=3){box(d,'boot',140,525,320,75,'catalog layouts',P.orangeLight,P.orange,30);d.arrow('unlock',470,550,735,470,P.orange,4);}
   });
   add(3,15,['Locate','Walk','Remember'],(d,s)=>{
-    const names=['Layout','RecordPage','TableScan','Catalog'];names.forEach((v,i)=>{box(d,'layer'+i,100+i*300,260,250,175,s>=1?v:'?',i===s?P.greenLight:P.white,P.green,31);if(i<3)d.arrow('a'+i,355+i*300,345,390+i*300,345,P.green,4);});
+    const names=['Layout','RecordPage','TableScan','Catalog'];names.forEach((v,i)=>{const active=s===0?i<2:s===1?i===2:i===3;box(d,'layer'+i,100+i*300,260,250,175,v,active?P.greenLight:P.white,P.green,31);if(i<3)d.arrow('a'+i,355+i*300,345,390+i*300,345,P.green,4);});
     if(s>=1){text(d,'formula',350,550,'k × size + offset',36);text(d,'next',950,550,'next()',40,P.green);}
     if(s>=2)text(d,'address',640,145,'bytes → rows',48);
   });

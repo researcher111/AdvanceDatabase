@@ -2,10 +2,10 @@
 window.CourseClarityCaptions = {
   "1": {
     "lecture-01-scene-01": [
-      "The SQL and its three result rows stay the same.",
-      "A cold run fetches the needed pages from storage.",
-      "A warm run reuses pages already in RAM.",
-      "These are modeled access costs, not whole-query timings."
+      "The SQL and three returned names stay the same. Predict which work can change between runs.",
+      "The cold run fetches the needed blocks before examining their rows.",
+      "The warm run reuses resident blocks while the query still executes.",
+      "Compare modeled block-access costs separately from whole-query timings."
     ],
     "lecture-01-scene-02": [
       "SQL starts as a sequence of characters.",
@@ -93,16 +93,16 @@ window.CourseClarityCaptions = {
       "A failure can erase changes that had not reached that boundary."
     ],
     "lecture-01-scene-16": [
-      "Which layers connect SQL to stored blocks?",
-      "Follow the interfaces from SQL through rows to pages and blocks.",
-      "Caching can remove storage reads while scanning and filtering still run."
+      "Return to the same request: which layers connect SQL to stored blocks?",
+      "Trace SQL to a plan, then rows to pages and blocks.",
+      "Reusing pages can remove storage reads while scanning and filtering still run."
     ]
   },
   "2": {
     "lecture-02-scene-01": [
-      "Request block B7 three times.",
+      "Request B7 three times. Where can a useful copy stay between requests?",
       "Without reuse, repeated requests can repeat storage work.",
-      "With B7 cached, the later requests reuse the first read."
+      "With B7 resident, later requests reuse the first read."
     ],
     "lecture-02-scene-02": [
       "Compare the completion boundaries in your Lab 1 measurements.",
@@ -189,16 +189,16 @@ window.CourseClarityCaptions = {
       "Release the hold when the caller finishes using the page."
     ],
     "lecture-02-scene-16": [
-      "Both workloads use the same three-frame pool.",
-      "The cyclic scan misses; the hot pair creates repeated reuse.",
-      "Pins protect active users independently of the hit-rate calculation."
+      "Keep the same three frames while changing the access order.",
+      "The cyclic scan misses; the hot pair gets repeated reuse before eviction.",
+      "Pins protect active users even when reuse is poor."
     ]
   },
   "3": {
     "lecture-03-scene-01": [
-      "A page begins as bytes without field meanings.",
-      "A layout interprets some bytes as one student row.",
-      "RID (0, 1) means block 0, slot 1."
+      "Cached bytes need interpretation rules before they become a student row.",
+      "A layout identifies a row and the fields inside it.",
+      "RID (0, 1) names block 0, slot 1; it does not permanently identify a student."
     ],
     "lecture-03-scene-02": [
       "Packed rows sit directly beside one another.",
@@ -285,16 +285,16 @@ window.CourseClarityCaptions = {
       "Known catalog layouts make this first metadata read possible."
     ],
     "lecture-03-scene-16": [
-      "Locate a field using its slot size and offset.",
-      "RecordPage interprets one block; TableScan walks across blocks.",
-      "The catalog preserves the layout rules for later use."
+      "Return to the saved address: locate a field from slot size and offset.",
+      "Interpret one pinned block, then scan occupied slots across blocks.",
+      "Recover the schema from the catalog to interpret the bytes after restart."
     ]
   },
   "4": {
     "lecture-04-scene-01": [
-      "A query can ask its plan for one result row at a time.",
+      "The operator tree is ready. What call starts work for one result row?",
       "The request travels from Project down to its input.",
-      "Each operator uses the same scan interface to return the next row."
+      "A qualifying row returns through the common scan interface."
     ],
     "lecture-04-scene-02": [
       "Materializing a scan stores its intermediate rows.",
@@ -385,16 +385,16 @@ window.CourseClarityCaptions = {
       "Project returns the requested student name and department."
     ],
     "lecture-04-scene-16": [
-      "The common interface lets the plan compose different operators.",
-      "Demand travels downward and qualifying rows return upward.",
-      "The plan determines candidate work as well as returned rows."
+      "Use the common interface to compose the plan.",
+      "Trace demand downward and qualifying rows upward.",
+      "Explain candidate work as well as results, then close every descendant scan."
     ]
   },
   "5": {
     "lecture-05-scene-01": [
-      "SQL describes the requested result before any row is read.",
-      "Parsing records fields, tables, and predicates in QueryData.",
-      "Planning creates scan objects that execution can pull from."
+      "Read the SQL request before execution reads any table rows.",
+      "Record fields, tables, and predicates in QueryData.",
+      "Create scan objects that can execute the described request."
     ],
     "lecture-05-scene-02": [
       "The SELECT list becomes fields = [name].",
@@ -480,16 +480,16 @@ window.CourseClarityCaptions = {
       "The runner reads name through ProjectScan."
     ],
     "lecture-05-scene-16": [
-      "Predict source visits and result counts for the two queries.",
-      "Both queries visit all 300 table rows.",
-      "Filtering returns 60 names instead of 300 after those rows are examined."
+      "Predict source visits and result counts for the same table with and without WHERE.",
+      "Both scan-based queries visit all 300 table rows.",
+      "Selection returns sixty names after those rows are examined; fewer results do not prove a timing ratio."
     ]
   },
   "7": {
     "money-disappears": [
-      "The two balances initially total 150.",
+      "Establish the account total before a transfer: 60 + 90 = 150.",
       "Only the debit reaches storage, reducing the stored total to 100.",
-      "A crash interrupts the transfer before its credit can restore the total."
+      "A crash leaves an incomplete transfer. What durable evidence could repair it?"
     ],
     "transaction": [
       "A transaction groups the debit and credit into one unit.",
@@ -568,15 +568,15 @@ window.CourseClarityCaptions = {
       "A durable FORCE commit means the transaction’s changes must be kept."
     ],
     "from-promise-to-code": [
-      "Write the required recovery information first.",
-      "Only then allow the changed page to become durable.",
-      "Preserve completed transactions and repair unfinished ones after a crash."
+      "Return to the write order: make recovery information durable first.",
+      "Only then allow the protected changed page to become durable.",
+      "Preserve completed work, undo unfinished work, and make the repair durable before completion."
     ]
   },
   "8": {
     "concurrency-mvcc": [
-      "Two clients both want to add 10 to the same balance.",
-      "Independent writes can lose one deposit unless access is coordinated."
+      "Two clients each add ten to one hundred. Predict the serial result.",
+      "Overlapping writes can lose a deposit even when no crash occurs."
     ],
     "two-deposits": [
       "The shared balance starts at 100.",
@@ -662,16 +662,16 @@ window.CourseClarityCaptions = {
       "A transaction lock controls conflicting access across transaction operations."
     ],
     "exit-schedule": [
-      "Two stale read-modify-write sequences can lose a deposit.",
+      "Return to the deposits: two stale read-modify-write sequences can leave 110.",
       "Lock conflict handling prevents that invalid schedule from completing.",
-      "Snapshot rules determine which row versions a reader can observe."
+      "Snapshot boundaries control visible versions; a consistent snapshot can still permit write skew."
     ]
   },
   "9": {
     "same-answer-different-work": [
-      "Both plans answer the same student-major query.",
-      "Filtering before pairing reduces the intermediate candidate set.",
-      "Both return 20 rows, from 900 versus 60 candidate pairs."
+      "Both plans must answer the same student-major query, including duplicates.",
+      "Input-only filters reduce the pairs formed before the final join check.",
+      "Both return twenty rows, from 900 versus sixty candidates. Compare timing separately."
     ],
     "optimizer": [
       "Stored statistics summarize relation sizes and value distributions.",
@@ -753,9 +753,9 @@ window.CourseClarityCaptions = {
       "Conflict protection must handle that concurrency problem separately."
     ],
     "exit-mechanism": [
-      "Storage mechanisms define how bytes become durable, reusable pages.",
-      "Execution mechanisms determine what candidate work a query performs.",
-      "Transaction mechanisms constrain failures and conflicting operations."
+      "Explain how a storage mechanism obtains and preserves the needed bytes.",
+      "Explain how an execution choice changes candidate work while preserving the result.",
+      "Explain the failure a transaction mechanism prevents and the guarantee it supplies."
     ]
   },
   "10": {
@@ -865,9 +865,9 @@ window.CourseClarityCaptions = {
       "Partition pruning can reduce the relevant files as well."
     ],
     "choose-the-shape": [
-      "A point lookup reconstructs one complete ride.",
-      "A whole-table aggregate benefits from reading its selected column.",
-      "A partitioned aggregate first rules out irrelevant partitions."
+      "Return to a complete ride: its fields sit together in row storage.",
+      "An average across rides needs the fare column.",
+      "A month predicate can also skip other partitions when the layout and query permit it."
     ],
     "parquet-is-a-file-format": [
       "A file format defines how data is stored. Save the same rides in a file named rides.parquet.",
@@ -1362,5 +1362,4 @@ window.CourseClarityCaptions = {
       "State the result, show the mechanism, defend the decision. Demonstrate a failure as well as a success."
     ]
   }
-
 };
