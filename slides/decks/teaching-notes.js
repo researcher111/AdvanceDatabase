@@ -495,7 +495,7 @@
       "question": "When should next return false?",
       "answer": "Only after every remaining block has been searched and no live row remains.",
       "builds": [
-        "Scan the used slots in the current block.",
+        "Connect the previous RecordPage example to TableScan: search occupied slots in one block, then continue across the file. Begin with the current block.",
         "Skip an empty slot without ending the scan.",
         "Release the exhausted page and move to the next block.",
         "For insertion, search reusable slots before appending a new block."
@@ -2482,7 +2482,7 @@
       idea: 'A query’s answer and the work needed to produce it are separate properties.'
     },
     2: {
-      story: 'Maya requests B7 three times. Noor points to a free frame and asks where its useful copy can stay. A later caller keeps using that frame, so a new block raises the question of safe reuse. This is a fictional classroom investigation.',
+      story: 'Maya requests B7, then asks for it twice more. Noor points to its copy in memory and asks whether they can use it again. Noor then starts reading B7 while Maya requests an uncached block. If the pool needs room, can it reuse B7’s frame before Noor finishes reading? This is a fictional classroom investigation.',
       calibrate: 'Does frame 0 have to contain block 0? What does a pin protect while a caller uses a page?',
       answer: 'A frame is a reusable memory slot and can contain another numbered block. A positive pin count protects that frame’s current contents from replacement.',
       opening: 'Use the repeated B7 request as the opening task. Distinguish a cached block from a cached query result before revealing the shorter request path.',
@@ -2537,7 +2537,7 @@
       idea: 'An index preserves routes to complete RID lists while the heap supplies the rows.'
     },
     7: {
-      story: 'Maya reopens the transfer demo and sees the debit without the credit. Noor opens the log beside the balances and asks which transaction completed. This is a fictional classroom investigation; the displayed balances illustrate the recovery rule.',
+      story: 'Maya tries to transfer $50 from A, which holds $60, to B, which holds $90. A’s new $10 balance reaches disk, but a power failure interrupts the credit to B. After restarting, the saved total is $100 instead of $150. Noor opens the transaction log and asks how it can help restore the missing $50. This is a fictional classroom investigation; the displayed balances illustrate the recovery rule.',
       calibrate: 'Does a dirty page in memory prove that a transaction committed durably? What distinction did fsync introduce in Lab 1?',
       answer: 'No. Working bytes, stored pages, durable recovery records, and completion records are separate states. The required synchronization order depends on the engine’s policy.',
       opening: 'Let students establish the original account total before applying a debit. Identify the incomplete transfer and the durable evidence available after interruption.',
@@ -2559,10 +2559,10 @@
       idea: 'Lock conflicts and snapshot boundaries constrain different observable schedules.'
     },
     9: {
-      story: 'Maya sees twenty rows from each plan and 900 versus sixty candidates. Noor covers the timers and asks her to explain the work before choosing. This is a fictional classroom investigation using the course’s join fixture.',
+      story: 'Maya wants students with a GPA above 3.5 in one selected department. One plan pairs all 300 students with three majors before filtering; another pairs the 60 students above that GPA cutoff with one selected major. Both return twenty rows, from 900 versus sixty pairs. Noor asks which rows can be ruled out before making pairs. This is a fictional classroom investigation using the course’s join fixture.',
       calibrate: 'Does sixty candidate pairs mean sixty result rows? What must agree before comparing two plans?',
       answer: 'No. The join still checks candidates. Plans must return the same required rows, including duplicates, before their work is comparable.',
-      opening: 'Read both plans as equivalent requests. Point to the input-only filters and predict the product size before discussing elapsed time.',
+      opening: 'State the request: return students with a GPA above 3.5 in one selected department. The fixture stores GPA in tenths, so the SQL tests gpa > 35. Explain that each candidate pairs a student row with a major row. Point to the input-only filters and predict how many pairs each plan forms before discussing elapsed time.',
       analogy: ['optimizer','Compare choosing a query plan to choosing a route from a map: statistics summarize rows and value distributions, the cost model estimates operator work, and plan search compares combinations. Check the estimates against measured counts.'],
       closing: 'Return to the twenty-row answer. Estimate candidate work, compare costs in common units, and check execution. Use the synthesis to explain one assumption whose failure could change the choice.',
       question: 'With a scan cost of 1,000 page accesses and an index cost of 3 plus the match count, which choice follows at 100 and 2,000 matches? What assumptions could change it?',

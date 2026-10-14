@@ -189,7 +189,7 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
     gpa   INT
 );</code></pre>
 
-<p>In microdb, an <code>INT</code> always occupies four bytes. A <code>VARCHAR</code> field also needs a declared byte capacity so the layout can reserve a fixed amount of space. The following declaration reserves eight bytes for each name’s contents:</p>
+<p>In microdb, an <code>INT</code> always occupies four bytes. A <code>VARCHAR</code> field also needs a declared byte capacity so the layout can reserve a fixed amount of space. The declaration above reserves eight bytes for each name’s contents.</p>
 
 <p>To read GPA in slot 3, the engine computes <code>3 × slot_size + offset(gpa)</code>. That works because every slot uses the same field offsets. The name field reserves twelve bytes: four for its length and eight for its contents. GPA therefore begins at offset 20 whether the name is ada or benjamin. This reservation is a microdb design choice; production SQL engines can use variable-length layouts.</p>
 
@@ -270,7 +270,7 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
 <!-- ============================================================ -->
 <h2 id="toast">Store large values outside the main row</h2>
 
-<p class="keep-in-present">Reserved capacity makes updates easy but can waste space. A very large value makes that cost visible: now ask whether the main row can hold a reference to bytes stored elsewhere.</p>
+<p class="keep-in-present">Reserved capacity makes updates easy but can waste space. For a very large value, reserving room in every row becomes impractical. The main row can instead hold a reference to bytes stored elsewhere.</p>
 
 <p>Reserving the maximum size in every row becomes impractical for large values such as a two-megabyte essay. PostgreSQL can compress such values and store them separately, leaving a small reference in the main row.</p>
 
@@ -354,6 +354,8 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 
 <!-- ============================================================ -->
 <h2 id="tablescan">Scan a table one block at a time</h2>
+
+<p><code>RecordPage</code> finds occupied slots within one block. <code>TableScan</code> extends that search across the file: when a block has no more occupied slots, it releases that block, opens the next one, and continues. The scan ends only after it exhausts the last block.</p>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="ask" data-step-name="ask this block" data-explain="next_after scans flags forward within the pinned block; the common case costs a few flag reads and no I/O at all.">slot = rp.next_after(current_slot)         # next USED slot here?</div>

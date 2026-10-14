@@ -214,7 +214,7 @@ SELECT 'select' FROM demo;  -- returns the literal text: select</code></pre>
 <!-- ============================================================ -->
 <h2 id="grammar">A small grammar defines microSQL’s supported statements</h2>
 
-<p class="keep-in-present">The token example shows why word recognition alone is insufficient. Write down the legal sequences next, then connect each grammar rule to the method that consumes it.</p>
+<p class="keep-in-present">Tokens identify the pieces of a statement, but the parser still needs rules for their order. A grammar specifies the allowed sequences; each rule below will correspond to a method that consumes part of the token stream.</p>
 
 <pre class="equation"><code>query   :=  SELECT fieldlist FROM tablelist [ WHERE predicate ]
 fieldlist := * | field { , field }
@@ -420,6 +420,8 @@ early-filter plan: Select[join] ← Product(σ(s) × σ(m))      60 pairs examin
 <p class="keep-in-present">Lecture 9 explains how an optimizer chooses among plans using statistics. Lab 5 compares two supplied plans so you can reason about their work first. The 15× reduction counts candidate pairs; it does not promise a 15× runtime improvement.</p>
 
 <h3 id="execution" class="new-slide" data-kicker="The naive planner">Trace a SQL query through the completed layers</h3>
+
+<p>Return to the single-table honors query, <code>SELECT name FROM students WHERE gpa &gt; 35</code>. Its scan tree is small enough to follow through every layer you have studied:</p>
 
 <table>
   <thead><tr><th>Layer</th><th>Week</th><th>What it does for this one query</th></tr></thead>

@@ -267,7 +267,7 @@ window.CourseClarityCaptions = {
       "Mark the page dirty, then release the pin when RecordPage closes."
     ],
     "lecture-03-scene-13": [
-      "TableScan visits slots whose in-use flag is one.",
+      "TableScan uses RecordPage to find slots marked 1 in the current block.",
       "It skips a slot marked zero.",
       "At the block boundary, release the old block and pin the next one.",
       "An insert can reuse a free slot before appending another block."
@@ -669,7 +669,7 @@ window.CourseClarityCaptions = {
   },
   "9": {
     "same-answer-different-work": [
-      "Both plans must answer the same student-major query, including duplicates.",
+      "Both plans find students above the GPA cutoff in the selected department; keep duplicates.",
       "Input-only filters reduce the pairs formed before the final join check.",
       "Both return twenty rows, from 900 versus sixty candidates. Compare timing separately."
     ],

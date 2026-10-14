@@ -52,7 +52,7 @@
   <p>Maya draws arrows from the two workers to one group. Each worker has only a partial count. They must send all contributions for the same word to a reducer, preserve every occurrence, and rerun failed tasks without losing contributions.</p>
 </div>
 
-<p class="keep-in-present">We will use this small word count to separate local computation from coordination. Partitioning assigns responsibility; a shuffle groups matching keys; execution engines schedule and recover tasks. Lab 11 first makes those rules visible in one Python process, then uses Spark and Ray for local parallel execution.</p>
+<p class="keep-in-present">We will use this small word count to separate local computation from coordination. Partitioning assigns responsibility; a shuffle groups matching keys; execution engines schedule and recover tasks. Lab 11 first makes those rules visible in one Python process. Its optional Spark and Ray exercises then show local parallel execution.</p>
 
 <div class="cite">
   Companion reading: Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce: Simplified Data Processing on Large Clusters</em></a> (OSDI 2004, 13 readable pages)<sup class="src"><a href="#src-1" title="MapReduce: Simplified Data Processing on Large Clusters (Google Research publication page)">1</a></sup> ·
@@ -215,7 +215,7 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
 <!-- ============================================================ -->
 <h2 id="spark">Spark records a plan before executing it</h2>
 
-<p class="keep-in-present">Noor asks whether the counting functions must change for a larger job. Spark lets them describe a dependency plan over partitioned collections. Read the small word-count chain before the printed plan; the shuffle tells you where records must move.</p>
+<p class="keep-in-present">Noor asks how the framework knows which work can run next. In Spark, Maya describes operations on partitioned collections, and Spark records which operations depend on which inputs. Read the small word-count chain before the printed plan; the shuffle tells you where records must move.</p>
 
 <h3 class="new-slide" data-kicker="Spark">Word count in Spark is three chained calls and one shuffle</h3>
 
@@ -254,7 +254,7 @@ counts.collect()                                      # NOW it runs</code></pre>
 
 <h3 class="new-slide" data-kicker="Spark">Lineage lets Spark recompute lost partitions</h3>
 
-<p class="keep-in-present">Spark records how each RDD was derived from its inputs. This <span class="gloss" data-gloss="lineage">lineage</span> lets it recompute a lost partition when the required inputs remain available. Checkpointing or replication may also be used; lineage is the recovery mechanism that does not require copying every intermediate result.<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup></p>
+<p class="keep-in-present">Spark records how each RDD was derived from its inputs. This <span class="gloss" data-gloss="lineage">lineage</span> lets it recompute a lost partition when the required inputs remain available and the transformations can be replayed to reproduce the data. Checkpointing or replication may also be used; lineage is the recovery mechanism that does not require copying every intermediate result.<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup></p>
 
 <!-- ============================================================ -->
 <h2 id="ray">Ray runs Python tasks and stateful actors</h2>
@@ -307,17 +307,17 @@ model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors
 <!-- ============================================================ -->
 <h2 id="thursday">November 10: implement MapReduce and try Spark and Ray</h2>
 
-<p>In Lab 11, implement a small MapReduce word count first. Then run word count in Spark and parallel nearest-neighbor tasks in Ray:</p>
+<p>In Lab 11, implement a small MapReduce word count for the graded Part A. The optional Parts B and C run word count in Spark and parallel nearest-neighbor tasks in Ray:</p>
 
 <ul class="checklist">
   <li>☐ <strong>Part A (graded, offline):</strong> micro-mapreduce. You write map,
   hash partitioning, the shuffle, and reduce; the harness checks the grouping guarantee
   and that the answer is independent of partition count.</li>
-  <li>☐ <strong>Part B (pyspark):</strong> the same word count in three chained calls;
+  <li>☐ <strong>Part B (optional, pyspark):</strong> the same word count in three chained calls;
   print the DAG (the directed acyclic graph of steps Spark plans to run, the plan shown above) and point at the shuffle in it.</li>
-  <li>☐ <strong>Part C (ray):</strong> parallelize nearest-neighbor searches over precomputed embeddings; measure the speedup
+  <li>☐ <strong>Part C (optional, ray):</strong> parallelize nearest-neighbor searches over precomputed embeddings; measure the speedup
   and the launch-then-wait discipline.</li>
-  <li>☐ Install ahead of class: <code>pip install pyspark ray</code>; pyspark needs Java
+  <li>☐ For the optional exercises, install ahead of class: <code>pip install pyspark ray</code>; pyspark needs Java
   (<code>java -version</code> must work). Parts B/C run locally; the autograder grades
   Part A.</li>
 </ul>
@@ -347,8 +347,8 @@ model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors
 <p class="keep-in-present"><strong>Before the November 10 lab:</strong></p>
 <ul>
   <li><strong>Read</strong> Dean &amp; Ghemawat, <em>MapReduce: Simplified Data Processing on Large Clusters</em> (OSDI 2004, 13 pages); Lab 11's Part A is that paper's shuffle, built by hand.</li>
-  <li><strong>Run</strong> <code>pip install pyspark ray</code>, then confirm <code>java -version</code> works; pyspark will not start without Java.</li>
-  <li><strong>Bring</strong> that laptop with both installs working: Parts B and C run locally in class, and the autograder grades Part A.</li>
+  <li><strong>Run</strong> <code>pip install pyspark ray</code> if you plan to try the optional exercises, then confirm <code>java -version</code> works; pyspark will not start without Java.</li>
+  <li><strong>Bring</strong> your laptop for Part A. Have both installs working if you plan to try optional Parts B and C locally in class; the autograder grades Part A.</li>
 </ul>
 
 <!-- ============================================================ -->

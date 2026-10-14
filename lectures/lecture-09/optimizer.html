@@ -44,14 +44,16 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 9 · Bonus reading · optional, self-paced</div>
   <h1>The Query Optimizer</h1>
-  <div class="subtitle">For the example join, the supplied Lab 5 planner examines 900 pairs. In Lab 4, you found a plan that examines 60. How can an optimizer choose between them before execution?</div>
+  <div class="subtitle">Two plans can answer the same query by examining 900 or 60 student–major pairs. How can an optimizer choose between them before execution?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya compares two plans for the same student-major query. Both return twenty rows, but their counters show 900 and 60 candidate pairs. Noor covers the timers: <q>Which operators create the extra candidate pairs?</q> They draw the two operator trees to locate the extra work.</p>
+  <p class="lede">Maya wants the names and departments of students in a selected department who have a GPA above 3.5. One plan pairs all 300 students with all three majors before filtering. The other first keeps the 60 students above that GPA cutoff and the one selected major, then pairs them. Both return twenty rows, but they examine 900 and 60 pairs. Noor asks, <q>Which rows can we rule out before making pairs?</q></p>
 </div>
+
+<p class="keep-in-present">The student fixtures store GPA in tenths, so 3.5 is stored as 35. The SQL condition is therefore <code>gpa &gt; 35</code>.</p>
 
 <p class="keep-in-present">An optimizer estimates the work of equivalent plans using statistics, a cost model, and a bounded search. We will explain the small join first, estimate page accesses for scan and index alternatives, then compare estimates with observed execution. This is optional extension material.</p>
 
@@ -103,7 +105,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <thead><tr><th>Component</th><th>Question it answers</th><th>Where it lives</th></tr></thead>
   <tbody>
     <tr><td><strong>Statistics</strong></td><td>how many rows will survive this predicate?</td><td>catalog tables, refreshed by <span class="gloss" data-gloss="analyze"><code>ANALYZE</code></span></td></tr>
-    <tr><td><strong>Cost model</strong></td><td>what would this plan cost, in blocks, without running it?</td><td>a handful of arithmetic formulas that take the statistics as input and return a block count; the Costing section lists them</td></tr>
+    <tr><td><strong>Cost model</strong></td><td>what would this plan cost, in blocks, without running it?</td><td>formulas that turn statistics into estimated block accesses; we work through these below</td></tr>
     <tr><td><strong>Plan search</strong></td><td>which of the exponentially many equivalent shapes is cheapest?</td><td>a <span class="gloss" data-gloss="dynamic-programming">dynamic-programming</span> search over join orders, introduced by IBM’s <span class="gloss" data-gloss="system-r">System R</span> in 1979 and influential in later cost-based optimizers<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: 60.1. Query Handling as a Complex Optimization Problem">1</a></sup></td></tr>
   </tbody>
 </table>
@@ -114,7 +116,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k"><code>EXPLAIN</code></span><span>asks the engine to print the plan it chose, with its cost and row-count estimates, instead of the query's results.</span></div>
   <div class="lc-row"><span class="lc-k">Adding <code>ANALYZE</code></span><span>also runs the query and prints the measured row counts and times next to each estimate. Decoding <span class="gloss" data-gloss="explain-analyze"><code>EXPLAIN ANALYZE</code></span> output is the skill to leave with today.</span></div>
-  <div class="lc-row"><span class="lc-k">The plan below</span><span>an illustrative PostgreSQL-style plan for our join, annotated; hover every line.</span></div>
+  <div class="lc-row"><span class="lc-k">The plan below</span><span>is an illustrative PostgreSQL-style plan for the same kind of join, using <code>'cs'</code> as the target department. Hover or tap each line to inspect its annotation.</span></div>
 </div>
 
 <div class="code-annotated" data-lang="sql">
@@ -137,7 +139,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p class="keep-in-present">Choosing a query plan resembles choosing a route from a map before traveling. Statistics summarize row counts and value distributions; the cost model estimates the work of each operator; plan search compares combinations of those operators. Check the estimates against measured row counts, especially when the data violates the model’s assumptions.</p>
 
-<p class="keep-in-present">Selectivity is the fraction of a table's rows that a predicate keeps: if <code>gpa &gt; 35</code> keeps 60 of 300 rows, its selectivity is 0.2. The optimizer needs this number before it runs anything, because every cost formula in the next section starts from how many rows each step will produce. It cannot know the number exactly, so it estimates it from a few facts it stores per table and per column. Those facts, and the formulas that turn them into an estimate, are what this section is about.</p>
+<p class="keep-in-present">Selectivity is the fraction of a table's rows that a predicate keeps: if <code>gpa &gt; 35</code> keeps 60 of 300 rows, its selectivity is 0.2. The optimizer needs this number before it runs anything, because every cost formula in the next section starts from how many rows each step will produce. It estimates that count from summaries stored for each table and column. We will trace how those summaries produce an estimate and where the assumptions can fail.</p>
 
 <h3 class="new-slide" data-kicker="Guessing selectivity">Basic selectivity formulas and their assumptions</h3>
 
@@ -232,9 +234,9 @@ from statistics, before running anything.</p>
 <!-- ============================================================ -->
 <h2 id="joins">Choose both the join algorithm and the join order</h2>
 
-<p class="keep-in-present">The access-path example chooses how to obtain rows. A join also chooses how to match them and which intermediate results to build first.</p>
+<p class="keep-in-present">So far, we have chosen how to obtain rows from one table. With several tables, we must also decide how to match their rows and which intermediate results to build first.</p>
 
-<p class="keep-in-present">A join plan must choose an algorithm for matching rows and an order for combining tables. These choices interact: an early filter or a smaller intermediate result can change which algorithm is cheapest for the next join.</p>
+<p class="keep-in-present">The matching algorithm and the table order affect each other: an early filter or a smaller intermediate result can change which algorithm is cheapest for the next join.</p>
 
 <h3 class="new-slide" data-kicker="Two choices per join">Nested loop, hash, and merge reuse familiar ideas</h3>
 
@@ -341,8 +343,7 @@ from statistics, before running anything.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Will microdb get an optimizer in a later lab?</h3>
-<p class="keep-in-present">No required optimizer implementation is assigned. The core microdb sequence stops at B+ trees; transactions and optimization remain optional extensions. The Going-Further path exists (Lab 6 wired an index into the planner; add
-statistics to the catalog and a cost comparison between candidate plans, and you have a small version of the System R optimizer). You could include such an extension in a final-project appendix if it supports your project’s goals.</p>
+<p class="keep-in-present">No required optimizer implementation is assigned. The core microdb sequence stops at B+ trees; transactions and optimization remain optional extensions. For an optional extension, first connect the Lab 6 index to the planner, then add catalog statistics and a cost comparison between candidate plans. These steps build a small version of a cost-based optimizer. You could include such an extension in a final-project appendix if it supports your project’s goals.</p>
 
 <h3 class="keep-in-present">Why do plans change when I add LIMIT 10?</h3>
 <p class="keep-in-present">The optimizer prices <em>first rows</em> differently from

@@ -218,7 +218,7 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
 <!-- ============================================================ -->
 <h2 id="columnar">Why columns help</h2>
 
-<p class="keep-in-present">Link column storage to collecting one entry from every record into an ordered list. All fares sit together; their positions still align with pickup and payment lists. This explains projection and shared patterns, while compression, chunk metadata, and the execution engine determine the actual work.</p>
+<p class="keep-in-present">Imagine copying the fare from each ride into a separate list while keeping the rides in the same order. The fare positions still line up with the pickup and payment positions, so we can reconstruct a ride when needed. Keeping one field together makes it easier to read just that field and to encode repeated patterns. Compression, chunk metadata, and the execution engine determine the actual work.</p>
 
 <p class="keep-in-present">Reading only the fare column saves work immediately. Storing similar values together also helps the engine do three things:</p>
 
@@ -310,7 +310,7 @@ Nearby numbers → store the first value and the changes
 <!-- ============================================================ -->
 <h2 id="worked-example">From trips to running totals</h2>
 
-<p class="keep-in-present">The storage layout changes which bytes are convenient to read. The query also changes what one result row means: group trips into monthly totals before adding a running total to each monthly row.</p>
+<p class="keep-in-present">We have seen how storage layout helps a query read fewer bytes. Now follow what the query does with those values: group trips into monthly totals, then add a running total to each monthly row. At each stage, the meaning of one result row matters.</p>
 
 <p>A <strong>window function</strong> lets each row use other rows in its calculation while keeping a result for each row. <a href="../../labs/lab-08/duckdb.html#window-explainer">Move through a four-ride visual to see which rows contribute →</a></p>
 <p>Here, start with one row per trip. <code>GROUP BY month</code> produces one row per month. A running total then shows how much revenue we have collected by the end of each month. Its <strong>frame</strong> includes the rows from the first month through the current month: January alone, then January plus February.</p>
@@ -585,7 +585,7 @@ FROM ML.PREDICT(
 <p class="keep-in-present">They serve different needs. DuckDB runs inside an application and focuses on analytics. Postgres runs as a server that many clients can read and update. Choose based on the work and how the application is deployed.<sup class="src"><a href="#src-15" title="DuckDB Concurrency">15</a></sup></p>
 
 <h3 class="keep-in-present">Where does our model training happen?</h3>
-<p class="keep-in-present">Inside DuckDB. Python sends the SQL and prints the results. If we exported the rows and fitted a model in a Python library, that training would happen outside the database.</p>
+<p class="keep-in-present">In this lecture’s regression example, training happens inside DuckDB. Python sends the SQL and prints the results. If we exported the rows and fitted a model in a Python library, that training would happen outside the database.</p>
 
 <h3 class="keep-in-present">What does “time travel” mean for a lakehouse table?</h3>
 <p class="keep-in-present">It means querying an earlier version of the table. Metadata identifies the files for that version. It works only while those files and their metadata are still retained.<sup class="src"><a href="#src-16" title="Delta Lake Utility Operations: Vacuum">16</a></sup></p>

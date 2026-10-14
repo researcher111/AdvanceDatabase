@@ -49,10 +49,10 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya restarts the transfer demo and sees only the debit on disk. Noor opens the log beside the balances: <q>Which transaction completed, and what value can we restore?</q> The debit reached disk without its matching credit, reducing the total balance.</p>
+  <p class="lede">Maya tries to transfer $50 from account A, which holds $60, to account B, which holds $90. The database saves A’s new $10 balance to disk, then a power failure interrupts the transfer before B is credited. After restarting, Maya sees $100 across the two accounts instead of $150. Noor opens the database’s log of transaction changes: <q>Can the log tell us A’s balance before the transfer?</q></p>
 </div>
 
-<p class="keep-in-present">Trace recovery information, changed pages, and completion records separately. The optional lab’s FORCE/STEAL policy makes the old-value log record durable before changing a page, and flushes changed data pages before recording a commit. We will use that policy to undo unfinished work, then compare policies that also need redo.</p>
+<p class="keep-in-present">Track three things separately: the log information needed to undo a change, the changed data pages, and the records that mark a transaction complete. The optional lab uses a FORCE/STEAL buffer policy: it makes the old-value log record durable before changing a page and flushes changed data pages before recording a commit. We will define both parts of that policy as we undo unfinished work, then compare policies that also need redo.</p>
 
 <div class="cite">
   Companion reading: Sciore,<sup class="src"><a href="#src-1" title="Database Design and Implementation: Second Edition (Google Books)">1</a></sup> <em>Database Design and Implementation</em>, ch. 5 (transactions) ·
@@ -80,7 +80,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p class="keep-in-present">This is an optional bonus reading with no quiz. Today we will trace the writes needed for atomicity and durability.</p>
 
-<p class="keep-in-present">Account A held $60 and account B held $90. A $50 transfer debited A, and that page reached disk. The power failed before B was credited. The stored balances are now $10 and $90, totaling $100 instead of $150. Recovery must undo the incomplete transfer.</p>
+<p class="keep-in-present">The interrupted transfer left the stored total at $100 instead of $150. We will follow the transaction log to undo that unfinished $50 transfer while keeping earlier committed changes.</p>
 
 
 <p class="keep-in-present">Today’s claim: <strong>durability depends on write ordering</strong>. Recovery information must be durable before the data it protects, and commit must finish the work required by the engine’s buffer policy.</p>
@@ -152,7 +152,7 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <table>
   <thead><tr><th>Event</th><th>fsync?</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>each SET record</td><td>yes in this lab</td><td><code>LogManager.append</code> syncs by default. The old value is durable before the page changes. Production engines can batch log writes, but must force the log through a page’s LSN before flushing that page.</td></tr>
+    <tr><td>each SET record</td><td>yes in this lab</td><td><code>LogManager.append</code> syncs by default. The old value is durable before the page changes. Production engines can batch log writes, but must make the log durable through the page’s latest logged change before flushing that page. A log sequence number (LSN) identifies that change.</td></tr>
     <tr><td>data pages at commit</td><td>yes (our <span class="gloss" data-gloss="force">FORCE</span> policy)</td><td>every dirty page the transaction touched is written to disk before the COMMIT record is appended. A durable COMMIT record therefore identifies a transaction whose data changes were already flushed; this design needs no redo pass</td></tr>
     <tr><td><strong>the COMMIT record</strong></td><td><strong>yes, before reporting success</strong></td><td>after this fsync succeeds, the completion record is durable and the engine can report a successful commit. If the call is interrupted, the outcome may be uncertain: the record may already be durable. Recovery follows the durable log; the client cannot infer failure merely because it missed the acknowledgement<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 3.4 Transactions">5</a></sup></td></tr>
     <tr><td>ROLLBACK records</td><td>yes, after undo is durable</td><td>Restore and flush the old values first, then append and sync the ROLLBACK record. Logging completion before the undo reaches disk could make recovery skip unfinished repair.</td></tr>
@@ -161,7 +161,7 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 
 <p class="key-fact keep-in-present"><strong>FORCE/STEAL in Lab 7:</strong> sync log records, flush dirty data pages, then sync COMMIT.</p>
 
-<p class="keep-in-present">Lab 7 chooses simple ordering over speed and can issue multiple syncs per transaction. A NO-FORCE production design can make commit depend on a log flush while writing data pages later; group commit can share that flush across transactions. This is the benefit of logging redo information.</p>
+<p class="keep-in-present">Lab 7 chooses simple ordering over speed and can issue multiple syncs per transaction. A NO-FORCE production design can make commit depend on a log flush while writing data pages later; group commit can share that flush across transactions. Redo information lets recovery reconstruct committed changes whose data pages were still unwritten at the crash.</p>
 
 <h3 class="new-slide" data-kicker="The write-ahead rule">Handle fsync errors without assuming a retry is safe</h3>
 
@@ -268,7 +268,7 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <!-- ============================================================ -->
 <h2 id="nextweek">Prepare for the transaction and recovery lab</h2>
 
-<p>Lab 7 completes microdb. The log manager and lock table are provided; you implement the five transaction operations below.</p>
+<p>Optional Lab 7 adds transaction support to microdb. If you take this extension, the log manager and lock table are provided; you implement the five transaction operations below.</p>
 
 <table>
   <thead><tr><th>You write</th><th>Responsibility</th></tr></thead>
@@ -313,11 +313,11 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 
 <p class="keep-in-present">Continue with the optional <a href="../lecture-08/concurrency.html">concurrency reading</a>, then use the bonus transaction lab to combine WAL, locks, rollback, and recovery. These extensions have no required quiz or deadline.</p>
 
-<p class="keep-in-present"><strong>Before Optional lab:</strong></p>
+<p class="keep-in-present"><strong>Before trying the optional lab:</strong></p>
 <ul>
   <li><strong>Read</strong> Sciore ch. 5 (transactions) and Postgres's WAL introduction, linked above.</li>
   <li><strong>Run</strong> <code>python3 test_tx.py</code> on the eight Lab 7 starter files; it should print <strong>0/9 passed</strong>.</li>
-  <li><strong>Bring</strong> your Lab 6 understanding and the WAL rule by heart: old value to the log before the page changes.</li>
+  <li><strong>Review</strong> Lab 6 and be ready to explain the WAL rule: old value to the log before the page changes.</li>
 </ul>
 
 <!-- ============================================================ -->

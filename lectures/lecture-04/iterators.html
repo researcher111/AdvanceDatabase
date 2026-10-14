@@ -136,7 +136,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 <!-- ============================================================ -->
 <h2 id="pull">Materializing every intermediate result can exhaust memory</h2>
 
-<p class="keep-in-present">Link the pull model to a Python generator: asking for the next item resumes work rather than constructing the whole result in advance. Here each operator resumes by asking its child. This explains the lab’s streaming operators; a sort or another blocking operator may need more input before producing its first output.</p>
+<p class="keep-in-present">A Python generator provides a useful starting point: asking for the next item resumes work rather than constructing the whole result in advance. A query operator can likewise resume by asking its input for a row. This explains the lab’s streaming operators; a sort or another blocking operator may need more input before producing its first output.</p>
 
 <p>A straightforward staged implementation <span class="gloss" data-gloss="materialization">materializes</span> the scan’s output, then the filter’s output, then the projection. Each intermediate needs memory or temporary storage. Our first join deliberately uses a Cartesian product followed by a filter; production equality joins can avoid enumerating that product.</p>
 
@@ -319,7 +319,7 @@ while plan.next():
 <!-- ============================================================ -->
 <h2 id="operators">Select filters rows; Project exposes selected fields</h2>
 
-<p class="keep-in-present">The call path is visible. Now give each wrapper one precise job: selection decides which rows pass, while projection decides which fields the caller may read.</p>
+<p class="keep-in-present">The common interface lets each wrapper change one part of its input’s behavior: selection decides which rows pass, while projection decides which fields the caller may read.</p>
 
 <p class="keep-in-present">Selection and projection are operations in <span class="gloss" data-gloss="relational-algebra">relational algebra</span>. Here, each class changes one part of its input’s behavior and delegates the remaining methods.</p>
 

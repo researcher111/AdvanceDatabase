@@ -1235,7 +1235,7 @@ const plans = [
         "title": "Durable first",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask students to place the safety boundary. The required ordering is durable recovery information before the associated changed data page can become durable. The lab enforces a stronger simple rule by syncing each log append before changing the buffer page. Production engines can batch log writes and force through the page LSN before flushing a data page. Do not repeat the older one-fsync-per-lab-transaction claim.",
+        "notes": "Ask students what must be durable before a changed data page is flushed. The required ordering is durable recovery information before the associated changed data page can become durable. The lab enforces a stronger simple rule by syncing each log append before changing the buffer page. Production engines can batch log writes, but must make the log durable through the page’s latest logged change before flushing that page. A log sequence number (LSN) identifies that change.",
         "id": "durable-first",
         "steps": 3,
         "states": [

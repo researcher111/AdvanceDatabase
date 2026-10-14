@@ -122,6 +122,7 @@ Deliverables
 This is a course-authoring adaptation of CLEAR: make the action, object, and consequence easy to identify before adding more detail.
 
 - Name the operation and the affected item. Replace “the source disappeared” with “the selected chunk lost its source ID during prompt assembly.”
+- Introduce an example before referring back to it: state the query’s goal and the counter or output being compared. When switching examples, name the query you are returning to.
 - Use a pronoun when its reference is clear. If “it,” “this,” or “that” could refer to several things, name the relevant query, record, page, or result.
 - State the concrete consequence. Replace “an incomplete durable state” with “the debit reached disk without its matching credit, reducing the total balance.”
 - Tell students what to inspect. Replace “trace one question all the way to its results” with “compare the returned neighbor IDs with exact search, then read the passages to check whether they answer the question.”

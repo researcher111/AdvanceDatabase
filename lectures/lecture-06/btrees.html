@@ -161,7 +161,7 @@
 <p>If the lower bound were 32 instead, the same left leaf would be the starting point, and 34 would be the first accepted key. A range endpoint need not exist in the tree. The stopping rule is <code>key &gt; hi</code>, not <code>key &gt;= hi</code>, because the upper endpoint is included.</p>
 
 <h2 id="worked-example">Connect the diagrams to code</h2>
-<p>The visual lookup and range now give meaning to the code. In the companion below, each step highlights code and shows the tree after that operation. Choose <code>child_index_for</code> to watch the separator comparisons, or <code>_descend</code> to follow the path as it grows. Lookup and range move through the tree; the split example changes its structure. You can return to its split example after building the tree in the next section. <strong>Keep three things separate:</strong> the key we search for, the separator that gives directions, and the RID that identifies a row.</p>
+<p>The lookup and range traces show what the code must accomplish. In the companion below, each step highlights code and shows the tree after that operation. Choose <code>child_index_for</code> to watch the separator comparisons, or <code>_descend</code> to follow the path as it grows. Lookup and range move through the tree; the split example changes its structure. After building the tree in the next section, return to the companion’s split example to connect each change to the code. <strong>Keep three things separate:</strong> the key we search for, the separator that gives directions, and the RID that identifies a row.</p>
 <div data-teaching-trace="btree-search btree-child-index btree-descend btree-split btree-range">
   <p><strong>Lookup:</strong> <code>search(36)</code> goes right at the root and returns <code>[(0, 4)]</code>. Fetching that address returns eli's row.</p>
   <p><strong>Split:</strong> five keys <code>[1, 2, 3, 4, 5]</code> become leaves <code>[1, 2]</code> and <code>[3, 4, 5]</code>, with a new root <code>[3]</code>.</p>
@@ -229,7 +229,7 @@
 </div>
 
 <h3 class="new-slide" data-kicker="Making room">Splitting near the middle avoids wasted space</h3>
-<p>Preserving entries and depth is necessary, but we also want useful free space where later inserts can use it.</p>
+<p>A split must preserve entries and equal leaf depth. It should also leave room in both resulting nodes for later insertions.</p>
 <p>Dividing five leaf keys into groups of two and three leaves both nodes at least half full. Dividing them into one and four would leave one node nearly empty and the other already full.</p>
 <p><span class="gloss" data-gloss="occupancy">Occupancy</span> means how much of a node's space is used. Repeatedly leaving nearly empty nodes makes the same data occupy more nodes and can add levels to the tree. With this lab's capacity of four, middle splits leave non-root nodes with at least two keys. The root is allowed to have fewer.</p>
 <p>These are different checks: keys can be in order and leaves can be at equal depth, yet the tree can still waste space. The lab checks both search results and tree shape.</p>
@@ -339,7 +339,7 @@
 <p><strong>Selectivity</strong> is the fraction of rows that match. One match out of 100,000 is <code>1 / 100000</code>. In everyday database language, that is a “highly selective” condition because it excludes almost everything. Say the fraction or match count when the wording could be confusing.</p>
 
 <h3 class="new-slide" data-kicker="Choosing an access path">An index also has to be built and maintained</h3>
-<p>Insert <code>(uid=42, name=mia, gpa=36)</code> and let its heap address be <code>r</code>. A uid index receives <code>42 → [r]</code>; a name index receives <code>mia → [r]</code>; a GPA index receives <code>36 → [r]</code>. If 36 already exists, append r to that entry's RID list. All three addresses refer to the same new row.</p>
+<p>Insert <code>(uid=42, name=mia, gpa=36)</code> and let its heap address be <code>r</code>. A uid index receives <code>42 → [r]</code>; a name index receives <code>mia → [r]</code>; a GPA index receives <code>36 → [r]</code>. If 36 already exists, append r to that entry's RID list. All three indexes store the same address for the new row.</p>
 <figure class="bt-reading" data-btree-scene="the-write-bill">
   <img class="bt-reading-static" src="diagrams/the-write-bill.svg" alt="Inserting one row into a table with three indexes maintains four structures: the heap and uid, name, and GPA indexes, all using the same RID." loading="lazy" width="1280" height="720">
   <figcaption>Compare tables with zero, one, two, and three indexes. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>

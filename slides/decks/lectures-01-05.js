@@ -1785,7 +1785,7 @@
         "teaching": {
           "idea": "The runner requests rows at the root, and each scan asks its input for the work it needs.",
           "builds": [
-            "Start with the completed honors-query plan. The runner first calls before_first() to initialize scan positions. The drawing now shows a tree ready to produce rows.",
+            "Return to the single-table query SELECT name FROM students WHERE gpa > 35. Its completed plan has one TableScan wrapped by SelectScan and ProjectScan. The runner first calls before_first() to initialize scan positions; the tree is now ready to produce rows.",
             "The runner calls next() on ProjectScan. That call reaches SelectScan, which asks TableScan for candidate rows. Point down the tree with the blue arrow.",
             "Use the toy row name = ada, gpa = 39. TableScan reads it, and SelectScan accepts it because 39 > 35. The successful next() result travels back toward the root.",
             "The runner calls get_val(\"name\") and obtains ada. ProjectScan exposes the requested field. The runner repeats next() until there are no more qualifying rows, then closes the plan."

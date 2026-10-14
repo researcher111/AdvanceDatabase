@@ -141,7 +141,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="locking">Two-phase locking orders conflicting operations</h2>
 
-<p class="keep-in-present">A reservation prevents two users from making incompatible use of one item. Shared locks permit compatible readers; an exclusive lock conflicts with another holder. A buffer pin merely keeps bytes in a frame, while a transaction lock constrains conflicting access. Keep those two kinds of protection separate.</p>
+<p class="keep-in-present">Think of a lock as a reservation on an item. Several readers can hold compatible shared reservations; a writer needs an exclusive reservation that conflicts with another transaction’s reservation. A buffer pin merely keeps bytes in a frame, while a transaction lock constrains conflicting access. Keep those two kinds of protection separate.</p>
 
 <p class="keep-in-present">A lock table prevents transactions from taking incompatible locks on the same item. Two-phase locking adds a rule about when those locks may be released. The provided Lab 7 lock table applies this approach to blocks.</p>
 
@@ -175,7 +175,7 @@ conflict table:        S      X
 <!-- ============================================================ -->
 <h2 id="levels">Isolation levels provide different guarantees</h2>
 
-<p class="keep-in-present">The label MVCC does not tell you which anomalies an isolation level prevents. Check its rules: a reader can see a consistent snapshot while concurrent transactions still produce a result that no serial execution would allow.</p>
+<p class="keep-in-present">Keeping multiple row versions—multi-version concurrency control, or MVCC—does not by itself tell you which anomalies an isolation level prevents. Check its rules: a reader can see a consistent snapshot while concurrent transactions still produce a result that no serial execution would allow.</p>
 
 <div class="viz" id="viz-iso">
   <div class="viz-title">four levels, three anomalies · compare the guarantees</div>
@@ -188,7 +188,7 @@ conflict table:        S      X
 
 <h3 class="new-slide" data-kicker="Isolation levels">Snapshot isolation can still allow write skew</h3>
 
-<p class="keep-in-present">Choose a level with <code>SET TRANSACTION ISOLATION LEVEL SERIALIZABLE</code>. The SQL-92 definitions classify levels using a limited set of anomalies. Snapshot isolation prevents the dirty and non-repeatable reads forbidden by REPEATABLE READ, but can still allow write skew. PostgreSQL uses snapshot isolation for REPEATABLE READ; its SERIALIZABLE level adds checks for outcomes that are not serializable.<sup class="src"><a href="#src-8" title="PostgreSQL Documentation: SET TRANSACTION">8</a></sup><sup class="src"><a href="#src-2" title="A Critique of ANSI SQL Isolation Levels (Berenson et al., SIGMOD 1995)">2</a></sup></p>
+<p class="keep-in-present">For example, <code>SET TRANSACTION ISOLATION LEVEL SERIALIZABLE</code> requests the serializable level. The SQL-92 definitions classify levels using a limited set of anomalies. Snapshot isolation prevents the dirty and non-repeatable reads forbidden by REPEATABLE READ, but can still allow write skew. PostgreSQL uses snapshot isolation for REPEATABLE READ; its SERIALIZABLE level adds checks for outcomes that are not serializable.<sup class="src"><a href="#src-8" title="PostgreSQL Documentation: SET TRANSACTION">8</a></sup><sup class="src"><a href="#src-2" title="A Critique of ANSI SQL Isolation Levels (Berenson et al., SIGMOD 1995)">2</a></sup></p>
 
 <!-- ============================================================ -->
 <h2 id="worked-example">Predict what two SELECTs can see</h2>
@@ -245,7 +245,7 @@ conflict table:        S      X
 <!-- ============================================================ -->
 <h2 id="thursday">Prepare for the optional transaction lab</h2>
 
-<p>Lab 7 completes microdb with WAL, commit, rollback, recovery, and the provided lock table controlling reads and writes at block granularity. Then you kill the process partway through a transaction and confirm that recovery brings the database back intact.</p>
+<p>Optional Lab 7 adds WAL, commit, rollback, and recovery to microdb. Its provided lock table controls reads and writes at block granularity. The crash tests kill the process partway through a transaction so you can check that recovery brings the database back intact.</p>
 
 <ul class="checklist">
   <li>☐ Lab 6 submitted; download the eight Lab 7 starter files.</li>
@@ -279,7 +279,7 @@ conflict table:        S      X
 <ul>
   <li><strong>Read</strong> Sciore ch. 5 and Postgres's isolation docs (linked above); be able to retell the FAQ's write-skew story.</li>
   <li><strong>Run</strong> the lost-update interleaving on paper (read, read, write, write) and mark the step where strict 2PL refuses it; then run the Lab 7 harness on the eight starter files and see <strong>0/9</strong>.</li>
-  <li><strong>Bring</strong> Lab 6 submitted and the WAL rule by heart: old value to the log, before the page.</li>
+  <li><strong>Review</strong> your Lab 6 work and be ready to explain the WAL rule: old value to the log, before the page.</li>
 </ul>
 
 <!-- ============================================================ -->

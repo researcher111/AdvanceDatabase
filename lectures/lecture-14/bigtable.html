@@ -105,7 +105,7 @@ The LSM design reduces some write costs while adding read and compaction work.</
 <!-- ============================================================ -->
 <h2 id="model">Bigtable stores a sparse, sorted map</h2>
 
-<p class="keep-in-present">Separate the address of a value from the way its updates are stored. Bigtable first needs to name a cell: row, column, and version. Then its tablet server must persist and retrieve that cell’s bytes.</p>
+<p class="keep-in-present">Before tracing how an update reaches storage, identify the value being updated. Bigtable names a cell by its row and column, and identifies a version by its timestamp. Its tablet server must then persist and retrieve the bytes at that address.</p>
 
 <p class="keep-in-present">The Bigtable paper describes a “sparse, distributed, persistent, multidimensional sorted map.” A value is addressed by three coordinates: row key, column name, and timestamp:<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></p>
 
@@ -213,14 +213,14 @@ SSTables, <span class="gloss" data-gloss="compaction">compact</span>, and then l
 <!-- ============================================================ -->
 <h2 id="reads">Use filters, indexes, and compaction to reduce reads</h2>
 
-<p class="keep-in-present">The version rule explains which answer is correct. Now ask how much work it takes to find it. Filters can rule out files, indexes can choose blocks, caches can reuse them, and compaction can reduce the runs that remain.</p>
+<p class="keep-in-present">The version rule explains which answer is correct. Now ask how much work it takes to find that version. Filters can rule out files, indexes can locate blocks, caches can reuse those blocks, and compaction can reduce the sorted files a read must check.</p>
 
 <h3 class="new-slide" data-kicker="The read path">Three ways to avoid unnecessary file reads</h3>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Bloom filters</span><span>An SSTable’s <span class="gloss" data-gloss="bloom">Bloom filter</span> answers “definitely absent” or “possibly present.” An absent result lets the engine skip the file. A possible match still needs checking because the filter can have false positives. Filter size and hash count control the false-positive rate; correctly maintained filters have no false negatives.<sup class="src"><a href="#src-4" title="RocksDB Bloom Filter (RocksDB wiki)">4</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Sparse indexes + caches</span><span>An SSTable index stores selected keys and block offsets. Searching that smaller index identifies which block may contain the key. A block cache can then satisfy frequently repeated reads without accessing storage.<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Compaction itself</span><span>Compaction merges sorted files and removes obsolete entries when safe. This reduces the number of files or versions a lookup must check. The exact overlap rules depend on the compaction strategy. Merging also consumes CPU and storage bandwidth, so more aggressive compaction has a cost.</span></div>
+  <div class="lc-row"><span class="lc-k">Compaction itself</span><span>Compaction merges sorted files and removes obsolete entries when safe. It must retain versions required by snapshots and deletion markers needed to hide older values. Removing entries that are no longer needed reduces the number of files or versions a lookup must check. The exact overlap rules depend on the compaction strategy. Merging also consumes CPU and storage bandwidth, so more aggressive compaction has a cost.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="The read path">Build a Bloom filter</h3>
