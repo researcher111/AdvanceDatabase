@@ -9,6 +9,7 @@
     if(!scene)throw new Error('Missing clarity scene: '+id+'/'+sceneId);
     scene.draw=draw;scene.kind='visual';scene.clarityNative=true;
     if(scene.traceId){scene.clarityTraceId=scene.traceId;delete scene.traceId;}
+    return scene;
   }
   function label(d,k,x,y,text,color=P.muted,size=24){d.text(k,x,y,text,size,color);}
   function foot(d,text){label(d,'mechanism-foot',640,643,text);}
@@ -198,6 +199,90 @@
     if(s>=2)label(d,'work',930,604,s===4?'Work: 2 centroids + 4 vectors = 6':'Work: 2 centroids + 1 vector = 3',P.orange,24);
   });
 
+  const ragOpening=use(12,'evidence-reaches-the-answer',(d,s)=>{
+    label(d,'opening-question',640,235,'How does a database recover after a crash?',P.ink,31);
+    label(d,'source-heading',210,314,'Source record',P.green,29);
+    label(d,'source-position',210,372,'position 2',P.ink,28);
+    label(d,'source-id',210,414,'source: wal',P.green,28);
+    label(d,'source-text',210,459,'Undo restores old values.',P.ink,24);
+    if(s>=1){
+      d.arrow('select-evidence',391,409,466,409,P.orange,3);
+      label(d,'evidence-heading',640,314,'Selected evidence',P.green,29);
+      label(d,'evidence-score',640,372,'score 0.9 → position 2',P.ink,25);
+      label(d,'evidence-id',640,414,'cite: [wal]',P.green,28);
+      label(d,'evidence-text',640,459,'Keep text beside its source ID',P.ink,24);
+    }
+    if(s>=2){
+      d.arrow('check-evidence',814,409,894,409,P.orange,3);
+      label(d,'support-heading',1060,314,'Claim check',P.orange,29);
+      label(d,'support-source',1060,372,'[wal] identifies the source',P.ink,24);
+      label(d,'support-question',1060,414,'Does its text support',P.orange,27);
+      label(d,'support-claim',1060,456,'the actual claim?',P.orange,27);
+    }
+    foot(d,'Toy record and score · a source reference makes a claim checkable, not automatically correct');
+  });
+  if(ragOpening){
+    ragOpening.states=['Identify the source','Select evidence with identity','Check the supported claim'];
+    ragOpening.teaching.builds=[
+      'Calibrate with the difference between a stored position and a source ID. Introduce the fictional recovery-question rehearsal. Read the toy source record before asking what the model will see.',
+      'Use the open-book comparison: a selected page needs its reference beside the text. Trace position 2 to source wal. This fixed score illustrates the interface, not a measured semantic ranking.',
+      'Noor asks: “Which sentence supports the answer?” A valid citation identifies where to look; it does not prove support. The lab’s echo mode exposes this context before a model call.'
+    ];
+    ragOpening.teaching.reference='Trace a source record into selected evidence, then check the claim against the source text. The two later evaluation metrics measure retrieval, while claim support needs a separate check. Keep the mock record distinct from the course’s measured corpus.';
+  }
+
+  const lsmOpening=use(14,'organize-writes-differently',(d,s)=>{
+    label(d,'opening-question',640,230,'The old bytes remain. Which record determines the read?',P.ink,29);
+    const xs=[240,640,1040],names=['SSTable A','SSTable B','Memtable'],values=['old @ 5','new @ 8','DELETE @ 9'];
+    xs.forEach((x,i)=>{
+      if(i>s)return;
+      label(d,'file-name-'+i,x,318,names[i],P.muted,26);
+      d.rect('version-'+i,x-155,347,310,112,i===s?P.orangeLight:P.white,i===s?P.orange:P.line,9,2);
+      label(d,'value-'+i,x,412,values[i],i===s?P.orange:P.ink,34);
+      if(i<s)d.arrow('newer-'+i,x+170,403,x+230,403,P.green,3);
+    });
+    label(d,'current-result',640,548,'Current read: '+['old','new','absent'][s],s===2?P.orange:P.green,34);
+    foot(d,'Same key k · sequence numbers order the toy updates · files remain immutable');
+  });
+  if(lsmOpening){
+    lsmOpening.states=['An older file','A newer value','A visible deletion'];
+    lsmOpening.teaching.builds=[
+      'Calibrate using WAL and buffer-pool memory from microdb. In the fictional debugging session, Maya opens an immutable file with old@5. Ask how an engine can update a key without editing these bytes.',
+      'Reveal new@8 in another file. Ask which record a current read should honor. Link the coming design to an ordered notebook that is sealed into immutable sorted pages.',
+      'Reveal DELETE@9. Noor asks what stops the old value returning. Keep the three records in view: the delete is itself newer state, and compaction must preserve its protection until reclamation is safe.'
+    ];
+    lsmOpening.teaching.reference='The opening follows the same old@5, new@8, DELETE@9 sequence as the worked trace. It motivates immutable runs, read-version resolution, and safe tombstone reclamation. The later discussion connects this storage choice to Bigtable’s address model, tablets, and durable logging.';
+  }
+
+  function repeatModel(d,s,question,labels){
+    label(d,'return-question',640,236,question,P.ink,30);
+    [175,485,795,1105].forEach((x,i)=>{
+      if(i>s)return;
+      d.circle('repeat-step-'+i,x,401,51,i===3?P.orangeLight:P.greenLight,i===3?P.orange:P.green,3);
+      label(d,'repeat-number-'+i,x,413,String(i+1),i===3?P.orange:P.green,34);
+      labels[i].forEach((line,j)=>label(d,'repeat-label-'+i+'-'+j,x,500+j*33,line,P.ink,26));
+      if(i<s)d.arrow('repeat-next-'+i,x+67,401,x+243,401,P.orange,3);
+    });
+  }
+  use(12,'a-measurable-rag-system',(d,s)=>{
+    repeatModel(d,s,'How does a database recover after a crash?',[
+      ['Record source','identity'],['Select evidence'],['Measure presence','and rank'],['Check each claim']
+    ]);
+    if(s===3)foot(d,'Select evidence · carry its identity · check what the passage actually supports');
+  });
+  use(13,'place-move-recover',(d,s)=>{
+    repeatModel(d,s,'“WAL, wal!” + “Page wal.” must keep the same word totals',[
+      ['Assign owners'],['Group equal keys'],['Execute the','dependencies'],['Recover lost work']
+    ]);
+    if(s===3)foot(d,'Changing placement should change the schedule, not wal = 3 and page = 1');
+  });
+  use(14,'trace-an-acknowledged-write',(d,s)=>{
+    repeatModel(d,s,'Return to k: old@5, new@8, DELETE@9',[
+      ['Log durably'],['Buffer in order'],['Flush sorted files'],['Resolve visible','records']
+    ]);
+    if(s===3)foot(d,'A current read returns absent; old bytes may remain until safe compaction');
+  });
+
   use(12,'keep-the-source-identity',(d,s)=>{
     label(d,'hits-title',260,223,'Ranked search hits');label(d,'chunks-title',915,223,'Original chunk records');
     const hits=window.CourseTraces.fixtures.hits,chunks=window.CourseTraces.fixtures.chunks.map(c=>[c.doc,c.text]);
@@ -326,4 +411,17 @@
     'Add the values within each key group. The final totals sum to four, preserving all mapped occurrences.',
     'Separate the invariant word totals from partition numbering and output order. The toy owner labels are illustrative; Python hash bucket numbers can vary.'
   ]);
+  // Keep the shared worked examples, adding a prediction before their first reveal.
+  const tracePredictions=[
+    [12,'keep-the-source-identity','Predict which source the integer position selects before following the hit.'],
+    [13,'reduce-sees-the-complete-group','Predict how many occurrences must survive and which values share a key group.'],
+    [14,'read-the-newest-visible-value','State the read snapshot, then predict the visible record before resolving versions.'],
+    [15,'paths-are-not-unique-vertices','State whether the question asks for walks or distinct people before counting.']
+  ];
+  for(const [id,sceneId,prediction] of tracePredictions){
+    const sc=decks[id]?.scenes.find(s=>s.id===sceneId);if(!sc)continue;
+    sc.teaching.builds[0]=prediction+' '+sc.teaching.builds[0];
+    sc.teaching.context=[sc.teaching.context,'Ask for a prediction, reveal the operation, then have a student explain why the result follows.'].filter(Boolean).join(' ');
+  }
+
 })();

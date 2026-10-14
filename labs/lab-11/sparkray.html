@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=1">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 </head>
@@ -15,14 +16,16 @@
 <aside class="toc">
   <div class="toc-title">Lab 11</div>
   <ul>
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Trace how keys select a partition</a></li>
     <li><a href="#big-idea">Separate computation from scheduling and data transfer</a></li>
+    <li><a href="#worked-example">Trace map output into independent partition dictionaries</a></li>
     <li><a href="#the-api">One file is graded; two more you run and read</a></li>
-    <li><a href="#worked-example">Worked example</a></li>
     <li><a href="#build">Part 1 · micro-mapreduce</a></li>
     <li><a href="#spark">Part 2 · Spark</a></li>
     <li><a href="#ray">Part 3 · Ray</a></li>
     <li><a href="#verify">Routing bugs hide at n=1, so the harness varies n</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -44,7 +47,7 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">A distributed word count splits the input across workers, but must still produce one total for each word. Today you implement map, partition, shuffle, and reduce in one process so that the grouping rule is easy to inspect. Then you run the same word count in Spark and parallelize nearest-neighbor searches with Ray. The data is the same 4,000 arXiv abstracts used in Lab 9.</p>
+<p class="lede">Two workers can count the same word locally and still leave you without one global total. Your first task is to make equal keys meet before reduction. Implement the MapReduce phases in one process so their contracts are visible, then compare Spark word count and Ray nearest-neighbor tasks over the same 4,000-abstract corpus.</p>
 
 <div class="cite">
   Builds on: <a href="../lab-10/microrag.html">Lab 10 · micro-rag</a> (same corpus) ·
@@ -63,6 +66,16 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>How many <code>wal</code> occurrences are in <code>“WAL, wal!”</code>? If another record adds one, what must be preserved while routing the pairs? Can every worker use a different partition rule?</p>
+  <details><summary>Check your explanation</summary><p>The first record has two occurrences after normalization; the second contributes another. Preserve all three contributions and route equal keys consistently. Separately launched workers need a compatible partition function; this graded exercise runs within one process.</p></details>
+</div>
+
+<p class="keep-in-present">Your learning loop is <strong>predict, run, explain</strong>. Make a small prediction, inspect one step of the trace or one function check, then connect the result to the mechanism. Use that explanation to choose the next experiment.</p>
+
 <h2 id="try-it">Trace how keys select a partition</h2>
 
 <p>This widget shows the grouping rule you will implement: four documents produce word-count pairs, and each key determines a partition. The colors show the destination selected by the widget’s simple hash.</p>
@@ -96,6 +109,8 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="big-idea">Separate computation from scheduling and data transfer</h2>
 
+<p class="keep-in-present">Think of sorting mail into destination trays. The address determines the tray, not the sender or arrival order. Here the word is the address, the partition is the tray, and each occurrence contributes a value. The lab’s specified hash rule supplies the actual routing; correct counts must not depend on the tray number.</p>
+
 <p class="keep-in-present">Parts 1 and 2 count words in the same 4,000 abstracts. Part 3 runs independent nearest-neighbor searches on their vectors. Compare the code that computes results with the code or framework that schedules work and transfers data:</p>
 
 <pre class="equation"><code>Part 1  mapreduce.py        implement map, partition, shuffle, and reduce
@@ -105,6 +120,18 @@ Part 3  ray_speedup.py      submit independent searches as Ray tasks
 Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vectors.</code></pre>
 
 <p class="keep-in-present">Part 1 executes each phase sequentially in one process. This lets you inspect how map output is routed and grouped before reducing it. Spark handles distributed scheduling and data transfer in Part 2. The map and reduce logic is similar, but running across machines also requires serialization, retry, and resource management.</p>
+
+<!-- ============================================================ -->
+<h2 id="worked-example">Trace map output into independent partition dictionaries</h2>
+
+<p class="keep-in-present">Predict the number of emitted pairs before advancing. Watch both copies of <code>wal</code> survive mapping and arrive in the same group. Distinguish a partition dictionary from each key’s value list inside it.</p>
+
+<p>Follow two tiny records before processing the corpus. The displayed bucket numbers are a fixed teaching choice. Your required implementation uses Python’s <code>hash(key) % n_partitions</code> within one process.</p>
+<div data-teaching-trace="shuffle">
+  <p><strong>Worked result:</strong> The map emits four pairs. Shuffle groups three values under wal and one under page. Reduction gives <code>{"wal": 3, "page": 1}</code>, independent of bucket numbering.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Implementation checkpoints:</strong> create each partition dictionary separately. Preserve all duplicate occurrences in <code>map_words</code> and <code>shuffle</code>. Test with more than one partition; one bucket hides routing errors. The graded implementation runs sequentially, while optional Spark and Ray exercises add actual scheduling.</p>
 
 <!-- ============================================================ -->
 <h2 id="the-api">One file is graded; two more you run and read</h2>
@@ -126,17 +153,9 @@ Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vecto
 </div>
 
 <!-- ============================================================ -->
-<h2 id="worked-example">Trace map output into independent partition dictionaries</h2>
-
-<p>Follow two tiny records before processing the corpus. The displayed bucket numbers are a fixed teaching choice. Your required implementation uses Python’s <code>hash(key) % n_partitions</code> within one process.</p>
-<div data-teaching-trace="shuffle">
-  <p><strong>Worked result:</strong> The map emits four pairs. Shuffle groups three values under wal and one under page. Reduction gives <code>{"wal": 3, "page": 1}</code>, independent of bucket numbering.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Implementation checkpoints:</strong> create each partition dictionary separately. Preserve all duplicate occurrences in <code>map_words</code> and <code>shuffle</code>. Test with more than one partition; one bucket hides routing errors. The graded implementation runs sequentially, while optional Spark and Ray exercises add actual scheduling.</p>
-
-<!-- ============================================================ -->
 <h2 id="build">Part 1 · micro-mapreduce <span class="part-time">~35 min in class · graded</span></h2>
+
+<p class="keep-in-present">For each function, identify its input, output, and preserved information on the small trace. Then run its function check. Avoid converting repeated word occurrences to a set; the missing counts cannot be recovered later.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -163,6 +182,8 @@ Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vecto
 <!-- ============================================================ -->
 <h2 id="spark">Part 2 · Spark <span class="part-time">~15 min in class</span></h2>
 
+<p class="keep-in-present">Use the same word-count model to read the Spark chain: create occurrences, attach counts, group equal keys, add values. Predict where redistribution is required before looking for <code>ShuffledRDD</code> in the printed plan.</p>
+
 <p>The starter provides the session and DAG printing. Write <code>flatMap</code> to emit word strings, <code>map</code> to turn each word into <code>(word, 1)</code>, and <code>reduceByKey</code> to sum counts. Part 1’s <code>map_words</code> already emits pairs, so do not pass its output through a second word-to-pair mapping.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span>
@@ -178,6 +199,8 @@ Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vecto
 
 <!-- ============================================================ -->
 <h2 id="ray">Part 3 · Ray <span class="part-time">~15 min in class</span></h2>
+
+<p class="keep-in-present">This workload asks for independent neighbor searches rather than word groups. Before timing it, sketch two schedules: launch-and-wait repeatedly, or launch all tasks and wait once. Check equality with serial results before interpreting elapsed time.</p>
 
 <p>For each abstract, find its ten nearest neighbors among the other 3,999 vectors. Each search is independent, so Ray can distribute the work across worker processes. This builds part of a k-nearest-neighbor graph; HNSW adds layers and neighbor-selection rules. In <code>ray_speedup.py</code>, define a remote search task, launch all tasks, then gather their results once.</p>
 
@@ -204,6 +227,8 @@ it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the
 
 <!-- ============================================================ -->
 <h2 id="verify">Routing bugs hide at n=1, so the harness varies n</h2>
+
+<p class="keep-in-present">A single partition can hide a routing bug. Predict which properties must survive changing the partition count, then read the OFFLINE checks as tests of those properties. Optional engine checks add separate execution behavior.</p>
 
 <h3 id="function-tests">Test one function at a time</h3>
 <p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
@@ -244,6 +269,14 @@ it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the
 </div>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the result without reading your code</span>
+  <p>Draw map → shuffle → reduce for the two-record trace. Then explain which part Spark schedules for you and why the Ray example launches tasks before waiting. Which results should stay the same when you change partition or worker counts?</p>
+  <details><summary>Check your explanation</summary><p>Map preserves occurrences, shuffle groups matching keys, and reduce combines a complete group. Spark adds execution and data movement around that dependency plan. Independent Ray tasks can overlap when submitted before the wait. Word totals and serial/parallel neighbor results should agree even when placement or timing changes. This is practice; Part 1 remains the graded submission.</p></details>
+</div>
+
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present">Submit <code>mapreduce.py</code> to Gradescope by Tuesday Nov 17 at class start, following the course submission instructions. The seven OFFLINE tests determine the lab grade.</p>

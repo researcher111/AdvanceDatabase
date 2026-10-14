@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=3">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
@@ -15,18 +16,18 @@
   <div class="toc-title">Lecture 14</div>
   <p><a href="../../slides/lecture-14.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#problem">B+ tree writes can become a storage bottleneck</a></li>
     <li><a href="#model">Bigtable stores a sparse, sorted map</a></li>
     <li><a href="#tablets">Tablets divide the sorted key space</a></li>
     <li><a href="#lsm">The LSM write path buffers and flushes updates</a></li>
     <li><a href="#try-it">Run the write path</a></li>
+    <li><a href="#worked-example">Trace a delete through older sorted files</a></li>
     <li><a href="#reads">Use filters, indexes, and compaction to reduce reads</a></li>
-    <li><a href="#worked-example">Worked example</a></li>
     <li><a href="#lsm-vs-btree">Compare B+ tree and LSM costs</a></li>
     <li><a href="#cap">During a network partition, consistency and availability conflict</a></li>
     <li><a href="#descendants">Related storage systems</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -43,11 +44,17 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 14 · Thursday November 12, 2026</div>
   <h1>Bigtable, LSM Trees &amp; NoSQL</h1>
-  <div class="subtitle">How do distributed storage engines handle a sustained stream of writes, and what extra work does that create for reads and background maintenance?</div>
+  <div class="subtitle">The old value is still in a file. How does a later update or delete win?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Bigtable was built for large, write-heavy datasets spread across many machines. Its 2006 paper combines ideas you already know: logging, caching, sorted data, and range partitioning. Today we connect those ideas through the LSM design: collect writes in memory, flush sorted files, and merge them in the background. Then we examine the cost this shifts to reads. Graph databases follow on Tuesday November 17. <a href="#src-1">Read the original Bigtable paper.</a></p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">Maya opens an immutable sorted file and finds <code>k = old</code>. The team has since written a new value and then deleted the key. Noor points to the old record: <q>If we can’t change this file, what stops that value coming back?</q></p>
+  <p>They lay out three records in sequence order: <code>old@5</code>, <code>new@8</code>, and <code>DELETE@9</code>. Maya reaches for the eraser. Noor stops her: <q>First show which record a current read must see.</q></p>
+</div>
+
+<p class="keep-in-present">An LSM engine buffers updates, flushes immutable sorted files, and merges them later. Reads must resolve versions across those structures. Bigtable combines this storage pattern with logging, caching, and range partitioning across servers. We will trace one key before comparing the read, write, and maintenance costs.</p>
 
 <div class="cite">
   Companion reading: Chang et&nbsp;al., <a href="https://research.google/pubs/pub27898/"><em>Bigtable: A Distributed Storage System for Structured Data</em></a> (OSDI 2006) ·
@@ -65,7 +72,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">The question we will trace</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>In microdb, why must recovery information survive a crash before an update is considered durable? If an old file cannot be edited, is forgetting a key in memory enough to delete it permanently?</p>
+  <details><summary>Check your explanation</summary><p>A durable log can reconstruct an update lost from memory. Forgetting a key in memory leaves older file records intact. A deletion needs a newer record that hides those older values until safe reclamation is possible.</p></details>
+</div>
 
 <p class="keep-in-present"><strong>Quiz 10</strong> first (MapReduce, Spark &amp; Ray, 10 min), then the write-optimized
 half of the storage world.</p>
@@ -78,7 +91,7 @@ half of the storage world.</p>
 <!-- ============================================================ -->
 <h2 id="problem">B+ tree writes can become a storage bottleneck</h2>
 
-<p class="key-fact keep-in-present"><strong>Scattered leaf updates</strong> can make B+ tree writes expensive. Buffering, batching, key order, and storage hardware determine the actual disk I/O.</p>
+<p class="keep-in-present">The B+ tree you built updates the leaf that owns a key. A sustained stream of scattered keys can dirty many pages. Before choosing a new design, ask which storage work is expensive and which work a different layout merely postpones.</p>
 
 <h3 class="new-slide" data-kicker="Write-heavy storage">Sequential output can reduce scattered writes</h3>
 
@@ -92,6 +105,8 @@ The LSM design reduces some write costs while adding read and compaction work.</
 
 <!-- ============================================================ -->
 <h2 id="model">Bigtable stores a sparse, sorted map</h2>
+
+<p class="keep-in-present">Separate the address of a value from the way its updates are stored. Bigtable first needs to name a cell: row, column, and version. Then its tablet server must persist and retrieve that cell’s bytes.</p>
 
 <p class="keep-in-present">The Bigtable paper describes a “sparse, distributed, persistent, multidimensional sorted map.” A value is addressed by three coordinates: row key, column name, and timestamp:<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></p>
 
@@ -117,6 +132,8 @@ timestamp  a cell version    · reads select versions under the retention policy
 
 <!-- ============================================================ -->
 <h2 id="tablets">Tablets divide the sorted key space</h2>
+
+<p class="keep-in-present">A sorted row-key space can be cut into intervals, as B+ tree leaves cover ordered ranges. A tablet is an interval assigned to a server, not a replica of the whole table. Trace where increasing keys go before assuming that another split spreads their writes.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The unit</span><span>A tablet holds a contiguous range of row keys. The original paper describes tablets of roughly 100–200 MB. Tablets let the system assign different ranges to different servers.</span></div>
@@ -147,7 +164,7 @@ timestamp  a cell version    · reads select versions under the retention policy
 <!-- ============================================================ -->
 <h2 id="lsm">The LSM write path buffers and flushes updates</h2>
 
-<p class="keep-in-present">Inside a tablet server, writes pass through a log and an in-memory structure before becoming sorted files:</p>
+<p class="keep-in-present">Think of a sorted notebook plus a stack of sealed sorted pages. Write new entries in the notebook, seal a batch into a file, then merge files. The memtable is the notebook; SSTables are the sealed pages. Actual durability comes from the log, not from this paper analogy.</p>
 
 <pre class="equation"><code>write(k, v):   1. append a log record       recovery information
                2. update the memtable      sorted state in memory
@@ -185,9 +202,19 @@ SSTables, <span class="gloss" data-gloss="compaction">compact</span>, and then l
 </div>
 
 <!-- ============================================================ -->
+<h2 id="worked-example">Trace a delete through older sorted files</h2>
+
+<p class="keep-in-present">Return to the three records from the opening. Predict what a read at snapshot 9 returns before revealing the delete. Then ask whether merging only two files is enough to erase its marker while the oldest file still exists.</p>
+<div data-teaching-trace="lsm">
+  <p><strong>Worked result:</strong> The newest visible record at snapshot 9 is DELETE@9, so return absent even though older files hold values at 8 and 5. A partial compaction must retain the tombstone while an older value can still reappear.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Connection to earlier lectures:</strong> WAL protects updates before flush, sorted files support ordered access, and snapshots can require retaining old versions. Compaction must preserve those contracts while reclaiming storage.</p>
+
+<!-- ============================================================ -->
 <h2 id="reads">Use filters, indexes, and compaction to reduce reads</h2>
 
-<p class="keep-in-present">A key may have versions in memory and in several SSTables. A lookup must find the newest visible value or deletion marker. This simplified engine checks newest to oldest; filters, indexes, and compaction reduce the work:</p>
+<p class="keep-in-present">The version rule explains which answer is correct. Now ask how much work it takes to find it. Filters can rule out files, indexes can choose blocks, caches can reuse them, and compaction can reduce the runs that remain.</p>
 
 <h3 class="new-slide" data-kicker="The read path">Three ways to avoid unnecessary file reads</h3>
 
@@ -221,17 +248,9 @@ Insert keys, then query keys you never inserted, and keep querying until the fil
 </div>
 
 <!-- ============================================================ -->
-<h2 id="worked-example">Trace a delete through older sorted files</h2>
-
-<p>An immutable file can still contain an obsolete value. A <strong>tombstone</strong> records a deletion so reads can suppress that value. Track the key’s sequence numbers and the read snapshot before deciding which record wins.</p>
-<div data-teaching-trace="lsm">
-  <p><strong>Worked result:</strong> The newest visible record at snapshot 9 is DELETE@9, so return absent even though older files hold values at 8 and 5. A partial compaction must retain the tombstone while an older value can still reappear.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Connection to earlier lectures:</strong> WAL protects updates before flush, sorted files support ordered access, and snapshots can require retaining old versions. Compaction must preserve those contracts while reclaiming storage.</p>
-
-<!-- ============================================================ -->
 <h2 id="lsm-vs-btree">Compare B+ tree and LSM costs</h2>
+
+<p class="keep-in-present">Maya can explain why the deleted key stays absent. Noor now asks what the design costs under their workload. Compare the operations you need, including the background work that keeps future reads manageable.</p>
 
 <p class="key-fact keep-in-present"><strong>Different update paths, different costs:</strong> B+ trees update the page containing a key. LSM trees collect updates in memory, write sorted files, and merge them later.</p>
 
@@ -251,7 +270,7 @@ Insert keys, then query keys you never inserted, and keep querying until the fil
 <!-- ============================================================ -->
 <h2 id="cap">During a network partition, consistency and availability conflict</h2>
 
-<p class="keep-in-present">When replicas cannot communicate, they cannot always agree on the latest value. To preserve a single up-to-date view, the system may have to delay or reject some requests. Serving every request instead can allow different replicas to return different results.</p>
+<p class="keep-in-present">Durable storage on one server is only part of the story. Two replicas lose communication after one sees a completed update. Predict what the isolated replica can know before naming the consistency and availability guarantees.</p>
 
 <h3 class="new-slide" data-kicker="Replication and CAP">CAP</h3>
 
@@ -295,7 +314,15 @@ Exact guarantees depend on the operation and configuration.</code><sup class="sr
 </div>
 
 <!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
+<h2 id="recap">Return to the opening question</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>SSTable A still holds <code>old@5</code>. A compaction merges only B’s <code>new@8</code> and C’s <code>DELETE@9</code>. Can it simply drop both records because the key is deleted?</p>
+  <details><summary>Check your explanation</summary><p>No. Without the tombstone, a later current read could expose A’s old value. Retain the deletion while that older value can reappear, and account for required snapshots. Reclamation needs a safety condition, not merely the observation that the newest record is a delete.</p></details>
+</div>
+
+<p class="keep-in-present">Return to <code>k</code>. The old bytes may remain, but a current read honors the newest visible record. The same sequence links recovery and lookup: log the update, buffer it, flush sorted files, then resolve versions during reads and safe compaction.</p>
 
 <ul class="recap-list">
   <li>Bigtable combines logging, sorted records, range partitioning, and caching across servers. Row-key design affects which records are stored together and where writes go.</li>

@@ -990,376 +990,377 @@ window.CourseClarityCaptions = {
   },
   "12": {
     "evidence-reaches-the-answer": [
-      "Begin with a corpus that contains potential supporting evidence.",
-      "Retrieve a small set of passages for the current question.",
-      "Generate an answer supported by those passages and their source IDs."
+      "Maya has found a recovery passage. First identify its stored record and source.",
+      "Carry the selected passage and its source ID into the context supplied for this question.",
+      "A source ID makes a claim checkable. Read the passage to decide whether it supports the claim."
     ],
     "retrieval-augmented-generation": [
-      "Split source documents into retrievable chunks.",
-      "Embed chunks with a compatible representation.",
-      "Build the searchable index during ingestion.",
-      "At query time, retrieve relevant chunks.",
-      "Supply retrieved evidence to the generator, preserving source attribution."
+      "Keep each chunk as a retrievable record with its source identity.",
+      "Represent those records with compatible embeddings.",
+      "Build the index during ingestion, before the question arrives.",
+      "For each question, select a ranked set of candidate passages.",
+      "Assemble their text and source IDs, then check the generated answer against that evidence."
     ],
     "three-places-for-knowledge": [
-      "Model weights can contain knowledge, but do not expose a current source collection.",
-      "Supplying the whole corpus repeatedly consumes a large context budget.",
-      "Retrieval selects a smaller, question-dependent evidence set."
+      "Trained weights can contain knowledge, but do not expose the current source pages.",
+      "Sending every page again uses context and processing work for every question.",
+      "Like an open-book answer, retrieval selects pages; the generator must still use them correctly."
     ],
     "design-the-retrieval-record": [
-      "Begin with the document’s structure and topic boundaries.",
-      "Chunks should preserve enough context to interpret their content.",
-      "Very small fragments can separate a statement from its meaning.",
-      "Overlap can preserve boundary context while duplicating some material."
+      "Inspect the source’s topics before deciding where one record ends.",
+      "Keep a claim with the context needed to interpret it.",
+      "A tiny fragment can return “it does this” while omitting what “it” means.",
+      "Overlap can keep boundary context, but adds duplicated text to the index and prompt."
     ],
     "keep-the-source-identity": [
-      "Search results contain vector positions, not source IDs.",
-      "Position 2 resolves to the WAL chunk about undo.",
-      "Copy the chunk before attaching the query-specific score.",
-      "Ranked chunks keep their original source IDs, even when IDs repeat.",
-      "The first relevant hit determines reciprocal rank; source IDs support citations."
+      "The toy hit contains position 2, not the source ID wal. Predict which record it selects.",
+      "Resolve position 2 to its original WAL chunk before building a citation.",
+      "Attach score 0.9 to a copy; leave the stored record unchanged for the next question.",
+      "Carry the ranked chunks’ source IDs into the prompt, including repeated IDs.",
+      "Count one hit per question and use the first relevant rank for its reciprocal score."
     ],
     "a-synonym-failure": [
-      "The query “OS page cache” retrieves the intended buffer-pool source.",
-      "Rephrasing the same idea changes the ranking in this example.",
-      "Exact search cannot repair a representation that ranks irrelevant content highly."
+      "The first wording retrieves the intended buffer-pool source.",
+      "Maya changes the wording; the same information need now gets different evidence.",
+      "This is exact search. More ANN exploration cannot fix these representation scores."
     ],
     "build-an-evaluation-set": [
-      "Build a varied set of at least 25 evaluation questions.",
-      "Label relevant source IDs, including multiple acceptable sources where appropriate.",
-      "Keep evaluation questions fixed while comparing retrieval settings."
+      "Write questions that a corpus user would actually ask; the project requires at least 25.",
+      "Label the sources needed to answer each question independently of the current ranking.",
+      "Keep comparison questions fixed and hold partner questions out of tuning."
     ],
     "presence-in-the-top-results": [
-      "Question 1 has a relevant source at rank 1.",
-      "Question 2 has a relevant source at rank 3.",
-      "Question 3 has no relevant source in the returned set.",
-      "Hit rate is 2 / 3: two questions have at least one relevant hit."
+      "Three toy questions use a top-three cutoff. Reveal their relevant sources before scoring.",
+      "Marked boxes show the relevant sources. Which questions have a hit in their first three?",
+      "Score each question once: 1, 1, 0. Repeated chunks from one source do not create extra hits.",
+      "Two of three questions hit: hit@3 = 2 / 3. Moving rank 3 to rank 1 does not change it."
     ],
     "rank-changes-the-score": [
-      "A first relevant result at rank 1 earns reciprocal rank 1.",
-      "A first relevant result at rank 3 earns 1 / 3.",
-      "A missing relevant result earns 0.",
-      "MRR is (1 + 1/3 + 0) / 3, approximately 0.44."
+      "Use the same three questions and top-three cutoff to measure how early the evidence returns.",
+      "The marked sources are at ranks 1 and 3. Predict their reciprocal-rank scores.",
+      "Ranks 1 and 3 contribute 1 and 1/3; the miss contributes 0.",
+      "MRR@3 = (1 + 1/3 + 0) / 3 ≈ 0.44. Compare ranks as well as presence."
     ],
     "measure-chunking-instead-of-guessing": [
-      "Ten-word chunks give hit rate 0.75 and MRR 0.67 in this fixture.",
-      "Sixty-word chunks improve these scores to 0.92 and 0.78.",
-      "Ninety-word chunks tie those scores here; this is a measured fixture, not a universal optimum."
+      "On the course fixture, ten-word chunks give hit@3 = 0.75 and MRR@3 = 0.67.",
+      "Sixty-word chunks give 0.92 and 0.78 on the same questions.",
+      "Ninety-word chunks tie those scores here. The fixture does not establish a universal chunk size."
     ],
     "context-has-a-budget": [
-      "Retrieve a candidate set before choosing the final context.",
-      "Rerank or filter the candidates to fit the evidence budget.",
-      "Preserve the chosen passage’s source ID when constructing the prompt."
+      "Collect candidates before choosing the final evidence packet.",
+      "Keep a useful subset that fits the context budget; extra text can add noise and cost.",
+      "Keep source IDs beside the chosen text so the final claims can be checked."
     ],
     "two-retrieval-paths": [
-      "The query contains the exact identifier E104.",
-      "Vector search and keyword search can find different candidates.",
-      "Merge candidates while removing duplicates; raw scores need not be comparable.",
-      "Rerank the merged set before selecting the final evidence."
+      "The question contains E104, an exact identifier worth preserving.",
+      "Keyword and vector search can contribute different candidates for the same question.",
+      "Merge and deduplicate candidates without assuming unrelated raw scores share a scale.",
+      "Rerank the merged set, then measure whether the extra stage fixes the observed failure."
     ],
     "filters-change-the-candidate-set": [
-      "The collection contains chunks from more than one access scope.",
-      "Restrict candidates to sources the current user may access.",
-      "Choose top-k within the authorized set, not from an unrestricted result list."
+      "The collection includes sources with different access scopes.",
+      "Constrain the evidence to sources the current user may access.",
+      "Find top-k within that allowed set; an unrestricted ranking is not an authorization check."
     ],
     "a-changed-source-invalidates-copies": [
-      "Source D7 and its stored embedding begin at version 1.",
-      "Updating the text alone leaves a stale searchable representation.",
-      "Embed the new source version before publishing it for retrieval.",
-      "Switch the source and index version together; a model change requires compatible re-embedding."
+      "D7’s text and searchable representation begin at version 1.",
+      "Changing the source alone leaves its stored derivatives stale.",
+      "Build the new source representation before making it searchable.",
+      "Switch compatible source and index versions together; a model change also needs re-embedding."
     ],
     "failure-diagnosis-workshop": [
-      "A missing relevant hit points to a retrieval or corpus problem.",
-      "A relevant result at rank 3 points to ranking quality.",
-      "A citation identifies a source; it does not by itself prove the answer is supported."
+      "Missing evidence: inspect the corpus and retrieved source IDs first.",
+      "Evidence at rank 3: inspect ranking, then measure a proposed change.",
+      "Unsupported claim: open the actual context and citation. An existing source ID is not proof."
     ],
     "a-measurable-rag-system": [
-      "Record source identity and version during ingestion.",
-      "Retrieve a ranked evidence set for each evaluation question.",
-      "Measure hit rate and reciprocal rank against labeled sources.",
-      "Check that the generated claims are supported by the cited passages."
+      "Return to Maya’s question: record the source identity and version.",
+      "Select the evidence and keep its ranking visible.",
+      "Check presence and rank against independently labeled sources.",
+      "Select evidence, carry its identity, check support. A fluent answer still needs that last check."
     ]
   },
   "13": {
     "one-job-many-machines": [
-      "At 2 GB/s, reading 10 TB on one worker takes about 5,000 seconds.",
-      "Dividing the bytes across 100 workers gives 100 GB per worker.",
-      "An ideal run takes about 50 seconds; a failed worker adds recovery work."
+      "The count is the same task at a larger scale: 10 TB / 2 GB/s = 5,000 seconds for one ideal scan.",
+      "With 100 independent readers, each receives 100 GB under this capacity estimate.",
+      "An ideal read takes 50 seconds before overhead; a failed worker also needs recovery."
     ],
     "partitioning": [
-      "Start with records whose keys determine ownership.",
-      "A partition rule assigns each key to a worker.",
-      "A point query uses the same rule to find the responsible worker."
+      "Treat a key like a destination address: it determines the responsible worker.",
+      "Apply one compatible routing rule to every record.",
+      "Use that rule to find the owner of a point query; partitions divide responsibility."
     ],
     "hash-routing": [
-      "The names begin as one logical collection.",
-      "The toy hash maps each name to one of four owners.",
-      "Equality lookup computes a single owner directly.",
-      "A key range can span many hash partitions."
+      "Keep the same twelve names while changing only the routing rule.",
+      "The transparent toy hash assigns each key to one of four owners.",
+      "An exact key such as kim computes one owner directly.",
+      "A key range has no single hash interval, so this example consults every partition."
     ],
     "range-routing": [
-      "Sorted keys can be divided into contiguous ranges.",
-      "Each worker owns one range of the key space.",
-      "A point lookup for kim routes to the k–z owner.",
-      "The d–f range query stays within one owner; uneven frequencies can still create hotspots."
+      "Now keep neighboring keys together in sorted intervals.",
+      "Assign each interval to a worker, like consecutive ranges in an ordered index.",
+      "Route kim to the owner of k–z.",
+      "The d–f range stays with one owner here; key frequencies can still create uneven work."
     ],
     "skew-creates-idle-time": [
-      "With no hot key, 8,000 equal-cost rows divide into 1,000 per worker.",
-      "A 40% hot key puts 3,800 rows on one worker and 600 on each other worker.",
-      "At 80%, the hot worker gets 6,600 rows and limits completion time."
+      "With equal-cost rows and no hot key, each worker receives 1,000 of the 8,000 rows.",
+      "At 40%, the hot worker gets 3,800 rows; the others get 600 each.",
+      "At 80%, one worker gets 6,600 rows. More workers do not divide that same-key group."
     ],
     "salt-and-combine": [
-      "Repeated key A directs all of its work to one owner.",
-      "Add a salt to spread A across four temporary keys.",
-      "Compute a partial result for each salted key.",
-      "Combine the four partial counts to recover A’s total of 100."
+      "The repeated key A concentrates its work on one owner.",
+      "Split it into four salted keys only if the operation supports correct partial results.",
+      "Count each salted group separately.",
+      "Combine 25 + 25 + 25 + 25 to recover A = 100; placement changes, the answer does not."
     ],
     "map-is-local-computation": [
-      "Read the text “The log the tree.”",
-      "Tokenize and normalize each word.",
-      "Emit one (word, 1) pair per occurrence, including both copies of “the.”"
+      "Read the four occurrences in “the log the tree.”",
+      "Normalize and tokenize without removing repeated words.",
+      "Emit four (word, 1) pairs. Both occurrences of “the” must survive."
     ],
     "shuffle-manufactures-locality": [
-      "Mappers emit local key-value pairs.",
-      "Route equal keys to the same reducer.",
-      "Equal words now share an owner and form separate groups, ready for reduction."
+      "Local mappers have pairs for words whose other occurrences may be elsewhere.",
+      "Like sorting mail by destination, send equal keys to the same owner.",
+      "Group each key’s values at that owner before reduction; moving records costs work."
     ],
     "reduce-sees-the-complete-group": [
-      "Two documents produce four word occurrences.",
-      "Emit (wal, 1) three times and (page, 1) once.",
-      "Shuffle all copies of a word to its chosen owner.",
-      "Reduce the groups to wal = 3 and page = 1.",
-      "Key ownership must be consistent; output ordering is a separate contract."
+      "Return to Maya’s two records. Predict how many occurrences mapping must preserve.",
+      "Keep three (wal, 1) pairs and one (page, 1) pair.",
+      "Route equal words to their common owner using a compatible partition rule.",
+      "Reduce complete groups: wal = 3 and page = 1.",
+      "Change the partition count, keep the totals. Bucket numbering and output order may change."
     ],
     "reduce-network-bytes-early": [
-      "Each of three mappers emits four occurrences of “log.”",
-      "Locally combine each mapper’s four pairs into (log, 4).",
-      "Shuffle three partial counts and sum them to 12."
+      "Each mapper holds four local occurrences of log.",
+      "For this sum, replace those four pairs with one local partial count, (log, 4).",
+      "Move three partial counts and add them to 12. A valid combine saves traffic, not occurrences."
     ],
     "a-lazy-spark-plan": [
-      "Begin with the input text collection.",
-      "flatMap creates one row per token.",
-      "map converts each token into a keyed count.",
-      "reduceByKey groups equal words through a shuffle.",
-      "An action requests execution and returns the result."
+      "Describe the input collection before triggering execution.",
+      "flatMap creates the word occurrences.",
+      "map attaches a count to each word.",
+      "reduceByKey creates the dependency that groups equal keys.",
+      "An action triggers work; collect returns the small result to the driver."
     ],
     "stages-follow-dependencies": [
-      "Narrow transformations can stay within a partition.",
-      "A shuffle redistributes records between partitions.",
-      "The shuffle separates stages of the execution graph.",
-      "Tasks within a stage can run on different workers."
+      "Partition-local operations can stay in a narrow chain.",
+      "Grouping can require a shuffle across workers.",
+      "That dependency separates stages in this simple word-count plan.",
+      "Schedule tasks within each stage; stage count is not simply the number of API calls."
     ],
     "lineage-rebuilds-lost-partitions": [
-      "Lineage records how partitions can be reconstructed.",
-      "Losing a worker can also lose its cached partitions.",
-      "Trace the lost partition back to the required inputs and transformations.",
-      "Recompute the missing work on another worker."
+      "Keep the recipe and the dependencies needed to reconstruct a partition.",
+      "A worker loss can remove its cached output.",
+      "Trace the missing output back to the required available inputs.",
+      "Replay the missing work elsewhere. Lineage is a recomputation recipe, not a transaction log."
     ],
     "launch-before-waiting": [
-      "Waiting after every launch makes independent tasks run serially.",
-      "Launch independent tasks before waiting for their results.",
-      "Workers can execute those tasks concurrently.",
-      "Reused actors keep state across calls; their scheduling and state need separate reasoning."
+      "Waiting immediately after each launch serializes these independent calls.",
+      "Submit the independent calls before waiting for their results.",
+      "Concurrency is now possible; resources and overhead determine actual speedup.",
+      "Actors keep explicit state across calls. Treat state reuse separately from the timing result."
     ],
     "choose-the-execution-shape": [
-      "A relational pipeline fits a dataflow execution graph.",
-      "Independent tasks can use a task scheduler without a relational plan.",
-      "If the data and work fit comfortably on one machine, distribution may add overhead."
+      "A joined aggregation suggests a relational dataflow and its grouping dependencies.",
+      "Independent Python calls suggest tasks; state that persists across calls may suggest actors.",
+      "If one machine meets the workload target, a cluster can add coordination and movement costs."
     ],
     "place-move-recover": [
-      "Choose a partition rule that matches the access pattern.",
-      "Identify which operation requires records to cross workers.",
-      "Execute independent work concurrently within the dependency graph.",
-      "Preserve enough lineage or durable state to recover failed work."
+      "Return to the count: choose owners using the key, not the sending worker.",
+      "Move matching keys together or combine valid partial results.",
+      "Execute the dependencies, allowing independent work to overlap.",
+      "Keep a recovery path. New placement should change the schedule, not the correct result."
     ]
   },
   "14": {
     "organize-writes-differently": [
-      "Updating scattered pages can turn small writes into random storage work.",
-      "Append recovery information sequentially before acknowledging protected writes.",
-      "Accumulate sorted runs and merge them later, shifting work to reads and compaction."
+      "Maya opens SSTable A: k = old at sequence 5. The file is immutable.",
+      "A newer record in B has k = new at sequence 8; the old bytes still exist.",
+      "DELETE at sequence 9 makes a current read return absent. Do not erase its protection too early."
     ],
     "a-multidimensional-map": [
-      "The row key selects a logical row.",
-      "A family and qualifier identify a column within that row.",
-      "A timestamp distinguishes versions of the cell’s byte value."
+      "Name the logical row before deciding where its bytes live.",
+      "The family and qualifier identify a column within that row.",
+      "A timestamp names a cell version; the application interprets its byte value."
     ],
     "sparse-cells-and-versions": [
-      "Absent cells do not require a full rectangular allocation.",
-      "A row can acquire another qualifier without filling every row.",
-      "A present cell can retain several timestamped versions."
+      "Store present cells without allocating every missing cell.",
+      "Add a qualifier to one row without filling that column in every row.",
+      "Retain eligible timestamped versions; version storage is not free."
     ],
     "tablets-separate-placement-from-storage": [
-      "Split the sorted row-key space into tablet ranges.",
-      "Assign responsibility for each tablet to a server.",
-      "Durable files live in a shared replicated storage layer in this architecture.",
-      "Reassigning a tablet changes its serving owner without relocating all durable bytes."
+      "Cut the sorted key space into contiguous tablet ranges.",
+      "Assign each range to a serving tablet server.",
+      "In the original Bigtable design, replicated storage holds the durable files.",
+      "Move serving responsibility without assuming all durable bytes must move with it."
     ],
     "splitting-cannot-fix-a-moving-hotspot": [
-      "Writes spread across the ranges can use several servers.",
-      "Increasing timestamp keys concentrate new writes at the rightmost range.",
-      "Splitting divides the current range into two tablets.",
-      "The next increasing keys still target the new rightmost tablet."
+      "Writes with distributed prefixes can reach several ranges.",
+      "Increasing timestamps put new writes at the tail of the key space.",
+      "Split the hot range and predict where the next increasing key lands.",
+      "It still goes to the rightmost range. A smaller tablet does not change that write pattern."
     ],
     "the-log-protects-memory": [
-      "A new write arrives for key k2.",
-      "Append the write’s recovery information to the log.",
-      "Establish the log’s required durability before acknowledging success.",
-      "Update the memtable; the durable log can rebuild it after a crash."
+      "Follow the write for k2 before it enters memory.",
+      "Record the recovery information in the log.",
+      "Meet the required durability condition before acknowledging the write.",
+      "The memtable holds the update; the durable log can restore it after RAM is lost."
     ],
     "the-memtable-stays-ordered": [
-      "Writes arrive in key order k8, k2, k5, k1, k7.",
-      "The memtable maintains key order despite the arrival order.",
-      "A later value for k2 becomes its newest visible version."
+      "Entries arrive out of order: k8, k2, k5, k1, k7.",
+      "Keep an ordered notebook: the memtable prepares a sorted flush.",
+      "A later k2 record changes its newest visible value without editing an old file."
     ],
     "freeze-a-sorted-file": [
-      "An active memtable reaches its size threshold.",
-      "Freeze it so its contents no longer change.",
-      "Write the sorted contents sequentially into an immutable SSTable.",
-      "New writes enter a new active memtable while the old one is flushed."
+      "The active memtable reaches its size threshold.",
+      "Freeze this notebook of entries so its contents stop changing.",
+      "Seal the sorted batch into an immutable SSTable.",
+      "Use a new active memtable for incoming writes while the old batch is flushed."
     ],
     "read-the-newest-visible-value": [
-      "SSTable A contains k = old at sequence 5.",
-      "SSTable B’s value at sequence 8 overrides the older visible value.",
-      "A tombstone at sequence 9 makes a current read return absent.",
-      "After flushing the tombstone, merge B and C; retain the deletion because A still exists.",
-      "Drop obsolete records only after covering older versions and checking snapshot needs."
+      "Read k from A: old at sequence 5.",
+      "A visible record at sequence 8 in B overrides it.",
+      "The visible deletion at sequence 9 makes the current result absent.",
+      "Merge B and C, but keep the deletion while A can expose an older value.",
+      "Discard records only after covering older values and checking snapshot requirements."
     ],
     "merge-sorted-runs": [
-      "Two immutable sorted files contain overlapping key ranges.",
-      "Compare the leading keys and advance a merge cursor.",
-      "For duplicate k2, retain the newest eligible value v2.",
-      "Produce one sorted run, subject to snapshot and version-retention requirements."
+      "Two sealed sorted batches can overlap in keys and versions.",
+      "Advance their merge cursors in key order.",
+      "For k2, retain the newest eligible value while honoring retained snapshots.",
+      "Write one sorted output. Sequential merging still consumes read and write bandwidth."
     ],
     "deletion-must-hide-older-values": [
-      "An older immutable file still holds k2 = v1.",
-      "A deletion writes a newer tombstone; it does not edit the old file.",
-      "A current read sees the tombstone and returns absent.",
-      "Reclaim it only when no older value or required snapshot needs its protection."
+      "Return to the opening problem: the old file still holds k2 = v1.",
+      "Write a newer tombstone instead of altering the immutable file.",
+      "A current read honors the visible tombstone and returns absent.",
+      "Remove its protection only when older values and required snapshots are accounted for."
     ],
     "a-one-sided-membership-test": [
-      "All Bloom-filter bits begin at zero.",
-      "Hashing inserted keys sets their selected bit positions.",
-      "Any required zero bit proves that the queried key is absent.",
-      "All required bits being one means only “possibly present.”",
-      "A data lookup rejects this false positive; the filter did not promise a match."
+      "Begin with zero bits and predict an absent query.",
+      "Insertion sets the selected bits for each key.",
+      "Any required zero bit proves absence, so the file can be skipped.",
+      "All required bits set means only possible presence, not a found record.",
+      "Check the data to reject a false positive. The filter has ruled in work, not proved a match."
     ],
     "skip-files-then-find-a-block": [
-      "A negative filter result can skip an entire file.",
-      "A sparse index narrows a possible match to a block.",
-      "Read and search the selected block to verify the key.",
-      "A cached block can avoid a new storage read."
+      "Use a negative Bloom-filter result to rule out a file.",
+      "For a possible match, use the sparse index to choose a candidate block.",
+      "Search that block and resolve its visible record.",
+      "Reuse a cached block when available; each layer avoids a different kind of work."
     ],
     "the-read-write-space-budget": [
-      "A B+ tree maintains searchable pages as updates arrive.",
-      "An LSM buffers updates and creates immutable sorted runs.",
-      "Background compaction spends read and write bandwidth to merge those runs.",
-      "Compare read, write, space, and durability costs for the actual workload."
+      "A B+ tree modifies searchable pages as updates arrive.",
+      "An LSM buffers entries and writes immutable sorted runs.",
+      "Compaction pays read and write work to merge those runs.",
+      "Choose from measured reads, writes, space, and durability needs, not the SQL or NoSQL label."
     ],
     "a-network-partition-forces-a-choice": [
-      "Both replicas initially expose value v1.",
-      "A completed write reaches replica 1, but a partition isolates replica 2.",
-      "Waiting avoids serving an answer that may miss the completed write.",
-      "Serving v1 stays responsive but sacrifices linearizable freshness in this example.",
-      "After communication resumes, reconcile state using the system’s conflict rules."
+      "Both replicas begin with v1.",
+      "Replica 1 receives a completed v2 write; communication with replica 2 is cut.",
+      "An isolated replica can wait rather than serve a value missing that completed write.",
+      "Returning v1 stays responsive but is not linearizable in this example.",
+      "After communication resumes, use the system’s conflict rules to reconcile."
     ],
     "trace-an-acknowledged-write": [
-      "Make the recovery log durable at the required acknowledgment boundary.",
-      "Keep the current write in an ordered memtable.",
-      "Flush it into a sorted file and merge files in the background.",
-      "A later read resolves versions across memory and files before returning a value."
+      "Return to k: make its recovery information durable at the required boundary.",
+      "Buffer its ordered record, including a deletion when needed.",
+      "Flush immutable sorted files and merge them without exposing obsolete records.",
+      "Log, buffer, flush, resolve. The newest visible record determines the read result."
     ]
   },
   "15": {
     "the-path-is-the-answer": [
-      "Begin with people as separate records.",
-      "Add directed relationships between them.",
-      "A query can ask for a connecting path, not just matching individual records."
+      "Maya’s drawing starts with people; ask which result the question needs.",
+      "Directed relationships connect them. Two routes can end at the same person.",
+      "A route to fay goes through cyd and eli. A path and a distinct endpoint are different results."
     ],
     "property-graph": [
-      "Nodes represent the entities in the graph.",
-      "Directed, typed edges describe relationships such as Follows.",
-      "Nodes and edges can both carry named properties."
+      "Map intersections to nodes: each represents an entity.",
+      "Map directed routes to typed edges such as Follows.",
+      "Attach properties to the entity or relationship they describe; the diagram’s since is illustrative."
     ],
     "store-adjacency-at-write-time": [
-      "An edge table records each source and destination.",
-      "Resolve ada’s outgoing edges to ben and cyd.",
-      "Maintaining adjacency at write time makes later neighbor expansion direct."
+      "A relational edge table names each source and destination.",
+      "Resolve ada’s outgoing relationships to ben and cyd.",
+      "Store neighbor references for later expansion, paying maintenance work when edges change."
     ],
     "one-hop": [
-      "Start the query at ada.",
-      "Follow ada’s outgoing edges to ben and cyd.",
-      "Return the neighbor set {ben, cyd}; edge direction matters."
+      "Start at ada and keep edge direction explicit.",
+      "Follow its outgoing edges to ben and cyd.",
+      "Return {ben, cyd}. Incoming neighbors would answer a different question."
     ],
     "two-hops-with-exclusions": [
-      "Expanding two edges can revisit ada and reach dee by two routes.",
-      "Remove the starting person when the query excludes self.",
-      "Remove existing neighbors and deduplicate endpoints to return {dee, eli}."
+      "Two-edge routes can return to ada or reach dee twice.",
+      "Exclude the start if the question asks for other people.",
+      "Exclude existing neighbors and deduplicate endpoints to obtain {dee, eli}."
     ],
     "breadth-first-reachability": [
-      "Initialize the frontier with ada and mark ada visited.",
-      "The next frontier contains ben and cyd at distance 1.",
-      "Add previously unvisited dee and eli at distance 2.",
-      "Add fay at distance 3; visited nodes do not re-enter the frontier."
+      "For reachability, initialize ada as visited and in the frontier.",
+      "Discover previously unvisited ben and cyd at distance 1.",
+      "Discover dee and eli at distance 2.",
+      "Discover fay at distance 3; already visited people do not re-enter the frontier."
     ],
     "paths-are-not-unique-vertices": [
-      "At one hop, both walk enumeration and BFS discover ben and cyd.",
-      "At two hops, four walks end at dee, ada, dee, and eli.",
-      "BFS keeps only the new frontier {dee, eli}, avoiding the repeat and the cycle.",
-      "At depth 3, BFS has examined eight edges; walk enumeration has produced eleven rows in total.",
-      "Choose between eleven walk rows and five unique reachable people according to the question."
+      "At one hop, both methods reach ben and cyd. Predict the next endpoints.",
+      "Four two-hop walks end at dee, ada, dee, and eli; dee is still one person.",
+      "For reachability, keep only the new frontier and track visited people.",
+      "Through depth 3: eleven walk rows versus eight BFS edge visits and five other people.",
+      "State the contract first. Routes, reachable people, and shortest paths ask for different work."
     ],
     "the-query-draws-a-shape": [
-      "A one-edge pattern specifies a source, relationship, and destination.",
-      "A bounded path pattern permits one to three relationships.",
-      "Recursive SQL can express traversal too; define duplicates, cycles, and stopping rules explicitly."
+      "Draw the requested directed relationship before writing query syntax.",
+      "The depth range bounds the path; exclusions and DISTINCT shape the final endpoints.",
+      "SQL recursion can express traversal too. Match cycle and duplicate rules before timing either query."
     ],
     "find-the-shortest-path": [
-      "BFS first discovers nodes one edge from ada.",
-      "The next frontier discovers nodes two edges away.",
-      "Discovering fay at distance 3 proves the shortest hop count for equal-cost edges.",
-      "Follow predecessor links backward to return ada → cyd → eli → fay."
+      "Start a shortest-route search at ada.",
+      "Explore candidates while retaining the predecessor information needed for a route.",
+      "Reach fay under the search’s stopping rule.",
+      "Reconstruct ada → cyd → eli → fay, a shortest route of three directed edges here."
     ],
     "a-supernode-is-skew-again": [
-      "A small-degree node has a modest expansion cost.",
-      "A supernode’s many edges can dominate the traversal.",
-      "Limiting expansion bounds work but can change completeness or query semantics."
+      "A small neighbor list is easy to locate and inspect.",
+      "A hub has thirty illustrated neighbors. Direct adjacency does not remove their expansion work.",
+      "Inspecting only eight reduces work but changes coverage; this is a hypothetical query budget."
     ],
     "choose-a-graph-workload": [
-      "A shallow relationship lookup may fit a relational join well.",
-      "A variable-depth path makes graph traversal central to the workload.",
-      "Whole-graph analytics is a different computation from a local neighborhood query."
+      "A fixed shallow relationship can fit a relational join plan.",
+      "Variable-depth routes benefit from explicit path operators when their semantics fit.",
+      "Whole-graph analytics is another workload; measure equivalent results and maintenance costs."
     ],
     "connections-augment-similarity": [
-      "Vector search retrieves nearby passages such as WAL and buffer content.",
-      "Resolve named entities mentioned by the retrieved passages.",
-      "Expand selected graph relationships to gather connected evidence.",
-      "Merge and deduplicate the evidence while retaining source provenance."
+      "Return to RAG: retrieve nearby passages as starting evidence.",
+      "Identify entities in those passages, such as WAL and buffers.",
+      "Follow a justified relationship to find potentially connected evidence.",
+      "Combine the evidence while keeping source identity; graph links can introduce noise too."
     ],
     "does-graph-expansion-help": [
-      "Measure a vector-only retrieval baseline on fixed questions.",
-      "Graph expansion can add useful evidence and irrelevant material.",
-      "Compare answer support, noise, and latency under the same evaluation setup."
+      "Keep vector-only retrieval as the baseline for the same questions.",
+      "Add relationship neighbors; predict a question helped and one harmed.",
+      "Measure support, noise, and latency. These drawn checkmarks are hypothetical, not project results."
     ],
     "five-mechanisms-recur": [
-      "A cache reuses data already fetched or computed.",
-      "An index narrows the candidate set before fetching records.",
-      "A log preserves information needed for recovery.",
-      "A plan determines the order and machinery of execution.",
-      "Partitioning assigns data or work across independent owners."
+      "Ask where bytes are stored and which reads a cache can reuse.",
+      "Ask which maintained structure lets a query skip work.",
+      "Ask what recovery information survives failure; lineage and WAL have different contracts.",
+      "Ask which plan turns the requested result into operations.",
+      "Ask who owns data and work, and where an uneven distribution can dominate."
     ],
     "read-a-new-system": [
-      "Ask how bytes, records, and versions are stored.",
-      "Ask which access paths avoid scanning all candidates.",
-      "Ask what makes an acknowledged operation survive failure.",
-      "Ask how operators coordinate and where work is materialized.",
-      "Ask how ownership, skew, and failure change as the system scales."
+      "Find the blocks and caches in the unfamiliar system.",
+      "Identify the access paths and the updates needed to maintain them.",
+      "Trace an acknowledged write through its failure and recovery rules.",
+      "Read the execution dependencies for the question you care about.",
+      "Inspect partition ownership and skew before choosing a workload-specific benchmark."
     ],
     "finish-with-measured-decisions": [
-      "Start with a concrete question or workload requirement.",
-      "Measure the mechanisms that determine the result.",
-      "Connect the evidence to a design choice and its tradeoffs.",
-      "Demonstrate the result and explain what the measurement does and does not establish."
+      "State the opening question and its required result.",
+      "Show evidence from the same workload under the compared configurations.",
+      "Explain the decision that follows from those results; the plotted points are schematic.",
+      "State the result, show the mechanism, defend the decision. Demonstrate a failure as well as a success."
     ]
   }
+
 };

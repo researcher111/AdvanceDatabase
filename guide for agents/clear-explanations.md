@@ -54,6 +54,18 @@ The fictional project rehearsal supplies a reason to care. CLEAR supplies the ex
 
 Keep the balanced-list estimate of **820** evaluations separate from the Lab 9 measured probe-4 result of **924** floored average comparisons and **0.9175** average recall. The first explains the work model; the second supports a classroom choice among measured settings.
 
+## Applications across Lectures 11 to 15 and Labs 9 to 11
+
+| Topic | Familiar connection | Small example before the general explanation | Closing transfer question |
+| --- | --- | --- | --- |
+| Lecture 11 and Lab 9 | Shelf labels and the books on each shelf | Four vectors, two centroid lists, a skipped v1, and separately counted centroid and candidate work | Why can searching every list match exact results while doing more comparisons? |
+| Lecture 12 and Lab 10 | An open-book answer with page references | A search position maps to a chunk copy and its source ID; three toy rankings separate hit rate from reciprocal rank | What does a relevant source in the prompt leave unproved about the generated claim? |
+| Lecture 13 and Lab 11 | Sorting mail into destination trays | Two records emit four occurrences; equal words meet before their totals are computed | What must stay the same when the partition count changes, and what can still affect timing? |
+| Lecture 14 | An ordered notebook sealed into sorted pages | old@5, new@8, and DELETE@9 remain in different structures while the newest visible record wins | Why must an incomplete compaction keep a deletion marker? |
+| Lecture 15 | Directed routes and distinct destinations on a map | Two walks reach Dee, while a visited frontier keeps Dee once | Which result and cycle rules must match before comparing SQL and graph execution? |
+
+For the labs, use **predict, run, explain** around existing traces and function checks. Keep these learning prompts separate from graded deliverables. Preserve required API and prompt formats, test thresholds, starter files, submission dates, and the distinction between required and optional engine exercises.
+
 ## Template for another video
 
 Copy these fields into notes for each new source. Preserve the source and its timestamped ideas separately from your adaptations.

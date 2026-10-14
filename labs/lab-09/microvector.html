@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=2">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 </head>
@@ -15,13 +16,15 @@
 <aside class="toc">
   <div class="toc-title">Lab 9 · microvector</div>
   <ul>
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Compare recall with the number of vectors searched</a></li>
     <li><a href="#big-idea">Partition the space so a query skips most of it</a></li>
+    <li><a href="#worked-example">Trace candidate IDs and every counted dot product</a></li>
     <li><a href="#the-api">Implement three methods and count their comparisons</a></li>
-    <li><a href="#worked-example">Worked example</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -43,7 +46,7 @@
   <div class="byline">Follows Lecture 11 (Vector Databases) · in class: 75 min · aim to finish Build + Verify · due Thu Nov 5 at class start</div>
 </header>
 
-<p class="lede">This lab compares exact vector search with an approximate index. You will search embeddings of 4,000 arXiv abstracts, first by scoring every vector and then with IVF. The provided k-means implementation finds <span class="gloss" data-gloss="centroid">centroids</span>; you assign vectors to lists and choose which lists a query searches. Measure <span class="gloss" data-gloss="recall-at-k">recall@10</span> and comparisons per query to see what is gained and lost when fewer vectors are searched. The index interface is reused in next week’s micro-rag lab and can support your project.</p>
+<p class="lede">Put an exact result beside an IVF result for the same question. Which neighbor IDs disappeared, and how much work did you save? You will build both search paths over 4,000 arXiv abstract vectors, then explain that trade with measurements. The provided k-means code chooses <span class="gloss" data-gloss="centroid">centroids</span>; your code assigns lists, searches them, and counts comparisons.</p>
 
 <div class="cite">
   Companion reading: Lecture 11's <a href="../../lectures/lecture-11/vectors.html">slides &amp; 2-D space</a> ·
@@ -61,6 +64,16 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>Normalize <code>(3, 4)</code>. Then explain why a query’s closest centroid need not contain its closest vector. If either step is unfamiliar, revisit <a href="../../lectures/lecture-11/vectors.html#worked-example">Lecture 11’s four-vector example</a> before coding.</p>
+  <details><summary>Check your explanation</summary><p>The unit vector is <code>(0.6, 0.8)</code>. A centroid represents a group; a member of another group can still be closer to the query. The small example separates build-time assignment from query-time similarity.</p></details>
+</div>
+
+<p class="keep-in-present">Your learning loop is <strong>predict, run, explain</strong>. Make a small prediction, inspect one step of the trace or one function check, then connect the result to the mechanism. Use that explanation to choose the next experiment.</p>
+
 <h2 id="try-it">Compare recall with the number of vectors searched</h2>
 
 <p>Move the probe slider to compare recall and search work. The displayed values come from the reference implementation on the supplied dataset. Use the same data and settings to compare your implementation with that reference.</p>
@@ -92,6 +105,8 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <!-- ============================================================ -->
 <h2 id="big-idea">Partition the space so a query skips most of it</h2>
+
+<p class="keep-in-present">Use the shelf model from Lecture 11: a centroid is like a shelf label, a list is the shelf, and the vectors are its books. A query chooses promising labels before checking the contents. Actual distances determine membership, so the labels can lead the query past a good vector in a skipped list.</p>
 
 <p>Like the B+ tree from week 6, IVF organizes stored data so a query can skip some of it. The difference is how it chooses what to skip. IVF searches the lists with the closest centroids, but a true neighbor can belong to a list with a less similar centroid. Recall@k measures the resulting misses.</p>
 
@@ -126,6 +141,18 @@ fast enough to run in a loop. The full 384-dimensional vectors ship too
 (<code>python3 measure_recall.py 384</code>), and Part 3 asks what the reduction cost.</p>
 
 <!-- ============================================================ -->
+<h2 id="worked-example">Trace candidate IDs and every counted dot product</h2>
+
+<p class="keep-in-present">Before pressing Next step, predict the selected list, the candidate IDs, and the comparison count. Keep centroid work separate from candidate work. Then compare your prediction with the displayed state.</p>
+
+<p>Use this tiny example to check the search contract before running on thousands of vectors. The fixed lists are intentionally uneven, so the actual number of candidates differs from the equal-list-size approximation.</p>
+<div data-teaching-trace="ivf">
+  <p><strong>Worked result:</strong> At probe 1, return only <code>[(0.8,0)]</code>, count three comparisons, and obtain recall@2 = 0.5. At probe 2, return <code>[(0.96,1),(0.8,0)]</code>, count six comparisons, and obtain recall@2 = 1.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Implementation checkpoints:</strong> the measurement script sets <code>comparisons = 0</code> before each measured search. Do the same when measuring repeated searches by hand. Return fewer than k results if fewer than k candidates exist. Break equal scores by ascending ID for both exact and approximate search. Keep the ground-truth vectors and similarity metric identical when computing recall.</p>
+
+<!-- ============================================================ -->
 <h2 id="the-api">Implement three methods and count their comparisons</h2>
 
 <div class="code-annotated" data-lang="python">
@@ -136,17 +163,9 @@ fast enough to run in a loop. The full 384-dimensional vectors ship too
 </div>
 
 <!-- ============================================================ -->
-<h2 id="worked-example">Trace candidate IDs and every counted dot product</h2>
-
-<p>Use this tiny example to check the search contract before running on thousands of vectors. The fixed lists are intentionally uneven, so the actual number of candidates differs from the equal-list-size approximation.</p>
-<div data-teaching-trace="ivf">
-  <p><strong>Worked result:</strong> At probe 1, return only <code>[(0.8,0)]</code>, count three comparisons, and obtain recall@2 = 0.5. At probe 2, return <code>[(0.96,1),(0.8,0)]</code>, count six comparisons, and obtain recall@2 = 1.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Implementation checkpoints:</strong> the measurement script sets <code>comparisons = 0</code> before each measured search. Do the same when measuring repeated searches by hand. Return fewer than k results if fewer than k candidates exist. Break equal scores by ascending ID for both exact and approximate search. Keep the ground-truth vectors and similarity metric identical when computing recall.</p>
-
-<!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
+
+<p class="keep-in-present">Keep the four-vector trace beside your editor. For each method, predict one small result, implement the operation, and run its function check. Build the exact reference before relying on the shortcut.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -166,6 +185,8 @@ fast enough to run in a loop. The full 384-dimensional vectors ship too
 
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~15 min in class</span></h2>
+
+<p class="keep-in-present">Use a failed check to identify a broken contract: exact scores, list membership, nested probe candidates, or accounting. Reproduce the smallest case before changing search settings.</p>
 
 <h3 id="function-tests">Test one function at a time</h3>
 <p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
@@ -203,6 +224,8 @@ fast enough to run in a loop. The full 384-dimensional vectors ship too
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
+<p class="keep-in-present">Before running the sweep, predict what probing every list does to recall and comparison count. Then inspect the returned paper titles as well as the numbers. Neighbor agreement and useful evidence are different checks.</p>
+
 <p>First inspect the papers returned for a question. Then run the measurement script to compare recall and comparisons across <span class="gloss" data-gloss="nprobe">probe settings</span> using the supplied deterministic data:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_recall.py</span>
@@ -238,6 +261,14 @@ fast enough to run in a loop. The full 384-dimensional vectors ship too
 <p class="keep-in-present">Run <code>python3 measure_recall.py 384</code> to use the original 384-dimensional vectors. Compare run times and recall at probe 4 with the 64-dimensional run. Each full-dimensional dot product uses six times as many dimensions. The reference recalls are 0.905 at 384 dimensions and 0.917 at 64. Each recall is measured against <span class="gloss" data-gloss="brute-baseline">exact search</span> in its own vector space: similar IVF recall does not mean the two spaces return the same papers. Explain that distinction using the reported overlap of their exact top-10 results.</p>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the result without reading your code</span>
+  <p>Use one query to explain the sequence: score centroids, select lists, score candidates, rank results. Why can probe-all have recall 1.0 while doing more comparisons than exact search? What would you measure before claiming a speedup?</p>
+  <details><summary>Check your explanation</summary><p>Searching all lists recovers the exact candidates under the same scores and ties, but still pays centroid comparisons: 4,020 rather than 4,000 in the displayed configuration. Comparison reduction is a work measure; elapsed time requires a timer. These explanation prompts are for practice and discussion, not an additional submission.</p></details>
+</div>
+
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present">Submit <code>microvector.py</code> to Gradescope by Thursday Nov 5 at class start, following the course submission instructions. The seven tests determine the lab grade. Keep your measurements for discussion and for evaluating the project’s retrieval index.</p>

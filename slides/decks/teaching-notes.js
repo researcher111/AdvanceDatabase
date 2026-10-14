@@ -1809,11 +1809,11 @@
   },
   "12": {
     "evidence-reaches-the-answer": {
-      "idea": "Retrieval supplies current source evidence to a model at question time.",
-      "question": "How could a model answer from a document changed this morning?",
-      "answer": "Retrieve the current passage and include it as evidence in the request.",
+      "idea": "Select evidence, carry its source identity, and check the claims it supports.",
+      "question": "Does a retrieved passage’s score identify its source or prove an answer is supported?",
+      "answer": "No. Resolve its stored position to the source record, then inspect the text behind the claim.",
       "builds": [
-        "Start with the changed source in the corpus.",
+        "Calibrate: ask what an index position identifies and what geometric recall does not prove. Then enter Maya and Noor’s fictional recovery-question rehearsal. Show the source record before discussing the answer. Start with the changed source in the corpus.",
         "Retrieve the relevant subset with its source identifier.",
         "Generate an answer and check whether the evidence supports its claims."
       ]
@@ -1823,7 +1823,7 @@
       "question": "Which work reruns when one document changes?",
       "answer": "Update its affected chunks, embeddings, and index entries; each question separately retrieves and assembles evidence.",
       "builds": [
-        "Chunk documents during ingestion.",
+        "Link the new pipeline to the open-book comparison: selected pages are evidence, page references are source IDs, and the generator writes the answer. Trace ingestion and question time separately. Chunk documents during ingestion.",
         "Embed the chunks in the chosen representation.",
         "Store searchable vectors with source identities.",
         "At question time, retrieve the relevant evidence.",
@@ -1835,7 +1835,7 @@
       "question": "Which approach can preserve an explicit, updateable source trail?",
       "answer": "Retrieval, provided source identities and versions survive through context assembly and citation.",
       "builds": [
-        "Discuss what learned weights encode and the limits of fresh fact lookup.",
+        "The evidence is now needed in the request. Compare the three supply paths by asking how a changed source becomes available and how much material each question processes. Discuss what learned weights encode and the limits of fresh fact lookup.",
         "Place the corpus in context and consider its size and evidence-use costs.",
         "Retrieve a subset with source IDs and evaluate its support for the answer."
       ]
@@ -1845,7 +1845,7 @@
       "question": "Why not always use the smallest possible fragment?",
       "answer": "It can split a claim from the context needed to interpret references or pronouns.",
       "builds": [
-        "Identify the document's topics.",
+        "Noor finds “it” without its definition in the selected chunk. Ask where to put the record boundary so the claim remains interpretable before discussing target sizes. Identify the document's topics.",
         "Choose boundaries around the topic needed for the question.",
         "Split too finely and inspect the lost context.",
         "Add overlap and discuss its extra index and prompt cost."
@@ -1856,7 +1856,7 @@
       "question": "Is the buffer-pool paraphrase failure caused by ANN approximation?",
       "answer": "No. The browser searches exactly; its hashed-word representation does not bridge the vocabulary change.",
       "builds": [
-        "Read the first buffer-pool question and inspect the retrieved source.",
+        "The record plumbing works, but Maya’s paraphrase misses the source. Ask whether ANN is involved before revealing that this widget uses exact search. Read the first buffer-pool question and inspect the retrieved source.",
         "Read the paraphrase and compare the result.",
         "Confirm the shared information need, then test representation changes."
       ]
@@ -1866,7 +1866,7 @@
       "question": "Should the current system's answer decide which sources are relevant?",
       "answer": "No. Relevance needs an explicit evidence judgment independent of the system being evaluated.",
       "builds": [
-        "Have pairs write a question requiring a particular passage.",
+        "Noor asks how to recognize a fix rather than a lucky result. Have the class propose a question and label its evidence independently of the retriever. Have pairs write a question requiring a particular passage.",
         "Ask another person to label its supporting sources.",
         "Hold out partner questions and include paraphrases, negatives, and unanswerable cases."
       ]
@@ -1876,7 +1876,7 @@
       "question": "Does moving a relevant result from rank three to rank one change hit@3?",
       "answer": "No. Both are hits; two of the three pictured questions hit, giving 2/3.",
       "builds": [
-        "Read each ranked list.",
+        "Envision the three-query example before the metric formula. Ask whether a rank-three relevant result is present in top three; score each row by hand. Read each ranked list.",
         "Mark independently labeled relevant items.",
         "Score whether each question hits within the first three results.",
         "Average the two hits and one miss to obtain about 0.67."
@@ -1887,7 +1887,7 @@
       "question": "What is the mean of reciprocal ranks 1, 1/3, and 0?",
       "answer": "4/9, approximately 0.444, for these truncated result lists.",
       "builds": [
-        "Keep the same three ranked lists as the hit-rate example.",
+        "Keep those same three queries. Ask which measure rewards moving useful evidence earlier; score the reciprocals before taking their mean. Keep the same three ranked lists as the hit-rate example.",
         "Find the first relevant result in each list.",
         "Assign reciprocal ranks 1, 1/3, and 0.",
         "Average them and separate ranking quality from answer faithfulness."
@@ -1898,7 +1898,7 @@
       "question": "Which supplied chunk sizes tie, and why is that result limited?",
       "answer": "60 and 90 words tie on this small corpus of already short sources; it does not establish a rule for long documents.",
       "builds": [
-        "Read the 10-word result: 67 chunks, hit@3 of 0.75, and MRR@3 about 0.667.",
+        "Now return to the measured twelve-question fixture. Keep the embedder, cutoff, and questions fixed while comparing the chunk sizes. Read the 10-word result: 67 chunks, hit@3 of 0.75, and MRR@3 about 0.667.",
         "Read the 60-word result: 25 chunks, hit@3 about 0.917, and MRR@3 about 0.778.",
         "Compare 90 words: 24 chunks with the same scores, and discuss the corpus's short sources."
       ]
@@ -1908,7 +1908,7 @@
       "question": "Does sorting the same retrieval scores again create a reranker?",
       "answer": "No. Reranking needs another relevance signal over the candidate set.",
       "builds": [
-        "Inspect all retrieved candidates and identify repeated or irrelevant content.",
+        "The retriever can produce more candidates than fit into the prompt. Ask which selected pages are worth their context cost and which merely repeat evidence. Inspect all retrieved candidates and identify repeated or irrelevant content.",
         "Use a new relevance signal to choose a smaller evidence set.",
         "Assemble the evidence with source IDs and deliberate ordering."
       ]
@@ -1918,7 +1918,7 @@
       "question": "Why not simply add raw scores from unrelated retrievers?",
       "answer": "Their scales may differ; fusion needs a justified method and evaluation.",
       "builds": [
-        "Use semantic retrieval to connect paraphrases.",
+        "The next question includes an exact error code. Predict where keyword search might help before proposing fusion or reranking. Use semantic retrieval to connect paraphrases.",
         "Use exact-token retrieval for a distinctive error code.",
         "Merge candidates with a justified fusion method.",
         "Rerank the combined set using question-passage relevance."
@@ -1929,7 +1929,7 @@
       "question": "Can access control rely on asking the model to ignore forbidden passages?",
       "answer": "No. The system must enforce authorization before unauthorized content becomes evidence.",
       "builds": [
-        "Identify all stored chunks and their access metadata.",
+        "Before any candidate becomes evidence, ask whether the current user is allowed to receive it. Authorization is a constraint, not a relevance score. Identify all stored chunks and their access metadata.",
         "Restrict candidates to the authorized subset.",
         "Retrieve top-k within the supported filtered plan and check its recall behavior."
       ]
@@ -1939,7 +1939,7 @@
       "question": "What must change when the embedding model changes?",
       "answer": "Every stored vector must be regenerated compatibly; record model revision and preprocessing as well as its name.",
       "builds": [
-        "Identify the source and vector versions currently in use.",
+        "Maya edits D7. Ask which stored derivatives now describe the old text, then separate a source change from an embedding-model change. Identify the source and vector versions currently in use.",
         "Change a document and locate its stale chunks.",
         "Build compatible replacement embeddings and index entries.",
         "Switch versions in a controlled way and retain citation and evaluation provenance."
@@ -1950,20 +1950,20 @@
       "question": "What should we inspect when the answer is unsupported despite correct retrieved evidence?",
       "answer": "Context assembly and generation, including whether cited passages support the claims.",
       "builds": [
-        "For missing evidence, inspect labels, chunks, representation, recall, and filters.",
+        "Ask partners to name the earliest failed artifact: retrieved IDs, rank, assembled prompt, or unsupported claim. Require a proposed experiment aimed at that boundary. For missing evidence, inspect labels, chunks, representation, recall, and filters.",
         "For wrong ranking, inspect scores and a possible reranking experiment.",
         "For an unsupported claim, inspect assembled context and citation support."
       ]
     },
     "a-measurable-rag-system": {
       "idea": "A measurable RAG system keeps source identity and tests each stage separately.",
-      "question": "Does a fluent answer alone reveal whether retrieval worked?",
-      "answer": "No. Inspect retrieved sources, assembled context, and supported claims against labeled questions.",
+      "question": "A relevant source is in the prompt, but the answer makes an unsupported claim. Which artifact would you inspect next?",
+      "answer": "Open the exact prompt and cited passage, then compare the claim with the evidence. Retrieval presence alone does not prove support.",
       "builds": [
-        "Record source identities with each chunk.",
+        "Repeat the same open-book model at the end. Have a student explain selected pages, references, and checked claims in ordinary language, then connect that explanation back to records and metrics. Record source identities with each chunk.",
         "Retrieve evidence for one question.",
         "Evaluate retrieval and answer quality on held-out questions.",
-        "Trace the answer's citation back to its source and choose one measured improvement."
+        "Repeat the same open-book model at the end. Have a student explain selected pages, references, and checked claims in ordinary language, then connect that explanation back to records and metrics."
       ]
     }
   },
@@ -1973,7 +1973,7 @@
       "question": "Does dividing an ideal scan time by the worker count guarantee that speedup?",
       "answer": "No. Network movement, coordination, imbalance, and failures add work beyond the capacity model.",
       "builds": [
-        "Calculate the ideal single-reader time for ten terabytes.",
+        "Calibrate with the two small documents from the reading: can either local wal count be called global? Then scale the same job to the diagram’s assumed 10 TB. Keep the scan estimate distinct from a benchmark. Calculate the ideal single-reader time for ten terabytes.",
         "Divide the data among readers and state the hypothetical throughput assumptions.",
         "Lose a worker and identify the extra coordination and recovery requirements."
       ]
@@ -1983,7 +1983,7 @@
       "question": "How does partitioning differ from replication?",
       "answer": "Partitions divide responsibility; replicas copy responsibility for resilience or service.",
       "builds": [
-        "Identify the keys that need owners.",
+        "Link ownership to sorting mail into destination trays. Map key to address and worker to owner. Name the limit: a routing rule does not ensure equal work or create replicas. Identify the keys that need owners.",
         "Assign keys to four partitions using a deterministic rule.",
         "Route kim to its owner and discuss grouping equal keys correctly."
       ]
@@ -1993,7 +1993,7 @@
       "question": "How can a query find dee through fay without an ordering property?",
       "answer": "It must consult all hash partitions, even though only some contain matching keys.",
       "builds": [
-        "Read the names before assigning owners.",
+        "Keep the input fixed so the hash-routing mechanism is the only change. Ask for the destination of a point lookup before the range case. Read the names before assigning owners.",
         "Compute the toy character-sum hash modulo four.",
         "Route kim's point lookup to one owner.",
         "Query the range and explain why hashing provides no neighboring-key locality."
@@ -2004,7 +2004,7 @@
       "question": "Why can the d-through-f query contact fewer owners here?",
       "answer": "The relevant neighboring keys share a known ordered range.",
       "builds": [
-        "Keep the same names as the hash-routing example.",
+        "Use the familiar sorted-key interval from B+ trees to explain range ownership. Ask why keeping neighbors together helps a range but can also concentrate writes. Keep the same names as the hash-routing example.",
         "Assign them to sorted key ranges.",
         "Route a point lookup to its range owner.",
         "Read the d-through-f range and discuss split points and write hotspots."
@@ -2015,7 +2015,7 @@
       "question": "Will adding workers fix a hot key that remains indivisible on one owner?",
       "answer": "No. Its owner's work still limits completion of the stage.",
       "builds": [
-        "Begin with evenly distributed work.",
+        "The routing rule is correct, yet one worker remains busy after the others finish. Ask which input property could cause that before naming skew. Begin with evenly distributed work.",
         "Assign forty percent to the hot key and compare the 3,800-versus-600 row loads.",
         "Increase the skew and identify waiting at the completion barrier."
       ]
@@ -2025,7 +2025,7 @@
       "question": "Can partial averages always be averaged directly?",
       "answer": "No. Preserve sum and count, then combine them; unequal bucket sizes make unweighted averages wrong.",
       "builds": [
-        "Identify the overloaded key.",
+        "Noor proposes splitting the hot group. Ask which partial information an operator must retain to combine correctly; use sum and count for an average. Identify the overloaded key.",
         "Split it into salted subkeys.",
         "Compute the four partial counts of twenty-five.",
         "Combine them under the original key to obtain one hundred."
@@ -2036,7 +2036,7 @@
       "question": "Why does the mapper emit the word the twice?",
       "answer": "It emits one pair per occurrence; repeated words remain separate occurrences at this stage.",
       "builds": [
-        "Read the four-word input document.",
+        "Count occurrences on paper before mapping. Ask why repeated words must remain repeated outputs rather than a set of distinct tokens. Read the four-word input document.",
         "Split it into word occurrences.",
         "Emit four pairs and identify each key's eventual destination."
       ]
@@ -2046,7 +2046,7 @@
       "question": "Where must every log pair arrive for this aggregation?",
       "answer": "At the same key owner so the complete group can be combined.",
       "builds": [
-        "Inspect the scattered mapper outputs.",
+        "Bring back the mail trays: equal keys must travel together even when different mappers emitted them. Ask which expensive work those arrows hide. Inspect the scattered mapper outputs.",
         "Route pairs to their key owners.",
         "Group equal keys and name the serialization, file, and network costs behind the arrows."
       ]
@@ -2056,7 +2056,7 @@
       "question": "Can four local (log, 1) pairs travel as one (log, 4) pair?",
       "answer": "Yes for sum. The combine must preserve correct aggregation and does not replace the global reduce.",
       "builds": [
-        "Count the raw pairs awaiting movement.",
+        "Ask what can safely be reduced before the expensive transfer. Link valid local combining to doing useful reduction before data movement. Count the raw pairs awaiting movement.",
         "Combine equal local keys with a sum.",
         "Send the smaller output and contrast sum with subtraction's incompatible behavior."
       ]
@@ -2066,7 +2066,7 @@
       "question": "When does this lazy word-count chain need to process the data?",
       "answer": "When an action such as collect requests the result.",
       "builds": [
-        "Identify the input without executing it.",
+        "The group contract is settled. Now trace the plan that expresses it, keeping description separate from execution until the action. Identify the input without executing it.",
         "Describe flatMap turning lines into words.",
         "Describe map turning words into (word, 1) pairs.",
         "Add the grouping dependency for reduceByKey.",
@@ -2078,7 +2078,7 @@
       "question": "Where does the stage boundary fall in this word-count chain?",
       "answer": "At the shuffle between map-side work and reduce-side work.",
       "builds": [
-        "Pipeline the narrow, partition-local operations.",
+        "Ask for the stage boundary before revealing it. A shuffle changes ownership; a narrow operation stays within its limited dependencies. Pipeline the narrow, partition-local operations.",
         "Locate the shuffle dependency.",
         "Place the boundary before revealing it.",
         "Inspect the two stages and distinguish stages from a count of API calls."
@@ -2089,7 +2089,7 @@
       "question": "Is lineage a durable transaction log for external side effects?",
       "answer": "No. It is a recomputation recipe; replayable transformations and accessible dependencies are required.",
       "builds": [
-        "Identify the recorded transformation recipe.",
+        "A worker fails. Ask what recipe and available inputs the engine needs before reconstructing its missing output. Contrast that recipe with a transaction log. Identify the recorded transformation recipe.",
         "Lose one worker's output partition.",
         "Find the necessary ancestors that remain available.",
         "Recompute replacement output and discuss the limits of replay."
@@ -2100,7 +2100,7 @@
       "question": "Which schedule permits overlap: immediate get inside the loop or get after launching all tasks?",
       "answer": "Launching first and then waiting allows overlap, subject to resources and overhead.",
       "builds": [
-        "Wait after each remote call and show the serial dependency.",
+        "Change workloads to independent KNN calls. Ask students to draw both launch/wait schedules before interpreting any laptop timing. Wait after each remote call and show the serial dependency.",
         "Launch all independent calls before waiting for their results.",
         "Identify the worker state needed for each KNN search.",
         "Reuse explicit actor state across calls without reloading it each time."
@@ -2111,30 +2111,30 @@
       "question": "What should justify paying distribution's movement and coordination costs?",
       "answer": "Evidence that the workload's size, latency, or concurrency requirements need it.",
       "builds": [
-        "Consider a large joined aggregation as a relational dataflow.",
+        "Ask each pair for the bottleneck and a defensible starting engine. Keep local execution in the comparison; data size alone is not the decision. Consider a large joined aggregation as a relational dataflow.",
         "Consider independent Python calls as separate tasks.",
         "Consider a workload comfortably served by one local engine and justify the starting choice."
       ]
     },
     "place-move-recover": {
       "idea": "A distributed job must place data, group it, execute dependencies, and recover lost work.",
-      "question": "Should changing the partition count change a correct word-count answer?",
-      "answer": "No. Ownership and work distribution change, but complete grouping must preserve the totals.",
+      "question": "What stays the same when the two-record word count changes from two partitions to seven?",
+      "answer": "The word totals stay the same. Placement and schedule may change; repeated occurrences and complete grouping must remain correct.",
       "builds": [
-        "Explain ownership and locate skew.",
+        "Repeat assign, group, execute, recover on the original small count. Ask what changes with seven partitions and which result must stay unchanged. Explain ownership and locate skew.",
         "Explain the movement needed to group equal keys.",
         "Explain the execution plan and when work starts.",
-        "Explain retry or recomputation, then connect the mechanisms to the lab."
+        "Repeat assign, group, execute, recover on the original small count. Ask what changes with seven partitions and which result must stay unchanged."
       ]
     }
   },
   "14": {
     "organize-writes-differently": {
-      "idea": "LSM storage changes how writes are organized and shifts work to reads and background merging.",
-      "question": "Is an LSM organization a claim that a database has no transactions?",
-      "answer": "No. Storage organization and transaction guarantees are separate choices.",
+      "idea": "An immutable file can retain an old value while a newer visible record determines the read.",
+      "question": "If old@5 remains after DELETE@9, should a current read return the old value?",
+      "answer": "No. The newer visible tombstone suppresses the old value. It must survive until older records and snapshot requirements are accounted for.",
       "builds": [
-        "Recall scattered B+ tree page updates.",
+        "Calibrate with WAL and immutable files. In the fictional investigation, old@5 is still present after new@8 and DELETE@9. Ask which record should win before discussing the storage layout. Recall scattered B+ tree page updates.",
         "Introduce sequential logging on the write path.",
         "Show sorted runs and ask where future read and merge costs arise."
       ]
@@ -2144,7 +2144,7 @@
       "question": "Why reverse a domain name in an ordered row key?",
       "answer": "Related domains then share a prefix, helping prefix-local scans.",
       "builds": [
-        "Identify the row coordinate and its ordered key.",
+        "First name a value’s logical address. Relate sorted row keys to the ordered ranges students already know, without conflating address with durable placement. Identify the row coordinate and its ordered key.",
         "Separate declared column families from qualifiers.",
         "Add the version timestamp and qualify its difference from a cross-row transaction snapshot."
       ]
@@ -2154,7 +2154,7 @@
       "question": "Does a missing qualifier require a fixed-width reservation in every row?",
       "answer": "No. Sparse cells can be omitted, although metadata and stored versions still consume space.",
       "builds": [
-        "Identify the absent cells in the sparse table.",
+        "Ask what is absent versus present before explaining sparse storage. Keep cell versions distinct from a full transaction snapshot. Identify the absent cells in the sparse table.",
         "Add a qualifier only to the row that needs it.",
         "Add another cell version and discuss retention and the requested timestamp."
       ]
@@ -2164,7 +2164,7 @@
       "question": "Why need a lost tablet server not mean lost durable data?",
       "answer": "In the original architecture, replicated GFS holds the logs and SSTables; reassignment and replay can rebuild service.",
       "builds": [
-        "Divide the ordered keys into contiguous tablet ranges.",
+        "Link tablets to assigned intervals in an ordered key space. Ask why the serving owner can change while replicated durable files remain available. Divide the ordered keys into contiguous tablet ranges.",
         "Assign those ranges to tablet servers.",
         "Locate durable files separately from server caches and active state.",
         "Reassign a tablet and identify the recovery work that remains."
@@ -2175,7 +2175,7 @@
       "question": "Where does the next timestamp-prefixed burst go after the hot tablet splits?",
       "answer": "To the newest tail range again; the split changes size without changing incoming key direction.",
       "builds": [
-        "Begin with distributed writes.",
+        "Predict the destination of the next timestamp key after a split. The incoming pattern, not just the tablet’s size, creates the hotspot. Begin with distributed writes.",
         "Send increasing timestamps to the tail.",
         "Split the hot range.",
         "Send another burst and discuss the locality tradeoff of a hash prefix or new key order."
@@ -2186,7 +2186,7 @@
       "question": "What fails if the engine acknowledges only a RAM update before crashing?",
       "answer": "The acknowledged write can be lost unless its recovery information is durable elsewhere.",
       "builds": [
-        "Receive a write under the engine's durability contract.",
+        "Return to the recovery contract: what would a crash after acknowledgment lose if only RAM held the update? Trace the log’s durability boundary. Receive a write under the engine's durability contract.",
         "Append its recovery record.",
         "Make the required log progress durable before acknowledgement.",
         "Update memory and explain how replay can reconstruct it."
@@ -2197,7 +2197,7 @@
       "question": "Why keep keys sorted in memory even if they arrive out of order?",
       "answer": "The later flush can stream them to disk in key order.",
       "builds": [
-        "Show the arrival order of the keys.",
+        "Link the memtable to an ordered notebook. Entries arrive unsorted, but keeping them ordered prepares the eventual sorted output. Show the arrival order of the keys.",
         "Insert each into the ordered memory structure.",
         "Update k2 and distinguish the simple latest-value view from snapshot version retention."
       ]
@@ -2207,7 +2207,7 @@
       "question": "Where does a later update to k2 go after this file is written?",
       "answer": "Into the active memtable, and eventually a newer file.",
       "builds": [
-        "Fill the active memory structure.",
+        "Link the immutable run to sealed sorted pages. Ask where the next update must go when those pages cannot be edited. Fill the active memory structure.",
         "Freeze it while keeping its contents readable.",
         "Flush its sorted entries sequentially to a file.",
         "Accept later writes in a new active memtable."
@@ -2218,7 +2218,7 @@
       "question": "Is merging free just because its input reads are sequential?",
       "answer": "No. It rewrites output and consumes bandwidth, and retained versions affect what may be discarded.",
       "builds": [
-        "Place the two immutable sorted files side by side.",
+        "The correct version is known. Ask what background work can reduce future lookup work without discarding required versions. Place the two immutable sorted files side by side.",
         "Choose the next key from their merge cursors.",
         "Resolve duplicate k2 versions under the visibility and retention rules.",
         "Write the merged output and account for the background work."
@@ -2229,7 +2229,7 @@
       "question": "Why not simply remove the newest k2 entry?",
       "answer": "A read could then discover the older k2 value; a tombstone must hide it until safe reclamation.",
       "builds": [
-        "Locate the old value in an earlier file.",
+        "Return explicitly to the opening old file. Ask why removing a marker could expose bytes that were never edited. Locate the old value in an earlier file.",
         "Write a tombstone as the newer record.",
         "Stop the lookup at the tombstone.",
         "Reclaim it only when older copies and relevant snapshots are safely covered."
@@ -2240,7 +2240,7 @@
       "question": "What does a zero among the query's required bits prove?",
       "answer": "Definite absence under correct insertion and supported operations; all set bits indicate only possible presence.",
       "builds": [
-        "Begin with empty bits.",
+        "Before naming the filter, ask what a one-sided answer can prove. Distinguish definite absence from the work of checking a possible match. Begin with empty bits.",
         "Insert k1 through k6 using the three deterministic hashes.",
         "Show the zero bit that proves k7 absent.",
         "Show a possible match whose bits are all set.",
@@ -2252,7 +2252,7 @@
       "question": "Does a Bloom-filter match prove the key exists?",
       "answer": "No. The engine still locates the candidate block and checks its entries and visible versions.",
       "builds": [
-        "Use the filter to skip a definitely absent file.",
+        "Walk down the levels of skipped work: file, block, storage read. Ask what each structure can and cannot prove. Use the filter to skip a definitely absent file.",
         "Use the sparse index to locate a candidate block.",
         "Read and inspect that block.",
         "Reuse a cached block to avoid another storage read."
@@ -2263,7 +2263,7 @@
       "question": "Why is fast log append alone insufficient for sustained LSM write performance?",
       "answer": "Background compaction must keep pace, or accumulated work can constrain the system.",
       "builds": [
-        "Identify B+ tree page organization and batching opportunities.",
+        "Noor asks whether the cheaper write path pays elsewhere. Compare the whole read/write/space/durability workload, including background maintenance. Identify B+ tree page organization and batching opportunities.",
         "Identify sorted LSM memory and files.",
         "Account for compaction's read, write, and space pressure.",
         "Choose a starting design from workload requirements and testable costs."
@@ -2274,7 +2274,7 @@
       "question": "What can replica 2 infer about v2 from silence alone?",
       "answer": "It cannot know that update. Preserving linearizability can require refusing service during the partition.",
       "builds": [
-        "Begin with agreeing replicas.",
+        "Now cut the link between replicas. Ask what the isolated replica can know before naming guarantees; explain the concrete choice at the request. Begin with agreeing replicas.",
         "Write v2 at replica 1 and interrupt communication.",
         "Consider waiting or refusing the isolated request.",
         "Consider serving v1 and state the consistency consequence.",
@@ -2283,23 +2283,23 @@
     },
     "trace-an-acknowledged-write": {
       "idea": "An acknowledged LSM write moves through logging, memory, sorted files, and later lookup.",
-      "question": "What protects the acknowledged write if its memory state is lost before flush?",
-      "answer": "The durable log, under the configured acknowledgement contract.",
+      "question": "Why must a compaction retain DELETE@9 while an unmerged file still holds old@5?",
+      "answer": "Dropping the marker could expose the old value again. Cover the older versions and required snapshots before reclaiming it.",
       "builds": [
-        "Identify the durable recovery record.",
+        "Repeat log, buffer, flush, resolve on k. Ask a student why the old file may remain while the current read is absent, then name the safety condition for compaction. Identify the durable recovery record.",
         "Place the write in ordered memory.",
         "Flush it into a sorted file and account for later compaction.",
-        "Read through files using filters, indexes, caches, and visibility checks."
+        "Repeat log, buffer, flush, resolve on k. Ask a student why the old file may remain while the current read is absent, then name the safety condition for compaction."
       ]
     }
   },
   "15": {
     "the-path-is-the-answer": {
       "idea": "A graph query can ask for the path connecting records.",
-      "question": "How does ada reach fay in this example?",
-      "answer": "Through cyd and eli, for a path of three directed edges.",
+      "question": "If two routes end at Dee, does a query for distinct reachable people need two copies of Dee?",
+      "answer": "No. Distinct reachability returns one Dee, while a route query can retain both paths. Decide the result contract first.",
       "builds": [
-        "Identify the familiar student records as nodes.",
+        "Calibrate with the src/dst join students know. Introduce Maya’s whiteboard: two routes can end at Dee. Ask whether the result requires routes or distinct people before tracing a route to Fay. Identify the familiar student records as nodes.",
         "Add directed follows relationships and ask a one-hop question.",
         "Reveal ada to cyd to eli to fay and distinguish a path from a matching row."
       ]
@@ -2309,7 +2309,7 @@
       "question": "Where would the fact since 2026 belong?",
       "answer": "On the Follows relationship, because it describes the connection rather than either endpoint alone.",
       "builds": [
-        "Identify the nodes.",
+        "Link to a directed campus map: intersections are nodes, routes are edges. Map properties to the thing they describe and state that storage alone does not choose query semantics. Identify the nodes.",
         "Add direction and a type to the edges.",
         "Place the illustrative properties on the appropriate node or relationship."
       ]
@@ -2319,7 +2319,7 @@
       "question": "How would a relational edge table find ada's neighbors?",
       "answer": "Match src using an index or scan; stored adjacency maintains the neighbor relationship for later reads.",
       "builds": [
-        "Find outgoing edges in the relational edge table.",
+        "The result contract is chosen. Ask how matching src finds the same neighbors that maintained adjacency can reference directly. Find outgoing edges in the relational edge table.",
         "Resolve endpoints while creating a relationship.",
         "Store and read the neighbor list, accounting for its write-time maintenance."
       ]
@@ -2329,7 +2329,7 @@
       "question": "Who does ada follow, and who follows ada?",
       "answer": "Ada follows ben and cyd; ben and fay follow ada.",
       "builds": [
-        "Start at ada and predict the outgoing neighbors.",
+        "Keep the first query to one outgoing hop. Ask how reversing direction would change the result before returning the endpoints. Start at ada and predict the outgoing neighbors.",
         "Expand the outgoing edges.",
         "Return ben and cyd, then contrast the reversed-direction question."
       ]
@@ -2339,7 +2339,7 @@
       "question": "What distinct endpoints remain after excluding ada and existing neighbors?",
       "answer": "Dee and eli. Dee is reached by two paths but is one person.",
       "builds": [
-        "Enumerate dee, ada, dee, and eli as raw two-hop endpoints.",
+        "Predict the two-hop list before exclusions. Let the class point at Dee twice and explain why DISTINCT people needs only one Dee. Enumerate dee, ada, dee, and eli as raw two-hop endpoints.",
         "Remove the starting node ada.",
         "Exclude existing neighbors and return distinct dee and eli."
       ]
@@ -2349,7 +2349,7 @@
       "question": "Which new nodes enter successive frontiers from ada?",
       "answer": "Ben and cyd, then dee and eli, then fay.",
       "builds": [
-        "Begin with ada in the frontier and visited set.",
+        "Use the map’s frontier as a picture before naming the algorithm. Ask which previously unvisited people belong to each distance layer. Begin with ada in the frontier and visited set.",
         "Discover ben and cyd at distance one.",
         "Discover dee and eli while skipping already visited nodes.",
         "Discover fay at distance three and state the equal-edge-cost assumption."
@@ -2360,7 +2360,7 @@
       "question": "How does the query remove ada and repeated endpoints?",
       "answer": "Exclude b.name equal to ada and use DISTINCT for endpoint deduplication.",
       "builds": [
-        "Read the single directed relationship pattern.",
+        "Draw the bounded relationship first, then translate it into syntax. Keep SQL recursion in view and require equivalent duplicate and cycle rules. Read the single directed relationship pattern.",
         "Extend it to one through three outgoing Follows edges.",
         "Compare a recursive SQL base case and bounded iterative join."
       ]
@@ -2370,7 +2370,7 @@
       "question": "What is the shortest route from ada to fay here?",
       "answer": "Ada to cyd to eli to fay, using three edges.",
       "builds": [
-        "Expand the first frontier.",
+        "Now change the question from reachable people to a route. Ask why predecessor information is needed to reconstruct the connecting path. Expand the first frontier.",
         "Expand the second frontier and retain predecessor links.",
         "Discover fay and establish the minimum hop count.",
         "Follow predecessors backward to reconstruct the path."
@@ -2381,7 +2381,7 @@
       "question": "Does cheap neighbor lookup make millions of neighbors cheap to expand?",
       "answer": "No. The number of neighbors still dominates; limiting expansion changes semantics and recall.",
       "builds": [
-        "Expand an ordinary-degree node.",
+        "Link this high-degree hub back to Lecture 13’s hot key. Direct lookup does not remove the cost of inspecting a large neighbor set. Expand an ordinary-degree node.",
         "Increase degree and compare the volume of work.",
         "Apply the illustrative expansion budget and discuss what it omits."
       ]
@@ -2391,7 +2391,7 @@
       "question": "Does a graph engine automatically outperform relational execution on every relationship query?",
       "answer": "No. Compare equivalent semantics and include the cost of maintaining the relationships.",
       "builds": [
-        "Consider a shallow department join using relational operations.",
+        "Ask which result and workload justify a new datastore. Consider maintenance and synchronization as well as the path syntax. Consider a shallow department join using relational operations.",
         "Consider unknown-depth dependency paths in a graph query engine.",
         "Consider whole-graph iterative analytics in a graph-compute framework."
       ]
@@ -2401,7 +2401,7 @@
       "question": "Why might a WAL-and-buffer-pool question need more than one similar passage?",
       "answer": "Its answer may depend on a relationship explained across sources, which graph expansion can help connect.",
       "builds": [
-        "Retrieve nearby passages as starting evidence.",
+        "Return to the evidence question from Lecture 12. Ask what a connection could add that a single similarity score omits. Retrieve nearby passages as starting evidence.",
         "Identify named entities in those passages.",
         "Follow a relevant one-hop relationship.",
         "Combine the connected and vector evidence, then check entity and edge correctness."
@@ -2412,7 +2412,7 @@
       "question": "When could expansion make retrieval worse?",
       "answer": "Ambiguous entities or high-degree hubs can introduce irrelevant evidence and extra latency.",
       "builds": [
-        "Record the vector-only baseline.",
+        "Keep the vector-only baseline. Ask for one benefited and one harmed question before treating graph expansion as an improvement. Record the vector-only baseline.",
         "Add relationship neighbors and predict a helped and a harmed question.",
         "Compare support, noise, context size, and latency on the same held-out questions."
       ]
@@ -2422,7 +2422,7 @@
       "question": "Is Spark lineage the same mechanism as a write-ahead log?",
       "answer": "No. Lineage records a recomputation recipe; WAL records information for transaction durability and recovery.",
       "builds": [
-        "Identify caches in buffer pools and SSTable block reads.",
+        "Repeat the mechanisms from earlier lectures with concrete examples. Demand the mechanism’s contract, not just the shared label. Identify caches in buffer pools and SSTable block reads.",
         "Identify indexes in B+ trees, IVF, and adjacency.",
         "Identify durable logs and contrast them with lineage.",
         "Identify plans in iterators, Spark, and graph queries.",
@@ -2434,7 +2434,7 @@
       "question": "What evidence should follow a product's architectural claims?",
       "answer": "A workload-specific benchmark with equivalent results and measurements of the relevant costs and failures.",
       "builds": [
-        "Ask what the system reads and writes in a block.",
+        "Transfer the model to an unfamiliar system. Have students ask for a byte path, skipped work, recovery boundary, execution dependency, and owner. Ask what the system reads and writes in a block.",
         "Ask how it skips data for the workload.",
         "Ask what survives an acknowledged write.",
         "Ask how it turns queries into execution.",
@@ -2443,16 +2443,17 @@
     },
     "finish-with-measured-decisions": {
       "idea": "A useful project explanation connects a measured result to a design decision.",
-      "question": "What should each team be able to explain from its experiments?",
-      "answer": "One result that changed a design choice and one failure it can demonstrate.",
+      "question": "What result requirement and experiment explain one design choice in your project?",
+      "answer": "State the same workload and result contract for both configurations, show their evidence, explain the choice, and demonstrate a diagnosed failure.",
       "builds": [
-        "State the question the project answers.",
+        "Repeat the same habit for the project: state the result, show the mechanism, defend a decision with evidence. Ask another student to explain one failure and the experiment that diagnosed it. State the question the project answers.",
         "Present the evidence behind a comparison.",
         "Explain the decision changed by that evidence.",
-        "Demonstrate a result or failure and connect it to the system's mechanisms."
+        "Repeat the same habit for the project: state the result, show the mechanism, defend a decision with evidence. Ask another student to explain one failure and the experiment that diagnosed it."
       ]
     }
   }
+
 };
   for (const [id, scenes] of Object.entries(notes)) {
     const deck = window.COURSE_DECKS[id];

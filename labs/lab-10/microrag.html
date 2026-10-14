@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=2">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 </head>
@@ -14,14 +15,16 @@
 <aside class="toc">
   <div class="toc-title">Lab 10</div>
   <ul>
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Inspect the evidence selected for a question</a></li>
     <li><a href="#big-idea">Read the provided stages and identify your two tasks</a></li>
+    <li><a href="#worked-example">Follow one hit into the prompt and evaluation</a></li>
     <li><a href="#the-api">Follow the required chunk and prompt formats</a></li>
-    <li><a href="#worked-example">Worked example</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
     <li><a href="#real">Part 4 · The same pipeline on real papers</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -43,7 +46,7 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">A language model may produce a fluent answer even when the retrieved passages do not support it. In this lab, you will build the retrieval and prompt-assembly stages of a RAG pipeline, then test whether they supply the right evidence. The starter provides the chunker, embedder, Lab 9’s index implementation, and a generation function. Its default <span class="gloss" data-gloss="echo-mode">echo mode</span> prints the assembled prompt without calling a model. A 12-question <span class="gloss" data-gloss="eval-set">evaluation set</span> checks retrieval quality independently of generation.</p>
+<p class="lede">The search result gives you a score and an integer position. The answer needs the correct text and a source ID. In this lab, follow one hit through the chunk record and assembled prompt, then measure whether the right evidence returns. You implement retrieval and prompt assembly; the starter supplies the other stages and an offline echo mode.</p>
 
 <div class="cite">
   Builds on: <a href="../lab-09/microvector.html">Lab 9 · microvector</a> (shipped as a reference implementation in this starter) ·
@@ -61,6 +64,16 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>Search returns <code>(0.9, 2)</code>. If chunk 2 has <code>doc = "wal"</code>, which value selects the record and which belongs in its citation? Can a high similarity score prove that an answer is supported?</p>
+  <details><summary>Check your explanation</summary><p>Position 2 selects the stored chunk; <code>wal</code> is its source ID. The score is query-specific. Even the correct source ID and a high score do not establish support for every generated claim; inspect the text.</p></details>
+</div>
+
+<p class="keep-in-present">Your learning loop is <strong>predict, run, explain</strong>. Make a small prediction, inspect one step of the trace or one function check, then connect the result to the mechanism. Use that explanation to choose the next experiment.</p>
+
 <h2 id="try-it">Inspect the evidence selected for a question</h2>
 
 <p>This widget runs the lab’s retrieval stage with the same hashing and <span class="gloss" data-gloss="stop-words">stop-word</span> list as the Python code. Inspect its results and assembled prompt, then use <code>python3 ask.py</code> to check your implementation against the same behavior.</p>
@@ -102,6 +115,8 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="big-idea">Read the provided stages and identify your two tasks</h2>
 
+<p class="keep-in-present">Treat the prompt as an open-book answer packet. The retriever selects pages; prompt assembly keeps the page references beside their text. The page reference is like a source ID, not an array position. The analogy explains evidence handling; the tests still require the exact chunk and prompt formats below.</p>
+
 <p class="keep-in-present"><code>micro_rag.py</code> implements the five stages from Lecture 12 in the following order:</p>
 
 <pre class="equation"><code>chunk_corpus()   documents → chunks               provided
@@ -127,6 +142,18 @@ return [x / norm for x in v]</div>
 <p class="keep-in-present">This embedder uses <span class="gloss" data-gloss="hashing-trick">feature hashing</span> and stop-word removal. It can match shared words, but cannot reliably connect synonyms. A learned embedder can replace it while keeping the pipeline interfaces; rebuild the stored vectors and rerun evaluation when making that change.</p>
 
 <!-- ============================================================ -->
+<h2 id="worked-example">Follow one hit into the prompt and evaluation</h2>
+
+<p class="keep-in-present">Trace one hit by hand before calling the real index. Predict the original chunk, the returned copy, its score, and its citation ID. After a second query, ask which stored fields should remain unchanged.</p>
+
+<p>The tuple returned by vector search is <code>(similarity, integer_position)</code>. The chunk’s <code>doc</code> is a source ID string. Step through the mapping before implementing the retriever.</p>
+<div data-teaching-trace="rag">
+  <p><strong>Worked result:</strong> Hit <code>(0.9,2)</code> selects <code>chunks[2]</code>, adds score 0.9 to a copy, and uses its source ID <code>wal</code> in a citation. Stored chunks remain unchanged.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Implementation checkpoints:</strong> embed stored chunks once during construction, and embed each question once during retrieval. Preserve search order. A source can appear in several chunks; one question still contributes at most one hit. The core evaluation in <code>measure_rag.py</code> truncates at three chunks, so it reports MRR@3, with zero for a miss in those results. The larger-corpus experiment in <code>measure_real.py</code> reports MRR@10. Keep the cutoff fixed when comparing scores.</p>
+
+<!-- ============================================================ -->
 <h2 id="the-api">Follow the required chunk and prompt formats</h2>
 
 <table>
@@ -147,17 +174,9 @@ return [x / norm for x in v]</div>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="worked-example">Follow one hit into the prompt and evaluation</h2>
-
-<p>The tuple returned by vector search is <code>(similarity, integer_position)</code>. The chunk’s <code>doc</code> is a source ID string. Step through the mapping before implementing the retriever.</p>
-<div data-teaching-trace="rag">
-  <p><strong>Worked result:</strong> Hit <code>(0.9,2)</code> selects <code>chunks[2]</code>, adds score 0.9 to a copy, and uses its source ID <code>wal</code> in a citation. Stored chunks remain unchanged.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Implementation checkpoints:</strong> embed stored chunks once during construction, and embed each question once during retrieval. Preserve search order. A source can appear in several chunks; one question still contributes at most one hit. The core evaluation in <code>measure_rag.py</code> truncates at three chunks, so it reports MRR@3, with zero for a miss in those results. The larger-corpus experiment in <code>measure_real.py</code> reports MRR@10. Keep the cutoff fixed when comparing scores.</p>
-
-<!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
+
+<p class="keep-in-present">Build the pipeline in the order you can inspect it: align chunks and vectors, retrieve copies in rank order, then assemble the required prompt. Use echo mode to open the exact evidence packet before interpreting an answer.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -180,6 +199,8 @@ return [x / norm for x in v]</div>
 
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~10 min in class</span></h2>
+
+<p class="keep-in-present">Match each test group to an observable artifact: returned chunk records, relevant-source ranks, or literal prompt sections. A plausible score is not enough if the vector position points to the wrong source.</p>
 
 <h3 id="function-tests">Test one function at a time</h3>
 <p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
@@ -217,6 +238,8 @@ return [x / norm for x in v]</div>
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
+<p class="keep-in-present">Predict whether increasing embedding width can fix both hash collisions and synonyms. Run the same questions under each setting, then open a missed result. Decide which failure the next experiment should address.</p>
+
 <p>Run the measurement script with the supplied corpus and default settings, then compare your output with the reference values below:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_rag.py</span>
@@ -247,6 +270,8 @@ return [x / norm for x in v]</div>
 
 <!-- ============================================================ -->
 <h2 id="real">Part 4 · The same pipeline on real papers <span class="part-time">~20 min · homework</span></h2>
+
+<p class="keep-in-present">Carry the same pipeline into a larger corpus while keeping the question labels and metric cutoff visible. The learned and hashed representations may rank different papers; inspect a concrete example before explaining the aggregate scores.</p>
 
 <p>The 24-document corpus is small enough to inspect closely. In this part, <code>measure_real.py</code> evaluates retrieval over the 4,000 arXiv abstracts from Lab 9. It compares hashed bag-of-words with <code>all-MiniLM-L6-v2</code> sentence embeddings. The document and question vectors are supplied in <code>data/</code>, so no model download or GPU is needed. Ten labeled questions paraphrase a specific paper without reusing its title words; use them to test vocabulary mismatch on a larger corpus.</p>
 
@@ -311,6 +336,14 @@ Embedding 4000 abstracts with your hashed embedder (DIM=2048)...
 <p class="keep-in-present">Set <code>DIM = 256</code> in <code>micro_rag.py</code> and rerun <code>measure_real.py</code>. Compare the change in hit@3 with Part 3’s smaller corpus. The larger corpus contains about 700,000 word occurrences, but collisions depend on the distinct terms and their distribution, not total word count alone. Use the results and retrieved examples to explain the difference.</p>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the result without reading your code</span>
+  <p>Draw <code>position → chunk copy → source ID → prompt</code>. Explain what hit@3 and MRR@3 check, and what they leave unproved. Why must the real-paper experiment’s MRR@10 be kept separate?</p>
+  <details><summary>Check your explanation</summary><p>The mapping must preserve the source behind each ranked hit while leaving stored chunks unchanged. Hit checks presence; reciprocal rank rewards an earlier relevant result. Neither evaluates all generated claims. MRR cutoffs differ, so compare scores under the same cutoff and question set. This check is practice, not an additional submission.</p></details>
+</div>
+
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present">Submit <code>micro_rag.py</code> to Gradescope, per the course submission instructions, by

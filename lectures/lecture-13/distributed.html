@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=3">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
@@ -15,16 +16,16 @@
   <div class="toc-title">Lecture 13</div>
   <p><a href="../../slides/lecture-13.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#wall">Why distribute a job?</a></li>
     <li><a href="#partition">Assign records with hash or range partitioning</a></li>
+    <li><a href="#worked-example">Trace two records through the shuffle</a></li>
     <li><a href="#mapreduce">MapReduce separates task logic from execution</a></li>
     <li><a href="#try-it">Follow records through map, shuffle, and reduce</a></li>
-    <li><a href="#worked-example">Worked example</a></li>
     <li><a href="#spark">Spark records a plan before executing it</a></li>
     <li><a href="#ray">Ray runs Python tasks and stateful actors</a></li>
     <li><a href="#thursday">November 10: implement MapReduce and try Spark and Ray</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -41,11 +42,17 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 13 · Thursday November 5, 2026</div>
   <h1>Distributed Compute</h1>
-  <div class="subtitle">When one machine cannot process the data fast enough, how do we divide the work, move records between workers, and recover from failures?</div>
+  <div class="subtitle">Splitting the input is easy. How do workers still produce one correct result?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Reading 10 TB at 2 GB/s takes roughly 85 minutes before any processing begins. Splitting the input across machines can reduce that time, but the workers must coordinate. Today we study three parts of distributed computation: partitioning the data, grouping records with the same key, and retrying failed tasks. MapReduce defines a common pattern for this work. Spark adds lazy dataflow plans, while Ray runs Python tasks and stateful workers. Lab 11’s lab starts with a small MapReduce implementation, then runs examples in Spark and Ray.</p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">At the whiteboard, Maya gives one worker <code>“WAL, wal!”</code> and another <code>“Page wal.”</code>. The first reports two occurrences of <code>wal</code>; the second reports one. Noor circles both outputs: <q>Who owns the final total?</q></p>
+  <p>Maya draws arrows from the two workers to one group. The counting rule has not changed. The location of the records has. Now they have to route equal words together, preserve every occurrence, and recover work if a worker fails.</p>
+</div>
+
+<p class="keep-in-present">We will use this small word count to separate local computation from coordination. Partitioning assigns responsibility; a shuffle groups matching keys; execution engines schedule and recover tasks. Lab 11 first makes those rules visible in one Python process, then uses Spark and Ray for local parallel execution.</p>
 
 <div class="cite">
   Companion reading: Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce: Simplified Data Processing on Large Clusters</em></a> (OSDI 2004, 13 readable pages)<sup class="src"><a href="#src-1" title="MapReduce: Simplified Data Processing on Large Clusters (Google Research publication page)">1</a></sup> ·
@@ -63,7 +70,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">The question we will trace</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>What would <code>GROUP BY word</code> need to produce one count for <code>wal</code>? If its occurrences are on different workers, can either worker announce the global total from its own input alone?</p>
+  <details><summary>Check your explanation</summary><p>A correct global aggregation needs all contributions for the key, either collected together or combined as valid partial results. A worker’s local count alone is not the global count.</p></details>
+</div>
 
 <p class="keep-in-present"><strong>Quiz 9</strong> first (RAG, 10 min), then partitioning, shuffles, Spark, and Ray.</p>
 
@@ -75,7 +88,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="wall">Why distribute a job?</h2>
 
-<p class="key-fact keep-in-present"><strong>~85 min</strong> just to read 10 TB once on one machine at 2 GB/s; 100 machines each read their own 100 GB in about 1 min</p>
+<p class="keep-in-present">The two-record count fits on one laptop. Distribution becomes a practical question when a measured workload needs more capacity. The following 10 TB scan is a capacity estimate under stated assumptions, not a requirement for your course project or a promised speedup.</p>
 
 <h3 class="new-slide" data-kicker="Why distribute">Partitioning distributes storage, memory, and recovery work</h3>
 
@@ -95,7 +108,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="partition">Assign records with hash or range partitioning</h2>
 
-<p class="keep-in-present">A partitioning rule assigns each record to a partition. Hash and range partitioning are two common choices, with different effects on lookup cost and load balance:</p>
+<p class="keep-in-present">Think of sorting mail into destination trays. The address determines the tray; the sending office does not. A partition rule similarly chooses an owner from the key. This analogy explains routing, while actual hash or range rules determine placement and do not guarantee equal workloads.</p>
 
 <h3 class="new-slide" data-kicker="Hash or range">Hash distributes distinct keys; range keeps neighboring keys together</h3>
 
@@ -153,9 +166,19 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
+<h2 id="worked-example">Trace two records through the shuffle</h2>
+
+<p class="keep-in-present">Keep both copies of <code>wal</code> in the first record. Before advancing, predict the number of emitted pairs and the values that must reach the same group. The result should survive a change in partition numbering.</p>
+<div data-teaching-trace="shuffle">
+  <p><strong>Worked result:</strong> <code>WAL, wal!</code> and <code>Page wal.</code> emit four pairs. Grouping yields <code>wal: [1,1,1]</code> and <code>page: [1]</code>. Reduction returns counts 3 and 1, regardless of which bucket number owns each word.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Lab connection:</strong> <a href="../../labs/lab-11/sparkray.html#worked-example">Lab 11’s first part runs in one Python process</a>. On a cluster, workers must agree on the partition function and its configuration. Separately launched Python processes do not automatically share a string-hash seed.</p>
+
+<!-- ============================================================ -->
 <h2 id="mapreduce">MapReduce separates task logic from execution</h2>
 
-<p class="keep-in-present">The MapReduce paper describes a pattern for many large batch computations. The programmer supplies map and reduce functions; the framework handles scheduling, grouping intermediate records, and retrying failed tasks:<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup></p>
+<p class="keep-in-present">Maya has now traced the small count. MapReduce gives names to the three operations she drew: emit pairs locally, group equal keys, and combine each group. The framework handles scheduling and recovery around those functions.</p>
 
 <pre class="equation"><code>map(record)         → zero or more (key, value) pairs       process each input record
 shuffle             → group matching keys by destination   transfer and group intermediate data
@@ -190,19 +213,9 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
 </div>
 
 <!-- ============================================================ -->
-<h2 id="worked-example">Trace two records through the shuffle</h2>
-
-<p>A mapper emits one pair per occurrence. A partition function chooses a bucket. The shuffle groups equal keys inside that bucket, and the reducer receives a complete group. Watch how many pairs exist at each boundary.</p>
-<div data-teaching-trace="shuffle">
-  <p><strong>Worked result:</strong> <code>WAL, wal!</code> and <code>Page wal.</code> emit four pairs. Grouping yields <code>wal: [1,1,1]</code> and <code>page: [1]</code>. Reduction returns counts 3 and 1, regardless of which bucket number owns each word.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Lab connection:</strong> <a href="../../labs/lab-11/sparkray.html#worked-example">Lab 11’s first part runs in one Python process</a>. On a cluster, workers must agree on the partition function and its configuration. Separately launched Python processes do not automatically share a string-hash seed.</p>
-
-<!-- ============================================================ -->
 <h2 id="spark">Spark records a plan before executing it</h2>
 
-<p class="keep-in-present">Spark's unit of data is the <span class="gloss" data-gloss="rdd">RDD</span>, a resilient distributed dataset: one collection, cut into partitions that live on different machines. A transformation is a call that derives a new RDD from an old one.</p>
+<p class="keep-in-present">Noor asks whether the counting functions must change for a larger job. Spark lets them describe a dependency plan over partitioned collections. Read the small word-count chain before the printed plan; the shuffle tells you where records must move.</p>
 
 <h3 class="new-slide" data-kicker="Spark">Word count in Spark is three chained calls and one shuffle</h3>
 
@@ -246,7 +259,7 @@ counts.collect()                                      # NOW it runs</code></pre>
 <!-- ============================================================ -->
 <h2 id="ray">Ray runs Python tasks and stateful actors</h2>
 
-<p class="keep-in-present">Spark describes computations over partitioned collections. Other workloads are more naturally expressed as repeated Python calls: embedding documents, training a model for each city, or testing hyperparameters. Ray provides tasks for those function calls:</p>
+<p class="keep-in-present">The word count needs groups of equal keys. The next workload needs many independent nearest-neighbor calls. Give each call a task, submit the tasks before waiting, and compare the results with the serial baseline.</p>
 
 <h3 class="new-slide" data-kicker="Ray">Use @ray.remote to define a task</h3>
 
@@ -310,7 +323,15 @@ model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors
 </ul>
 
 <!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
+<h2 id="recap">Return to the opening question</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>Your word count is correct with two partitions. You increase to seven. What should stay the same, what may change, and why might the run still become slower?</p>
+  <details><summary>Check your explanation</summary><p>The totals for every word should stay the same. Bucket numbers, placement, scheduling, and output order may change. More partitions can add overhead or leave a frequent key concentrated on one worker. Compare the results before interpreting the timing.</p></details>
+</div>
+
+<p class="keep-in-present">Return to the two documents. The explanation still fits on the whiteboard: assign owners, move matching keys together, compute complete results, and recover missing work. Spark and Ray add execution machinery around the workload’s dependencies.</p>
 
 <ul class="recap-list">
   <li>Partitioning assigns records to workers. Hash partitioning groups equal keys; range partitioning keeps neighboring keys together. Both require attention to skew.</li>

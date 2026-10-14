@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=1">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
@@ -16,10 +17,11 @@
   <div class="toc-title">Lecture 15</div>
   <p><a href="../../slides/lecture-15.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
+    <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#joins">Compare repeated joins with graph traversal</a></li>
     <li><a href="#try-it">Path enumeration and reachability do different work</a></li>
-    <li><a href="#worked-example">Worked example</a></li>
+    <li><a href="#worked-example">Count paths and reachable people separately</a></li>
+    <li><a href="#cost">Compare work for the same result</a></li>
     <li><a href="#model">Store nodes, edges, and their properties</a></li>
     <li><a href="#cypher">Express paths with SQL or Cypher</a></li>
     <li><a href="#kuzu">Run graph queries in an embedded Kuzu demo</a></li>
@@ -27,7 +29,7 @@
     <li><a href="#graphrag">Combine text similarity with entity relationships</a></li>
     <li><a href="#synthesis">Five recurring database ideas</a></li>
     <li><a href="#endgame">The project runway: discovery, evaluation, and final demos</a></li>
-    <li><a href="#recap">Final recap</a></li>
+    <li><a href="#recap">Explain the system and defend the decision</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -44,11 +46,17 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 15 · Tuesday November 17, 2026</div>
   <h1>Graph Databases &amp; Course Synthesis</h1>
-  <div class="subtitle">How do graph databases store relationships, and when does traversal make a query easier to express or faster to run?</div>
+  <div class="subtitle">Two routes can reach the same person. Decide what the query should count before choosing a plan.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Relationship queries can require repeated expansion: “Who follows ada?” asks for immediate neighbors, while “Who is within three hops of ada?” explores several levels. SQL can express these queries with joins or recursive CTEs. Graph databases provide adjacency-oriented storage and path operators designed for this work. We will compare the approaches using a small Kuzu demo, then review five database ideas that recur across the course.<sup class="src"><a href="#src-1" title="Kuzu documentation: Welcome to Kuzu (docs source, kuzudb/kuzu-docs)">1</a></sup></p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">Maya draws Ada’s follows graph on the whiteboard. Two different two-hop routes end at Dee. She starts counting the route endpoints as people. Noor points to Dee’s name twice: <q>Are we counting routes, or people we can reach?</q></p>
+  <p>Maya puts a circle around each person and an arrow along each relationship. One question needs distinct people; another needs the connecting path. They write the result contract above the drawing before comparing SQL with a graph query.</p>
+</div>
+
+<p class="keep-in-present">Graph databases store relationships and provide operators for paths. SQL joins and recursive queries can also express these questions. We will keep the six-person course graph fixed, specify direction and duplicate rules, then compare the work each question requires. The final discussion connects these choices to the database mechanisms you have used throughout the course.</p>
 
 <div class="cite">
   Companion reading: Kuzu's <a href="https://docs.kuzudb.com/">documentation</a> (setup and Cypher examples) ·
@@ -66,7 +74,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">The question we will trace</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>An edge table contains <code>src</code> and <code>dst</code>. How would a join find Ada’s outgoing neighbors? If two routes end at Dee, does a query for distinct people need two copies of Dee?</p>
+  <details><summary>Check your explanation</summary><p>Match the frontier’s person key to <code>src</code> and return the corresponding <code>dst</code> values. Distinct reachability returns Dee once. A route query can legitimately retain both paths; specify the question before deduplicating.</p></details>
+</div>
 
 <p class="keep-in-present"><strong>Quiz 11</strong> first (Bigtable, LSM &amp; NoSQL, 10 min, the last quiz), then graph storage, traversal queries, and the course review.</p>
 
@@ -77,6 +91,39 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <!-- ============================================================ -->
 <h2 id="joins">Compare repeated joins with graph traversal</h2>
+
+<!-- ============================================================ -->
+<h2 id="try-it">Path enumeration and reachability do different work</h2>
+
+<p class="keep-in-present">A join can match a person’s key to relationship rows. Stored adjacency keeps neighbor references for later expansion. Think of a campus map: intersections are nodes and directed paths are edges. Listing every route and listing distinct destinations are different questions; the map alone does not choose the algorithm.</p>
+
+<div class="viz" id="viz-walk">
+  <div class="viz-title">traversal · 6 students, 9 follows edges</div>
+  <p class="viz-description">Click a student and increase the depth one hop at a time. The graph shows reached nodes and examined edges. The counters compare two algorithms: a traversal with a visited set and a path-enumerating <span class="gloss" data-gloss="self-join-chain">self-join chain</span>. They are not a timing benchmark of SQL against a graph engine.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="walk-step">+1 hop</button>
+    <button type="button" class="btn" id="walk-reset">Reset</button>
+    <span class="walk-msg" id="walk-msg"></span>
+  </div>
+  <div class="walk-svg-wrap"><svg id="walk-svg" viewBox="0 0 640 340"></svg></div>
+  <div class="bs-stats" id="walk-stats"></div>
+  <p class="viz-caption">Start at ada and step to depth 3. The reached students match query 3 of the Kuzu demo. The cycle ada → cyd → eli → fay → ada shows why traversal needs a stopping rule. The example queries use a depth bound, and <code>DISTINCT</code> removes duplicate students from their final results.<sup class="src"><a href="#src-2" title="DuckDB documentation: WITH Clause (recursive CTEs)">2</a></sup></p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="worked-example">Count paths and reachable people separately</h2>
+
+<p class="keep-in-present">Before comparing costs, let the drawing settle the contract. Predict the two-hop endpoints, then compare that list with a frontier of previously unvisited people. A repeated endpoint is not an extra person.</p>
+<div data-teaching-trace="graph">
+  <p><strong>Worked result:</strong> At depth two, the walk endpoints are <code>[dee, ada, dee, eli]</code>. Visited-set reachability adds only <code>[dee, eli]</code>. Through depth three, BFS examines eight outgoing edges and finds five other people; bounded walk enumeration produces eleven rows before exclusions.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Check yourself before benchmarking:</strong> specify edge direction, depth bound, duplicate handling, and whether revisiting a vertex or edge is allowed. Equivalent SQL and graph queries must agree on these rules.</p>
+
+<!-- ============================================================ -->
+<h2 id="cost">Compare work for the same result</h2>
+
+<p class="keep-in-present">The small graph shows why counting paths and counting reached people can do different work. Now generalize those counts. Match the result contracts before treating the formulas as a comparison.</p>
 
 <div class="math">
 <p>A relational join finds neighbors by matching keys, often through a hash table or index. An adjacency-oriented graph store finds them through stored neighbor references. With average degree <em>d</em>, enumerating paths of length <em>k</em> can generate roughly <em>d</em><sup>k</sup> rows before duplicate nodes are removed. A reachability traversal with a visited set has a different bound:</p>
@@ -102,35 +149,9 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <p class="keep-in-present">Graph-oriented storage and path operators can reduce work, but neither notation guarantees a faster plan.</p>
 
 <!-- ============================================================ -->
-<h2 id="try-it">Path enumeration and reachability do different work</h2>
-
-<p>The widget uses the six students and nine follows edges loaded by the Kuzu demo. Choose a start node, then increase the depth. Compare the edge visits of a traversal that tracks visited nodes with the rows generated by a join chain that enumerates paths.</p>
-
-<div class="viz" id="viz-walk">
-  <div class="viz-title">traversal · 6 students, 9 follows edges</div>
-  <p class="viz-description">Click a student and increase the depth one hop at a time. The graph shows reached nodes and examined edges. The counters compare two algorithms: a traversal with a visited set and a path-enumerating <span class="gloss" data-gloss="self-join-chain">self-join chain</span>. They are not a timing benchmark of SQL against a graph engine.</p>
-  <div class="qj-controls">
-    <button type="button" class="btn primary" id="walk-step">+1 hop</button>
-    <button type="button" class="btn" id="walk-reset">Reset</button>
-    <span class="walk-msg" id="walk-msg"></span>
-  </div>
-  <div class="walk-svg-wrap"><svg id="walk-svg" viewBox="0 0 640 340"></svg></div>
-  <div class="bs-stats" id="walk-stats"></div>
-  <p class="viz-caption">Start at ada and step to depth 3. The reached students match query 3 of the Kuzu demo. The cycle ada → cyd → eli → fay → ada shows why traversal needs a stopping rule. The example queries use a depth bound, and <code>DISTINCT</code> removes duplicate students from their final results.<sup class="src"><a href="#src-2" title="DuckDB documentation: WITH Clause (recursive CTEs)">2</a></sup></p>
-</div>
-
-<!-- ============================================================ -->
-<h2 id="worked-example">Count paths and reachable people separately</h2>
-
-<p>Before comparing query plans, state the result contract: every bounded walk, distinct endpoints, or a shortest route. The same six-person graph can produce different correct counts because those questions ask for different things.</p>
-<div data-teaching-trace="graph">
-  <p><strong>Worked result:</strong> At depth two, the walk endpoints are <code>[dee, ada, dee, eli]</code>. Visited-set reachability adds only <code>[dee, eli]</code>. Through depth three, BFS examines eight outgoing edges and finds five other people; bounded walk enumeration produces eleven rows before exclusions.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Check yourself before benchmarking:</strong> specify edge direction, depth bound, duplicate handling, and whether revisiting a vertex or edge is allowed. Equivalent SQL and graph queries must agree on these rules.</p>
-
-<!-- ============================================================ -->
 <h2 id="model">Store nodes, edges, and their properties</h2>
+
+<p class="keep-in-present">The result contract is now clear. The storage model gives names to the drawing: a person is a node, a follows relationship is a directed edge, and names or dates are properties. Maintaining adjacency can make the next expansion direct, while adding update work.</p>
 
 <p class="keep-in-present">The property-graph model used by many graph databases (Neo4j,
 Kuzu, Neptune, Memgraph):<sup class="src"><a href="#src-3" title="What Is Amazon Neptune? (AWS Neptune User Guide)">3</a></sup></p>
@@ -152,7 +173,7 @@ adjacency storage keeps references for locating these neighbors</code></pre>
 <!-- ============================================================ -->
 <h2 id="cypher">Express paths with SQL or Cypher</h2>
 
-<p class="keep-in-present">SQL’s <code>WITH RECURSIVE</code> defines a query that repeatedly uses one iteration’s results to produce the next. A depth condition or cycle-handling rule bounds the traversal. Below, a recursive SQL query and a Cypher query answer the same question on the six-student dataset; both return <code>ben cyd dee eli fay</code>.<sup class="src"><a href="#src-5" title="PostgreSQL documentation: 7.8. WITH Queries (Common Table Expressions)">5</a></sup></p>
+<p class="keep-in-present">Noor asks Maya to express the same bounded question in two languages. Keep the starting person, edge direction, depth, exclusions, and duplicate handling identical. Compare those rules before comparing the plans.</p>
 
 <h3 class="new-slide" data-kicker="Cypher vs SQL">In Cypher, *1..3 means a path of one to three edges</h3>
 
@@ -176,7 +197,7 @@ RETURN DISTINCT b.name ORDER BY b.name</code></pre>
 <!-- ============================================================ -->
 <h2 id="kuzu">Run graph queries in an embedded Kuzu demo</h2>
 
-<p>Kuzu runs inside the Python process without a separate server. The demo loads six students and runs four queries. The recorded outputs below let you follow the example even if you do not run the script. The FAQ notes the project’s maintenance status.</p>
+<p class="keep-in-present">Run the six-person example or use the recorded output below. Each query changes the requested result: immediate neighbors, new two-hop contacts, bounded reachability, or a shortest route. Those differences explain the output before the engine name does.</p>
 
 <div class="chat-downloads">
   <span class="chat-downloads-label">Demo script:</span>
@@ -240,6 +261,8 @@ loaded 6 students, 9 follows edges
 <!-- ============================================================ -->
 <h2 id="synthesis">Five recurring database ideas</h2>
 
+<p class="keep-in-present">Maya puts the new system diagram beside the old microdb sketch. Ask the same concrete questions of both: where are the bytes, what work is skipped, how is a failure repaired, what plan runs, and who owns each part of the work?</p>
+
 <table>
   <thead><tr><th>The idea</th><th>Where you built it</th><th>Where you met it again</th></tr></thead>
   <tbody>
@@ -271,7 +294,15 @@ loaded 6 students, 9 follows edges
 </ul>
 
 <!-- ============================================================ -->
-<h2 id="recap">Final recap</h2>
+<h2 id="recap">Explain the system and defend the decision</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>A graph query emits eleven bounded-walk rows while a visited-set traversal finds five other people. Is one result necessarily wrong? What must you fix before presenting a performance comparison?</p>
+  <details><summary>Check your explanation</summary><p>No. The algorithms can satisfy different contracts. State direction, depth, exclusions, duplicate handling, and permitted revisits; make both queries return the same requested result. Then compare execution work and timing. Neither SQL syntax nor graph syntax guarantees a faster plan.</p></details>
+</div>
+
+<p class="keep-in-present">Return to the whiteboard. Maya can now distinguish the route from its destination, state the query’s stopping rule, and explain where adjacency changes lookup work. For the project, the same habit applies: state the result, show the mechanism, then use evidence to defend a decision.</p>
 
 <ul class="recap-list">
   <li>Adjacency-oriented storage records relationships so traversal can avoid repeated key matching. Graph query operators are useful when paths or variable-depth connections are central to the workload.</li>
@@ -313,8 +344,7 @@ loaded 6 students, 9 follows edges
 
 <!-- ============================================================ -->
 <h2 id="sources">Sources</h2>
-<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
-document that supports the claim it is attached to.</p>
+<p class="keep-in-present">Return to the retrieval project. A passage about logging and a passage about buffers may need an explicit relationship to be useful together. Graph expansion supplies another way to select evidence; it still needs comparison with the vector-only baseline.</p>
 <ol class="sources">
   <li id="src-1"><a href="https://raw.githubusercontent.com/kuzudb/kuzu-docs/main/src/content/docs/index.mdx">Kuzu documentation: Welcome to Kuzu (docs source, kuzudb/kuzu-docs)</a></li>
   <li id="src-2"><a href="https://duckdb.org/docs/current/sql/query_syntax/with.html">DuckDB documentation: WITH Clause (recursive CTEs)</a></li>
