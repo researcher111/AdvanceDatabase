@@ -48,8 +48,8 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">At the whiteboard, Maya gives one worker <code>“WAL, wal!”</code> and another <code>“Page wal.”</code>. The first reports two occurrences of <code>wal</code>; the second reports one. Noor circles both outputs: <q>Who owns the final total?</q></p>
-  <p>Maya draws arrows from the two workers to one group. The counting rule has not changed. The location of the records has. Now they have to route equal words together, preserve every occurrence, and recover work if a worker fails.</p>
+  <p class="lede">At the whiteboard, Maya gives one worker <code>“WAL, wal!”</code> and another <code>“Page wal.”</code>. The first reports two occurrences of <code>wal</code>; the second reports one. Noor circles both outputs: <q>Which worker combines these counts into the final total?</q></p>
+  <p>Maya draws arrows from the two workers to one group. Each worker has only a partial count. They must send all contributions for the same word to a reducer, preserve every occurrence, and rerun failed tasks without losing contributions.</p>
 </div>
 
 <p class="keep-in-present">We will use this small word count to separate local computation from coordination. Partitioning assigns responsibility; a shuffle groups matching keys; execution engines schedule and recover tasks. Lab 11 first makes those rules visible in one Python process, then uses Spark and Ray for local parallel execution.</p>
@@ -168,7 +168,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace two records through the shuffle</h2>
 
-<p class="keep-in-present">Keep both copies of <code>wal</code> in the first record. Before advancing, predict the number of emitted pairs and the values that must reach the same group. The result should survive a change in partition numbering.</p>
+<p class="keep-in-present">Keep both copies of <code>wal</code> in the first record. Before advancing, predict the number of emitted pairs and the values that must reach the same group. Changing partition numbers must not change the final word counts.</p>
 <div data-teaching-trace="shuffle">
   <p><strong>Worked result:</strong> <code>WAL, wal!</code> and <code>Page wal.</code> emit four pairs. Grouping yields <code>wal: [1,1,1]</code> and <code>page: [1]</code>. Reduction returns counts 3 and 1, regardless of which bucket number owns each word.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
@@ -331,7 +331,7 @@ model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors
   <details><summary>Check your explanation</summary><p>The totals for every word should stay the same. Bucket numbers, placement, scheduling, and output order may change. More partitions can add overhead or leave a frequent key concentrated on one worker. Compare the results before interpreting the timing.</p></details>
 </div>
 
-<p class="keep-in-present">Return to the two documents. The explanation still fits on the whiteboard: assign owners, move matching keys together, compute complete results, and recover missing work. Spark and Ray add execution machinery around the workload’s dependencies.</p>
+<p class="keep-in-present">Return to the two documents. Choose a partition for each key, send values with the same key to one group, compute each word’s total, and rerun tasks whose results were lost. Spark and Ray schedule tasks and track dependencies so this work can run across workers.</p>
 
 <ul class="recap-list">
   <li>Partitioning assigns records to workers. Hash partitioning groups equal keys; range partitioning keeps neighboring keys together. Both require attention to skew.</li>

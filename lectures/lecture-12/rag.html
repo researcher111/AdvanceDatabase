@@ -44,17 +44,17 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 12 · Tuesday October 27, 2026</div>
   <h1>RAG as a Systems Problem</h1>
-  <div class="subtitle">Finding a passage is only the start. Can you carry it into an answer and show what it supports?</div>
+  <div class="subtitle">Finding a passage is only the start. Can you give the model that passage and check which claims it supports?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya turns her laptop toward Noor. The crash-recovery question from last lecture has returned a passage. Noor points at the result: <q>Which source is this, and what will the model actually see?</q></p>
+  <p class="lede">Maya turns her laptop toward Noor. Their search for the crash-recovery question from last lecture has returned a passage. Noor points at the result: <q>Which document contains this passage, and what text will the model actually receive?</q></p>
   <p>Maya opens the prompt. A score alone cannot answer either question. They trace the result back to its chunk, carry the source ID into the context, and keep the original passage beside the proposed answer.</p>
 </div>
 
-<p class="keep-in-present">Retrieval-augmented generation (RAG) supplies selected source passages to a language model. We will follow the records, vectors, ranked hits, and prompt separately, then test whether retrieval finds useful evidence. Lab 10 provides an offline echo mode that prints the assembled prompt so you can inspect this boundary before calling a model.</p>
+<p class="keep-in-present">Retrieval-augmented generation (RAG) supplies selected source passages to a language model. We will follow the records, vectors, ranked hits, and prompt separately, then test whether retrieval finds useful evidence. Lab 10 provides an offline echo mode that prints the assembled prompt so you can inspect the retrieved passages and their source IDs before calling a model.</p>
 
 <div class="cite">
   Companion reading: Lewis et&nbsp;al., <a href="https://arxiv.org/abs/2005.11401"><em>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</em></a> (the paper that named it)<sup class="src"><a href="#src-1" title="Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv 2005.11401)">1</a></sup> ·
@@ -137,7 +137,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="pipeline">The five stages of this RAG pipeline</h2>
 
-<p class="keep-in-present">Noor asks Maya to point to the first place the source could have disappeared. Trace ingestion separately from a question: create records, embed them, build the index, retrieve candidates, then assemble and generate. Each boundary leaves an artifact you can inspect.</p>
+<p class="keep-in-present">Noor asks Maya to check where a selected chunk might lose its source ID. Trace the ingestion steps first: create chunk records, embed them, and build the index. Then trace a question through retrieval, prompt assembly, and generation. Inspect the chunk records, vectors, ranked hits, and prompt to check that the selected passage still has the correct source ID.</p>
 
 <pre class="equation"><code>documents ──chunk──▶ records ──embed──▶ vectors ──index──▶ ANN structure
                                                               │
@@ -167,7 +167,7 @@ question ──embed──▶ query vector ──────retrieve (top-k)─
 <!-- ============================================================ -->
 <h2 id="chunking">Choose chunks that preserve useful context</h2>
 
-<p class="keep-in-present">The source ID is correct, but the retrieved sentence begins with “it.” Its definition is on the previous line, outside the chunk. The next decision is what one retrievable record should contain. Preserve a coherent claim before choosing a target word count.</p>
+<p class="keep-in-present">The source ID is correct, but the retrieved sentence begins with “it.” The previous line explains what “it” refers to, but that line is outside the chunk. Choose chunk boundaries that keep the claim and its necessary context together before choosing a target word count.</p>
 
 <h3>Whole document, paragraph, or sentence</h3>
 
@@ -214,11 +214,11 @@ question ──embed──▶ query vector ──────retrieve (top-k)─
 <!-- ============================================================ -->
 <h2 id="eval">Retrieval quality is measurable: two numbers, twelve questions</h2>
 
-<p class="keep-in-present">Maya wants to compare two settings on the same questions. First count whether evidence returns at all, then how early it appears. These are separate judgments.</p>
+<p class="keep-in-present">Maya wants to compare two retrieval settings on the same questions. First count whether each result contains a labeled relevant source, then record that source’s rank. These measure different aspects of retrieval quality.</p>
 
 <div class="exercise learning-check">
   <span class="ex-label">Count a small example before using the formula</span>
-  <p>For three questions, the first relevant source is at rank 1, rank 3, and outside the top 3. Predict each question’s hit and reciprocal-rank score. Does moving the second result to rank 1 change both metrics?</p>
+  <p>For three questions, the first relevant source is at rank 1, rank 3, and outside the top 3. Predict each question’s hit and reciprocal-rank score. If the second question’s relevant source moves from rank 3 to rank 1, do both metrics change?</p>
   <details><summary>Check your explanation</summary><p>The hit scores are 1, 1, 0, giving hit@3 = 2/3. Reciprocal ranks are 1, 1/3, 0, giving MRR@3 = 4/9 ≈ 0.44. Moving the second relevant source to rank 1 improves MRR but leaves hit@3 unchanged. This is a toy three-question example, separate from the twelve-question measurements below.</p></details>
 </div>
 
@@ -339,7 +339,7 @@ two phrasings, DIM=2048:</p>
   <details><summary>Check your explanation</summary><p>Retrieval found at least one labeled relevant source for each question. That does not prove every generated claim is supported. Open the assembled prompt and cited passages, then compare each claim with the evidence. Changing ANN probes is not the first response to a support failure.</p></details>
 </div>
 
-<p class="keep-in-present">Return to the recovery question. Maya can now show the retrieved IDs, the exact context, and the source passage behind each claim. The same model explains the whole pipeline: select evidence, carry its identity, and check the answer against the source.</p>
+<p class="keep-in-present">Return to the recovery question. Maya can now show the retrieved IDs, the exact prompt context, and the source passage behind each claim. Follow the pipeline in three steps: select passages, preserve their source IDs in the prompt, and compare each generated claim with its cited passage.</p>
 
 <ul class="recap-list">
   <li>RAG uses chunk storage, metadata, an index, and a retrieval query to supply evidence for generation. The lab’s echo mode lets you inspect that evidence before calling a model.</li>

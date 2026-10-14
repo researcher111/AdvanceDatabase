@@ -49,10 +49,10 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya restarts the transfer demo and sees only the debit on disk. Noor opens the log beside the balances: <q>Which transaction completed, and what value can we restore?</q> A write that looked finished in memory has left an incomplete durable state.</p>
+  <p class="lede">Maya restarts the transfer demo and sees only the debit on disk. Noor opens the log beside the balances: <q>Which transaction completed, and what value can we restore?</q> The debit reached disk without its matching credit, reducing the total balance.</p>
 </div>
 
-<p class="keep-in-present">Trace recovery information, changed pages, and completion records separately. The optional lab’s FORCE/STEAL policy syncs old values before changes and forces data at commit. We will use that policy to undo unfinished work, then compare policies that also need redo.</p>
+<p class="keep-in-present">Trace recovery information, changed pages, and completion records separately. The optional lab’s FORCE/STEAL policy makes the old-value log record durable before changing a page, and flushes changed data pages before recording a commit. We will use that policy to undo unfinished work, then compare policies that also need redo.</p>
 
 <div class="cite">
   Companion reading: Sciore,<sup class="src"><a href="#src-1" title="Database Design and Implementation: Second Edition (Google Books)">1</a></sup> <em>Database Design and Implementation</em>, ch. 5 (transactions) ·
@@ -131,7 +131,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="wal">Log the old value before the page changes</h2>
 
-<p class="keep-in-present">Think of keeping a repair record before changing the thing it describes. A SET log record remembers the old value; the changed page holds the new one. The analogy motivates ordering, but a record in memory is insufficient: the required log information must be durable before the protected data reaches storage.</p>
+<p class="keep-in-present">Before editing a number, write down its previous value so you can restore it. A SET log record remembers the old value; the changed page holds the new one. The analogy motivates ordering, but a record in memory is insufficient: the required log information must be durable before the protected data reaches storage.</p>
 
 <pre class="equation"><code>WRITE-AHEAD:   log(old value) → sync log → modify page → later flush page<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup>
 
@@ -183,7 +183,7 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <!-- ============================================================ -->
 <h2 id="recovery">Recovery restores values from unfinished transactions</h2>
 
-<p class="keep-in-present">The write order leaves enough information to repair unfinished work. Start at the newest completion records, then decide which older SET records still need undo.</p>
+<p class="keep-in-present">Read the log backward. Completion records identify transactions to skip; SET records for unfinished transactions supply the old values to restore.</p>
 
 <p class="keep-in-present">Under the lab’s FORCE/STEAL policy, committed changes are on disk, but some changes from unfinished transactions may also be there. <span class="gloss" data-gloss="steal">STEAL</span> allows a dirty page to be flushed before its transaction commits. Recovery reads the log backward and restores the old values of unfinished transactions, then flushes those repairs.</p>
 
@@ -296,8 +296,8 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 
 <div class="exercise learning-check">
   <span class="ex-label">Explain it to a teammate</span>
-  <p>Undo has restored 60 in memory. Can recovery sync ROLLBACK before flushing that repair? What happens if a crash lands between those actions?</p>
-  <details><summary>Check your explanation</summary><p>The lab must flush the repaired value before syncing ROLLBACK. Otherwise later recovery could see a completed transaction and skip an undo whose repaired page never reached disk. Recovery has its own durability boundary.</p></details>
+  <p>Undo has restored 60 in memory. Can recovery sync ROLLBACK before flushing that repair? What happens if the process crashes between those actions?</p>
+  <details><summary>Check your explanation</summary><p>The lab must flush the repaired value before syncing ROLLBACK. Otherwise later recovery could see a completed transaction and skip an undo whose repaired page never reached disk. An undo is complete only when the repaired pages are durable.</p></details>
 </div>
 
 <p class="keep-in-present">Return to the interrupted transfer. Identify completed transactions, undo unfinished changes in reverse order, make repairs durable, and only then record recovery completion. WAL and the buffer policy jointly determine that order.</p>

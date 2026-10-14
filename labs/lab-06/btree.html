@@ -105,7 +105,7 @@
 <!-- ============================================================ -->
 <h2 id="big-idea">The tree stores no rows, only RIDs into your heap</h2>
 
-<p class="keep-in-present">Use an ordered directory: internal signs direct the search, leaf entries list addresses, and the heap holds the rows. Follow the address after the lookup instead of treating the index key as the full record. Its leaf chain makes adjacent directory entries available to a range scan.</p>
+<p class="keep-in-present">Think of an ordered directory whose entries contain addresses. Internal separator keys route the search to a leaf; that leaf lists the RIDs for the matching key. Use each RID to read its row from the heap. Links between leaves let a range scan continue through neighboring keys in sorted order.</p>
 
 <p>This index stores keys and record IDs rather than complete rows. Each record ID identifies a block and slot in the heap file. The reference <code>TableScan.move_to_rid()</code> positions the scan at that address. Index entries must be updated when rows are inserted, deleted, or moved so they continue to identify the intended rows.</p>
 
@@ -139,7 +139,7 @@
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
-<p class="keep-in-present">Draw one split before coding it. Keep each key paired with its complete RID list, repair the leaf link, then ask whether the parent also overflows.</p>
+<p class="keep-in-present">Draw one leaf split before coding it. Move each key with its complete RID list into the correct leaf, link the old leaf to the new right leaf, and keep the right leaf linked to the old successor. Then check whether adding the separator makes the parent overflow.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 

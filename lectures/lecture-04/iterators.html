@@ -50,10 +50,10 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya asks the top of a scan tree for one name. Ada comes back. She asks again, expecting the next stored row, ben. Noor watches the filter: <q>What must it do before it can return the next qualifying name?</q> The request travels down; rejected rows stay below the caller.</p>
+  <p class="lede">Maya asks the top of a scan tree for one name. Ada comes back. She asks again, expecting the next stored row, ben. Noor watches the filter: <q>What must it do before it can return the next qualifying name?</q> The filter keeps requesting input rows until one passes the GPA condition.</p>
 </div>
 
-<p class="keep-in-present">Use the same scan interface for tables, filters, projections, and products. A caller requests a row, operators ask their inputs for work, and a successful result travels back up. We will trace one request before counting how plan shape changes candidate work.</p>
+<p class="keep-in-present">Use the same scan interface for tables, filters, projections, and products. A caller requests a row; filters, projections, and products request rows from their inputs until they can return a result. We will trace one request, then count how operator order changes the number of candidate pairs.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 8 (query processing)<sup class="src"><a href="#src-1" title="Database Design and Implementation, Second Edition (Penn State University Libraries catalog record with contents)">1</a></sup> ·
@@ -463,7 +463,7 @@ as text. Only the <code>F</code> wrapper requests a field lookup.</p>
 <!-- ============================================================ -->
 <h2 id="product">Our first join uses a nested loop</h2>
 
-<p class="keep-in-present">One input can supply the next row. A join needs a row from each side, so our first implementation holds one left row and rewinds the right input for each new left row.</p>
+<p class="keep-in-present">A filter has one input; a join combines rows from two inputs. Our first implementation holds one left row and rewinds the right input for each new left row.</p>
 
 <p class="keep-in-present">Our first join combines two operators: <code>ProductScan</code> enumerates every left-right pair, and <code>SelectScan</code> keeps pairs that satisfy the join condition. This is simple to trace but can perform much more work than production join algorithms.</p>
 
@@ -566,7 +566,7 @@ as text. Only the <code>F</code> wrapper requests a field lookup.</p>
 <!-- ============================================================ -->
 <h2 id="shapes">Equivalent plans can perform different amounts of work</h2>
 
-<p class="keep-in-present">The product preserves every candidate pair, including ones later rejected. Ask whether an input-only predicate can reject rows before those pairs are formed.</p>
+<p class="keep-in-present">The product forms pairs even when a later filter rejects them. Can a filter that uses only one table’s fields reject its rows before the product forms those pairs?</p>
 
 <p class="keep-in-present">These two plans return the same 20 rows. They differ in when they apply the filters, which changes how many candidate pairs the product enumerates. The rewrite is valid because each moved filter refers only to fields in its own input.</p>
 
@@ -636,7 +636,7 @@ as text. Only the <code>F</code> wrapper requests a field lookup.</p>
   <details><summary>Check your explanation</summary><p>A moved filter must use fields available from that input and preserve the query’s result, including duplicates. The counts show candidate work, not elapsed time or physical disk reads. Measure those separately and close the complete plan to release resources.</p></details>
 </div>
 
-<p class="keep-in-present">Return to one requested name. Demand moves down; qualifying rows and field access move up. The plan determines rejected candidates, and closing its root must close its descendants.</p>
+<p class="keep-in-present">Return to one requested name. The root’s inputs search for the next qualifying row. Operator order determines how many candidate rows or pairs they examine. Calling <code>close()</code> on the root must close every input.</p>
 
 <p>Three points to remember:</p>
 

@@ -46,7 +46,7 @@
   <div class="byline">Follows Lecture 11 (Vector Databases) · in class: 75 min · aim to finish Build + Verify · due Thu Nov 5 at class start</div>
 </header>
 
-<p class="lede">Put an exact result beside an IVF result for the same question. Which neighbor IDs disappeared, and how much work did you save? You will build both search paths over 4,000 arXiv abstract vectors, then explain that trade with measurements. The provided k-means code chooses <span class="gloss" data-gloss="centroid">centroids</span>; your code assigns lists, searches them, and counts comparisons.</p>
+<p class="lede">Compare exact and IVF search results for the same question. Which exact neighbor IDs are missing from the IVF result, and how many comparisons did each search perform? Build both search methods over 4,000 arXiv abstract vectors, then measure how searching fewer candidates affects recall. The provided k-means code chooses <span class="gloss" data-gloss="centroid">centroids</span>; your code assigns lists, searches them, and counts comparisons.</p>
 
 <div class="cite">
   Companion reading: Lecture 11's <a href="../../lectures/lecture-11/vectors.html">slides &amp; 2-D space</a> ·
@@ -72,7 +72,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <details><summary>Check your explanation</summary><p>The unit vector is <code>(0.6, 0.8)</code>. A centroid represents a group; a member of another group can still be closer to the query. The small example separates build-time assignment from query-time similarity.</p></details>
 </div>
 
-<p class="keep-in-present">Your learning loop is <strong>predict, run, explain</strong>. Make a small prediction, inspect one step of the trace or one function check, then connect the result to the mechanism. Use that explanation to choose the next experiment.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict which lists will be searched and how many comparisons they require, run the trace or function check, then explain which returned neighbor IDs support or contradict your prediction.</p>
 
 <h2 id="try-it">Compare recall with the number of vectors searched</h2>
 
@@ -106,7 +106,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="big-idea">Partition the space so a query skips most of it</h2>
 
-<p class="keep-in-present">Use the shelf model from Lecture 11: a centroid is like a shelf label, a list is the shelf, and the vectors are its books. A query chooses promising labels before checking the contents. Actual distances determine membership, so the labels can lead the query past a good vector in a skipped list.</p>
+<p class="keep-in-present">Use the shelf model from Lecture 11: a centroid is like a shelf label, a list is the shelf, and the vectors are its books. A query chooses promising labels before checking the contents. Distances to centroids determine list membership and which lists are searched. A nearby vector can belong to a list whose centroid is farther from the query, so the search can skip that vector.</p>
 
 <p>Like the B+ tree from week 6, IVF organizes stored data so a query can skip some of it. The difference is how it chooses what to skip. IVF searches the lists with the closest centroids, but a true neighbor can belong to a list with a less similar centroid. Recall@k measures the resulting misses.</p>
 
@@ -186,7 +186,7 @@ fast enough to run in a loop. The full 384-dimensional vectors ship too
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~15 min in class</span></h2>
 
-<p class="keep-in-present">Use a failed check to identify a broken contract: exact scores, list membership, nested probe candidates, or accounting. Reproduce the smallest case before changing search settings.</p>
+<p class="keep-in-present">Use a failed check to locate the error: incorrect similarity scores, wrong list membership, larger probe settings that omit earlier candidates, or an incorrect comparison count. Reproduce the failure with a small input before changing search settings.</p>
 
 <h3 id="function-tests">Test one function at a time</h3>
 <p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>

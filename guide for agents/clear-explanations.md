@@ -117,6 +117,18 @@ Deliverables
 - Verification needed:
 ```
 
+## Check each sentence
+
+This is a course-authoring adaptation of CLEAR: make the action, object, and consequence easy to identify before adding more detail.
+
+- Name the operation and the affected item. Replace “the source disappeared” with “the selected chunk lost its source ID during prompt assembly.”
+- Use a pronoun when its reference is clear. If “it,” “this,” or “that” could refer to several things, name the relevant query, record, page, or result.
+- State the concrete consequence. Replace “an incomplete durable state” with “the debit reached disk without its matching credit, reducing the total balance.”
+- Tell students what to inspect. Replace “trace one question all the way to its results” with “compare the returned neighbor IDs with exact search, then read the passages to check whether they answer the question.”
+- Keep technical conditions in the sentence or its immediate explanation. For example, distinguish current reads from older snapshots before saying that a deletion marker can be removed.
+
+Read a story sentence aloud and ask whether a student can say what happened, why it matters, and what to check next. Keep the familiar comparison, but explain how it maps to the actual mechanism.
+
 ## Final review
 
 - Does the opening question check the assumed audience knowledge?
@@ -124,6 +136,7 @@ Deliverables
 - Does the diagram show why the result occurs?
 - Do students see the example before the general formula?
 - Is the essential claim precise enough to remain true when simplified?
+- Does each action name its object, and does each consequence say what actually changes?
 - Does the ending revisit the same model and test whether students can use it?
 - Are source ideas, invented scenes, toy inputs, estimates, and measured results distinguishable?
 

@@ -72,7 +72,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <details><summary>Check your explanation</summary><p>Position 2 selects the stored chunk; <code>wal</code> is its source ID. The score is query-specific. Even the correct source ID and a high score do not establish support for every generated claim; inspect the text.</p></details>
 </div>
 
-<p class="keep-in-present">Your learning loop is <strong>predict, run, explain</strong>. Make a small prediction, inspect one step of the trace or one function check, then connect the result to the mechanism. Use that explanation to choose the next experiment.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict which chunk a search position selects and which source ID appears in the prompt, run the trace or function check, then explain the returned text, citation, and rank.</p>
 
 <h2 id="try-it">Inspect the evidence selected for a question</h2>
 
@@ -115,7 +115,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="big-idea">Read the provided stages and identify your two tasks</h2>
 
-<p class="keep-in-present">Treat the prompt as an open-book answer packet. The retriever selects pages; prompt assembly keeps the page references beside their text. The page reference is like a source ID, not an array position. The analogy explains evidence handling; the tests still require the exact chunk and prompt formats below.</p>
+<p class="keep-in-present">Compare the prompt to notes for an open-book answer. The retriever selects passages, and prompt assembly keeps each passage’s source ID beside its text, much like a page reference. The source ID identifies the document; the array position selects the stored chunk. Use the exact chunk and prompt formats below.</p>
 
 <p class="keep-in-present"><code>micro_rag.py</code> implements the five stages from Lecture 12 in the following order:</p>
 
@@ -176,7 +176,7 @@ return [x / norm for x in v]</div>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
-<p class="keep-in-present">Build the pipeline in the order you can inspect it: align chunks and vectors, retrieve copies in rank order, then assemble the required prompt. Use echo mode to open the exact evidence packet before interpreting an answer.</p>
+<p class="keep-in-present">Store each vector at the same position as its chunk, retrieve copies in rank order, then assemble the required prompt. Use echo mode to read the selected text, source IDs, and question exactly as they would be sent to the language model.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -271,7 +271,7 @@ return [x / norm for x in v]</div>
 <!-- ============================================================ -->
 <h2 id="real">Part 4 · The same pipeline on real papers <span class="part-time">~20 min · homework</span></h2>
 
-<p class="keep-in-present">Carry the same pipeline into a larger corpus while keeping the question labels and metric cutoff visible. The learned and hashed representations may rank different papers; inspect a concrete example before explaining the aggregate scores.</p>
+<p class="keep-in-present">Run the same pipeline on the larger corpus. For one labeled question, compare where the learned and hashed embeddings rank its target paper. Then explain the overall hit and reciprocal-rank scores using their stated result cutoffs.</p>
 
 <p>The 24-document corpus is small enough to inspect closely. In this part, <code>measure_real.py</code> evaluates retrieval over the 4,000 arXiv abstracts from Lab 9. It compares hashed bag-of-words with <code>all-MiniLM-L6-v2</code> sentence embeddings. The document and question vectors are supplied in <code>data/</code>, so no model download or GPU is needed. Ten labeled questions paraphrase a specific paper without reusing its title words; use them to test vocabulary mismatch on a larger corpus.</p>
 

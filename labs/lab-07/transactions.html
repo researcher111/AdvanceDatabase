@@ -47,7 +47,7 @@
   <div class="byline">Follows bonus Lectures 7–8 · self-paced · optional and ungraded · no submission deadline</div>
 </header>
 
-<p class="lede">Use this optional lab to make a crash-recovery promise concrete. Log old values before changing pages, commit in the required order, and undo unfinished writes in reverse. Then restart the crash demo and explain which durable records make the repaired balances trustworthy.</p>
+<p class="lede">In this optional lab, restart a database after a process exits during a transfer. Log old values before changing pages, commit in the required order, and undo unfinished changes from newest to oldest. Use the saved log records and balances to explain why recovery keeps the committed transfer and reverses the incomplete one.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 5 ·
@@ -110,7 +110,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="big-idea">Sync the old value before changing the page</h2>
 
-<p class="keep-in-present">Think of writing down how to repair a change before making it. The old value is the repair information, and the page carries the change. The actual rule requires durable log information, not merely a note in RAM. This lab’s FORCE/STEAL policy also determines data and completion flush ordering.</p>
+<p class="keep-in-present">Imagine recording an account’s original balance before changing it. The undo log saves that old value so recovery can restore it. The log record must reach durable storage before the changed data page does. This lab’s FORCE/STEAL policy also specifies when to flush data pages and completion records.</p>
 
 <p class="keep-in-present">The <span class="gloss" data-gloss="undo-log">write-ahead rule</span> is precise: recovery information must reach durable storage before the data it protects. This lab syncs each log append by default, then uses FORCE at commit: flush dirty data pages before syncing COMMIT. JSON lines make the log readable; production formats add checksums and recovery metadata.</p>
 
@@ -144,7 +144,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
-<p class="keep-in-present">Trace each operation’s log, memory, data-flush, and completion boundaries. Check the specific method before combining it with the full transfer and restart scenario.</p>
+<p class="keep-in-present">For each operation, trace when it appends a log record, changes a buffered page, writes that page to storage, and records completion. Run the matching method check before testing the full transfer and restart scenario.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 

@@ -53,7 +53,7 @@
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
   <p class="lede">Maya draws Ada’s follows graph on the whiteboard. Two different two-hop routes end at Dee. She starts counting the route endpoints as people. Noor points to Dee’s name twice: <q>Are we counting routes, or people we can reach?</q></p>
-  <p>Maya puts a circle around each person and an arrow along each relationship. One question needs distinct people; another needs the connecting path. They write the result contract above the drawing before comparing SQL with a graph query.</p>
+  <p>Maya puts a circle around each person and an arrow along each relationship. One question needs distinct people; another needs the connecting path. They write what each query must return above the drawing before comparing SQL with a graph query.</p>
 </div>
 
 <p class="keep-in-present">Graph databases store relationships and provide operators for paths. SQL joins and recursive queries can also express these questions. We will keep the six-person course graph fixed, specify direction and duplicate rules, then compare the work each question requires. The final discussion connects these choices to the database mechanisms you have used throughout the course.</p>
@@ -113,7 +113,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="worked-example">Count paths and reachable people separately</h2>
 
-<p class="keep-in-present">Before comparing costs, let the drawing settle the contract. Predict the two-hop endpoints, then compare that list with a frontier of previously unvisited people. A repeated endpoint is not an extra person.</p>
+<p class="keep-in-present">Before comparing costs, use the drawing to distinguish paths from distinct people. Predict the two-hop endpoints, then compare that list with a frontier of previously unvisited people. A repeated endpoint is not an extra person.</p>
 <div data-teaching-trace="graph">
   <p><strong>Worked result:</strong> At depth two, the walk endpoints are <code>[dee, ada, dee, eli]</code>. Visited-set reachability adds only <code>[dee, eli]</code>. Through depth three, BFS examines eight outgoing edges and finds five other people; bounded walk enumeration produces eleven rows before exclusions.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
@@ -123,7 +123,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="cost">Compare work for the same result</h2>
 
-<p class="keep-in-present">The small graph shows why counting paths and counting reached people can do different work. Now generalize those counts. Match the result contracts before treating the formulas as a comparison.</p>
+<p class="keep-in-present">The small graph shows why counting paths and counting reached people can require different amounts of work. Now generalize those counts. Require both algorithms to return the same kind of result before comparing their work estimates.</p>
 
 <div class="math">
 <p>A relational join finds neighbors by matching keys, often through a hash table or index. An adjacency-oriented graph store finds them through stored neighbor references. With average degree <em>d</em>, enumerating paths of length <em>k</em> can generate roughly <em>d</em><sup>k</sup> rows before duplicate nodes are removed. A reachability traversal with a visited set has a different bound:</p>
@@ -146,12 +146,12 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p class="key-fact keep-in-present"><strong>Count edges and paths separately.</strong> A visited-set traversal and a query enumerating all bounded paths need not perform the same work.</p>
 
-<p class="keep-in-present">Graph-oriented storage and path operators can reduce work, but neither notation guarantees a faster plan.</p>
+<p class="keep-in-present">Graph-oriented storage and path operators can reduce work, but writing a query in SQL or Cypher does not by itself guarantee a faster plan.</p>
 
 <!-- ============================================================ -->
 <h2 id="model">Store nodes, edges, and their properties</h2>
 
-<p class="keep-in-present">The result contract is now clear. The storage model gives names to the drawing: a person is a node, a follows relationship is a directed edge, and names or dates are properties. Maintaining adjacency can make the next expansion direct, while adding update work.</p>
+<p class="keep-in-present">We have specified what the query must return. The storage model gives names to the drawing: a person is a node, a follows relationship is a directed edge, and names or dates are properties. Stored adjacency lets the query read a node’s neighbor references directly; adding or removing an edge must also update those references.</p>
 
 <p class="keep-in-present">The property-graph model used by many graph databases (Neo4j,
 Kuzu, Neptune, Memgraph):<sup class="src"><a href="#src-3" title="What Is Amazon Neptune? (AWS Neptune User Guide)">3</a></sup></p>
@@ -197,7 +197,7 @@ RETURN DISTINCT b.name ORDER BY b.name</code></pre>
 <!-- ============================================================ -->
 <h2 id="kuzu">Run graph queries in an embedded Kuzu demo</h2>
 
-<p class="keep-in-present">Run the six-person example or use the recorded output below. Each query changes the requested result: immediate neighbors, new two-hop contacts, bounded reachability, or a shortest route. Those differences explain the output before the engine name does.</p>
+<p class="keep-in-present">Run the six-person example or use the recorded output below. Each query requests a different result: immediate neighbors, new two-hop contacts, bounded reachability, or a shortest route. Predict the rows each query should return before running it in Kuzu.</p>
 
 <div class="chat-downloads">
   <span class="chat-downloads-label">Demo script:</span>
@@ -299,7 +299,7 @@ loaded 6 students, 9 follows edges
 <div class="exercise learning-check">
   <span class="ex-label">Explain it to a teammate</span>
   <p>A graph query emits eleven bounded-walk rows while a visited-set traversal finds five other people. Is one result necessarily wrong? What must you fix before presenting a performance comparison?</p>
-  <details><summary>Check your explanation</summary><p>No. The algorithms can satisfy different contracts. State direction, depth, exclusions, duplicate handling, and permitted revisits; make both queries return the same requested result. Then compare execution work and timing. Neither SQL syntax nor graph syntax guarantees a faster plan.</p></details>
+  <details><summary>Check your explanation</summary><p>No. One algorithm may be answering a question about paths while the other answers a question about distinct people. State direction, depth, exclusions, duplicate handling, and permitted revisits; make both queries return the same requested result. Then compare execution work and timing. Neither SQL syntax nor graph syntax guarantees a faster plan.</p></details>
 </div>
 
 <p class="keep-in-present">Return to the whiteboard. Maya can now distinguish the route from its destination, state the query’s stopping rule, and explain where adjacency changes lookup work. For the project, the same habit applies: state the result, show the mechanism, then use evidence to defend a decision.</p>

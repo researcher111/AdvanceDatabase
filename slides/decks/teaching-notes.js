@@ -24,7 +24,7 @@
         "Read the SQL as a sequence of characters.",
         "Group characters into tokens. Distinguish token recognition from parsing the grammar.",
         "Follow Project, Select, and Scan in the executable tree.",
-        "Mark the boundary between understanding SQL and executing the plan."
+        "Identify when tokens, QueryData, and scan operators are created, then when next() begins reading rows."
       ]
     },
     "lecture-01-scene-03": {
@@ -199,8 +199,8 @@
       "answer": "No. Buffering and OS caching can let it return before durable completion.",
       "builds": [
         "Ask two students for their measured sync/no-sync ratios and methods.",
-        "Identify the buffered-acceptance boundary.",
-        "Identify the boundary that requests durable completion.",
+        "Identify when write() returns after the operating system accepts the bytes.",
+        "Identify when fsync() returns after completing the file-sync request.",
         "Interpret the measured gap, then ask how a cache could avoid a new request entirely."
       ]
     },
@@ -540,7 +540,7 @@
       "question": "What starts work in the operator tower?",
       "answer": "A caller requests the next row, causing requests to travel down the tree.",
       "builds": [
-        "Show the idle operator tower and ask what begins execution.",
+        "Show the operator tree before any next() call and ask which call starts reading rows.",
         "Follow one caller request down to Scan.",
         "Return a matching row through the composed operators."
       ]
@@ -709,7 +709,7 @@
       "answer": "It can reduce input sizes and candidate work; close must still release every descendant's resources.",
       "builds": [
         "Recall the scan interface shared by every operator.",
-        "Trace requests downward and successful field access upward.",
+        "Trace next() calls down to TableScan, then show the caller reading the accepted row’s fields.",
         "Compare returned rows with candidate work, then explain cleanup at the root."
       ]
     }
@@ -860,7 +860,7 @@
     "money-disappears": {
       "idea": "Individually valid writes can leave a transfer only partly applied after a crash.",
       "question": "Where did the missing fifty go in this picture?",
-      "answer": "Only the debit reached durable storage; the transfer is in an inconsistent intermediate state.",
+      "answer": "Only the debit reached durable storage; A lost $50 while B received nothing.",
       "builds": [
         "Establish the original total of 150.",
         "Apply only the debit and distinguish memory from durable storage.",
@@ -889,12 +889,12 @@
     },
     "durable-first": {
       "idea": "Recovery information must become durable before the changed page can become durable.",
-      "question": "Where is the safety boundary before a dirty page flush?",
+      "question": "What must already be durable before a changed data page is flushed?",
       "answer": "The associated recovery log information must already be durable.",
       "builds": [
         "Identify the old value before changing the page.",
         "Make its recovery information durable first.",
-        "Allow the changed page to flush after that boundary."
+        "Allow the changed page to flush after its recovery log information is durable."
       ]
     },
     "write-ahead-logging": {
@@ -903,12 +903,12 @@
       "answer": "The change may survive with no durable old value available to restore it.",
       "builds": [
         "Identify the lab's old-value recovery record.",
-        "Mark the record's durability boundary.",
+        "Identify when the old-value log record reaches durable storage.",
         "Require log durability before page durability, separating the general rule from this undo format."
       ]
     },
     "a-complete-transfer": {
-      "idea": "The lab's FORCE commit makes changed data durable before its commit receipt.",
+      "idea": "The lab's FORCE commit makes changed data durable before syncing the COMMIT log record.",
       "question": "Where do new balances live after each SET and before the commit flush?",
       "answer": "In buffers, until the FORCE commit flushes the changed pages.",
       "builds": [
@@ -940,7 +940,7 @@
     },
     "repair-can-crash-too": {
       "idea": "Recovery must be safe to repeat if another crash interrupts the repair.",
-      "question": "Why is a rollback receipt unsafe before repaired pages are durable?",
+      "question": "Why is syncing a ROLLBACK log record unsafe before repaired pages are durable?",
       "answer": "A later restart could skip a repair whose completion was recorded but whose data never survived.",
       "builds": [
         "Restore the old value by assignment.",
@@ -970,7 +970,7 @@
       ]
     },
     "commit-boundary": {
-      "idea": "A commit reply is safe only after the engine's required durability boundary.",
+      "idea": "A durable commit reply is safe only after required log records and, under FORCE, changed pages are durable.",
       "question": "What if the connection fails after durability but before the reply arrives?",
       "answer": "The transaction may already be committed even though the client does not know its outcome.",
       "builds": [
@@ -1003,10 +1003,10 @@
     "from-promise-to-code": {
       "idea": "The code must preserve WAL ordering during writes, commit, and recovery.",
       "question": "Which must become durable first: recovery information or the associated changed page?",
-      "answer": "Recovery information. Under the lab's FORCE policy, changed pages also precede the durable commit receipt.",
+      "answer": "Recovery information. Under the lab's FORCE policy, changed pages also precede the durable COMMIT log record.",
       "builds": [
         "Narrate the recovery record and its sync.",
-        "Change the page only after the lab's log boundary.",
+        "In this lab, change the buffered page only after syncing its old-value log record.",
         "Explain a commit and an interrupted transaction's repair without reading the script."
       ]
     }
@@ -1124,7 +1124,7 @@
     },
     "versions-instead-of-waiting": {
       "idea": "MVCC lets readers and writers use different versions of a row.",
-      "question": "What pays for the concurrency gained through versions?",
+      "question": "What extra storage and bookkeeping does MVCC need to let readers use older versions?",
       "answer": "Version storage, visibility bookkeeping, and cleanup; writers can still conflict.",
       "builds": [
         "Identify the original version.",
@@ -1318,7 +1318,7 @@
       "question": "Can recovery infer the intended deposit lost by a bad concurrent schedule?",
       "answer": "No. Logging and recovery preserve recorded actions; isolation must prevent the invalid schedule.",
       "builds": [
-        "Place durable log information before changed data and the FORCE commit receipt.",
+        "Place durable log information before changed data and the FORCE COMMIT log record.",
         "Retell the lost-update schedule.",
         "Locate the lock conflict and explain why snapshots still allow write skew."
       ]
@@ -1642,7 +1642,7 @@
       "builds": [
         "Calibrate first: ask what a B+ tree does for an exact key and whether students have used vector scores. Take one brief answer, then enter the fictional rehearsal. Maya points at her recovery passage: “It is right here.” Ask why an exact-string lookup misses it. If students know embeddings, move directly to the compatibility question; otherwise use the second build to explain the representation.",
         "Noor reads the different wording aloud. Introduce compatible embeddings as a way to compare the question and passage, without promising that every paraphrase will be close.",
-        "Maya pulls the laptop back: “Let us trace one question all the way to its results.” Say that both the index’s missed neighbors and the usefulness of returned passages will need checking."
+        "Maya turns back to the keyboard: “Let’s trace the search to see why it missed the passage.” Compare returned neighbor IDs with exact search, then open the passages to check whether they answer the recovery question."
       ],
       "checks": [
         {
@@ -1756,12 +1756,12 @@
       ]
     },
     "choose-an-operating-point": {
-      "idea": "A measured operating point should satisfy both the quality target and the work budget.",
+      "idea": "A measured search setting should satisfy both the neighbor-recall target and the comparison budget.",
       "question": "With at least 0.90 mean recall and at most 1,000 average comparisons, which listed setting does the least work?",
-      "answer": "Probe 4. Its mean recall is 0.9175 and its floored mean count is 924; probes 1 and 2 miss the quality target, while probe 8 exceeds the work budget.",
+      "answer": "Probe 4. Its mean recall is 0.9175 and its floored mean count is 924; probes 1 and 2 miss the recall target, while probe 8 exceeds the work budget.",
       "builds": [
         "Switch explicitly from the toy whiteboard to measurements on Lab 9’s four thousand arXiv vectors and forty questions.",
-        "Noor proposes a classroom quality target of 0.90. Let students eliminate settings before revealing the threshold.",
+        "Noor proposes a classroom mean-recall target of 0.90. Let students eliminate settings before revealing the threshold.",
         "Add a one-thousand-comparison budget. Maya points at probe 1: “This does the least work. Can we use it?” Ask the class to defend probe 4. A project needs its own justified target and a separate latency measurement."
       ]
     },
@@ -1788,7 +1788,7 @@
     "diagnose-the-index": {
       "idea": "Index recall and evidence relevance need different diagnostic experiments.",
       "question": "What if exact and ANN results agree but neither answers the question?",
-      "answer": "Inspect representation, chunking, metadata, or ranking; more ANN probes cannot fix an unsuitable space.",
+      "answer": "Inspect chunking, embeddings, metadata, or ranking. More ANN exploration changes which vectors are scored, not their similarity scores.",
       "builds": [
         "Maya suspects the missing evidence is in an unsearched region. Compare ANN IDs with exact IDs first.",
         "Increase search breadth. If useful exact neighbors return, the index budget explains that particular miss.",
@@ -2080,7 +2080,7 @@
       "builds": [
         "Ask for the stage boundary before revealing it. A shuffle changes ownership; a narrow operation stays within its limited dependencies. Pipeline the narrow, partition-local operations.",
         "Locate the shuffle dependency.",
-        "Place the boundary before revealing it.",
+        "Ask where the shuffle separates map-side and reduce-side stages before revealing that division.",
         "Inspect the two stages and distinguish stages from a count of API calls."
       ]
     },
@@ -2422,7 +2422,7 @@
       "question": "Is Spark lineage the same mechanism as a write-ahead log?",
       "answer": "No. Lineage records a recomputation recipe; WAL records information for transaction durability and recovery.",
       "builds": [
-        "Repeat the mechanisms from earlier lectures with concrete examples. Demand the mechanism’s contract, not just the shared label. Identify caches in buffer pools and SSTable block reads.",
+        "Use earlier examples to ask what each mechanism guarantees: a cache reuses bytes, an index narrows search, and a log supports recovery. Identify caches in buffer pools and SSTable block reads.",
         "Identify indexes in B+ trees, IVF, and adjacency.",
         "Identify durable logs and contrast them with lineage.",
         "Identify plans in iterators, Spark, and graph queries.",
@@ -2436,7 +2436,7 @@
       "builds": [
         "Transfer the model to an unfamiliar system. Have students ask for a byte path, skipped work, recovery boundary, execution dependency, and owner. Ask what the system reads and writes in a block.",
         "Ask how it skips data for the workload.",
-        "Ask what survives an acknowledged write.",
+        "Ask which data or recovery log records are durable when the client receives a successful write reply.",
         "Ask how it turns queries into execution.",
         "Ask how it partitions data and requests, then choose a benchmark."
       ]
@@ -2446,10 +2446,10 @@
       "question": "What result requirement and experiment explain one design choice in your project?",
       "answer": "State the same workload and result contract for both configurations, show their evidence, explain the choice, and demonstrate a diagnosed failure.",
       "builds": [
-        "Repeat the same habit for the project: state the result, show the mechanism, defend a decision with evidence. Ask another student to explain one failure and the experiment that diagnosed it. State the question the project answers.",
+        "State the question the project answers and what a correct result contains. Ask another student to explain one observed failure and the experiment that identified its cause.",
         "Present the evidence behind a comparison.",
         "Explain the decision changed by that evidence.",
-        "Repeat the same habit for the project: state the result, show the mechanism, defend a decision with evidence. Ask another student to explain one failure and the experiment that diagnosed it."
+        "Compare two configurations on the same workload and required result. Explain which measurements support the choice, then show one observed failure and how its cause was identified."
       ]
     }
   }
@@ -2507,9 +2507,9 @@
       story: 'Maya asks for the name after ada and expects ben. Noor watches selection skip ben before returning cyd. This is a fictional classroom investigation over the six-row student fixture.',
       calibrate: 'When TableScan.next() returns True, does it provide a whole result table or position the scan at one current row?',
       answer: 'It positions the scan at one row. The caller can read that row’s fields; another next call advances again.',
-      opening: 'Start with the idle operator tower. Let the class name the call that starts work and trace the request down before revealing a returned row.',
+      opening: 'Start with the operator tree before any next() call. Have the class trace the first next() request down to TableScan before revealing a returned row.',
       analogy: ['lecture-04-scene-05','Link the interface to nested Python generators: asking for the next item resumes work and a wrapper can skip items. Rewind, field routing, and close remain explicit scan contracts. Blocking operators later qualify the streaming model.'],
-      closing: 'Return to one requested name. Narrate downward demand, skipped input rows, upward field access, and closing the root. Then compare equivalent plans with different candidate counts.',
+      closing: 'Return to one requested name. Trace next() calls, skipped input rows, the caller’s field read, and close() calls on every input. Then compare equivalent plans with different candidate counts.',
       question: 'What can moving an input-only filter below the product change, and what result and cleanup obligations must it preserve?',
       expected: 'It can reduce candidates while preserving matching rows and duplicates. It must use fields available in that input, and closing the plan still releases all descendant resources. Counts do not by themselves establish timing.',
       idea: 'One successful result request can cause many input visits; the plan determines that work.'
@@ -2518,15 +2518,15 @@
       story: 'At the prompt, Maya circles the keyword FROM and the value “from” inside quotes. Noor asks for the tokens before a plan. This fictional classroom puzzle returns in the quotes scene; the opening first traces the ordinary SELECT request.',
       calibrate: 'Has constructing a query description already executed the scan? Does a quoted string with keyword letters have to be a keyword token?',
       answer: 'No to both. Parsing records a request before execution; the lexer distinguishes a quoted string value from a keyword.',
-      opening: 'Follow the visible SELECT through its description and plan. Name each artifact before moving to the next; reserve actual row reads for execution.',
+      opening: 'Follow the visible SELECT through tokens, QueryData, and scan operators. Name each representation before moving to the next; reserve actual row reads for execution.',
       analogy: ['lecture-05-scene-06','Link tokens and grammar to words and sentence structure. Recognizing words does not establish legal arrangement, schema validity, or a way to execute the request. Connect each grammar rule to its consuming parser method.'],
-      closing: 'Return to the typed query and trace tokens, QueryData, scan objects, and execution. Explain the 300 visits with sixty returned rows using those boundaries.',
+      closing: 'Return to the typed query and trace tokens, QueryData, scan objects, and execution. Explain that TableScan visits 300 students while SelectScan accepts sixty; parsing only records the condition.',
       question: 'If WHERE returns one fifth as many names, what work can remain unchanged and which observations are still needed before claiming a speedup?',
       expected: 'The scan still visits all 300 students. Selection adds checks and reduces output work. Compare the operator counters and repeated timings; parsing and planning remain separate from row execution.',
       idea: 'Tokens describe text, QueryData describes the request, and scans execute it.'
     },
     6: {
-      story: 'Maya stops at the root separator 36 and asks whether she has found eli. Noor points to the right leaf and then RID (0, 4): directions first, address next, heap row last. This is a fictional classroom investigation using the existing toy tree.',
+      story: 'Maya stops at the root separator 36 and asks whether she has found eli. Noor points to the right leaf and then RID (0, 4): the root’s 36 selects the right child, the leaf’s 36 supplies the RID, and the heap fetch returns the row. This is a fictional classroom investigation using the existing toy tree.',
       calibrate: 'What does a RID identify, and must two rows with the same search key share one RID?',
       answer: 'A RID identifies one heap block and slot. Duplicate search keys can lead to multiple RIDs in a leaf entry.',
       opening: 'Ask students to distinguish a GPA value, a routing separator, and a row address. Follow the existing drawing through the leaf to the actual heap row.',
@@ -2563,7 +2563,7 @@
       calibrate: 'Does sixty candidate pairs mean sixty result rows? What must agree before comparing two plans?',
       answer: 'No. The join still checks candidates. Plans must return the same required rows, including duplicates, before their work is comparable.',
       opening: 'Read both plans as equivalent requests. Point to the input-only filters and predict the product size before discussing elapsed time.',
-      analogy: ['optimizer','Use a route estimate: statistics sketch the terrain, the cost model prices possible steps, and search compares routes. An estimate is not a completed trip. Check actual counts and the assumptions behind the sketch.'],
+      analogy: ['optimizer','Compare choosing a query plan to choosing a route from a map: statistics summarize rows and value distributions, the cost model estimates operator work, and plan search compares combinations. Check the estimates against measured counts.'],
       closing: 'Return to the twenty-row answer. Estimate candidate work, compare costs in common units, and check execution. Use the synthesis to explain one assumption whose failure could change the choice.',
       question: 'With a scan cost of 1,000 page accesses and an index cost of 3 plus the match count, which choice follows at 100 and 2,000 matches? What assumptions could change it?',
       expected: 'The model gives 103 and 2,003 accesses: index for 100, scan for 2,000. Cache hits, shared heap pages, clustering, CPU costs, and inaccurate counts can change a real comparison.',

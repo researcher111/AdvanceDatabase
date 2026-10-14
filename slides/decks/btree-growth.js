@@ -20,7 +20,7 @@
     ['Predict insertion of 7', [[1,2],[3,4,5,6]], 7, 'The right leaf is full. Predict the next split.', 'Hold 7 above the tree. Ask whether splitting this leaf must make the tree taller. The current root has room for another separator.'],
     ['The right leaf overflows', [[1,2],[3,4,5,6,7]], null, 'Only the right leaf overflows.', 'Insert 7 with RID g into the right leaf temporarily. The left leaf is unaffected. Repair proceeds along the insertion path, not by rebuilding every leaf.'],
     ['Split the right leaf', [[1,2],[3,4],[5,6,7]], null, 'Keep 3 and 4; move 5, 6, and 7 to a new leaf.', 'Split the overfull right leaf into [3,4] and [5,6,7], carrying each RID with its key. Repair the sibling links. The parent still needs the new child pointer and separator.'],
-    ['Copy 5 into the existing root', [[1,2],[3,4],[5,6,7]], null, 'The root becomes [3, 5]. Its height does not change.', 'Copy the first key of the new right leaf, 5, into the existing root and add its child pointer. The root has only two keys, so it does not overflow. Keep key 5 and RID e in the leaf.'],
+    ['Copy 5 into the existing root', [[1,2],[3,4],[5,6,7]], null, 'The root becomes [3, 5]. The tree stays two levels tall.', 'Copy the first key of the new right leaf, 5, into the existing root and add its child pointer. The root has only two keys, so it does not overflow. Keep key 5 and RID e in the leaf.'],
     ['Read the completed tree', [[1,2],[3,4],[5,6,7]], null, 'All seven entries remain in leaves at the same depth.', 'Read the routes: below 3, at least 3 but below 5, and at least 5. Point to both copied separators still present in leaves. A leaf split grows the tree only when a new root is required.']
   ];
 

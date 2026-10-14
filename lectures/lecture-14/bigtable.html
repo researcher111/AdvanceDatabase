@@ -80,8 +80,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <details><summary>Check your explanation</summary><p>A durable log can reconstruct an update lost from memory. Forgetting a key in memory leaves older file records intact. A deletion needs a newer record that hides those older values until safe reclamation is possible.</p></details>
 </div>
 
-<p class="keep-in-present"><strong>Quiz 10</strong> first (MapReduce, Spark &amp; Ray, 10 min), then the write-optimized
-half of the storage world.</p>
+<p class="keep-in-present"><strong>Quiz 10</strong> first (MapReduce, Spark &amp; Ray, 10 min), then LSM trees and storage for write-heavy workloads.</p>
 
 <p class="keep-in-present">A large crawler generates a steady stream of writes across a growing key space. B+ tree buffering can combine updates, but scattered dirty pages still create pressure on storage. LSM engines organize the write path around sequential output and background merging. The question is how much read and compaction work that choice adds.</p>
 
@@ -91,7 +90,7 @@ half of the storage world.</p>
 <!-- ============================================================ -->
 <h2 id="problem">B+ tree writes can become a storage bottleneck</h2>
 
-<p class="keep-in-present">The B+ tree you built updates the leaf that owns a key. A sustained stream of scattered keys can dirty many pages. Before choosing a new design, ask which storage work is expensive and which work a different layout merely postpones.</p>
+<p class="keep-in-present">The B+ tree you built updates the leaf that owns a key. A sustained stream of scattered keys can dirty many pages. Before choosing a new design, ask whether reducing scattered writes will increase later compaction work or the number of files a read must check.</p>
 
 <h3 class="new-slide" data-kicker="Write-heavy storage">Sequential output can reduce scattered writes</h3>
 
@@ -204,7 +203,7 @@ SSTables, <span class="gloss" data-gloss="compaction">compact</span>, and then l
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace a delete through older sorted files</h2>
 
-<p class="keep-in-present">Return to the three records from the opening. Predict what a read at snapshot 9 returns before revealing the delete. Then ask whether merging only two files is enough to erase its marker while the oldest file still exists.</p>
+<p class="keep-in-present">Return to the three records from the opening. Predict what a read at snapshot 9 returns before revealing the delete. Then ask whether a compaction of only two files can safely drop the deletion marker while the oldest file still contains a value for that key.</p>
 <div data-teaching-trace="lsm">
   <p><strong>Worked result:</strong> The newest visible record at snapshot 9 is DELETE@9, so return absent even though older files hold values at 8 and 5. A partial compaction must retain the tombstone while an older value can still reappear.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>

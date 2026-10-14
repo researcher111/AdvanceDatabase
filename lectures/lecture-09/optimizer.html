@@ -50,10 +50,10 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya compares two plans for the same student-major query. Both return twenty rows, but their counters show 900 and 60 candidate pairs. Noor covers the timers: <q>Can we explain this difference before we choose a plan?</q> The answer is unchanged; the route to it is not.</p>
+  <p class="lede">Maya compares two plans for the same student-major query. Both return twenty rows, but their counters show 900 and 60 candidate pairs. Noor covers the timers: <q>Which operators create the extra candidate pairs?</q> They draw the two operator trees to locate the extra work.</p>
 </div>
 
-<p class="keep-in-present">An optimizer estimates the work of equivalent plans using statistics, a cost model, and a bounded search. We will explain the small join first, price scan and index alternatives in shared units, then compare estimates with observed execution. This is optional extension material.</p>
+<p class="keep-in-present">An optimizer estimates the work of equivalent plans using statistics, a cost model, and a bounded search. We will explain the small join first, estimate page accesses for scan and index alternatives, then compare estimates with observed execution. This is optional extension material.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 10 &amp; 15 ·
@@ -135,7 +135,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="stats">Row-count estimates drive cost estimates</h2>
 
-<p class="keep-in-present">Estimating a route before traveling requires a map of the terrain. Statistics are the data sketch, the cost model assigns work to possible steps, and plan search compares routes. The analogy does not make an estimate a measurement: inspect actual row counts and check the assumptions behind the sketch.</p>
+<p class="keep-in-present">Choosing a query plan resembles choosing a route from a map before traveling. Statistics summarize row counts and value distributions; the cost model estimates the work of each operator; plan search compares combinations of those operators. Check the estimates against measured row counts, especially when the data violates the model’s assumptions.</p>
 
 <p class="keep-in-present">Selectivity is the fraction of a table's rows that a predicate keeps: if <code>gpa &gt; 35</code> keeps 60 of 300 rows, its selectivity is 0.2. The optimizer needs this number before it runs anything, because every cost formula in the next section starts from how many rows each step will produce. It cannot know the number exactly, so it estimates it from a few facts it stores per table and per column. Those facts, and the formulas that turn them into an estimate, are what this section is about.</p>
 
@@ -183,7 +183,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="cost">Estimate a plan’s block accesses before execution</h2>
 
-<p class="keep-in-present">The row-count sketch now supplies inputs. Use one unit for competing plans so a smaller number actually means less estimated work under the same assumptions.</p>
+<p class="keep-in-present">The estimated row counts now supply inputs to the cost formulas. Compare competing plans in the same unit, such as block accesses, so a smaller estimate means less work under the same assumptions.</p>
 
 <p class="keep-in-present">Table scans and index scans provide different <span class="gloss" data-gloss="access-path">access paths</span> to rows. A cost model estimates each candidate plan’s work from its operators and estimated row counts. Our teaching model counts block accesses, extending the measurements from Lab 4. Production models also account for CPU work, caching, and differences between sequential and random I/O.</p>
 

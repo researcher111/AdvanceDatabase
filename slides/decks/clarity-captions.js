@@ -77,7 +77,7 @@ window.CourseClarityCaptions = {
     "lecture-01-scene-13": [
       "The file layer supplies addressed blocks.",
       "Buffers manage pages; records interpret their bytes.",
-      "Operators execute rows; SQL describes the requested result.",
+      "Operators scan, filter, and project rows; SQL describes the requested result.",
       "Indexes and recovery build on the lower layers’ interfaces."
     ],
     "lecture-01-scene-14": [
@@ -88,9 +88,9 @@ window.CourseClarityCaptions = {
     ],
     "lecture-01-scene-15": [
       "write() can return after the OS accepts buffered data.",
-      "fsync() requests the durability boundary.",
-      "Successful sync establishes the requested durable completion.",
-      "A failure can erase changes that had not reached that boundary."
+      "fsync() requests durable storage of the file’s writes.",
+      "Successful fsync() completes the sync request; power-loss guarantees depend on the storage stack.",
+      "A power failure can lose writes that remain only in volatile caches."
     ],
     "lecture-01-scene-16": [
       "Return to the same request: which layers connect SQL to stored blocks?",
@@ -105,9 +105,9 @@ window.CourseClarityCaptions = {
       "With B7 resident, later requests reuse the first read."
     ],
     "lecture-02-scene-02": [
-      "Compare the completion boundaries in your Lab 1 measurements.",
+      "Compare when write() and fsync() finish in your Lab 1 measurements.",
       "write() can finish when the OS cache accepts the data.",
-      "fsync() waits for the requested durability boundary.",
+      "fsync() waits for file synchronization; the storage stack determines its durability guarantee.",
       "Explain the measured gap using those different boundaries."
     ],
     "lecture-02-scene-03": [
@@ -722,7 +722,7 @@ window.CourseClarityCaptions = {
     "search-without-enumerating-everything": [
       "Begin with access paths for individual relations.",
       "Reuse good plans for relation pairs when building larger joins.",
-      "A useful order can justify retaining an additional physical alternative."
+      "A useful sort order can justify keeping a subplan alongside a cheaper alternative."
     ],
     "diagnose-then-review": [
       "Read the estimated plan before interpreting its total cost.",
@@ -937,7 +937,7 @@ window.CourseClarityCaptions = {
     ],
     "probe-the-lists": [
       "Maya’s whiteboard has four toy vectors in two lists. Build-time assignment is fixed.",
-      "The query prefers c0. Predict which vector a one-list search can score.",
+      "The query’s highest centroid score is for c0. Predict which vector a one-list search can score.",
       "Probe 1 returns only v0: two centroid comparisons plus one candidate comparison.",
       "The skipped v1 scores 0.96, above v0’s 0.80. Recall@2 is only 1 / 2.",
       "Probe both lists to recover v1, paying six comparisons versus four for exact search."
@@ -967,14 +967,14 @@ window.CourseClarityCaptions = {
       "With at most 1,000 average comparisons too, choose P = 4: recall 0.9175, count 924."
     ],
     "memory-and-update-budgets": [
-      "Before keeping the shortcut, Maya counts IVF’s centroids, lists, and vector payload.",
+      "Count memory for IVF’s centroids, lists, and stored vectors before choosing an index.",
       "HNSW also needs neighbor links and work to construct them.",
-      "Compression can save memory but adds another accuracy trade to measure."
+      "Compression can save memory but can also change neighbor rankings; measure recall again."
     ],
     "where-the-index-lives": [
       "Maya asks who updates the index when a source changes. A database can keep it beside rows.",
-      "An embedded library leaves persistence and synchronization to the application.",
-      "A separate service adds a network boundary and responsibility for synchronized copies."
+      "The application must save an embedded index and update it when source data changes.",
+      "A separate service requires network requests and keeping its index in sync with source records."
     ],
     "diagnose-the-index": [
       "If ANN misses useful exact neighbors, investigate the search budget.",
@@ -983,9 +983,9 @@ window.CourseClarityCaptions = {
     ],
     "rebuild-the-retrieval-contract": [
       "Return to Maya’s question. Establish exact neighbors before taking a shortcut.",
-      "Use an index to reduce candidate work under an explicit search budget.",
+      "Set the IVF probe count or HNSW search breadth, then measure candidate work.",
       "Measure missed neighbor IDs across representative questions.",
-      "Searching fewer candidates can miss true neighbors; measure that loss against exact search. Check evidence too."
+      "Compare returned IDs with exact neighbors, then read the passages to check whether they answer the question."
     ]
   },
   "12": {
@@ -1022,7 +1022,7 @@ window.CourseClarityCaptions = {
     "a-synonym-failure": [
       "The first wording retrieves the intended buffer-pool source.",
       "Maya changes the wording; the same information need now gets different evidence.",
-      "This is exact search. More ANN exploration cannot fix these representation scores."
+      "Exact search already scored every chunk; more probes would not change those scores."
     ],
     "build-an-evaluation-set": [
       "Write questions that a corpus user would actually ask; the project requires at least 25.",
@@ -1064,7 +1064,7 @@ window.CourseClarityCaptions = {
     ],
     "a-changed-source-invalidates-copies": [
       "D7’s text and searchable representation begin at version 1.",
-      "Changing the source alone leaves its stored derivatives stale.",
+      "Changing D7’s source text alone leaves its old chunks and vectors in the index.",
       "Build the new source representation before making it searchable.",
       "Switch compatible source and index versions together; a model change also needs re-embedding."
     ],
@@ -1077,7 +1077,7 @@ window.CourseClarityCaptions = {
       "Return to Maya’s question: record the source identity and version.",
       "Select the evidence and keep its ranking visible.",
       "Check presence and rank against independently labeled sources.",
-      "Select evidence, carry its identity, check support. A fluent answer still needs that last check."
+      "Select passages, keep their source IDs, and check each answer claim against the cited text."
     ]
   },
   "13": {
@@ -1093,8 +1093,8 @@ window.CourseClarityCaptions = {
     ],
     "hash-routing": [
       "Keep the same twelve names while changing only the routing rule.",
-      "The transparent toy hash assigns each key to one of four owners.",
-      "An exact key such as kim computes one owner directly.",
+      "The shown hash rule assigns each key to one of four workers.",
+      "For an equality lookup on kim, compute its hash to choose one partition.",
       "A key range has no single hash interval, so this example consults every partition."
     ],
     "range-routing": [
@@ -1134,7 +1134,7 @@ window.CourseClarityCaptions = {
     "reduce-network-bytes-early": [
       "Each mapper holds four local occurrences of log.",
       "For this sum, replace those four pairs with one local partial count, (log, 4).",
-      "Move three partial counts and add them to 12. A valid combine saves traffic, not occurrences."
+      "Send three partial counts instead of twelve pairs, then add them to get the same total of 12."
     ],
     "a-lazy-spark-plan": [
       "Describe the input collection before triggering execution.",
@@ -1150,10 +1150,10 @@ window.CourseClarityCaptions = {
       "Schedule tasks within each stage; stage count is not simply the number of API calls."
     ],
     "lineage-rebuilds-lost-partitions": [
-      "Keep the recipe and the dependencies needed to reconstruct a partition.",
+      "Keep the transformations and available inputs needed to reconstruct a partition.",
       "A worker loss can remove its cached output.",
       "Trace the missing output back to the required available inputs.",
-      "Replay the missing work elsewhere. Lineage is a recomputation recipe, not a transaction log."
+      "Replay the required transformations on another worker. Lineage describes recomputation, not transaction recovery."
     ],
     "launch-before-waiting": [
       "Waiting immediately after each launch serializes these independent calls.",
@@ -1170,14 +1170,14 @@ window.CourseClarityCaptions = {
       "Return to the count: choose owners using the key, not the sending worker.",
       "Move matching keys together or combine valid partial results.",
       "Execute the dependencies, allowing independent work to overlap.",
-      "Keep a recovery path. New placement should change the schedule, not the correct result."
+      "Plan retries using retained inputs and task information; preserve the same word totals."
     ]
   },
   "14": {
     "organize-writes-differently": [
       "Maya opens SSTable A: k = old at sequence 5. The file is immutable.",
       "A newer record in B has k = new at sequence 8; the old bytes still exist.",
-      "DELETE at sequence 9 makes a current read return absent. Do not erase its protection too early."
+      "DELETE at sequence 9 makes a current read return absent. Keep its tombstone while old values could reappear."
     ],
     "a-multidimensional-map": [
       "Name the logical row before deciding where its bytes live.",
@@ -1204,7 +1204,7 @@ window.CourseClarityCaptions = {
     "the-log-protects-memory": [
       "Follow the write for k2 before it enters memory.",
       "Record the recovery information in the log.",
-      "Meet the required durability condition before acknowledging the write.",
+      "For a durable write, sync the required log record before acknowledging success.",
       "The memtable holds the update; the durable log can restore it after RAM is lost."
     ],
     "the-memtable-stays-ordered": [
@@ -1222,20 +1222,20 @@ window.CourseClarityCaptions = {
       "Read k from A: old at sequence 5.",
       "A visible record at sequence 8 in B overrides it.",
       "The visible deletion at sequence 9 makes the current result absent.",
-      "Merge B and C, but keep the deletion while A can expose an older value.",
-      "Discard records only after covering older values and checking snapshot requirements."
+      "Merge B and C, but keep DELETE@9 while A still contains old@5.",
+      "Here all older versions are included and no active snapshot needs them, so these records can be removed."
     ],
     "merge-sorted-runs": [
       "Two sealed sorted batches can overlap in keys and versions.",
       "Advance their merge cursors in key order.",
-      "For k2, retain the newest eligible value while honoring retained snapshots.",
+      "This current-value view keeps k2:v2; real compaction also retains versions needed by active snapshots.",
       "Write one sorted output. Sequential merging still consumes read and write bandwidth."
     ],
     "deletion-must-hide-older-values": [
       "Return to the opening problem: the old file still holds k2 = v1.",
       "Write a newer tombstone instead of altering the immutable file.",
       "A current read honors the visible tombstone and returns absent.",
-      "Remove its protection only when older values and required snapshots are accounted for."
+      "Drop the tombstone only when older values cannot reappear and required snapshots remain valid."
     ],
     "a-one-sided-membership-test": [
       "Begin with zero bits and predict an absent query.",
@@ -1264,7 +1264,7 @@ window.CourseClarityCaptions = {
       "After communication resumes, use the system’s conflict rules to reconcile."
     ],
     "trace-an-acknowledged-write": [
-      "Return to k: make its recovery information durable at the required boundary.",
+      "Return to k: sync its recovery log record before acknowledging a durable write.",
       "Buffer its ordered record, including a deletion when needed.",
       "Flush immutable sorted files and merge them without exposing obsolete records.",
       "Log, buffer, flush, resolve. The newest visible record determines the read result."
@@ -1307,7 +1307,7 @@ window.CourseClarityCaptions = {
       "Four two-hop walks end at dee, ada, dee, and eli; dee is still one person.",
       "For reachability, keep only the new frontier and track visited people.",
       "Through depth 3: eleven walk rows versus eight BFS edge visits and five other people.",
-      "State the contract first. Routes, reachable people, and shortest paths ask for different work."
+      "Specify the required result: walks, distinct reachable people, or a shortest path. Their work can differ."
     ],
     "the-query-draws-a-shape": [
       "Draw the requested directed relationship before writing query syntax.",
@@ -1344,7 +1344,7 @@ window.CourseClarityCaptions = {
     "five-mechanisms-recur": [
       "Ask where bytes are stored and which reads a cache can reuse.",
       "Ask which maintained structure lets a query skip work.",
-      "Ask what recovery information survives failure; lineage and WAL have different contracts.",
+      "Ask how lost data is restored: lineage replays transformations; WAL supports transaction recovery.",
       "Ask which plan turns the requested result into operations.",
       "Ask who owns data and work, and where an uneven distribution can dominate."
     ],
@@ -1359,7 +1359,7 @@ window.CourseClarityCaptions = {
       "State the opening question and its required result.",
       "Show evidence from the same workload under the compared configurations.",
       "Explain the decision that follows from those results; the plotted points are schematic.",
-      "State the result, show the mechanism, defend the decision. Demonstrate a failure as well as a success."
+      "Compare configurations on the same required result, explain the measurements, and show one diagnosed failure."
     ]
   }
 };

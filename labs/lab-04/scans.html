@@ -49,7 +49,7 @@
   <div class="byline">Follows Lecture 4 (The Iterator Model) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 24 at class start</div>
 </header>
 
-<p class="lede">Ask the plan for one qualifying row, then watch how much work its operators do to supply it. Build selection, projection, and product through the common scan interface. Use the same result under two plan shapes to explain why earlier filtering can reduce candidate work.</p>
+<p class="lede">Request one result row from a query plan and trace the source rows and candidate pairs its operators examine. Implement selection, projection, and product through the common scan interface. Then compare two plans that return the same rows and explain why filtering before the product can reduce the number of pairs examined.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 8 ·
@@ -82,8 +82,7 @@
 
 <div class="viz" id="viz-stack">
   <div class="viz-title">Plan builder · students(6) ⋈ majors(3)</div>
-  <p class="viz-description">Pick a preset plan, press run, and read the per-operator traffic:
-  rows flowing <em>through</em> each stage vs rows delivered at the top.</p>
+  <p class="viz-description">Pick a preset plan, press run, and compare the number of rows each operator processes with the number of result rows the plan returns.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="st-q1">SELECT name WHERE gpa &gt; 35</button>
     <button type="button" class="btn primary" id="st-q2">the join (honors × majors)</button>
@@ -451,7 +450,7 @@ All scans closed; no buffer pins remain.</code></pre>
 <!-- ============================================================ -->
 <h2 id="big-idea">How each operator uses its input scans</h2>
 
-<p class="keep-in-present">Use nested Python generators as the familiar connection. A wrapper can ask its input for another item, skip rejected items, and expose selected fields without building a new table. The actual scan methods also carry rewind, field routing, exhaustion, and cleanup contracts.</p>
+<p class="keep-in-present">A chain of Python generators provides a useful comparison: each stage requests an item from its input, then skips or returns it. Scan operators also return one row at a time, but must support resetting the cursor, reading fields from the correct input, reporting the end of input, and closing their input scans.</p>
 
 <p class="keep-in-present">Each operator refers to its input scan or scans and implements the same five methods. These operators expose one current row at a time without storing a copy of the full result. Their memory use depends on the plan and its active scans, rather than the number of result rows. The table shows which behaviors each operator changes.</p>
 

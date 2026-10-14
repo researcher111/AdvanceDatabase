@@ -51,10 +51,10 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya follows GPA 36 to the root’s separator and stops. <q>Have we found eli?</q> Noor points to the right leaf, then to RID (0, 4). The first 36 gave directions; the second supplies an address. They still need the heap row before they can answer the query.</p>
+  <p class="lede">Maya searches for GPA 36 and stops at the root’s separator, also 36. <q>Have we found eli?</q> Noor points to the right leaf, then to RID (0, 4). The root’s 36 selects the right child; the leaf’s 36 supplies eli’s row address. They still need the heap row before they can answer the query.</p>
 </div>
 
-<p class="keep-in-present">An index gives a query another route to rows already stored in a heap. We will compare key organizations, follow equality and range lookups, then preserve those routes while inserting and splitting. Lab 6 keeps tree nodes in memory and fetches rows through returned RIDs.</p>
+<p class="keep-in-present">An index gives a query another route to rows already stored in a heap. We will compare key organizations, follow equality and range lookups, then update the tree’s pointers and separators as we insert and split nodes. Lab 6 keeps tree nodes in memory and fetches rows through returned RIDs.</p>
 
 <div class="cite">Optional reading: Sciore, <a href="https://link.springer.com/book/10.1007/978-3-030-33836-7"><em>Database Design and Implementation</em>, chapter 12</a>. Read if curious; not required. The <a href="../../labs/lab-06/btree.html">Lab 6 page</a> explains what you will implement.</div>
 <p class="glossary-hint">New terms are explained in the text. Hover or tap a dotted-underlined term to see its definition again.</p>
@@ -323,7 +323,7 @@
 
 <h2 id="costs">When does an index help?</h2>
 
-<p class="keep-in-present">The small tree now returns the correct addresses. Keep that result contract and scale up the workload: count node visits and heap access before interpreting the benchmark’s elapsed time.</p>
+<p class="keep-in-present">The small tree returns every matching RID. Now increase the table size and count index-node visits and heap-page accesses before interpreting the benchmark’s elapsed time.</p>
 <p>The first question is <strong>how many rows match?</strong> An index can save a great deal of work when we need just a few rows. PostgreSQL's B-tree indexes support both equality and range searches.<sup class="src"><a href="#src-1">1</a></sup></p>
 <p>In Lab 6, a complete scan for <code>uid = 77777</code> examines 100,000 rows across 294 heap blocks. The reference index follows 11 in-memory tree nodes and returns one RID. The matching row occupies one heap block. The benchmark times index construction separately from the lookup.</p>
 
@@ -392,7 +392,7 @@
 </div>
 
 <p class="keep-in-present">Return to GPA 36. Route through separators, find the leaf entry, obtain every matching RID, then fetch the heap rows. Insertion changes the structure while preserving that lookup contract.</p>
-<p>Start with <code>[1, 2, 3, 4]</code>, insert 5, and then search for 4. Narrate the changes before advancing: overflow, split, link, copy the separator, route right, return the address, fetch the row. If you can explain why key 3 remains in its leaf and why finding 4 does not yet fetch its row, the two halves of the lecture fit together.</p>
+<p>Start with <code>[1, 2, 3, 4]</code>, insert 5, and then search for 4. Narrate the changes before advancing: overflow, split, link, copy the separator, route right, return the address, fetch the row. Explain why key 3 must remain in its leaf, then distinguish the index search for 4 from the heap fetch that follows.</p>
 <figure class="bt-reading" data-btree-scene="exit-trace">
   <img class="bt-reading-static" src="diagrams/exit-trace.svg" alt="After inserting 5, root [3] routes to leaves [1, 2] and [3, 4, 5]. Searching for 4 returns RID d, which the heap uses to fetch the row." loading="lazy" width="1280" height="720">
   <figcaption>Connect insertion, routing, and row fetching in one final trace. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
@@ -440,7 +440,7 @@
 <script src="../../slides/_shared/trace-scenes.js?v=1"></script>
 <script src="../../slides/decks/lectures-06-10.js?v=2"></script>
 <script src="../../slides/decks/storage-choices.js"></script>
-<script src="../../slides/decks/btree-growth.js"></script>
+<script src="../../slides/decks/btree-growth.js?v=18"></script>
 <script src="../../slides/decks/btree-clarity.js"></script>
 <script src="reading-diagrams.js?v=1"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>

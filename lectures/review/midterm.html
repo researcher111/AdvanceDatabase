@@ -14,7 +14,7 @@
 <p class="notice"><strong>Midterm: Thursday October 22.</strong> Review Lectures 1–6 and Labs 1–6: storage, buffers, records, scans, the SQL front end, and B+ trees. Analytics, vectors, and the optional transaction/concurrency/optimizer material are outside this exam’s scope. These are practice examples, not an additional graded assignment.</p>
 <div class="flow" aria-label="SQL becomes a plan; scans request pages; pages contain rows"><span>SQL → plan</span><span>Plan → scans</span><span>Scans → pages</span><span>Pages → rows</span></div>
 </header>
-<div class="exercise learning-check"><span class="ex-label">Check the starting point</span><p>Can you name what SQL, a plan, a row, a RID, and a page each represent? Draw their relationships before opening a worked solution. Choose the first unclear boundary as your review question.</p><details><summary>Check the model</summary><p>SQL states a request; a plan supplies operators; a row contains field values; a RID locates a row in a block and slot; a page holds a working copy of block bytes. Following the same request through these representations connects the six required topics.</p></details></div>
+<div class="exercise learning-check"><span class="ex-label">Check the starting point</span><p>Can you name what SQL, a plan, a row, a RID, and a page each represent? Draw their relationships before opening a worked solution. Mark the first connection you cannot explain and use it as your review question.</p><details><summary>Check the model</summary><p>SQL states a request; a plan supplies operators; a row contains field values; a RID locates a row in a block and slot; a page holds a working copy of block bytes. Following the same request through these representations connects the six required topics.</p></details></div>
 <section id="agenda"><h2>Use the whole session</h2>
 <ol class="beats">
 <li><b>0–5 · Draw the engine.</b> Put parser, planner, scan, record page, buffer, and file manager in a request path. Collect questions to return to.</li>
@@ -26,7 +26,7 @@
 </ol>
 <p>For each problem: predict individually, compare with a partner, then reveal the explanation. Bring a diagram or trace from a lab that you want to discuss.</p>
 </section>
-<section id="buffers"><h2>1. Which page can move?</h2>
+<section id="buffers"><h2>1. Which buffer frame can be reused?</h2>
 <p>A two-frame buffer pool contains block A (pin count 1, clean) and block B (pin count 0, dirty). Block C exists on disk but is not cached. A caller requests C. Assume ordinary page reads and write-back on dirty eviction.</p>
 <p><strong>Predict:</strong> which frame can be reused? How many disk reads and writes does this request need? What changes if B is also pinned?</p>
 <details><summary>Reveal the explanation</summary><p>B is the only unpinned candidate. Write its dirty contents back once, read C once, and pin C for the caller. A remains in place even if it is older. If both frames are pinned, neither is an eligible victim; the request cannot complete until a frame becomes available. A cache hit would not need another disk read.</p><p>A pin count tracks active users. A dirty flag records a modified page. An eviction policy chooses among eligible frames; it cannot make a pinned frame eligible.</p></details>
@@ -57,7 +57,7 @@
 </section>
 <section id="exit"><h2>Finish with one complete explanation</h2>
 <p>“The query is parsed into ____. The plan requests rows through ____. The tree locates ____. The RID leads to ____. The buffer decides whether ____. The caller receives ____.”</p>
-<p>Return to the boundary you marked at the start. Explain it to a partner using the same query and diagram before choosing another topic.</p>
+<p>Return to the connection you marked at the start. Use the same query and diagram to explain how those items are related—for example, how a RID locates a row—before choosing another topic.</p>
 <p>Then change one condition: a duplicate key, a cached page, a pinned victim, a missing key, or an inclusive range endpoint. Explain exactly which part of the trace changes.</p>
 <p><strong>Before Thursday:</strong> revisit the public lecture diagrams and Labs 1–6, practice drawing intermediate states, and bring remaining content questions to the course’s usual help channels. Follow the instructor’s separate exam logistics.</p>
 </section>

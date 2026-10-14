@@ -148,7 +148,7 @@ vectors cosine similarity is just the dot product<sup class="src"><a href="#src-
 <!-- ============================================================ -->
 <h2 id="ann">Search less and risk missing a neighbor</h2>
 
-<p class="keep-in-present">Noor sketches groups of vectors on paper. <q>What if we search only a few groups?</q> Maya starts to nod, then stops. <q>What happens to a good passage in a group we skip?</q> That question is the price of the shortcut.</p>
+<p class="keep-in-present">Noor sketches groups of vectors on paper. <q>What if we search only a few groups?</q> Maya starts to nod, then stops. <q>What happens to a good passage in a group we skip?</q> Searching fewer groups saves comparisons, but it can leave a useful passage out of the results.</p>
 
 <p class="keep-in-present">IVF and HNSW avoid comparing the query with every vector. Each provides a search setting that controls how much of the index is explored. Increasing that setting usually improves recall while increasing query cost.</p>
 
@@ -171,7 +171,7 @@ vectors cosine similarity is just the dot product<sup class="src"><a href="#src-
 <!-- ============================================================ -->
 <h2 id="try-it">Watch a neighbor disappear</h2>
 
-<p>Maya moves the question near a list boundary. <q>The point beside it must be found, surely?</q> Predict before clicking: could that neighbor belong to a list the query does not search? In this two-dimensional illustration, click to place a query, run exact search, then try IVF probe 1. Increase to probe 2 and compare. Real embedding spaces have many more dimensions; this picture makes the skipped work visible.</p>
+<p>Maya places the query vector near a cluster boundary. <q>Surely the search will find the nearby vector?</q> Predict before clicking: could that neighbor belong to a list the query does not search? In this two-dimensional illustration, click to place a query, run exact search, then try IVF probe 1. Increase to probe 2 and compare. Real embedding spaces have many more dimensions; this picture makes the skipped work visible.</p>
 
 <div class="viz" id="viz-space">
   <div class="viz-title">2-D vector space · 300 points, 8 IVF clusters</div>
@@ -195,8 +195,8 @@ vectors cosine similarity is just the dot product<sup class="src"><a href="#src-
 <!-- ============================================================ -->
 <h2 id="worked-example">Find the missing neighbor by hand</h2>
 
-<p>Maya puts four unit vectors on the whiteboard. The query is <code>q = (0.8, 0.6)</code>. It prefers centroid <code>c0</code>, whose list contains only <code>v0</code>. <q>Then v0 is our best result?</q> Noor asks her to score <code>v1 = (0.6, 0.8)</code> before advancing. Its dot product is <strong>0.96</strong>, higher than v0’s <strong>0.80</strong>. But v1 belongs to the other list.</p>
-<p><strong>Predict the next step:</strong> what will probe 1 return, and what changes at probe 2? Distinguish the closest <strong>centroid</strong> at build time from the closest <strong>vector</strong> to this query. These are toy coordinates, separate from the fictional project’s passages.</p>
+<p>Maya puts four unit vectors on the whiteboard. The query is <code>q = (0.8, 0.6)</code>. The query’s highest centroid score is for <code>c0</code>, whose list contains only <code>v0</code>. <q>Then v0 is our best result?</q> Noor asks her to score <code>v1 = (0.6, 0.8)</code> before advancing. Its dot product is <strong>0.96</strong>, higher than v0’s <strong>0.80</strong>. But v1 belongs to the other list.</p>
+<p><strong>Predict the next step:</strong> what will probe 1 return, and what changes at probe 2? At build time, each stored vector joins its closest centroid’s list. At query time, choosing the closest centroid to the query can skip the query’s closest stored vector. These are toy coordinates, separate from the fictional project’s passages.</p>
 <div data-teaching-trace="ivf">
   <p><strong>Worked result:</strong> At probe 1, the query searches only vector 0 and misses vector 1, whose score is 0.96. Recall@2 is 0.5. At probe 2 it finds both exact neighbors but pays six dot products, compared with four for exact search.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
@@ -249,7 +249,7 @@ vectors cosine similarity is just the dot product<sup class="src"><a href="#src-
 <!-- ============================================================ -->
 <h2 id="recall">Decide how much search is enough</h2>
 
-<p class="keep-in-present">Maya opens the saved exact result beside the IVF result. <q>How many did we lose?</q> Count the shared IDs. <span class="gloss" data-gloss="recall">Recall</span> turns that comparison into a number, so a faster-looking result cannot hide its missing neighbors.</p>
+<p class="keep-in-present">Maya opens the saved exact result beside the IVF result. <q>How many exact neighbors are missing from the IVF result?</q> Count the shared IDs. <span class="gloss" data-gloss="recall">Recall</span> measures that overlap so you can assess the missed neighbors alongside the reduction in search work.</p>
 
 <div class="math">
 \[ \text{recall@}k \;=\; \frac{\bigl|\, \text{approximate top-}k \;\cap\; \text{true top-}k \,\bigr|}{k} \]
@@ -288,7 +288,7 @@ quarter of the real neighbors, on that measured query set<sup class="src"><a hre
 
 <p class="keep-in-present">There is no recall target that suits every application. A missed neighbor may remove a useful recommendation or omit the passage needed to answer a question. Evaluate those effects with representative queries. Geometric recall measures agreement with exact vector search; it does not by itself show whether the results answer the user’s question.</p>
 
-<p class="keep-in-present">Maya leans back when the missing vector returns. Noor opens its passage. <q>Does it actually explain recovery?</q> If exact search finds useful evidence that IVF misses, investigate the index’s search budget. If even the exact neighbors are unhelpful, inspect chunking, embeddings, metadata, or ranking. More probes cannot make an unsuitable representation understand the question.</p>
+<p class="keep-in-present">Maya leans back when the missing vector returns. Noor opens its passage. <q>Does it actually explain recovery?</q> If exact search finds useful evidence that IVF misses, investigate the index’s search budget. If even the exact neighbors are unhelpful, inspect chunking, embeddings, metadata, or ranking. Increasing the probe count searches more vectors; it does not change their similarity scores or the text stored in each chunk.</p>
 
 <h3 class="new-slide" data-kicker="Recall">Check yourself: recall is a count you can do by hand</h3>
 

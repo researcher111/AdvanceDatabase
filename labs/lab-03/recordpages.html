@@ -44,7 +44,7 @@
   <div class="byline">Follows Lecture 3 (Record Layout &amp; the Catalog) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 17 at class start</div>
 </header>
 
-<p class="lede">A cached block is still just bytes. Give each record a slot, locate its fields from a schema, and make the scan skip empty slots while moving its pin across blocks. The provided catalog then uses those same operations to save the table’s interpretation rules.</p>
+<p class="lede">A cached block contains bytes; the record layer determines which bytes belong to each row and field. Store records in fixed-size slots, calculate field offsets from the schema, and scan occupied slots one block at a time. The provided catalog uses those operations to store table names, field definitions, offsets, and slot sizes.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6–7 ·
@@ -128,7 +128,7 @@
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
-<p class="keep-in-present">First make a layout you can calculate by hand. Then use it to read and write one slot before connecting the block-by-block scan. Check that closing the scan releases its pin.</p>
+<p class="keep-in-present">Calculate one record’s field offsets and slot size by hand. Use that layout to test reads and writes within one slot, then implement scanning across blocks. Check that closing the scan unpins its current block.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 

@@ -48,7 +48,7 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya asks for block B7 three times. Noor points to a free memory frame: <q>Can the next request use the copy we already have?</q> Then another caller keeps using that frame while Maya requests a different block. Saving a read has created a new question: when is the frame safe to reuse?</p>
+  <p class="lede">Maya asks for block B7 three times. Noor points to the frame holding B7: <q>Can the next request use the copy we already have?</q> Then Noor starts reading B7 while Maya requests an uncached block. Can the pool reuse B7’s frame before Noor finishes reading?</p>
 </div>
 
 <p class="keep-in-present">A buffer pool keeps selected database blocks in a fixed set of memory frames. We will trace hits, misses, pins, and dirty eviction, then connect reuse to average access cost. Lab 2 implements the replacement and pin-count rules alongside the OS page cache.</p>
@@ -214,7 +214,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 <!-- ============================================================ -->
 <h2 id="policies">LRU: evict the unpinned frame used longest ago</h2>
 
-<p class="keep-in-present">Pins establish which frames may move. Only then can recency choose among them. Trace a small access sequence before generalizing what LRU predicts.</p>
+<p class="keep-in-present">Pin counts identify which frames are available for reuse. LRU then chooses among the unpinned frames. Trace a small access sequence to see which block it replaces.</p>
 
 <p>When a requested block is absent and every frame is occupied, the pool must select an unpinned frame to reuse. Lab 2 uses least recently used (LRU) replacement.</p>
 
@@ -311,7 +311,7 @@ instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
 <!-- ============================================================ -->
 <h2 id="math">A small fraction of misses can dominate average access time</h2>
 
-<p class="keep-in-present">Now separate safe replacement from useful reuse. Imagine ten requests with one expensive miss: that single storage trip can dominate the nine memory accesses. Use the hit-rate formula to quantify the same effect.</p>
+<p class="keep-in-present">The pin and dirty-page rules protect data; the hit rate tells us how often a request avoids disk. Imagine ten requests with one expensive miss: that single disk read can dominate the nine memory accesses. Use the hit-rate formula to quantify the same effect.</p>
 
 <div class="math">
 \[ T_{\text{avg}} \;=\; h \cdot t_{\text{mem}} \;+\; (1 - h) \cdot t_{\text{disk}} \qquad (h = \text{hit rate}) \]

@@ -314,7 +314,7 @@
     if(s<3){const x=240+Math.min(s,2)*400;d.arrow('read',x,408,640,497,P.orange,4);d.box('read-result',380,515,520,72,s===0?'Read at 5 → old':s===1?'Read at 8 → new':'Read at 9 → absent',s===2?P.redLight:P.greenLight,s===2?P.red:P.green,29);}
     if(s===3){d.rect('merge-region',467,247,760,167,'none',P.orange,10,3);d.arrow('merge',850,431,850,485,P.orange,4);d.box('merge-output',585,500,535,78,'Merged output keeps DELETE @ 9',P.orangeLight,P.orange,26);label(d,'remaining',235,494,'A still holds old @ 5',P.red,25);}
     if(s===4){d.box('safe-output',340,479,600,100,'Safe output for k: no record',P.greenLight,P.green,30);}
-    foot(d,s===4?'All covered old versions are accounted for, and no active snapshot needs them.':s===3?'Dropping the tombstone now would let old @ 5 reappear.':'A current read selects the highest visible sequence, including deletion records.');
+    foot(d,s===4?'All older versions are included, and no active snapshot needs them.':s===3?'Dropping the tombstone now would let old @ 5 reappear.':'A current read selects the highest visible sequence, including deletion records.');
   });
 
   const graphNodes={ada:[180,385],ben:[390,260],cyd:[390,505],dee:[620,260],eli:[620,505],fay:[825,385]};

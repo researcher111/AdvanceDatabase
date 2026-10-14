@@ -47,7 +47,7 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Two workers can count the same word locally and still leave you without one global total. Your first task is to make equal keys meet before reduction. Implement the MapReduce phases in one process so their contracts are visible, then compare Spark word count and Ray nearest-neighbor tasks over the same 4,000-abstract corpus.</p>
+<p class="lede">Two workers may each count a word, but those partial counts must be combined to get its total across the corpus. Route every occurrence of the same word to the same partition before adding its values. Implement these MapReduce phases in one process, then explore the optional Spark word-count and Ray nearest-neighbor examples over the same 4,000-abstract corpus.</p>
 
 <div class="cite">
   Builds on: <a href="../lab-10/microrag.html">Lab 10 · micro-rag</a> (same corpus) ·
@@ -74,7 +74,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <details><summary>Check your explanation</summary><p>The first record has two occurrences after normalization; the second contributes another. Preserve all three contributions and route equal keys consistently. Separately launched workers need a compatible partition function; this graded exercise runs within one process.</p></details>
 </div>
 
-<p class="keep-in-present">Your learning loop is <strong>predict, run, explain</strong>. Make a small prediction, inspect one step of the trace or one function check, then connect the result to the mechanism. Use that explanation to choose the next experiment.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict the emitted pairs, their destination partitions, and the final word totals; run the trace or function check; then explain how each occurrence contributes to its word’s total.</p>
 
 <h2 id="try-it">Trace how keys select a partition</h2>
 
@@ -155,7 +155,7 @@ Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vecto
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · micro-mapreduce <span class="part-time">~35 min in class · graded</span></h2>
 
-<p class="keep-in-present">For each function, identify its input, output, and preserved information on the small trace. Then run its function check. Avoid converting repeated word occurrences to a set; the missing counts cannot be recovered later.</p>
+<p class="keep-in-present">For each function, follow the small example from words to pairs, grouped value lists, and totals. Check that repeated occurrences survive until their values are added, then run the function check. Converting occurrences to a set would discard duplicates and undercount repeated words.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -274,7 +274,7 @@ it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the
 <div class="exercise learning-check">
   <span class="ex-label">Explain the result without reading your code</span>
   <p>Draw map → shuffle → reduce for the two-record trace. Then explain which part Spark schedules for you and why the Ray example launches tasks before waiting. Which results should stay the same when you change partition or worker counts?</p>
-  <details><summary>Check your explanation</summary><p>Map preserves occurrences, shuffle groups matching keys, and reduce combines a complete group. Spark adds execution and data movement around that dependency plan. Independent Ray tasks can overlap when submitted before the wait. Word totals and serial/parallel neighbor results should agree even when placement or timing changes. This is practice; Part 1 remains the graded submission.</p></details>
+  <details><summary>Check your explanation</summary><p>Map preserves occurrences, shuffle groups matching keys, and reduce combines a complete group. Spark schedules the map and reduce work and transfers pairs to the workers responsible for their keys. Independent Ray tasks can overlap when submitted before the wait. Word totals and serial/parallel neighbor results should agree even when placement or timing changes. This is practice; Part 1 remains the graded submission.</p></details>
 </div>
 
 <h2 id="assignment">Assignment</h2>

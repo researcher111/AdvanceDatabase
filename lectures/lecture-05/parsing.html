@@ -48,7 +48,7 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">At the SQL prompt, Maya circles <code>FROM</code> and the quoted value <code>'from'</code>. <q>Same letters. Can I treat them the same?</q> Noor asks her to show the tokens before drawing a plan. The engine must distinguish the structure of a request from a value inside it.</p>
+  <p class="lede">At the SQL prompt, Maya circles <code>FROM</code> and the quoted value <code>'from'</code>. <q>Same letters. Can I treat them the same?</q> Noor asks her to show the tokens before drawing a plan. The engine must recognize <code>FROM</code> as a keyword and <code>'from'</code> as a string value.</p>
 </div>
 
 <p class="keep-in-present">Follow SQL through three inspectable representations: tokens, a statement description, and an executable scan tree. The supplied Lab 5 front end builds those representations. Your work is to trace them, write queries, predict their work, and compare measurements.</p>
@@ -395,7 +395,7 @@ SELECT name, gpa FROM students;  -- one field, then one comma-and-field pair</co
 <!-- ============================================================ -->
 <h2 id="planner">The lab planner constructs a plan in four steps</h2>
 
-<p class="keep-in-present">The parser has described the request without opening its result rows. The planner now needs objects that implement that description using the operators from Lab 4.</p>
+<p class="keep-in-present">The parser has recorded fields, tables, and conditions without reading result rows. The planner now connects Lab 4 operators to execute that request.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">1 · scans</span><span>a TableScan per table in the FROM list; layouts fetched from your Lab 3 catalog.</span></div>
@@ -486,8 +486,8 @@ early-filter plan: Select[join] ← Product(σ(s) × σ(m))      60 pairs examin
 
 <div class="exercise learning-check">
   <span class="ex-label">Explain it to a teammate</span>
-  <p>Adding <code>WHERE gpa &gt; 35</code> reduces 300 returned names to 60. Has the parser become a faster scan, or has TableScan skipped 240 students?</p>
-  <details><summary>Check your explanation</summary><p>Neither follows. The parser still describes the request; this scan-based plan still visits all 300 students and selection rejects some afterward. Explain source visits, comparisons, output work, and repeated timings separately.</p></details>
+  <p>Adding <code>WHERE gpa &gt; 35</code> reduces 300 returned names to 60. Does this mean TableScan skipped 240 students? Which stage tests their GPAs?</p>
+  <details><summary>Check your explanation</summary><p>No. The parser records the condition; this scan-based plan still visits all 300 students and SelectScan rejects some afterward. Explain source visits, comparisons, output work, and repeated timings separately.</p></details>
 </div>
 
 <p class="keep-in-present">Return to the prompt: characters become tokens, tokens become a query description, the planner creates scans, and execution asks those scans for rows. Each boundary has an artifact you can inspect.</p>

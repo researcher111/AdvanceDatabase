@@ -46,7 +46,7 @@
   <div class="byline">Follows Lecture 1 (Anatomy of a Database) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 3 at class start</div>
 </header>
 
-<p class="lede">A value that reads back correctly from memory is only the first checkpoint. Store its bytes in the required format, write the correct block, and reopen the file to check what persisted. These contracts become the foundation for every later microdb layer.</p>
+<p class="lede">Reading a value back from memory does not test whether it was saved correctly. Store its bytes in the required format, write them to the intended file block, then close and reopen the file to read them again. Later microdb layers use these same byte formats and block addresses.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 3 (SimpleDB's file manager) ·
@@ -309,7 +309,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
-<p class="keep-in-present">Build outward from one observable contract: exact page bytes, then block addressing, then reopen behavior. Use the matching function check after each implementation step.</p>
+<p class="keep-in-present">First check that each page method stores the required bytes. Then check that file reads and writes reach the intended block. Finally, close and reopen the file to check the saved values. Use the matching function check after each implementation step.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -488,7 +488,7 @@ neighbor.</p>
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
 
-<p class="keep-in-present">Predict which run pays for synchronization on every block. Compare the observed throughput, but keep a faster buffered return separate from a completed durability request.</p>
+<p class="keep-in-present">Predict which run requests synchronization after every block write. Compare the measured write rates and explain when each call returns: after a buffered write, or after the synchronization request completes.</p>
 
 <p>The file manager’s <code>write(…, sync=True)</code> option ends with <code>fsync</code>. Compare its throughput with <code>sync=False</code> to measure the cost of requesting synchronization to storage.</p>
 

@@ -52,7 +52,7 @@
   <p class="lede">Maya saves the byte position where cyd begins, then renames ben to benjamin in a packed page. The later bytes shift. Noor taps the saved address: <q>Does this still point to cyd?</q> They try again with reserved slots so a longer name can stay inside its own row.</p>
 </div>
 
-<p class="keep-in-present">The record layer gives bytes a repeatable shape. A <code>Layout</code> computes field offsets, a <code>RecordPage</code> interprets one pinned block, and a <code>TableScan</code> walks occupied slots. The catalog saves the rules needed to interpret those rows after restart.</p>
+<p class="keep-in-present">The record layer locates a row’s fields within a block. A <code>Layout</code> computes field offsets, a <code>RecordPage</code> interprets one pinned block, and a <code>TableScan</code> walks occupied slots. The catalog saves the rules needed to interpret those rows after restart.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6 (record management) &amp; ch. 7 (metadata)<sup class="src"><a href="#src-2" title="Database Design and Implementation: Second Edition (Google Books listing)">2</a></sup> ·
@@ -392,7 +392,7 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 <!-- ============================================================ -->
 <h2 id="catalog">Store schemas in catalog tables</h2>
 
-<p class="keep-in-present">The offsets work while the program remembers the schema. Close the program and reopen the table: where will the next scan recover those rules?</p>
+<p class="keep-in-present">The scan needs the table’s schema and field offsets to interpret its bytes. After the program restarts, where can it read that information?</p>
 
 <p>These are the <code>field_catalog</code> rows that describe the student layout. Lab 3’s provided <code>create_table</code> writes them using your record layer:</p>
 
@@ -416,7 +416,7 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Postgres</span><span><code>pg_class</code> describes tables and other relations such as indexes and views. <code>pg_attribute</code> describes their columns. The <code>\d students</code> command queries this metadata.<sup class="src"><a href="#src-11" title="PostgreSQL Documentation: 52.7. pg_attribute">11</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Everything is a row</span><span>indexes, views, functions, permissions, even the catalog's own tables: all rows in catalog tables<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 52.11. pg_class">12</a></sup>. One mechanism, everywhere.</span></div>
+  <div class="lc-row"><span class="lc-k">Catalog rows</span><span>Catalog rows describe indexes, views, functions, permissions, and even the catalog tables themselves<sup class="src"><a href="#src-12" title="PostgreSQL Documentation: 52.11. pg_class">12</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">Why it matters to DS</span><span>Database schema browsers, ORMs such as SQLAlchemy, and database-connected reporting tools obtain metadata from catalogs or metadata APIs. A pandas <code>df.info()</code> call instead describes a DataFrame already in memory.</span></div>
 </div>
 
@@ -467,7 +467,7 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 
 <ul class="recap-list">
   <li><strong>Fixed-size slots make addresses predictable.</strong> The cost is unused reserved space, and values that exceed their field capacity must be rejected.</li>
-  <li><strong>Deletion is a flag; live-row addresses stay stable.</strong> A deleted slot can be reused for another row, so indexes must be updated when rows are deleted or replaced.</li>
+  <li><strong>Deletion changes a slot’s flag; live-row addresses stay stable.</strong> A deleted slot can be reused for another row, so indexes must be updated when rows are deleted or replaced.</li>
   <li><strong>Large values can be stored separately.</strong> PostgreSQL can compress a large value or move it to TOAST storage, leaving a reference in the main row.</li>
   <li><strong>The catalog stores schemas as data.</strong> Its own layouts are defined in code so the engine can open it without first looking up those layouts.</li>
 </ul>
