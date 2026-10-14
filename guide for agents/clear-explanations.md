@@ -54,7 +54,24 @@ The fictional project rehearsal supplies a reason to care. CLEAR supplies the ex
 
 Keep the balanced-list estimate of **820** evaluations separate from the Lab 9 measured probe-4 result of **924** floored average comparisons and **0.9175** average recall. The first explains the work model; the second supports a classroom choice among measured settings.
 
-## Applications across Lectures 11 to 15 and Labs 9 to 11
+## Applications across the course
+
+The same method connects all fifteen lecture readings and slide decks, all eleven labs, the midterm review, and the discovery sessions. Preserve the distinction between optional material and required coursework. Lab 5 supplies the front end; Lab 7 is optional practice; Lab 8’s model investigation retains its existing deliverables.
+
+| Topic | Familiar connection | Small example to trace | Closing transfer question |
+| --- | --- | --- | --- |
+| Lecture 1 and Lab 1 | Workshop responsibilities and numbered storage boxes | The same student query on cold and resident blocks; exact bytes and block positions | Can a cached page replace executing a query, or a self-consistent round trip prove the file format? |
+| Lecture 2 and Lab 2 | Books on limited work desks, with active users | Repeated B7 requests; a pinned clean frame and an unpinned dirty victim | Why can safe replacement coexist with a zero-hit cyclic scan? |
+| Lecture 3 and Lab 3 | Fixed compartments and positions within them | A packed update moves an address; a 24-byte slot locates GPA at byte 92 | What stays the same when a deleted RID is reused, and what changes? |
+| Lecture 4 and Lab 4 | Nested Python generators | One result request skips rejected rows; a product rewinds its right input | What must valid filter pushdown preserve besides the result count? |
+| Lecture 5 and Lab 5 | Reading instructions before carrying them out | Characters, token kinds, QueryData, scans, and rows remain separate | Why can sixty returned names still require three hundred source visits? |
+| Lecture 6 and Lab 6 | Ordered directory signs, entries, and addresses | Separator 36 routes to a leaf RID; insert 5 into a four-key leaf | How does a duplicate key differ from a distinct key, and what must a split retain? |
+| Lecture 7 and optional Lab 7 | Saving repair information before a change | Undo restores 10 → 40 → 60, then flushes before recording completion | What if recovery declares completion before its repair becomes durable? |
+| Optional Lecture 8 and Lab 7’s provided lock table | Compatible reservations and dated views | Two deposits lose an update; a fixed schedule exposes different second reads | Why do durable writes, pins, locks, and snapshots provide different guarantees? |
+| Optional Lecture 9 | A route estimated from a sketch | Equivalent joins form 900 or 60 candidates; an index model prices 103 or 2,003 accesses | Which assumptions could change the estimated best plan? |
+| Lecture 10 and Lab 8 | One complete record versus one list of fields; practice versus reserved questions | Three toy fares under two layouts; training and held-out predictions | Which values can the query skip, and what comparison supports a model improvement? |
+
+### Later topics
 
 | Topic | Familiar connection | Small example before the general explanation | Closing transfer question |
 | --- | --- | --- | --- |

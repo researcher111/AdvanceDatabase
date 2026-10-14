@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
@@ -15,7 +16,8 @@
   <div class="toc-title">Lecture 2</div>
   <p><a href="../../slides/lecture-02.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
+
+    <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#problem">Disk provides persistence; RAM provides faster access</a></li>
     <li><a href="#try-it">Compare a sequential scan with repeated access to a hot set</a></li>
     <li><a href="#pool">Frames hold blocks; pin and unpin track their users</a></li>
@@ -23,7 +25,7 @@
     <li><a href="#dirty">Dirty pages reach disk on eviction or an explicit flush</a></li>
     <li><a href="#math">A small fraction of misses can dominate average access time</a></li>
     <li><a href="#thursday">Thursday you build it: four methods, ten tests</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -44,7 +46,12 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">In Lab 1 you measured how <code>fsync</code> changes write throughput. You also built a file manager that issues a read whenever it is asked for a block. Today we add a <strong>buffer pool</strong>: a cache managed by the database that keeps selected blocks in memory. It works alongside the OS <span class="gloss" data-gloss="os-page-cache">page cache</span>. We will study how pinning, eviction, and dirty-page tracking make that cache safe to use, then implement it in Lab 2.</p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">Maya asks for block B7 three times. Noor points to a free memory frame: <q>Can the next request use the copy we already have?</q> Then another caller keeps using that frame while Maya requests a different block. Saving a read has created a new question: when is the frame safe to reuse?</p>
+</div>
+
+<p class="keep-in-present">A buffer pool keeps selected database blocks in a fixed set of memory frames. We will trace hits, misses, pins, and dirty eviction, then connect reuse to average access cost. Lab 2 implements the replacement and pin-count rules alongside the OS page cache.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation<sup class="src"><a href="#src-1" title="Database Design and Implementation, Second Edition (Sciore, Springer 2020), table of contents">1</a></sup></em>, ch. 4 (SimpleDB's buffer manager) ·
@@ -61,7 +68,13 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 </div>
 
 <!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">The question we will trace</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>In a toy two-frame pool, A is pinned and clean; B is unpinned and dirty. A request for uncached C arrives. Which frame may be reused, and what must happen first?</p>
+  <details><summary>Check your explanation</summary><p>Only B is eligible. Write B’s modified bytes back before reusing its frame to read C. A’s age cannot override its active pin. If both frames are pinned, the lab reports that no frame is available.</p></details>
+</div>
 
 <p class="keep-in-present">We begin with Quiz 1 (files, blocks, and pages, 10 min), then use your Lab 1 measurements to motivate the buffer pool.</p>
 
@@ -149,6 +162,8 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 <!-- ============================================================ -->
 <h2 id="pool">Frames hold blocks; pin and unpin track their users</h2>
 
+<p class="keep-in-present">Picture books on a limited set of work desks. A block is the book; a frame is a desk; a pin records someone still using that book. Replacing a book is safe only after its users finish. Unlike a physical desk, a reused frame keeps the same memory address while its bytes change, which is why an old reference needs protection.</p>
+
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The pool</span><span>N fixed <strong>frames</strong>, allocated once at startup; Postgres calls the setting<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup> <code>shared_buffers</code>. Each frame holds exactly one block's page.</span></div>
   <div class="lc-row"><span class="lc-k">The lookup</span><span>"is block <em>b</em> already here?": microdb scans its handful of frames; real engines keep a <span class="gloss" data-gloss="hash-table">hash table</span> from BlockId → frame so the answer costs \(O(1)\).</span></div>
@@ -198,6 +213,8 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 
 <!-- ============================================================ -->
 <h2 id="policies">LRU: evict the unpinned frame used longest ago</h2>
+
+<p class="keep-in-present">Pins establish which frames may move. Only then can recency choose among them. Trace a small access sequence before generalizing what LRU predicts.</p>
 
 <p>When a requested block is absent and every frame is occupied, the pool must select an unpinned frame to reuse. Lab 2 uses least recently used (LRU) replacement.</p>
 
@@ -294,6 +311,8 @@ instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
 <!-- ============================================================ -->
 <h2 id="math">A small fraction of misses can dominate average access time</h2>
 
+<p class="keep-in-present">Now separate safe replacement from useful reuse. Imagine ten requests with one expensive miss: that single storage trip can dominate the nine memory accesses. Use the hit-rate formula to quantify the same effect.</p>
+
 <div class="math">
 \[ T_{\text{avg}} \;=\; h \cdot t_{\text{mem}} \;+\; (1 - h) \cdot t_{\text{disk}} \qquad (h = \text{hit rate}) \]
 <p>with <em>t</em><sub>mem</sub> = 100 ns and <em>t</em><sub>disk</sub> = 25 µs:</p>
@@ -371,7 +390,15 @@ bottom layer matches. Hover each line:</p>
 </ul>
 
 <!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
+<h2 id="recap">Return to the opening question</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>A is older than B, but A still has one pin. Can LRU evict A? If the same pool later gets a different hit rate, has its correctness rule changed?</p>
+  <details><summary>Check your explanation</summary><p>No. LRU chooses among unpinned frames. Hit rate can change with access order and reuse distance while the pin and dirty-write rules stay the same. Capacity, correctness, and performance answer different questions.</p></details>
+</div>
+
+<p class="keep-in-present">Return to B7: find the resident block, pin its frame, use the page, and unpin it. On a miss, select an eligible victim, preserve dirty data, and load the requested block.</p>
 
 <p>Three points to remember:</p>
 

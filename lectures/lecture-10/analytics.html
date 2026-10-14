@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=3">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
@@ -16,6 +17,7 @@
   <div class="toc-title">Lecture 10</div>
   <p><a href="../../slides/lecture-10.html">Visual slide deck ↗</a></p>
   <ul>
+
     <li><a href="#storage-layout">Row and column layouts</a></li>
     <li><a href="#discovery">Start with the taxi data</a></li>
     <li><a href="#plan">Today's plan</a></li>
@@ -27,7 +29,7 @@
     <li><a href="#warehouse">The same ideas in the cloud</a></li>
     <li><a href="#in-database-ml">Train a model with SQL</a></li>
     <li><a href="#thursday">Tuesday's lab</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -48,8 +50,17 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Imagine a table with one row per taxi ride and columns for pickup location, payment type, and fare. What is the average fare across all rides? To answer, we need only the fare column.</p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">Maya lays out three toy taxi rides: fares $36, $24, and $30. Noor asks for the average, then changes the request to every field of Ride 2. Maya groups the same values two ways: <q>Which arrangement keeps the values for this question together?</q></p>
+</div>
 <p>With <strong>row storage</strong>, each ride's fields are stored together. Reading fares can also bring in pickup locations and payment types. With <strong>column storage</strong>, fares are stored together, so the query can read just that column.</p>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>For average fare, do pickup location and payment type contribute? For all details of Ride 2, which values are needed? Should changing the question change the stored facts?</p>
+  <details><summary>Check your explanation</summary><p>The average needs the three fares; the complete-ride lookup needs that ride’s fields. Both layouts retain the same facts and can answer both queries. They group values differently, and real reads operate on pages or chunks.</p></details>
+</div>
 
 <h2 id="storage-layout">Same rides, two storage layouts</h2>
 
@@ -207,6 +218,8 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
 <!-- ============================================================ -->
 <h2 id="columnar">Why columns help</h2>
 
+<p class="keep-in-present">Link column storage to collecting one entry from every record into an ordered list. All fares sit together; their positions still align with pickup and payment lists. This explains projection and shared patterns, while compression, chunk metadata, and the execution engine determine the actual work.</p>
+
 <p class="keep-in-present">Reading only the fare column saves work immediately. Storing similar values together also helps the engine do three things:</p>
 
 <table>
@@ -297,6 +310,8 @@ Nearby numbers → store the first value and the changes
 <!-- ============================================================ -->
 <h2 id="worked-example">From trips to running totals</h2>
 
+<p class="keep-in-present">The storage layout changes which bytes are convenient to read. The query also changes what one result row means: group trips into monthly totals before adding a running total to each monthly row.</p>
+
 <p>A <strong>window function</strong> lets each row use other rows in its calculation while keeping a result for each row. <a href="../../labs/lab-08/duckdb.html#window-explainer">Move through a four-ride visual to see which rows contribute →</a></p>
 <p>Here, start with one row per trip. <code>GROUP BY month</code> produces one row per month. A running total then shows how much revenue we have collected by the end of each month. Its <strong>frame</strong> includes the rows from the first month through the current month: January alone, then January plus February.</p>
 <p>At each step, ask: <strong>what does one row represent now?</strong> This is the table's <em>grain</em>. The <code>WITH</code> clause names the monthly result so the next step can use it; that named result is a common table expression (CTE).</p>
@@ -359,6 +374,8 @@ December, average fare → read fares in December's partition</code></pre>
 
 <!-- ============================================================ -->
 <h2 id="in-database-ml">Train a model with SQL</h2>
+
+<p class="keep-in-present">The engine can summarize fares. Now use training rides to estimate a relationship, save that model, and apply it to separate test rides. Keep data preparation, learning, and prediction visible as different operations.</p>
 
 <p class="keep-in-present">Can trip distance help predict fare? We will use SQL to fit a line, save its slope and intercept in a table, and predict a new fare. DuckDB does the calculations. This is <strong>in-database machine learning</strong>.</p>
 <p><a href="../../slides/lecture-10.html#s=17&amp;b=1">Step through these queries in the slides →</a> The slides use the same six rides and saved model as the examples below.</p>
@@ -531,7 +548,15 @@ FROM ML.PREDICT(
 <p>The core lab runs locally on a CPU without a cloud account. Explain your measured model errors; you do not need to match the reference run’s numbers.</p>
 
 <!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
+<h2 id="recap">Return to the opening question</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>The same stored rides must support a full-ride lookup and an average fare query. Explain the grouping each favors. Then name the extra check needed before claiming a more complex fare model is better.</p>
+  <details><summary>Check your explanation</summary><p>A row keeps one ride’s fields together; a column keeps one field across rides together. Both must give the same answer. For models, compare the same error metric on the same held-out rides, with training kept separate. More complexity alone proves neither lower error nor less work.</p></details>
+</div>
+
+<p class="keep-in-present">Return to the three fares. Choose the values the query needs, preserve which ride each value belongs to, and measure the work. For a learned prediction, also show which rows trained the model and which rows tested it.</p>
 
 <ul class="recap-list">
   <li><strong>Match the layout to the query.</strong> Rows keep one record together. Columns keep one field's values together.</li>

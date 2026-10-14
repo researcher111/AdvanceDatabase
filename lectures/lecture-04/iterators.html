@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="../../labs/_shared/query-journey.css?v=1">
 <link rel="stylesheet" href="styles.css?v=5">
 </head>
@@ -16,7 +17,8 @@
   <div class="toc-title">Lecture 4</div>
   <p><a href="../../slides/lecture-04.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
+
+    <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#query-plan">How a query plan fits into the database</a></li>
     <li><a href="#pull">Materializing every intermediate result can exhaust memory</a></li>
     <li><a href="#try-it">A request at the root starts the next round of work</a></li>
@@ -25,7 +27,7 @@
     <li><a href="#product">Our first join uses a nested loop</a></li>
     <li><a href="#shapes">Equivalent plans can perform different amounts of work</a></li>
     <li><a href="#thursday">Thursday you write three classes and run the first join</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -46,7 +48,12 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">A query can pass rows between stages one at a time instead of storing each stage’s full output. Your <code>TableScan</code> already provides the operations needed to do that: advance to a row, read its fields, and eventually close the scan. Today we use the <strong>Volcano iterator model</strong> to give filters, projections, and <span class="gloss" data-gloss="cartesian-product">products</span> the same interface. Connecting these operators forms a query plan. The operators in this lab stream their results without materializing intermediate tables.</p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">Maya asks the top of a scan tree for one name. Ada comes back. She asks again, expecting the next stored row, ben. Noor watches the filter: <q>What must it do before it can return the next qualifying name?</q> The request travels down; rejected rows stay below the caller.</p>
+</div>
+
+<p class="keep-in-present">Use the same scan interface for tables, filters, projections, and products. A caller requests a row, operators ask their inputs for work, and a successful result travels back up. We will trace one request before counting how plan shape changes candidate work.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 8 (query processing)<sup class="src"><a href="#src-1" title="Database Design and Implementation, Second Edition (Penn State University Libraries catalog record with contents)">1</a></sup> ·
@@ -62,7 +69,13 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 </div>
 
 <!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">The question we will trace</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>The input begins ada:39, ben:31, cyd:37, with <code>gpa &gt; 35</code>. After returning ada, can the next successful root call simply return ben? How many more input rows must the filter examine?</p>
+  <details><summary>Check your explanation</summary><p>It skips ben and accepts cyd, examining two more input rows to return one result. One successful <code>next()</code> call is not one input-row visit or one disk read.</p></details>
+</div>
 
 <p class="keep-in-present">We begin with Quiz 3 (records and the catalog, 10 min), then build query operators on top of your table scanner.</p>
 
@@ -122,6 +135,8 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 
 <!-- ============================================================ -->
 <h2 id="pull">Materializing every intermediate result can exhaust memory</h2>
+
+<p class="keep-in-present">Link the pull model to a Python generator: asking for the next item resumes work rather than constructing the whole result in advance. Here each operator resumes by asking its child. This explains the lab’s streaming operators; a sort or another blocking operator may need more input before producing its first output.</p>
 
 <p>A straightforward staged implementation <span class="gloss" data-gloss="materialization">materializes</span> the scan’s output, then the filter’s output, then the projection. Each intermediate needs memory or temporary storage. Our first join deliberately uses a Cartesian product followed by a filter; production equality joins can avoid enumerating that product.</p>
 
@@ -304,6 +319,8 @@ while plan.next():
 <!-- ============================================================ -->
 <h2 id="operators">Select filters rows; Project exposes selected fields</h2>
 
+<p class="keep-in-present">The call path is visible. Now give each wrapper one precise job: selection decides which rows pass, while projection decides which fields the caller may read.</p>
+
 <p class="keep-in-present">Selection and projection are operations in <span class="gloss" data-gloss="relational-algebra">relational algebra</span>. Here, each class changes one part of its input’s behavior and delegates the remaining methods.</p>
 
 <h3 class="new-slide" data-kicker="Select and Project">SelectScan skips rejected rows instead of copying keepers</h3>
@@ -446,6 +463,8 @@ as text. Only the <code>F</code> wrapper requests a field lookup.</p>
 <!-- ============================================================ -->
 <h2 id="product">Our first join uses a nested loop</h2>
 
+<p class="keep-in-present">One input can supply the next row. A join needs a row from each side, so our first implementation holds one left row and rewinds the right input for each new left row.</p>
+
 <p class="keep-in-present">Our first join combines two operators: <code>ProductScan</code> enumerates every left-right pair, and <code>SelectScan</code> keeps pairs that satisfy the join condition. This is simple to trace but can perform much more work than production join algorithms.</p>
 
 <h3 class="new-slide" data-kicker="The nested loop">For each left row, scan the right input from start to finish</h3>
@@ -547,6 +566,8 @@ as text. Only the <code>F</code> wrapper requests a field lookup.</p>
 <!-- ============================================================ -->
 <h2 id="shapes">Equivalent plans can perform different amounts of work</h2>
 
+<p class="keep-in-present">The product preserves every candidate pair, including ones later rejected. Ask whether an input-only predicate can reject rows before those pairs are formed.</p>
+
 <p class="keep-in-present">These two plans return the same 20 rows. They differ in when they apply the filters, which changes how many candidate pairs the product enumerates. The rewrite is valid because each moved filter refers only to fields in its own input.</p>
 
 <h3 class="new-slide" data-kicker="Plan shape">Filtering both inputs before the product reduces candidate pairs 15×</h3>
@@ -607,7 +628,15 @@ as text. Only the <code>F</code> wrapper requests a field lookup.</p>
 </ul>
 
 <!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
+<h2 id="recap">Return to the opening question</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>Two plans return the same 20 rows, but one forms 900 pairs and the other 60. What must be true of a filter moved below the product? What do those counts leave unproved?</p>
+  <details><summary>Check your explanation</summary><p>A moved filter must use fields available from that input and preserve the query’s result, including duplicates. The counts show candidate work, not elapsed time or physical disk reads. Measure those separately and close the complete plan to release resources.</p></details>
+</div>
+
+<p class="keep-in-present">Return to one requested name. Demand moves down; qualifying rows and field access move up. The plan determines rejected candidates, and closing its root must close its descendants.</p>
 
 <p>Three points to remember:</p>
 

@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=3">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
@@ -15,15 +16,16 @@
   <div class="toc-title">Lecture 8</div>
   <p><a href="../../slides/lecture-08.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
+
+    <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#anomalies">Correct alone is not correct together</a></li>
     <li><a href="#try-it">Create a lost update, then enable locks</a></li>
     <li><a href="#locking">Two-phase locking orders conflicting operations</a></li>
     <li><a href="#levels">Isolation levels provide different guarantees</a></li>
-    <li><a href="#mvcc">Postgres keeps row versions for snapshot reads</a></li>
     <li><a href="#worked-example">Worked example</a></li>
+    <li><a href="#mvcc">Postgres keeps row versions for snapshot reads</a></li>
     <li><a href="#thursday">Prepare for the optional transaction lab</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -45,7 +47,12 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Two cashiers each add $10 to a $100 account. If both read $100 before either writes, both store $110, leaving one deposit unrecorded. Crash recovery does not prevent this: the problem is the order of concurrent operations. Today we will examine common concurrency anomalies, then compare two-phase locking with <span class="gloss" data-gloss="mvcc-intro">MVCC</span>. MVCC keeps row versions so ordinary snapshot reads can proceed without conflicting with row updates.<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: 13.1. Introduction (Concurrency Control)">1</a></sup></p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">At a shared account screen, Maya and Noor each add $10 to $100. Both read 100, both calculate 110, and both write 110. Maya points to the two completed deposits: <q>Why is the balance missing ten?</q> No crash occurred; their operations overlapped.</p>
+</div>
+
+<p class="keep-in-present">Concurrency adds an ordering problem to otherwise correct transactions. Build a lost-update schedule, find the conflicting lock request, then compare what row versions different snapshot boundaries expose. Locks, MVCC, and crash recovery solve distinct problems.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 5 ·
@@ -63,7 +70,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">The question we will trace</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>If the deposits run one after the other, what is the final balance? Does making each 110 write durable repair the concurrent schedule?</p>
+  <details><summary>Check your explanation</summary><p>Serial execution gives 120. Durability can preserve the incorrect final 110; it does not supply isolation. The read, compute, and write order must prevent a lost update.</p></details>
+</div>
 
 <p class="keep-in-present">Optional exploration: build a bad interleaving, then explain how locks or snapshots change it.</p>
 
@@ -128,6 +141,8 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="locking">Two-phase locking orders conflicting operations</h2>
 
+<p class="keep-in-present">A reservation prevents two users from making incompatible use of one item. Shared locks permit compatible readers; an exclusive lock conflicts with another holder. A buffer pin merely keeps bytes in a frame, while a transaction lock constrains conflicting access. Keep those two kinds of protection separate.</p>
+
 <p class="keep-in-present">A lock table prevents transactions from taking incompatible locks on the same item. Two-phase locking adds a rule about when those locks may be released. The provided Lab 7 lock table applies this approach to blocks.</p>
 
 <pre class="equation"><code>S lock (shared / read):     many holders welcome, readers coexist
@@ -160,6 +175,8 @@ conflict table:        S      X
 <!-- ============================================================ -->
 <h2 id="levels">Isolation levels provide different guarantees</h2>
 
+<p class="keep-in-present">A mechanism’s name is not its result contract. Ask which outcomes an isolation level permits before assuming every consistent-looking snapshot prevents every anomaly.</p>
+
 <div class="viz" id="viz-iso">
   <div class="viz-title">four levels, three anomalies · compare the guarantees</div>
   <p class="viz-description">Each card shows one concurrency anomaly. Select an isolation level to see which of the listed anomalies the SQL standard permits and which it forbids. The cost summary describes common implementation tradeoffs; details vary by engine.</p>
@@ -174,7 +191,19 @@ conflict table:        S      X
 <p class="keep-in-present">Choose a level with <code>SET TRANSACTION ISOLATION LEVEL SERIALIZABLE</code>. The SQL-92 definitions classify levels using a limited set of anomalies. Snapshot isolation prevents the dirty and non-repeatable reads forbidden by REPEATABLE READ, but can still allow write skew. PostgreSQL uses snapshot isolation for REPEATABLE READ; its SERIALIZABLE level adds checks for outcomes that are not serializable.<sup class="src"><a href="#src-8" title="PostgreSQL Documentation: SET TRANSACTION">8</a></sup><sup class="src"><a href="#src-2" title="A Critique of ANSI SQL Isolation Levels (Berenson et al., SIGMOD 1995)">2</a></sup></p>
 
 <!-- ============================================================ -->
+<h2 id="worked-example">Predict what two SELECTs can see</h2>
+
+<p>Use one fixed schedule to compare the snapshot boundaries. This example is about ordinary PostgreSQL SELECT statements, with no writes by the reader. A transaction’s start, its snapshot, and another transaction’s commit are separate events. <a href="https://www.postgresql.org/docs/current/transaction-iso.html">PostgreSQL documents these isolation rules</a>.</p>
+<div data-teaching-trace="snapshots">
+  <p><strong>Worked result:</strong> R first reads 100. W commits 120. R’s second SELECT reads 120 at Read Committed and 100 at Repeatable Read. A new transaction can see 120 at either level.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Connection to Lab 7:</strong> its provided <code>LockTable</code> holds locks until completion and raises <code>LockAbortError</code> on conflict. It does not implement snapshots or waiting. A buffer pin prevents eviction; a transaction lock controls conflicting access. One does not replace the other.</p>
+
+<!-- ============================================================ -->
 <h2 id="mvcc">Postgres keeps row versions for snapshot reads</h2>
+
+<p class="keep-in-present">Waiting for locks is one way to coordinate access. Another is to keep older versions: a snapshot acts like a dated view of the data. The actual visibility rules, transaction status, and snapshot membership determine what a reader sees.</p>
 
 <table>
   <thead><tr><th>Piece</th><th>Mechanism</th><th>Connection to earlier labs</th></tr></thead>
@@ -214,16 +243,6 @@ conflict table:        S      X
 </div>
 
 <!-- ============================================================ -->
-<h2 id="worked-example">Predict what two SELECTs can see</h2>
-
-<p>Use one fixed schedule to compare the snapshot boundaries. This example is about ordinary PostgreSQL SELECT statements, with no writes by the reader. A transaction’s start, its snapshot, and another transaction’s commit are separate events. <a href="https://www.postgresql.org/docs/current/transaction-iso.html">PostgreSQL documents these isolation rules</a>.</p>
-<div data-teaching-trace="snapshots">
-  <p><strong>Worked result:</strong> R first reads 100. W commits 120. R’s second SELECT reads 120 at Read Committed and 100 at Repeatable Read. A new transaction can see 120 at either level.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Connection to Lab 7:</strong> its provided <code>LockTable</code> holds locks until completion and raises <code>LockAbortError</code> on conflict. It does not implement snapshots or waiting. A buffer pin prevents eviction; a transaction lock controls conflicting access. One does not replace the other.</p>
-
-<!-- ============================================================ -->
 <h2 id="thursday">Prepare for the optional transaction lab</h2>
 
 <p>Lab 7 completes microdb with WAL, commit, rollback, recovery, and the provided lock table controlling reads and writes at block granularity. Then you kill the process partway through a transaction and confirm that recovery brings the database back intact.</p>
@@ -236,7 +255,15 @@ conflict table:        S      X
 </ul>
 
 <!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
+<h2 id="recap">Return to the opening question</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>A reader first sees 100, another transaction commits 120, and the reader issues a second ordinary SELECT. Can “the data is durable” determine what it reads?</p>
+  <details><summary>Check your explanation</summary><p>No. PostgreSQL Read Committed takes a new statement snapshot and can see 120; Repeatable Read keeps its transaction snapshot and sees 100. A new transaction can see 120. Snapshot isolation still needs a separate discussion of write skew.</p></details>
+</div>
+
+<p class="keep-in-present">Return to the two deposits. Explain the schedule, the first incompatible lock request, and the snapshot boundary separately. Durable writes, protected frames, and isolated transactions are different guarantees.</p>
 
 <ul class="recap-list">
   <li><strong>Correct alone ≠ correct together.</strong> Recognizing these anomalies helps you interpret an engine’s isolation guarantees.</li>

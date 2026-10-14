@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=4">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=2">
 </head>
@@ -15,6 +16,7 @@
   <div class="toc-title">Lecture 6</div>
   <p><a href="../../slides/lecture-06.html">Visual slide deck ↗</a></p>
   <ul>
+
     <li><a href="#plan">What we will learn</a></li>
     <li><a href="#problem">Why add an index?</a></li>
     <li><a href="#choices">Compare four organizations</a></li>
@@ -25,7 +27,7 @@
     <li><a href="#fanout">Why large trees stay short</a></li>
     <li><a href="#costs">When an index helps</a></li>
     <li><a href="#thursday">Connect the ideas to Lab 6</a></li>
-    <li><a href="#recap">Recap and next time</a></li>
+    <li><a href="#recap">Explain the lookup and preserve its contract</a></li>
     <li><a href="#faq">Common questions</a></li>
     <li><a href="#sources">Sources and further reading</a></li>
   </ul>
@@ -47,7 +49,12 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">In Lecture 5, our engine tested a condition by reading rows one at a time. Now imagine asking for one student in a table with 100,000 rows. An <strong>index</strong> gives the engine another way to find that row: look up the value, get its address, and go to the row. A <strong>B+ tree</strong> keeps these lookup entries in order and makes room as new entries arrive.</p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">Maya follows GPA 36 to the root’s separator and stops. <q>Have we found eli?</q> Noor points to the right leaf, then to RID (0, 4). The first 36 gave directions; the second supplies an address. They still need the heap row before they can answer the query.</p>
+</div>
+
+<p class="keep-in-present">An index gives a query another route to rows already stored in a heap. We will compare key organizations, follow equality and range lookups, then preserve those routes while inserting and splitting. Lab 6 keeps tree nodes in memory and fetches rows through returned RIDs.</p>
 
 <div class="cite">Optional reading: Sciore, <a href="https://link.springer.com/book/10.1007/978-3-030-33836-7"><em>Database Design and Implementation</em>, chapter 12</a>. Read if curious; not required. The <a href="../../labs/lab-06/btree.html">Lab 6 page</a> explains what you will implement.</div>
 <p class="glossary-hint">New terms are explained in the text. Hover or tap a dotted-underlined term to see its definition again.</p>
@@ -57,6 +64,12 @@
 </div>
 
 <h2 id="plan">What we will learn</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>What does RID (0, 4) identify? If two students have the same GPA, should one searchable leaf key lead to one address or to both?</p>
+  <details><summary>Check your explanation</summary><p>The RID names block 0, slot 4. A search key can repeat across rows, so its leaf entry holds a list of all matching RIDs. Finding a separator alone does not return a row.</p></details>
+</div>
 <p><strong>Quiz 5</strong> comes first: parsing and planning, 10 minutes. Then we will answer three questions:</p>
 <ol>
   <li>How does an index lead us to a row?</li>
@@ -106,6 +119,8 @@
 <p><strong>Find 3 through 9.</strong> All four now contain seven keys, and the answer is <code>3, 5, 6, 7, 9</code>. The heap tests every row. The toy hash index checks every bucket because its bucket numbers do not preserve key order. The sorted array finds the lower bound and walks forward. The tree finds the starting leaf and follows its leaf links until it reaches 11. This combination—ordered access and room to grow—is what we want to understand.</p>
 
 <h2 id="anatomy">Read a small B+ tree</h2>
+
+<p class="keep-in-present">An ordered directory separates signs that give directions from entries that give addresses. Internal separators are the signs; leaf keys and RID lists are the entries; the heap contains the rows at those addresses. The actual inequalities and leaf links below define routing and range behavior.</p>
 <p>A tree is made of <strong>nodes</strong>, the boxes below. The <strong>root</strong> is the starting node at the top. A node can point to other nodes, called its <strong>children</strong>. A <strong>leaf</strong> has no children and stores the actual lookup entries.</p>
 <figure class="bt-reading" data-btree-scene="b-tree">
   <img class="bt-reading-static" src="diagrams/b-tree.svg" alt="Root separator 36 routes keys below 36 left and keys at least 36 right. Leaves contain 28, 31, 34 and 36, 37, 39. Key 31 has two RIDs; the leaves link in key order." loading="lazy" width="1280" height="720">
@@ -307,6 +322,8 @@
 <p>A short tree reduces search work. The number of matches, their locations in the heap, and the cache still affect the cost of fetching the answers.</p>
 
 <h2 id="costs">When does an index help?</h2>
+
+<p class="keep-in-present">The small tree now returns the correct addresses. Keep that result contract and scale up the workload: count node visits and heap access before interpreting the benchmark’s elapsed time.</p>
 <p>The first question is <strong>how many rows match?</strong> An index can save a great deal of work when we need just a few rows. PostgreSQL's B-tree indexes support both equality and range searches.<sup class="src"><a href="#src-1">1</a></sup></p>
 <p>In Lab 6, a complete scan for <code>uid = 77777</code> examines 100,000 rows across 294 heap blocks. The reference index follows 11 in-memory tree nodes and returns one RID. The matching row occupies one heap block. The benchmark times index construction separately from the lookup.</p>
 
@@ -366,7 +383,15 @@
 <p>Check the result addresses as well as the shape: the repaired range returns <code>[(0, 5), (0, 4), (0, 2)]</code>. After an insertion, verify that keys remain sorted, routing reaches the right children, each internal node has one more child than separator, every key retains its RID list, the leaf chain is complete, and all leaves have equal depth. Check occupancy separately.</p>
 <p>For Thursday, October 1, <a href="../../labs/lab-06/btree.html">get the eight Lab 6 starter files</a> and run <code>python3 test_btree.py</code>. A fresh starter reports <strong>0/9 passing</strong> because the four methods are unfinished. You can test one method at a time with <code>--unit</code>. Bring a drawing of what happens when you insert 5 into <code>[1, 2, 3, 4]</code>.</p>
 
-<h2 id="recap">Explain one complete operation</h2>
+<h2 id="recap">Explain the lookup and preserve its contract</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>A full leaf has four distinct keys. A new row arrives with a key already in that leaf. Must the tree split immediately? What must every later split preserve?</p>
+  <details><summary>Check your explanation</summary><p>In this lab’s model, append the new RID to that key’s list; it does not add a distinct-key slot. A split must preserve every actual key and complete RID list, sorted leaves, routing boundaries, leaf links, and equal leaf depth.</p></details>
+</div>
+
+<p class="keep-in-present">Return to GPA 36. Route through separators, find the leaf entry, obtain every matching RID, then fetch the heap rows. Insertion changes the structure while preserving that lookup contract.</p>
 <p>Start with <code>[1, 2, 3, 4]</code>, insert 5, and then search for 4. Narrate the changes before advancing: overflow, split, link, copy the separator, route right, return the address, fetch the row. If you can explain why key 3 remains in its leaf and why finding 4 does not yet fetch its row, the two halves of the lecture fit together.</p>
 <figure class="bt-reading" data-btree-scene="exit-trace">
   <img class="bt-reading-static" src="diagrams/exit-trace.svg" alt="After inserting 5, root [3] routes to leaves [1, 2] and [3, 4, 5]. Searching for 4 returns RID d, which the heap uses to fetch the row." loading="lazy" width="1280" height="720">

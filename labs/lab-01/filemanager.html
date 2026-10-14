@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
@@ -14,6 +15,8 @@
 <aside class="toc">
   <div class="toc-title">Lab 1 · microdb 1</div>
   <ul>
+
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Inspecting a record’s bytes</a></li>
     <li><a href="#big-idea">Locating fixed-size blocks</a></li>
     <li><a href="#file-vs-page">Memory and persistent storage</a></li>
@@ -21,6 +24,7 @@
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -42,7 +46,7 @@
   <div class="byline">Follows Lecture 1 (Anatomy of a Database) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 3 at class start</div>
 </header>
 
-<p class="lede">When <code>df.to_csv(...)</code> returns, the OS may still hold buffered writes that have not reached durable storage. This lab builds a file manager that reads and writes fixed-size blocks and exposes an explicit sync option. Later layers add records, caching, and recovery on top of that interface.</p>
+<p class="lede">A value that reads back correctly from memory is only the first checkpoint. Store its bytes in the required format, write the correct block, and reopen the file to check what persisted. These contracts become the foundation for every later microdb layer.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 3 (SimpleDB's file manager) ·
@@ -57,7 +61,19 @@
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>With 4096-byte blocks, where does block 2 begin? If the string <code>é</code> occupies two UTF-8 bytes, should its stored length be one or two?</p>
+  <details><summary>Check your explanation</summary><p>Block 2 begins at byte 8192. The string length prefix records two bytes, not one character. Reading and writing must follow the published byte format, including little-endian integers.</p></details>
+</div>
+
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+
 <h2 id="try-it">Inspecting a record’s bytes</h2>
+
+<p class="keep-in-present">Predict the four bytes for integer 1 before choosing the preset. Then store a multibyte string and inspect both its length prefix and content bytes.</p>
 
 <p>The widget shows a 64-byte <span class="gloss" data-gloss="page-mem">page</span> so each byte is visible. The default block size in your code is 4096 bytes. Use the presets to store the lecture’s example row (<code>id=1</code>, <code>name="ada"</code>, <code>gpa=39</code>, representing a GPA of 3.9), then try your own values and read them back.</p>
 
@@ -101,6 +117,8 @@
 
 <!-- ============================================================ -->
 <h2 id="big-idea">Locating fixed-size blocks</h2>
+
+<p class="keep-in-present">A file is like a numbered row of equally sized storage boxes: the number determines the starting position. A <code>BlockId</code> names the file and box; a <code>Page</code> is its working byte copy in memory. This comparison explains addressing, while <code>write</code> and <code>fsync</code> determine persistence.</p>
 
 <p>The file manager reads and writes fixed-size blocks. In microdb, the default block size is 4 KB. Fixed sizes make blocks easy to locate: block <code>k</code> starts at byte <code>k * block_size</code>. They also allow the next lab’s buffer pool to hold blocks in equally sized memory frames. Reading a whole block can make nearby data available for later requests, although the transfer still has a cost.</p>
 
@@ -291,6 +309,8 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
+<p class="keep-in-present">Build outward from one observable contract: exact page bytes, then block addressing, then reopen behavior. Use the matching function check after each implementation step.</p>
+
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
 <p>Download the three starter files using the buttons below the page widget. Put them in <code>microdb-lab1/</code> and implement the methods in the order below. Run the tests after each step to check the behavior you have added.</p>
@@ -468,6 +488,8 @@ neighbor.</p>
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
 
+<p class="keep-in-present">Predict which run pays for synchronization on every block. Compare the observed throughput, but keep a faster buffered return separate from a completed durability request.</p>
+
 <p>The file manager’s <code>write(…, sync=True)</code> option ends with <code>fsync</code>. Compare its throughput with <code>sync=False</code> to measure the cost of requesting synchronization to storage.</p>
 
 <p>Run it and note all three numbers; you will want them in class:</p>
@@ -507,6 +529,16 @@ ratio (buffered / durable):           15.1x</code></pre>
 </table>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the mechanism without reading your code</span>
+  <p>Your reader and writer both use the wrong byte order, but their round-trip test passes. Has the file-format contract passed? What extra observation would reveal the problem?</p>
+  <details><summary>Check your explanation</summary><p>No. Both mistakes can agree with each other. Compare the actual stored bytes with the required little-endian format, then check block position and reopen behavior. Timing a write tests a different property from interpreting its bytes correctly.</p></details>
+</div>
+
+<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present"><strong>Submit</strong> <code>file_manager.py</code> <strong>on Gradescope</strong> (link on the

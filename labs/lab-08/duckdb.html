@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=7">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 <link rel="stylesheet" href="../_shared/paragraph-speech.css?v=3">
@@ -15,6 +16,8 @@
 <aside class="toc">
   <div class="toc-title">Lab 8 · analytics</div>
   <ul>
+
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#setup">Set up and load the data</a></li>
     <li><a href="#the-data">Understand the rides table</a></li>
     <li><a href="#going-further">Fit a model with SQL</a></li>
@@ -22,6 +25,7 @@
     <li><a href="#pytorch">Train, predict, and investigate</a></li>
     <li><a href="#investigation">Optional · Explore another question</a></li>
     <li><a href="#model-challenge">Problem 2 · Improve predictions for 5+ miles</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">What to submit · 4 files</a></li>
     <li><a href="#reference">SQL and storage reference</a></li>
     <li><a href="#try-it">Try SQL in the browser</a></li>
@@ -62,7 +66,7 @@
   <p><a href="#pytorch"><strong>DuckDB + PyTorch →</strong></a> Train a neural network, then call it from a SQL query.</p>
 </nav>
 
-<p class="lede">Can trip distance predict a taxi fare? Use 60,000 real NYC taxi trips to compare a straight-line model fitted in SQL with a neural network trained by PyTorch. DuckDB prepares the rows, calls the trained network from SQL, and helps you find which trips have the largest errors. Your job is to run the pipeline, investigate a pattern, and explain what the evidence supports.</p>
+<p class="lede">Can a curve predict taxi fares better than a straight line? Run the two models on the same reserved rides, inspect an error pattern, and explain your comparison. DuckDB prepares and queries the data; PyTorch trains the neural network. The measured evidence, rather than model complexity, supports your conclusion.</p>
 
 <div class="callout note" id="database-ml-intro">
   <span class="label">SQL and machine learning in one Python program</span>
@@ -86,6 +90,16 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
   <div id="glossary-content" class="glossary-content"></div>
 </div>
+
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>What does one rides row represent, which field is the input to the fare models, and which field is the target? Why must November and December remain out of training for the supplied comparison?</p>
+  <details><summary>Check your explanation</summary><p>One row is one sampled trip; distance is the input and fare is the target. Reserving November and December allows the supplied experiment to check predictions on rides the model did not train on. Evaluate both models on the same rides with the same metric.</p></details>
+</div>
+
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
 
 <h2 id="setup">Set up the local lab <span class="part-time">~10 min</span></h2>
 <p>Use Python 3.11 or later and clone the complete repository so the bundled taxi data is included. Install the packages before class if possible. Everything runs locally on your CPU; no cloud account or database server is needed.</p>
@@ -117,6 +131,8 @@ python gen_data.py</code></pre>
 
 <h2 id="the-data">Understand the rides table <span class="part-time">~5 min</span></h2>
 
+<p class="keep-in-present">Think of learning from a practice sheet and checking on separate questions. Training rides supply examples for fitting; reserved rides test the saved model. The analogy explains the split, while the date filter, preprocessing, and common error metric make the actual comparison inspectable.</p>
+
 <p>This lab uses a prepared sample of 60,000 NYC yellow-taxi trips from 2024: 5,000 from each month. Everyone uses the same saved sample.</p>
 
 <p class="keep-in-present">The <code>rides</code> table has one row per trip:</p>
@@ -137,6 +153,8 @@ python gen_data.py</code></pre>
 
 <!-- ============================================================ -->
 <h2 id="going-further">Fit a straight-line model with SQL <span class="part-time">~10 min</span></h2>
+
+<p class="keep-in-present">Predict what one output row represents at each stage: a training ride, a saved coefficient pair, or a test ride with a prediction. Match that stage to the microdb operator before revealing the plan explanation.</p>
 
 <p class="keep-in-present"><strong>Train and apply a model in SQL.</strong> Run Lecture 10’s
 <a href="../../lectures/lecture-10/analytics.html#in-database-ml">in-database machine learning example</a>
@@ -298,6 +316,8 @@ are called <strong>query execution plans</strong>.</p>
 </div>
 
 <h2 id="pytorch">Train, predict, and investigate <span class="part-time">~45 min</span></h2>
+
+<p class="keep-in-present">Before running the models, predict one distance band where a straight line may struggle and one reason a neural network might still fail there. Keep the same test rides and error definition when checking the result.</p>
 
 <p><strong>Our question:</strong> does a model that can learn a curve predict fares better than a straight line? Use the same real taxi sample and the same input, distance, for both models. Keep November and December rides out of training, then compare predictions with their recorded fares.</p>
 <p>DuckDB selects the data. <strong>PyTorch trains the neural network.</strong> Then a SQL function calls that trained network, and DuckDB groups its errors. Everything runs in one local Python process on your CPU. This is the main lab exercise. Keep the training and test rides separate throughout the investigation.</p>
@@ -608,6 +628,16 @@ python explore_predictions.py --query five_plus.sql --predictions data/pytorch-t
 <p>Choose one of your trials, restore its code and settings, and rerun it if needed. Submit that script, its chart, and your completed <code>model_challenge.txt</code>. If neither trial meets the goal, submit your best attempt and explain what you tried. Do not remove difficult rides or change the scoring to create a win.</p>
 <p>Because you use the November–December scores to choose changes, those rides are now a <strong>challenge benchmark</strong>. An improvement here is useful evidence about this sample. You would still need new, untouched rides to assess how well the model predicts future trips.</p>
 
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the mechanism without reading your code</span>
+  <p>A changed model improves error on all reserved rides but makes the five-mile-and-longer group worse. Has it solved the model challenge? Which evidence should accompany your conclusion?</p>
+  <details><summary>Check your explanation</summary><p>The challenge asks about the five-mile-and-longer group, so inspect that group on the same reserved rides and metric. Keep the script, command, trial results, and chart consistent, and explain both improvement and remaining errors. Follow the existing Problem 1 and Problem 2 submission instructions below.</p></details>
+</div>
+
+<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+
 <h2 id="assignment">What to submit <span class="part-time">4 files · due Tue Oct 20</span></h2>
 <p class="keep-in-present"><strong>Submit Problems 1 and 2 together to the Lab 8 Gradescope assignment by Tuesday October 20 at class start.</strong> Upload these four files directly, using the exact filenames below. Do not upload a folder or ZIP.</p>
 <h3>Problem 1 · Operator matching</h3>
@@ -852,6 +882,8 @@ LIMIT 5;</code></pre>
 <!-- ============================================================ -->
 <h2 id="worked-example">Follow the intermediate rows in Q6</h2>
 
+<p class="keep-in-present">Predict monthly row count and totals before adding the window. The window keeps the monthly rows; its running frame adds prior monthly values without returning the original trip rows.</p>
+
 <p>Use four toy trips to separate grouped totals from a running window. The example names the grouped result <code>monthly</code>, which makes it clear what one row represents at each stage.</p>
 <div data-teaching-trace="analytics">
   <p><strong>Worked result:</strong> Monthly rows are <code>(1,20)</code> and <code>(2,30)</code>. Adding the running window yields <code>(1,20,20)</code> and <code>(2,30,50)</code>.</p>
@@ -918,6 +950,8 @@ con.execute("""
 
 <!-- ============================================================ -->
 <h2 id="measure">Compare file formats <span class="part-time">optional</span></h2>
+
+<p class="keep-in-present">For the optional storage experiment, predict which columns and files the query needs. Read the plan and timing together; the reference machine’s ratio is an example, not a required target.</p>
 
 <p>Example run on an Apple-silicon laptop. Timings and plan formatting vary by machine, cache state, and DuckDB version:</p>
 

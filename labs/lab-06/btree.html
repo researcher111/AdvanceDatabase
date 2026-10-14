@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=1">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=2">
 </head>
@@ -14,13 +15,16 @@
 <aside class="toc">
   <div class="toc-title">Lab 6 · microdb 6</div>
   <ul>
+
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Split by hand</a></li>
     <li><a href="#big-idea">Values → RIDs</a></li>
-    <li><a href="#the-api">Implementation requirements</a></li>
     <li><a href="#worked-example">Worked example</a></li>
+    <li><a href="#the-api">Implementation requirements</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -42,7 +46,7 @@
   <div class="byline">Follows Lecture 6 (B+ Trees from First Principles) · in class: 75 min · aim to finish Build + Verify · due Thu Oct 8 at class start</div>
 </header>
 
-<p class="lede">Microdb currently finds a row such as <code>uid = 77777</code> by scanning the table. In this lab, you will build a B+ tree that maps field values to <span class="gloss" data-gloss="rid-stability">record IDs</span> in the heap file. Implement search, insertion, node splitting, and range lookup. The provided <code>IndexSelectScan</code> uses the resulting IDs to retrieve matching rows. The measurement compares a scan of 100,000 rows with an index lookup that visits 11 tree nodes in the reference run.</p>
+<p class="lede">Your heap already contains the rows. Build a separate ordered structure that finds their RIDs, then use those addresses to fetch them. Trace equality, splitting, and inclusive ranges while preserving duplicate-key RID lists. Compare index work with a full scan without confusing in-memory nodes with disk reads.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 12 ·
@@ -57,6 +61,16 @@
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>The root separator is 36. Which child receives equality with 36? If key 31 has two RIDs, can a range return more rows than distinct matching keys?</p>
+  <details><summary>Check your explanation</summary><p>Equality goes right in the supplied routing convention. A key’s complete RID list contributes every matching row, so matching-key count and result-row count can differ. Internal separators route; leaves hold the RID lists.</p></details>
+</div>
+
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+
 <h2 id="try-it">Leaves copy the middle key up; internal nodes move it</h2>
 
 <p>Use the widget to practice splitting an overfull node before implementing <code>_split</code>. For each example, identify the key sent to the parent and the keys left in each child.</p>
@@ -91,9 +105,23 @@
 <!-- ============================================================ -->
 <h2 id="big-idea">The tree stores no rows, only RIDs into your heap</h2>
 
+<p class="keep-in-present">Use an ordered directory: internal signs direct the search, leaf entries list addresses, and the heap holds the rows. Follow the address after the lookup instead of treating the index key as the full record. Its leaf chain makes adjacent directory entries available to a range scan.</p>
+
 <p>This index stores keys and record IDs rather than complete rows. Each record ID identifies a block and slot in the heap file. The reference <code>TableScan.move_to_rid()</code> positions the scan at that address. Index entries must be updated when rows are inserted, deleted, or moved so they continue to identify the intended rows.</p>
 
 <p class="keep-in-present">The index provides a sorted lookup structure for the same rows stored in the heap file.</p>
+
+<!-- ============================================================ -->
+<h2 id="worked-example">Trace the supplied helpers before writing the methods</h2>
+
+<p class="keep-in-present">Before each step, predict the child, leaf key, or returned RID list. Distinguish an exact supplied helper from teaching pseudocode, then use the matching function-level check.</p>
+
+<p>Step through the lookup with its tree, then choose <code>child_index_for</code> and <code>_descend</code> to trace the supplied Python helpers. The split and range cases use teaching pseudocode; each highlighted operation has a matching tree state. Positions inside a node are zero-based. A leaf stores one RID list per distinct key; an internal node stores one more child than separator.</p>
+<div data-teaching-trace="btree-search btree-child-index btree-descend btree-split btree-range">
+  <p><strong>Worked result:</strong> <code>search(36)</code> returns <code>[(0,4)]</code>. <code>search(35)</code> returns <code>[]</code>. <code>range(31,37)</code> returns five RIDs because key 31 has two rows.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Implementation checkpoints:</strong> <code>keys[i]</code> and <code>rids[i]</code> must describe the same leaf entry. In an internal split, <code>keys[:mid]</code> pairs with <code>children[:mid+1]</code>. Preserve the old leaf successor before assigning <code>node.next</code>. A missing key returns an empty list, not an exception.</p>
 
 <!-- ============================================================ -->
 <h2 id="the-api">Methods to implement</h2>
@@ -109,17 +137,9 @@
 </div>
 
 <!-- ============================================================ -->
-<h2 id="worked-example">Trace the supplied helpers before writing the methods</h2>
-
-<p>Step through the lookup with its tree, then choose <code>child_index_for</code> and <code>_descend</code> to trace the supplied Python helpers. The split and range cases use teaching pseudocode; each highlighted operation has a matching tree state. Positions inside a node are zero-based. A leaf stores one RID list per distinct key; an internal node stores one more child than separator.</p>
-<div data-teaching-trace="btree-search btree-child-index btree-descend btree-split btree-range">
-  <p><strong>Worked result:</strong> <code>search(36)</code> returns <code>[(0,4)]</code>. <code>search(35)</code> returns <code>[]</code>. <code>range(31,37)</code> returns five RIDs because key 31 has two rows.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Implementation checkpoints:</strong> <code>keys[i]</code> and <code>rids[i]</code> must describe the same leaf entry. In an internal split, <code>keys[:mid]</code> pairs with <code>children[:mid+1]</code>. Preserve the old leaf successor before assigning <code>node.next</code>. A missing key returns an empty list, not an exception.</p>
-
-<!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
+
+<p class="keep-in-present">Draw one split before coding it. Keep each key paired with its complete RID list, repair the leaf link, then ask whether the parent also overflows.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -177,6 +197,8 @@
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
+<p class="keep-in-present">Predict which operations the lookup timer includes. Count tree-node visits and heap-row access separately, and keep construction time separate from querying the completed index.</p>
+
 <p>The output below shows the shape of a completed run. For the supplied 100,000 distinct keys, the scan visits 294 blocks and the reference tree has height 11. Values marked <code>&lt;measured&gt;</code> come from your machine. The index timer includes both tree descent and heap lookup; index construction is timed separately.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_index.py</span>
@@ -218,6 +240,16 @@ an estimated height under an explicit occupancy assumption. <code>ORDER = 4</cod
 <p>Indexes also add storage and write work. An insert usually needs a new index entry, and updates or deletes may change existing entries. For some bulk loads, building an index after loading the data is cheaper than maintaining it row by row. Lab 9 explores vector indexes, which address a related problem: finding nearby vectors without comparing the query with every stored vector.</p>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the mechanism without reading your code</span>
+  <p>Insert a second RID for an existing key in a full leaf. Does this add another distinct-key slot? During a later split, what would go wrong if only one RID moved with that key?</p>
+  <details><summary>Check your explanation</summary><p>It extends the existing RID list in this lab’s model. Moving only one RID would lose a matching row, even if routing still looked balanced. Preserve whole lists, sorted keys, leaf links, and correct separators; search returns a copy of the list.</p></details>
+</div>
+
+<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present"><strong>Submit <code>btree.py</code> to Gradescope, per the course submission

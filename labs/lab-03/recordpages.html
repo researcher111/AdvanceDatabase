@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
@@ -13,12 +14,15 @@
 <aside class="toc">
   <div class="toc-title">Lab 3 · microdb 3</div>
   <ul>
+
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Scanning a table one block at a time</a></li>
     <li><a href="#big-idea">Record layout and slot addresses</a></li>
     <li><a href="#the-api">Classes and methods to implement</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -40,7 +44,7 @@
   <div class="byline">Follows Lecture 3 (Record Layout &amp; the Catalog) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 17 at class start</div>
 </header>
 
-<p class="lede">The Lab 2 buffer pool loads blocks into memory but does not know where records or fields begin. You will define those positions from a schema, store records in fixed-size slots, and implement <code>TableScan</code> to move through a table’s <span class="gloss" data-gloss="heap-file">heap file</span>. The provided catalog will use your code to store and retrieve schema information.</p>
+<p class="lede">A cached block is still just bytes. Give each record a slot, locate its fields from a schema, and make the scan skip empty slots while moving its pin across blocks. The provided catalog then uses those same operations to save the table’s interpretation rules.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6–7 ·
@@ -55,7 +59,19 @@
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>Use a toy 24-byte slot with GPA at offset 20. Where is GPA in slot 3? If slot 1 is deleted, must the later occupied slots shift left?</p>
+  <details><summary>Check your explanation</summary><p>GPA begins at byte 92. Fixed-size slots remain in place; deletion changes the slot’s status flag. Compute offsets from the layout rather than from the number of earlier occupied rows.</p></details>
+</div>
+
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+
 <h2 id="try-it">Scanning a table one block at a time</h2>
+
+<p class="keep-in-present">Before advancing the scan, predict the next occupied slot and which block remains pinned. Explain the unpin/pin transition at a block boundary.</p>
 
 <p>The example below shows a scan of a table with three blocks and five slots per block. <code>TableScan.next()</code> visits the occupied slots while keeping <strong>one block pinned at a time</strong>. Step through the scan and watch the pin move when the scan reaches the next block.</p>
 
@@ -90,6 +106,8 @@
 <!-- ============================================================ -->
 <h2 id="big-idea">Record layout and slot addresses</h2>
 
+<p class="keep-in-present">Think of a fixed compartment for each record. Slot number chooses the compartment; the layout locates fields inside it; the flag says whether it is occupied. Deleting a row frees its compartment without moving neighboring rows or erasing all its old bytes.</p>
+
 <p class="keep-in-present">Each record occupies a fixed-size slot: a <strong>four-byte status flag</strong> followed by the fields in schema order, <code>[flag][fields]</code>. Slot <code>k</code> starts at byte <code>k * slot_size</code>. Deleting a row sets its <span class="gloss" data-gloss="tombstone">status flag to EMPTY</span> so a later insert can reuse the slot. The other rows stay in place.</p>
 
 <!-- ============================================================ -->
@@ -109,6 +127,8 @@
 
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
+
+<p class="keep-in-present">First make a layout you can calculate by hand. Then use it to read and write one slot before connecting the block-by-block scan. Check that closing the scan releases its pin.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -333,6 +353,8 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
 
+<p class="keep-in-present">Predict why reserving more bytes for a name can increase the number of blocks even when the row count is unchanged. Use slot size and rows per block to explain the reference totals.</p>
+
 <p>After all twelve tests pass, run <code>python3 measure_layout.py</code>. With the original schemas and 4096-byte blocks, your results should match these values:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_layout.py</span>
@@ -363,6 +385,16 @@ full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember
 </ul>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the mechanism without reading your code</span>
+  <p>A deleted slot is reused by a new row. Which address can remain the same, which bytes may still be old, and which fields must the caller initialize?</p>
+  <details><summary>Check your explanation</summary><p>The block and slot address can stay the same while the row’s identity changes. Deletion leaves field bytes behind, so the caller must write every field before treating the reused slot as the new record. A RID names a location, not a permanent person.</p></details>
+</div>
+
+<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present"><strong>Submit <code>record_manager.py</code> to Gradescope by Thursday Sep 17 at class start.</strong> Follow the course submission instructions. Your score on the twelve local tests determines your grade.</p>

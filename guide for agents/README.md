@@ -2,7 +2,7 @@
 
 Read these files when revising lecture writing, slide explanations, presenter notes, or teaching videos in this repository.
 
-Start with [Explain complex ideas with CLEAR](clear-explanations.md). It includes Calibrate, Link, Envision, Abstract, and Repeat, a practical writing workflow, a reusable template for another video, and applications across Lectures 11–15 and Labs 9–11. Use [Storytelling for technical lectures](lecture-storytelling.md) to give the lesson a concrete task, visible actions, and a causal sequence.
+Start with [Explain complex ideas with CLEAR](clear-explanations.md). It includes Calibrate, Link, Envision, Abstract, and Repeat, a practical writing workflow, a reusable template for another video, and applications across all fifteen lectures and eleven labs. Use [Storytelling for technical lectures](lecture-storytelling.md) to give the lesson a concrete task, visible actions, and a causal sequence.
 
 ## Saved source transcripts
 

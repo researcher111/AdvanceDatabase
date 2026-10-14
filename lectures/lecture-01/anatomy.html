@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="../../labs/_shared/query-journey.css?v=1">
 <link rel="stylesheet" href="styles.css?v=9">
 </head>
@@ -16,15 +17,16 @@
   <div class="toc-title">Lecture 1</div>
   <p><a href="../../slides/lecture-01.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
+
+    <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#try-it">A warm buffer pool can avoid disk reads</a></li>
     <li><a href="#why-databases">When an application needs more than pandas and CSV files</a></li>
     <li><a href="#relational">Rows, schemas, and keys</a></li>
     <li><a href="#layers">Five layers help us understand a database engine</a></li>
     <li><a href="#storage">Storage access has a substantial fixed cost</a></li>
-    <li><a href="#microdb">You build the engine bottom-up, one layer per Thursday</a></li>
+    <li><a href="#microdb">Build the engine one layer at a time</a></li>
     <li><a href="#thursday">Prepare for Lab 1</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -45,7 +47,12 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">The same SQL query can run faster a second time because the database has kept its data in memory. Today we follow one <code>SELECT</code> through the parser, <span class="gloss" data-gloss="plan">planner</span>, <span class="gloss" data-gloss="operator">operators</span>, <span class="gloss" data-gloss="buffer-pool">buffer pool</span>, and disk to see why. Over the next seven Thursday labs, you will implement these components in Python and combine them into a working database engine called <strong>microdb</strong>.</p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">At a lab desk, Maya runs the student query twice. Both runs return ada, cyd, and eli. She points at the second run: <q>Same question, same answer. What work changed?</q> Noor opens the page counters before looking at the timer.</p>
+</div>
+
+<p class="keep-in-present">Follow one <code>SELECT</code> from SQL text to a plan, from the plan to rows, and from rows to cached pages and stored blocks. The first six labs build these interfaces into <strong>microdb</strong>; an optional transaction lab adds crash recovery.</p>
 
 <div class="cite">
   Built on: Edward Sciore, <a href="https://link.springer.com/book/10.1007/978-3-030-33836-7"><em>Database Design and Implementation</em></a> (the SimpleDB book) ·
@@ -64,7 +71,13 @@ right below the sentence you're reading.
 </div>
 
 <!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">The question we will trace</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>If a second scan finds both table blocks in memory, must it still test the six students against the GPA condition? Which count describes the answer, and which counts describe the work?</p>
+  <details><summary>Check your explanation</summary><p>It still tests the rows. In the toy scan, three returned names describe the answer; six examined rows and the storage-read count describe different parts of the work. Reusing pages does not reuse a completed query result.</p></details>
+</div>
 
 <p class="keep-in-present">The opening animation compares two runs of the same query. The first reads two blocks from disk; the second finds both in memory. Our simplified block-access model gives 50 µs for the first run and 0.2 µs for the second.</p>
 
@@ -164,6 +177,8 @@ right below the sentence you're reading.
 <!-- ============================================================ -->
 <h2 id="relational">Rows, schemas, and keys</h2>
 
+<p class="keep-in-present">The result contains names, but the engine needs rules for every field it may read. Start by giving the six rows a schema and identifying what can serve as a stable key.</p>
+
 <p>A <strong>relation</strong> is a set of rows (<em>tuples</em>) sharing a <strong>schema</strong>: a list of named fields and their types. We will use this six-row student table throughout the first part of the course:</p>
 
 <div class="viz" id="viz-students">
@@ -229,6 +244,8 @@ right below the sentence you're reading.
 
 <!-- ============================================================ -->
 <h2 id="layers">Five layers help us understand a database engine</h2>
+
+<p class="keep-in-present">Think of following an order through a workshop. The front desk records the request; each station asks the next for what it needs. Map the request to SQL, the work instructions to a plan, and the stations to operators and storage layers. The analogy organizes responsibilities; the real interfaces below determine what each layer can do.</p>
 
 <p class="keep-in-present">We will study a database engine as five cooperating layers. Production systems organize their code differently, but these layers give us a useful way to separate their responsibilities.</p>
 
@@ -307,11 +324,13 @@ right below the sentence you're reading.
 
 <div class="callout insight">
   <span class="label">The kill -9 test</span>
-  <p class="keep-in-present">In Lab 7 you will use <code>kill -9</code> to stop microdb during a transaction, restart it, and check that recovery preserves committed work and undoes incomplete work. Lab 1’s <code>fsync</code> measurement introduces the cost of making writes durable.</p>
+  <p class="keep-in-present">In optional Lab 7 you can use <code>kill -9</code> to stop microdb during a transaction, restart it, and check that recovery preserves committed work and undoes incomplete work. Lab 1’s <code>fsync</code> measurement introduces the cost of making writes durable.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="storage">Storage access has a substantial fixed cost</h2>
+
+<p class="keep-in-present">The request path now reaches storage. Ask how much data moves on one trip and why keeping that data can make the next trip unnecessary.</p>
 
 <p class="keep-in-present">A storage request has overhead beyond the time needed to transfer its bytes. That overhead helps explain why databases read blocks and keep recently used blocks in memory.</p>
 
@@ -389,11 +408,11 @@ the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Less
 <p class="keep-in-present">Lecture 10 examines how analytical systems group many rows and store their columns separately. A query can then read the selected columns without reading every field in each row.</p>
 
 <!-- ============================================================ -->
-<h2 id="microdb">You build the engine bottom-up, one layer per Thursday</h2>
+<h2 id="microdb">Build the engine one layer at a time</h2>
 
-<p class="keep-in-present">The first seven labs build the engine from storage upward. Each lab adds a component that uses the interfaces introduced in earlier labs.</p>
+<p class="keep-in-present">The first six labs build the required engine from storage upward. The optional seventh adds transactions and recovery. Each component uses the interfaces introduced in earlier labs.</p>
 
-<h3 class="new-slide" data-kicker="The microdb plan">Seven labs share consistent interfaces</h3>
+<h3 class="new-slide" data-kicker="The microdb plan">The labs share consistent interfaces</h3>
 
 <div class="viz" id="viz-microdb-plan">
   <div class="viz-title">Bottom-up build order · hover each layer</div>
@@ -413,7 +432,7 @@ the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Less
   </ul>
 </div>
 
-<p class="keep-in-present">By Lab 5 microdb answers SQL typed at a prompt. By Lab 7 it survives
+<p class="keep-in-present">By Lab 5 microdb answers SQL typed at a prompt. With optional Lab 7 it survives
 <code>kill -9</code>. The midterm covers the engine you built.</p>
 
 <!-- ============================================================ -->
@@ -484,7 +503,15 @@ add: the first digit counts 16s, the second counts 1s, and the digits A through 
 </ul>
 
 <!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
+<h2 id="recap">Return to the opening question</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>Return to the two runs. Suppose a table update happens between them while both blocks stay cached. Can the engine return the old result just because it needs no new disk reads?</p>
+  <details><summary>Check your explanation</summary><p>No. A page cache supplies the current buffered data to execution; it is not a cache of the old answer. Run the plan, examine rows, and apply the predicate again. Keep result counts, examined rows, and storage reads separate.</p></details>
+</div>
+
+<p class="keep-in-present">Trace the same request again: interpret SQL, build a plan, request rows, locate their bytes, and obtain their blocks. The second run can skip storage reads while the other work remains.</p>
 
 <p>Three ideas to carry into the labs:</p>
 

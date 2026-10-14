@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=2">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
@@ -15,15 +16,16 @@
   <div class="toc-title">Lecture 7</div>
   <p><a href="../../slides/lecture-07.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
+
+    <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#promise">Atomicity and durability across a crash</a></li>
     <li><a href="#try-it">Trace a crash during a transfer</a></li>
     <li><a href="#wal">Log the old value before the page changes</a></li>
-    <li><a href="#recovery">Recovery restores values from unfinished transactions</a></li>
     <li><a href="#worked-example">Worked example</a></li>
+    <li><a href="#recovery">Recovery restores values from unfinished transactions</a></li>
     <li><a href="#policies">Buffer policy decides what recovery must do</a></li>
     <li><a href="#nextweek">Prepare for the transaction and recovery lab</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -45,7 +47,12 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">A committed transaction must survive a crash, even though data pages may be flushed at different times. Write-ahead logging makes this possible by preserving recovery information before data reaches disk. In the optional transaction lab, you implement a simple FORCE/STEAL design, then test it with an abrupt process exit. We will also compare it with production designs that defer data-page writes.</p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">Maya restarts the transfer demo and sees only the debit on disk. Noor opens the log beside the balances: <q>Which transaction completed, and what value can we restore?</q> A write that looked finished in memory has left an incomplete durable state.</p>
+</div>
+
+<p class="keep-in-present">Trace recovery information, changed pages, and completion records separately. The optional lab’s FORCE/STEAL policy syncs old values before changes and forces data at commit. We will use that policy to undo unfinished work, then compare policies that also need redo.</p>
 
 <div class="cite">
   Companion reading: Sciore,<sup class="src"><a href="#src-1" title="Database Design and Implementation: Second Edition (Google Books)">1</a></sup> <em>Database Design and Implementation</em>, ch. 5 (transactions) ·
@@ -63,7 +70,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">The question we will trace</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>If an unfinished transaction changes one value from 60 to 40 to 10, which old values must undo restore first and second? Would replaying the SET records forward leave the correct value?</p>
+  <details><summary>Check your explanation</summary><p>Restore 40, then 60 by reading the SET records backward. Forward undo would restore 60 and then 40, leaving the wrong final value. This is the lab’s physical-undo model.</p></details>
+</div>
 
 <p class="keep-in-present">This is an optional bonus reading with no quiz. Today we will trace the writes needed for atomicity and durability.</p>
 
@@ -118,6 +131,8 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="wal">Log the old value before the page changes</h2>
 
+<p class="keep-in-present">Think of keeping a repair record before changing the thing it describes. A SET log record remembers the old value; the changed page holds the new one. The analogy motivates ordering, but a record in memory is insufficient: the required log information must be durable before the protected data reaches storage.</p>
+
 <pre class="equation"><code>WRITE-AHEAD:   log(old value) → sync log → modify page → later flush page<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup>
 
 one record per change:   {"kind": "SET_INT", "tx": 2, "file": "acct.tbl",
@@ -156,7 +171,19 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 </div>
 
 <!-- ============================================================ -->
+<h2 id="worked-example">Trace recovery when one value changes twice</h2>
+
+<p>A SET record stores the old value <em>for one write</em>. Track the buffer value after each undo and distinguish it from the last durable page value. The example uses the lab’s physical undo policy; PostgreSQL uses a different recovery design.</p>
+<div data-teaching-trace="undo">
+  <p><strong>Worked result:</strong> tx2 changed <code>60 → 40 → 10</code>. Recovery restores <code>40</code>, then <code>60</code>. It skips tx1 after seeing its COMMIT, flushes the restored value, then syncs ROLLBACK for tx2.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Lab connection:</strong> <a href="../../labs/lab-07/transactions.html#worked-example">Lab 7 traces the same log</a>. Explain why each restore happens before writing the recovery loop.</p>
+
+<!-- ============================================================ -->
 <h2 id="recovery">Recovery restores values from unfinished transactions</h2>
+
+<p class="keep-in-present">The write order leaves enough information to repair unfinished work. Start at the newest completion records, then decide which older SET records still need undo.</p>
 
 <p class="keep-in-present">Under the lab’s FORCE/STEAL policy, committed changes are on disk, but some changes from unfinished transactions may also be there. <span class="gloss" data-gloss="steal">STEAL</span> allows a dirty page to be flushed before its transaction commits. Recovery reads the log backward and restores the old values of unfinished transactions, then flushes those repairs.</p>
 
@@ -192,17 +219,9 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 </div>
 
 <!-- ============================================================ -->
-<h2 id="worked-example">Trace recovery when one value changes twice</h2>
-
-<p>A SET record stores the old value <em>for one write</em>. Track the buffer value after each undo and distinguish it from the last durable page value. The example uses the lab’s physical undo policy; PostgreSQL uses a different recovery design.</p>
-<div data-teaching-trace="undo">
-  <p><strong>Worked result:</strong> tx2 changed <code>60 → 40 → 10</code>. Recovery restores <code>40</code>, then <code>60</code>. It skips tx1 after seeing its COMMIT, flushes the restored value, then syncs ROLLBACK for tx2.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Lab connection:</strong> <a href="../../labs/lab-07/transactions.html#worked-example">Lab 7 traces the same log</a>. Explain why each restore happens before writing the recovery loop.</p>
-
-<!-- ============================================================ -->
 <h2 id="policies">Buffer policy decides what recovery must do</h2>
+
+<p class="keep-in-present">The repair works under the lab’s policy. Change the policy next: can disk contain unfinished changes, or lack completed ones? Those two possibilities determine the need for undo and redo.</p>
 
 <p class="keep-in-present">Select a quadrant and identify whether disk can contain uncommitted changes or lack committed changes. These two possibilities determine whether the model needs undo, redo, or both.</p>
 
@@ -273,7 +292,15 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 </ul>
 
 <!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
+<h2 id="recap">Return to the opening question</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>Undo has restored 60 in memory. Can recovery sync ROLLBACK before flushing that repair? What happens if a crash lands between those actions?</p>
+  <details><summary>Check your explanation</summary><p>The lab must flush the repaired value before syncing ROLLBACK. Otherwise later recovery could see a completed transaction and skip an undo whose repaired page never reached disk. Recovery has its own durability boundary.</p></details>
+</div>
+
+<p class="keep-in-present">Return to the interrupted transfer. Identify completed transactions, undo unfinished changes in reverse order, make repairs durable, and only then record recovery completion. WAL and the buffer policy jointly determine that order.</p>
 
 <ul class="recap-list">
   <li><strong>Atomicity and durability require recovery,</strong> and the append-only log provides the information to undo incomplete transactions while preserving committed changes.</li>

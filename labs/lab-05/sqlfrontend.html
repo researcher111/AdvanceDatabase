@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=1">
 <link rel="stylesheet" href="query-walkthrough.css?v=2">
 </head>
@@ -14,6 +15,8 @@
 <aside class="toc">
   <div class="toc-title">Lab 5 · microdb 5</div>
   <ul>
+
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Try SQL in the browser</a></li>
     <li><a href="#verify">Part 1 · Run the supplied engine</a></li>
     <li><a href="#terminal">Interactive SQL terminal</a></li>
@@ -25,6 +28,7 @@
     <li><a href="#plan-query">Build and execute the scan tree</a></li>
     <li><a href="#build">Part 3 · Write queries and predict</a></li>
     <li><a href="#measure">Part 4 · Measure and explain</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -46,7 +50,7 @@
   <div class="byline">Follows Lecture 5 (From SQL Text to Plan) · in class: 75 min · walk through · write queries · predict and measure · due Thu Oct 1 at class start</div>
 </header>
 
-<p class="lede">The parser and planner are provided complete. We will walk through how SQL becomes a query description and then an executable scan tree. Your work is to write queries, predict their cost from the operators involved, measure the actual work, and explain why some plans run faster. Use counts to support your explanation before interpreting timings.</p>
+<p class="lede">The parser and planner are supplied. Follow a typed query into its description and scan tree, then predict and measure the work of six SQL queries. Your explanation should connect the operators to counts before interpreting timing; no front-end implementation is required.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 9–10 ·
@@ -61,7 +65,19 @@
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>A query returns sixty names instead of three hundred after adding a GPA filter. Can that result count alone tell you how many source rows TableScan visited? Has parsing already performed the scan?</p>
+  <details><summary>Check your explanation</summary><p>No. The supplied scan-based plan visits all three hundred rows, then filters them. Parsing creates a description of the request; execution later asks scans for rows. Use the measured counters to identify the work.</p></details>
+</div>
+
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+
 <h2 id="try-it">Run SQL in the browser</h2>
+
+<p class="keep-in-present">Choose one statement and predict its result before running it. Then open the worked trace to distinguish the request’s tokens and description from the rows execution returns.</p>
 
 <p class="keep-in-present">The browser widget demonstrates the microSQL syntax supported by this lab. Use it to create tables, insert rows, and run queries before running the same syntax in the supplied Python engine.</p>
 
@@ -152,6 +168,8 @@ SELECT label FROM readings WHERE value &gt; 20;</code></pre>
 
 <!-- ============================================================ -->
 <h2 id="big-idea">Part 2 · Walk through the implementation <span class="part-time">25 min</span></h2>
+
+<p class="keep-in-present">Link the stages to reading instructions before carrying them out: token recognition finds the words, parsing records their structure, and planning creates the steps to execute. Keep each intermediate artifact beside the next so a mistake can be traced to its first boundary.</p>
 <p class="keep-in-present">Open <a href="starter/sql_frontend.py"><code>sql_frontend.py</code></a> alongside this page. Everything below is supplied. Follow the token cursor, the data returned by each method, and the scan objects built from that data. No parser or planner code is required for this lab.</p>
 
 <h3 id="worked-example">Follow your query from text to a scan plan</h3>
@@ -309,6 +327,8 @@ ProjectScan[name]
 
 <!-- ============================================================ -->
 <h2 id="build">Part 3 · Write queries and predict <span class="part-time">20 min</span></h2>
+
+<p class="keep-in-present">Keep your original predictions before running measurements. Identify the source rows, possible product pairs, predicate checks, and requested output cells for each query.</p>
 <p>Complete <a href="starter/queries.sql" download><code>queries.sql</code></a> from these English requests. Save your predictions in the <a href="starter/lab5_report.md" download>report template</a> <strong>before</strong> running the measurement script.</p>
 <p>The measurement fixture has 300 students and three majors. Student <code>i</code>, for <code>i=0…299</code>, has <code>sid=i</code>, <code>name='s'+str(i)</code>, <code>gpa=20+i%20</code>, and <code>mid=1+i%3</code>. The major rows are <code>(1,'ds'), (2,'stat'), (3,'econ')</code>. GPA 35 represents 3.5. Use the distinct join fields <code>students.mid</code> and <code>majors.mid2</code>; microSQL queries spell them as <code>mid</code> and <code>mid2</code>.</p>
 <table><thead><tr><th>Query</th><th>Write a SELECT that…</th></tr></thead><tbody>
@@ -326,6 +346,8 @@ ProjectScan[name]
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 4 · Measure and explain <span class="part-time">25 min · finish as homework</span></h2>
+
+<p class="keep-in-present">Verify that both plans return the same rows including duplicates. Explain a counter difference from the plan before deciding whether the repeated timing samples support a speedup.</p>
 <p>The supplied <a href="starter/measure_sql.py"><code>measure_sql.py</code></a> runs every SELECT through two plans, checks that the results match <em>including duplicates</em>, and reports counters and repeated timings. No implementation changes are needed.</p>
 <pre class="terminal"><code>python3 measure_sql.py
 python3 measure_sql.py --queries queries.sql --repeat 7
@@ -372,6 +394,16 @@ WHERE mid = mid2 AND gpa &gt; 35 AND dept = 'ds';</code></pre>
 <p>Keep an incorrect prediction in your report and explain what changed your model. A strong explanation names the operator, counts its work, and then uses the measurement as evidence. “The database optimizes it” is insufficient for this engine: identify the actual plan and rewrite.</p>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the mechanism without reading your code</span>
+  <p>Moving valid filters before the product reduces pairs, while reversing two AND terms can change comparisons without changing pairs. How can both changes preserve the same result?</p>
+  <details><summary>Check your explanation</summary><p>Input-only filters remove rows before pairing. AND still requires every term to be true, but short-circuit evaluation can stop at the first false term. Placement changes candidates; term order changes checks within a candidate. Preserve duplicates and compare the same query under both plans.</p></details>
+</div>
+
+<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+
 <h2 id="assignment">Assignment</h2>
 <p><strong>Submit four files to the Lab 5 programming assignment on Gradescope by Thursday Oct 1 at class start.</strong> The <a href="starter/lab5_report.md" download>report template</a> lists the questions and evidence.</p>
 <table><thead><tr><th>File</th><th>What to include</th></tr></thead><tbody>

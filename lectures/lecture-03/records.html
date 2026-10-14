@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
@@ -15,7 +16,8 @@
   <div class="toc-title">Lecture 3</div>
   <p><a href="../../slides/lecture-03.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Today's plan</a></li>
+
+    <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#gap">Why packed variable-length rows are hard to update</a></li>
     <li><a href="#try-it">Fixed-size slots keep neighboring rows in place</a></li>
     <li><a href="#layout">Compute field offsets from the schema</a></li>
@@ -24,7 +26,7 @@
     <li><a href="#tablescan">Scan a table one block at a time</a></li>
     <li><a href="#catalog">Store schemas in catalog tables</a></li>
     <li><a href="#thursday">Prepare for Lab 3</a></li>
-    <li><a href="#recap">Recap &amp; next time</a></li>
+    <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
@@ -45,7 +47,12 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">In Lab 1 you placed field values into a page by hand. If variable-length rows are packed directly together, lengthening a name requires shifting later data. Today we introduce microdb’s fixed-size record slots so an update can leave neighboring rows in place. A <code>Layout</code> computes field offsets from the schema; a <code>RecordPage</code> uses those offsets within a block; and a <code>TableScan</code> visits the table’s rows. The catalog stores the schemas needed to interpret those rows<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: Chapter 52. System Catalogs">1</a></sup>.</p>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p class="lede">Maya saves the byte position where cyd begins, then renames ben to benjamin in a packed page. The later bytes shift. Noor taps the saved address: <q>Does this still point to cyd?</q> They try again with reserved slots so a longer name can stay inside its own row.</p>
+</div>
+
+<p class="keep-in-present">The record layer gives bytes a repeatable shape. A <code>Layout</code> computes field offsets, a <code>RecordPage</code> interprets one pinned block, and a <code>TableScan</code> walks occupied slots. The catalog saves the rules needed to interpret those rows after restart.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6 (record management) &amp; ch. 7 (metadata)<sup class="src"><a href="#src-2" title="Database Design and Implementation: Second Edition (Google Books listing)">2</a></sup> ·
@@ -63,7 +70,13 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 </div>
 
 <!-- ============================================================ -->
-<h2 id="plan">Today's plan</h2>
+<h2 id="plan">The question we will trace</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Start with what you already know</span>
+  <p>In the 128-byte toy block, each student slot occupies 24 bytes and GPA begins at offset 20. Where does slot 3’s GPA begin? Would deleting slot 1 move it?</p>
+  <details><summary>Check your explanation</summary><p>Its address is 3 × 24 + 20 = 92. Deletion changes slot 1’s status flag; fixed-size slots keep slot 3 at the same position. The layout is required to interpret the bytes there.</p></details>
+</div>
 
 <p class="keep-in-present">We begin with Quiz 2 (the buffer pool, 10 min), then add the record layer that interprets cached bytes as rows and fields.</p>
 
@@ -168,6 +181,8 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
 <!-- ============================================================ -->
 <h2 id="layout">Compute field offsets from the schema</h2>
 
+<p class="keep-in-present">Think of a tray with equally sized compartments. A slot reserves one compartment, and field offsets locate items inside it. Map compartment number to slot number and the tray to a block. The actual capacity is measured in bytes, including string length prefixes; a character count alone is insufficient.</p>
+
 <pre><code class="language-sql">CREATE TABLE students (
     id    INT,
     name  VARCHAR(8),
@@ -254,6 +269,8 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
 
 <!-- ============================================================ -->
 <h2 id="toast">Store large values outside the main row</h2>
+
+<p class="keep-in-present">Reserved capacity makes updates easy but can waste space. A very large value makes that cost visible: now ask whether the main row can hold a reference to bytes stored elsewhere.</p>
 
 <p>Reserving the maximum size in every row becomes impractical for large values such as a two-megabyte essay. PostgreSQL can compress such values and store them separately, leaving a small reference in the main row.</p>
 
@@ -375,6 +392,8 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 <!-- ============================================================ -->
 <h2 id="catalog">Store schemas in catalog tables</h2>
 
+<p class="keep-in-present">The offsets work while the program remembers the schema. Close the program and reopen the table: where will the next scan recover those rules?</p>
+
 <p>These are the <code>field_catalog</code> rows that describe the student layout. Lab 3’s provided <code>create_table</code> writes them using your record layer:</p>
 
 <table>
@@ -434,7 +453,15 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 </ul>
 
 <!-- ============================================================ -->
-<h2 id="recap">Recap &amp; next time</h2>
+<h2 id="recap">Return to the opening question</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain it to a teammate</span>
+  <p>A row is deleted at RID (0, 1), and another row reuses that slot. Has the address changed? Does it still identify the original student?</p>
+  <details><summary>Check your explanation</summary><p>The physical address is unchanged, but its occupant can change. A RID names a block and slot while a row lives there; a student ID provides a different identity. Keep index entries consistent when rows are deleted or moved.</p></details>
+</div>
+
+<p class="keep-in-present">Return to the saved address. Fixed slots locate a row; the layout locates its fields; the scan skips empty slots; the catalog preserves the interpretation rules. Stable byte positions do not make a RID a permanent identity.</p>
 
 <p>Four points to remember:</p>
 

@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=2">
 <link rel="stylesheet" href="statement-walkthrough.css?v=1">
 </head>
@@ -14,6 +15,8 @@
 <aside class="toc">
   <div class="toc-title">Lab 4 · microdb 4</div>
   <ul>
+
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Combining scan operators</a></li>
     <li><a href="#sql-walkthrough">SQL → storage → scans</a></li>
     <li><a href="#statement-walkthrough">Execute statements line by line</a></li>
@@ -24,6 +27,7 @@
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -45,7 +49,7 @@
   <div class="byline">Follows Lecture 4 (The Iterator Model) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 24 at class start</div>
 </header>
 
-<p class="lede">Your <code>TableScan</code> reads one table. Today you add filtering, projection, and a Cartesian product, then combine them to express a join. The operators share one interface and stream rows through the plan. The measurement compares two correct plans and shows how early filtering reduces pair-building work.</p>
+<p class="lede">Ask the plan for one qualifying row, then watch how much work its operators do to supply it. Build selection, projection, and product through the common scan interface. Use the same result under two plan shapes to explain why earlier filtering can reduce candidate work.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 8 ·
@@ -60,7 +64,19 @@
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>In a toy product, three left rows and two right rows are fully enumerated. How many candidate pairs exist? If the join keeps only two, did the other pairs disappear before ProductScan formed them?</p>
+  <details><summary>Check your explanation</summary><p>There are six candidates. A selection above the product rejects nonmatching pairs after enumeration. Returned rows and candidate pairs count different things; neither is automatically a disk-read count.</p></details>
+</div>
+
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+
 <h2 id="try-it">Combining operators into a query plan</h2>
+
+<p class="keep-in-present">Predict the rows delivered at the root separately from the rows or pairs touched below it. Run the same plan and connect each counter to the operator that performs that work.</p>
 
 <p>Use the widget to combine operators over the <code>students</code> and <code>majors</code> tables. Run a plan and compare how many rows each operator processes. Start with the join preset to see the behavior you will implement.</p>
 
@@ -435,6 +451,8 @@ All scans closed; no buffer pins remain.</code></pre>
 <!-- ============================================================ -->
 <h2 id="big-idea">How each operator uses its input scans</h2>
 
+<p class="keep-in-present">Use nested Python generators as the familiar connection. A wrapper can ask its input for another item, skip rejected items, and expose selected fields without building a new table. The actual scan methods also carry rewind, field routing, exhaustion, and cleanup contracts.</p>
+
 <p class="keep-in-present">Each operator refers to its input scan or scans and implements the same five methods. These operators expose one current row at a time without storing a copy of the full result. Their memory use depends on the plan and its active scans, rather than the number of result rows. The table shows which behaviors each operator changes.</p>
 
 <table>
@@ -499,6 +517,8 @@ predicate <em>is</em> the join.</p>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
+<p class="keep-in-present">Trace one accepted row and one rejected row before implementing selection. For product, trace the right input’s exhaustion, its rewind, and the next left row. Keep exhausted scans exhausted until a rewind.</p>
+
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
 <p>Work in <code>labs/lab-04/starter/</code> after pulling the latest files, or download the starter files into <code>microdb-lab4/</code>. Four files provide reference implementations of the lower layers; <code>sql_walkthrough.py</code> is an optional runnable companion. Read the two new methods at the bottom of the reference <code>TableScan</code>, then implement the operators in test order:</p>
@@ -553,6 +573,8 @@ predicate <em>is</em> the join.</p>
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
 
+<p class="keep-in-present">Predict the candidate pairs in each plan before reading the printed counts. First verify equal results, then explain which input-only filters reduce the product’s inputs.</p>
+
 <p>Reference output is deterministic, yours must match:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_pipeline.py</span>
@@ -594,6 +616,16 @@ one sentence why Plan A's count never moves while the ratio does.</p>
 <p>Polars’ lazy API and Spark DataFrames describe computations as plans. An action such as <code>collect()</code> executes the plan. Their optimizers can move a filter closer to its input when doing so preserves the result. In distributed processing, filtering before a shuffle can also reduce the rows sent across the network.</p>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the mechanism without reading your code</span>
+  <p>Two plans return twenty rows from 900 and 60 candidate pairs. What changed in the plan, what stayed equal, and what must <code>close()</code> still release?</p>
+  <details><summary>Check your explanation</summary><p>Applying valid input-only filters before the product reduces its candidates while preserving matching rows and duplicates. Both plans must close every descendant scan and release pins. Use repeated timings to evaluate elapsed time separately from these work counts.</p></details>
+</div>
+
+<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present"><strong>Submit</strong> <code>query_engine.py</code> to Gradescope, per the course

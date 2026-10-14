@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=1">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 </head>
@@ -14,13 +15,16 @@
 <aside class="toc">
   <div class="toc-title">Lab 7 · microdb 7</div>
   <ul>
+
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Read completion records before earlier changes</a></li>
     <li><a href="#big-idea">Sync the old value before changing the page</a></li>
-    <li><a href="#the-api">Implement five transaction operations in the required order</a></li>
     <li><a href="#worked-example">Worked example</a></li>
+    <li><a href="#the-api">Implement five transaction operations in the required order</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Test an abrupt exit</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -43,7 +47,7 @@
   <div class="byline">Follows bonus Lectures 7–8 · self-paced · optional and ungraded · no submission deadline</div>
 </header>
 
-<p class="lede">In this lab, you will complete microdb’s transaction layer. Implement <code>set_int</code> and <code>set_string</code> so old values reach the log before data pages change. Then implement <code>commit</code>, <code>rollback</code>, and <code>recover()</code> with the required flush ordering. Finally, <code>crash_demo.py</code> will terminate the engine during a transfer. Your recovery code must preserve the completed transfer and undo the incomplete one.</p>
+<p class="lede">Use this optional lab to make a crash-recovery promise concrete. Log old values before changing pages, commit in the required order, and undo unfinished writes in reverse. Then restart the crash demo and explain which durable records make the repaired balances trustworthy.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 5 ·
@@ -62,6 +66,16 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>An unfinished transaction changed 60 to 40 to 10. Which old value should reverse undo restore first? If a newer COMMIT belongs to another transaction, does it complete this one?</p>
+  <details><summary>Check your explanation</summary><p>Restore 40 first, then 60. Completion is tracked by transaction ID; another transaction’s COMMIT does not complete this transaction. Preserve committed work while undoing unfinished work.</p></details>
+</div>
+
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+
 <h2 id="try-it">Read completion records before earlier changes</h2>
 
 <p>Before coding, trace the decisions <code>recover()</code> must make. Read this sample log from newest to oldest and identify which transactions completed and which changes need undo.</p>
@@ -96,9 +110,23 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="big-idea">Sync the old value before changing the page</h2>
 
+<p class="keep-in-present">Think of writing down how to repair a change before making it. The old value is the repair information, and the page carries the change. The actual rule requires durable log information, not merely a note in RAM. This lab’s FORCE/STEAL policy also determines data and completion flush ordering.</p>
+
 <p class="keep-in-present">The <span class="gloss" data-gloss="undo-log">write-ahead rule</span> is precise: recovery information must reach durable storage before the data it protects. This lab syncs each log append by default, then uses FORCE at commit: flush dirty data pages before syncing COMMIT. JSON lines make the log readable; production formats add checksums and recovery metadata.</p>
 
 <p class="key-fact keep-in-present"><strong>Commit completes after the required data writes and the COMMIT log record are durable.</strong> This lab performs multiple syncs per transaction.</p>
+
+<!-- ============================================================ -->
+<h2 id="worked-example">Trace the exact order of undo and completion</h2>
+
+<p class="keep-in-present">Before revealing each undo, predict both the buffer value and the last durable page value. Then predict what the next restart sees if recovery stops at that point.</p>
+
+<p>Before coding, predict the value after undoing each SET record. The example separates buffer changes from the final flush and completion record. All unfinished transactions must be recovered before new ones begin.</p>
+<div data-teaching-trace="undo">
+  <p><strong>Worked result:</strong> Reverse undo restores 10 to 40, then 40 to 60. Flush 60 before syncing ROLLBACK. The next recovery returns <code>[]</code>.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<p><strong>Implementation checkpoints:</strong> restore via the buffer page and call <code>set_modified()</code>. Do not call the transaction setters during undo: they create new SET records. In <code>rollback()</code>, stop at your own START; in startup <code>recover()</code>, continue across all transactions. Release every pin you acquired.</p>
 
 <!-- ============================================================ -->
 <h2 id="the-api">Implement five transaction operations in the required order</h2>
@@ -114,17 +142,9 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 </div>
 
 <!-- ============================================================ -->
-<h2 id="worked-example">Trace the exact order of undo and completion</h2>
-
-<p>Before coding, predict the value after undoing each SET record. The example separates buffer changes from the final flush and completion record. All unfinished transactions must be recovered before new ones begin.</p>
-<div data-teaching-trace="undo">
-  <p><strong>Worked result:</strong> Reverse undo restores 10 to 40, then 40 to 60. Flush 60 before syncing ROLLBACK. The next recovery returns <code>[]</code>.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p><strong>Implementation checkpoints:</strong> restore via the buffer page and call <code>set_modified()</code>. Do not call the transaction setters during undo: they create new SET records. In <code>rollback()</code>, stop at your own START; in startup <code>recover()</code>, continue across all transactions. Release every pin you acquired.</p>
-
-<!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
+
+<p class="keep-in-present">Trace each operation’s log, memory, data-flush, and completion boundaries. Check the specific method before combining it with the full transfer and restart scenario.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -187,6 +207,8 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Test an abrupt exit <span class="part-time">~25 min · finish as homework</span></h2>
 
+<p class="keep-in-present">Predict the stored balances before restart and after recovery. In the no-steal variation, explain why undo can be harmless even when disk already holds the earlier value.</p>
+
 <p>Run <code>crash_demo.py</code> to observe a committed transfer followed by an incomplete one. The script flushes an uncommitted dirty page under the <span class="gloss" data-gloss="stolen-page">STEAL policy</span>, then exits with <code>os._exit(1)</code>. On restart, compare the balances before and after recovery. Reference output:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 crash_demo.py</span>
@@ -225,6 +247,16 @@ right balances; say what your undo wrote and why it was harmless.</p>
 </table>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the mechanism without reading your code</span>
+  <p>A recovery pass has repaired the buffer but has not flushed it. Can it sync ROLLBACK and declare completion? Which failure would the opposite order permit?</p>
+  <details><summary>Check your explanation</summary><p>Flush the repair before syncing ROLLBACK. Otherwise another crash could leave the old damaged data beside a completion record that makes later recovery skip the repair. This ordering protects recovery as well as ordinary transactions.</p></details>
+</div>
+
+<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present">For optional practice, complete <code>transaction.py</code> and run the supplied tests locally. No submission or grade is required.</p>

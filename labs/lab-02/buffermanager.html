@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
@@ -13,12 +14,15 @@
 <aside class="toc">
   <div class="toc-title">Lab 2 · microdb 2</div>
   <ul>
+
+    <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Explore the buffer pool</a></li>
     <li><a href="#big-idea">Why pin/unpin exists</a></li>
     <li><a href="#the-api">Implementation requirements</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
+    <li><a href="#explain-it">Explain what your result means</a></li>
     <li><a href="#assignment">Assignment</a></li>
     <li><a href="#going-further">Going further</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -40,7 +44,7 @@
   <div class="byline">Follows Lecture 2 (Memory &amp; the Buffer Pool) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 10 at class start</div>
 </header>
 
-<p class="lede">In this lab, you will build a buffer manager that keeps a fixed number of database blocks in memory. It tracks which frames are in use, chooses a frame to evict with an LRU policy, and writes modified pages back before reusing their frames. You will implement four methods, run ten tests, and measure how access patterns affect the cache hit rate.</p>
+<p class="lede">Your file manager can fetch a block. Now decide whether that block is already in memory and whether another frame is safe to reuse. Implement the four buffer-manager methods, preserving active pins and dirty data, then compare hit rates under different access patterns.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 4 ·
@@ -56,7 +60,19 @@
 </div>
 
 <!-- ============================================================ -->
+<h2 id="before-you-start">Check the starting point</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Check the starting point</span>
+  <p>Two callers pin the same cached block, then one unpins it. Is its frame eligible for eviction? Does the second pin need another file read?</p>
+  <details><summary>Check your explanation</summary><p>One active pin remains, so the frame is protected. The second pin reuses the resident block and counts as a hit. Only the final unpin makes the frame eligible; dirty data still needs write-back before reuse.</p></details>
+</div>
+
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+
 <h2 id="try-it">Explore a three-frame buffer pool</h2>
+
+<p class="keep-in-present">Predict the memory value, disk value, pin count, and dirty flag after a modification. Evict the frame only after releasing its pins, then explain why the disk value changes.</p>
 
 <p>The widget models a buffer pool with three frames and six disk blocks. Select a block, pin it, modify it, and unpin it. Then load other blocks to see when the modified page is written back. Try pinning when all frames are in use, modifying an unpinned block, and unpinning a block that is not pinned.</p>
 
@@ -90,6 +106,8 @@
 <!-- ============================================================ -->
 <h2 id="big-idea">Why pinned frames cannot be evicted</h2>
 
+<p class="keep-in-present">Use the lecture’s limited work desks: blocks are books, frames are desks, and pins count active users. Changing the book on a desk while someone still reads it changes the bytes behind that caller’s reference. Recency chooses only among desks whose users have finished.</p>
+
 <p>A buffer frame can hold different blocks over time. Pinning keeps the current block in its frame while a caller uses it.</p>
 
 <p class="keep-in-present">Suppose you obtain a reference to a page, but its frame is evicted before you read from it. The reference still points to the same memory, which now contains a different block. Pinning prevents this: a frame with a positive pin count cannot be evicted. Each caller must unpin the frame when finished. The frame can be reused only after every caller has released its pin.</p>
@@ -122,6 +140,8 @@
 
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
+
+<p class="keep-in-present">Separate finding a resident block, finding an eligible victim, and updating pin counts. Ask which state each method may change before running its function check.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -188,6 +208,8 @@
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
+<p class="keep-in-present">Predict whether the next request reuses a block before eviction. Compare the scan and hot-set traces at the same capacity; explain the hit-rate difference from access order.</p>
+
 <p>Use the hit and miss counters to compare a repeated full scan with a workload that frequently revisits a small set of blocks.</p>
 
 <p>The reference solution's output (yours should match it exactly, since the workloads are
@@ -232,6 +254,16 @@ the same size from the reference table, and whether the scan column changed at a
 <p>A dataframe must fit its materialized result in memory; a query engine can often stream a larger input through a bounded pool. Spark’s <code>cache()</code> and <code>persist()</code> request reuse, but do not pin partitions against eviction. Lost partitions can be recomputed, and some storage levels spill them to disk. In every case, reuse and memory pressure determine the benefit.</p>
 
 <!-- ============================================================ -->
+<h2 id="explain-it">Explain what your result means</h2>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the mechanism without reading your code</span>
+  <p>The oldest frame is pinned, and a newer unpinned frame is dirty. Which may be reused? Why can correct LRU behavior still give zero hits on a repeated scan?</p>
+  <details><summary>Check your explanation</summary><p>Only the unpinned frame is eligible, and its dirty bytes must be written first. A cyclic scan larger than the pool can evict each block before its next request. Correct protection and replacement rules do not guarantee useful reuse.</p></details>
+</div>
+
+<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present"><strong>Submit <code>buffer_manager.py</code> to Gradescope, per the course submission
