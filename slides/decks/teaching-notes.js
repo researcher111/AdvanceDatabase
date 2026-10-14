@@ -11,8 +11,8 @@
       "answer": "The buffer pool can reuse pages from the first run, avoiding storage reads.",
       "builds": [
         "Show the identical query and answer. Give students thirty seconds to predict what might change.",
-        "Follow the first trip to storage. Point out the cost of fetching the blocks.",
-        "Reveal the pages already in memory and follow the shorter path.",
+        "Follow the first path to disk: read the two table blocks into memory, then check each student's GPA.",
+        "Follow the second path to memory: both blocks are still available, and the engine checks the students' GPAs again.",
         "Compare the two block-access costs. These are model calculations, not whole-query benchmarks."
       ]
     },
@@ -2471,10 +2471,10 @@
   'use strict';
   const topics = {
     1: {
-      story: 'At a lab desk, Maya runs the student query twice and gets ada, cyd, and eli both times. Noor opens the counters: “Same question, same answer. What work changed?” This is a fictional classroom investigation.',
+      story: 'At a lab desk, Maya asks the database to list students with a GPA above 3.5. Both runs return ada, cyd, and eli. Noor points to the Disk reads counter: two on the first run, zero on the second. Maya asks why it did not read the file again. The first run kept the student data in memory, so the second can check the same rows there. This is a fictional classroom investigation.',
       calibrate: 'Does SELECT name with a GPA condition request matching names, or prescribe which stored blocks the engine must read?',
       answer: 'It requests a result. The engine chooses and executes a plan; matching names and block reads describe different things.',
-      opening: 'Keep the repeated query and answer visible. Ask for a reason the second run could do less work before following either route.',
+      opening: 'Read the query as asking for students with a GPA above 3.5. Explain that the slides store GPA in tenths, so 35 represents 3.5. Keep ada, cyd, and eli visible, and ask whether a second run must read their data from disk again before following either path.',
       analogy: ['lecture-01-scene-09','Use a workshop order to map responsibilities: SQL states the request, the plan supplies work instructions, operators request rows, and lower layers obtain their bytes. The actual interfaces determine what each station can do.'],
       closing: 'Explain the same request again: SQL to plan, plan to rows, rows to bytes, bytes to resident or stored blocks. Change one condition by updating a row while its page stays cached.',
       question: 'If a table changes between two runs while its pages stay cached, can zero new storage reads justify returning the old answer?',

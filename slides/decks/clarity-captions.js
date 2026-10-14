@@ -2,9 +2,9 @@
 window.CourseClarityCaptions = {
   "1": {
     "lecture-01-scene-01": [
-      "The SQL and three returned names stay the same. Predict which work can change between runs.",
-      "The cold run fetches the needed blocks before examining their rows.",
-      "The warm run reuses resident blocks while the query still executes.",
+      "Both runs return ada, cyd, and eli. Must the second run read their data from disk again?",
+      "The first run reads the two table blocks from disk, then checks the six students’ GPAs.",
+      "The second run checks the students again, using the two blocks kept in memory.",
       "Compare modeled block-access costs separately from whole-query timings."
     ],
     "lecture-01-scene-02": [
