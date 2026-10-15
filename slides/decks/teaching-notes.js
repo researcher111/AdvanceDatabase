@@ -72,7 +72,7 @@
       ]
     },
     "lecture-01-scene-07": {
-      "idea": "A transaction gives a transfer guarantees that separate file writes do not provide automatically.",
+      "idea": "A transaction can make both sides of a transfer succeed or fail together.",
       "question": "What happens if a naive transfer crashes between debit and credit?",
       "answer": "One balance may change without the other. Atomicity requires the transfer to complete or roll back together.",
       "builds": [
@@ -90,12 +90,12 @@
       "builds": [
         "Establish that both paths must produce the same result.",
         "Count the scan's 500 modeled block reads.",
-        "Count the index path's seven stipulated reads.",
+        "Count the seven index-path reads assumed in this example.",
         "Compare the result and the roughly 71-fold difference in modeled storage trips."
       ]
     },
     "lecture-01-scene-09": {
-      "idea": "Each engine layer translates work into the interface of the layer below.",
+      "idea": "The engine turns SQL into requests for rows, pages, and file blocks.",
       "question": "Which layers understand field names, and which work with pages or offsets?",
       "answer": "Operators and records interpret rows and fields; buffers and files handle pages and blocks.",
       "builds": [
@@ -103,7 +103,7 @@
         "Show operators requesting and processing rows.",
         "Explain how the record layer maps fields to bytes.",
         "Follow a page request into the buffer pool.",
-        "Show the file manager transferring an addressed block."
+        "Show the file manager reading the requested file block into memory."
       ]
     },
     "lecture-01-scene-10": {
@@ -122,10 +122,10 @@
       "question": "Can we always ignore CPU work when predicting query time?",
       "answer": "No. Cached data, expensive expressions, and large scans can make CPU work significant.",
       "builds": [
-        "Count the accesses before multiplying by a latency.",
+        "Count block accesses, then multiply by the assumed time per access.",
         "Give students a minute to compute 12.5 ms and 0.175 ms.",
         "Increase the table size and discuss how the paths scale.",
-        "Compare 50 µs with 0.2 µs for cold and warm block access; qualify the model."
+        "Compare 50 µs for two storage reads with 0.2 µs for two memory accesses. These totals omit other query work."
       ]
     },
     "lecture-01-scene-12": {
@@ -161,12 +161,12 @@
       ]
     },
     "lecture-01-scene-15": {
-      "idea": "A completed buffered write and durable completion are different boundaries.",
+      "idea": "A buffered write can return before its bytes reach durable storage.",
       "question": "What does the sync/no-sync comparison measure?",
-      "answer": "It compares different completion requirements, including the cost of requesting durable completion with fsync.",
+      "answer": "It compares writes that return after buffering with writes that also wait for fsync.",
       "builds": [
-        "Show where a buffered write can return successfully.",
-        "Add the request for durable completion.",
+        "Show the bytes in the OS cache when write() returns.",
+        "Call fsync() to wait for the file-sync request to complete.",
         "Explain that fsync can report failure and depends on the storage stack.",
         "Distinguish a process crash from power loss before previewing recovery."
       ]
@@ -177,7 +177,7 @@
       "answer": "Parsing and planning still happen, and the engine still scans and filters rows.",
       "builds": [
         "Have students reconstruct the engine layers from the diagram.",
-        "Ask three students to narrate SQL-to-plan, row-to-page, and page-to-disk boundaries.",
+        "Ask three students how SQL becomes a plan, how fields are found in a page, and how a file block reaches memory.",
         "Return to the warm query and identify the work that remains."
       ]
     }
@@ -215,24 +215,24 @@
       ]
     },
     "lecture-02-scene-04": {
-      "idea": "A repeated scan can miss every time when reuse exceeds cache capacity.",
+      "idea": "A repeated scan can miss every time if each page is evicted before its next use.",
       "question": "Will the second request for block 0 hit in this pool?",
       "answer": "No. It has already been evicted; this preset has 16 accesses and zero hits.",
       "builds": [
-        "Load the first three blocks and mark the resident set.",
-        "Continue beyond capacity and identify each victim.",
+        "Load the first three blocks and name the pages now in memory.",
+        "Load the next blocks and identify which page each one replaces.",
         "Pause before the second block 0 and predict whether it remains resident.",
         "Finish the trace and explain why every request still misses."
       ]
     },
     "lecture-02-scene-05": {
-      "idea": "Frequently reused blocks can stay hot even while cold blocks pass through.",
+      "idea": "Frequently requested blocks can stay in memory while occasional requests replace other pages.",
       "question": "How many hits and misses does this preset produce?",
       "answer": "Eleven hits and five misses, or about a 69% hit rate.",
       "builds": [
         "Predict the hit rate and count the compulsory first misses.",
-        "Follow the short reuse intervals for blocks 0 and 1.",
-        "Insert a cold request and check whether the hot blocks survive.",
+        "Follow the repeated requests for blocks 0 and 1 before either is evicted.",
+        "Request a new block and check whether blocks 0 and 1 remain in memory.",
         "Count 11 hits and five misses; compare the access order with the previous scan."
       ]
     },
@@ -298,8 +298,8 @@
       "answer": "Duplicate copies consume memory and can contribute to swapping if the combined budget is too large.",
       "builds": [
         "Identify the database buffer pool and OS cache as separate layers.",
-        "Explain the database's active page holds.",
-        "Connect database-controlled writes to recovery ordering.",
+        "Point to the pin that prevents an active page from being replaced.",
+        "Explain why the database must save recovery information before the changed page reaches storage.",
         "Discuss the combined memory budget and the risk of double caching."
       ]
     },
@@ -310,7 +310,7 @@
       "builds": [
         "Identify the pages repeatedly used by short transactions.",
         "Run a large scan and show how it displaces hot pages.",
-        "Use a small conceptual scan ring to limit pollution.",
+        "Let the scan reuse a small ring of frames so it displaces fewer frequently used pages.",
         "Compare exact LRU with a clock approximation and discuss policy tradeoffs."
       ]
     },
@@ -326,7 +326,7 @@
       ]
     },
     "lecture-02-scene-14": {
-      "idea": "A one-frame capacity change can transform a cyclic workload's reuse.",
+      "idea": "One more frame can let every page in a repeated scan stay in memory until its next use.",
       "question": "What changes when the pool grows from 49 to 50 frames for 50 blocks?",
       "answer": "Exact LRU misses on the cyclic scan at 49 frames; at 50, later passes hit after the initial fill.",
       "builds": [
@@ -337,9 +337,9 @@
       ]
     },
     "lecture-02-scene-15": {
-      "idea": "The buffer manager must preserve holds, recency, and dirty contents through every request.",
+      "idea": "The buffer manager tracks page users and recent access, and saves dirty pages before replacing them.",
       "question": "What must happen before a dirty frame is reused?",
-      "answer": "The supplied flush plumbing must save its contents before a replacement is loaded.",
+      "answer": "The supplied flush method must write the changed page before its frame receives a replacement.",
       "builds": [
         "Look for the requested block among resident pages.",
         "Choose an eligible frame if the request misses.",
@@ -350,7 +350,7 @@
     "lecture-02-scene-16": {
       "idea": "Cache performance depends on reuse, while pins protect work that is still active.",
       "question": "Why can the same pool give zero hits on one workload and about 69% on another?",
-      "answer": "The access order changes reuse distance; capacity alone does not determine the hit rate.",
+      "answer": "In one request order, pages are evicted before reuse; in the other, frequently requested pages remain in memory.",
       "builds": [
         "Keep the number of frames fixed as the comparison begins.",
         "Contrast the cyclic scan with the repeatedly accessed hot blocks.",
@@ -360,7 +360,7 @@
   },
   "3": {
     "lecture-03-scene-01": {
-      "idea": "The record layer turns anonymous page bytes into rows with predictable addresses.",
+      "idea": "The record layer uses a layout to find rows and fields in a page’s bytes.",
       "question": "What is missing from Page and Buffer when we want to find a student?",
       "answer": "They know bytes and blocks, but need a record layout to identify rows and fields.",
       "builds": [
@@ -381,7 +381,7 @@
       ]
     },
     "lecture-03-scene-03": {
-      "idea": "Fixed reservations let microdb compute a row's address without parsing earlier rows.",
+      "idea": "Fixed-size slots let microdb calculate a row’s address without reading earlier rows.",
       "question": "Why can a name change stay in place here?",
       "answer": "The slot already reserves capacity for the name, as long as its encoded bytes fit.",
       "builds": [
@@ -420,7 +420,7 @@
       "builds": [
         "Mark the eight-byte storage reservation.",
         "Fit an ASCII example and count its encoded bytes.",
-        "Compare a UTF-8 example with the same character count.",
+        "Count the two characters é and 😀: UTF-8 uses six bytes to store them.",
         "Reject overflow before changing either the old value or the adjacent field."
       ]
     },
@@ -453,14 +453,14 @@
       "builds": [
         "Treat zero as a valid stored number.",
         "Treat an empty string as a valid string value.",
-        "Introduce missingness as a separate state; microdb currently has no NULL.",
+        "Show that a missing value differs from zero and empty text; microdb currently has no NULL.",
         "Use the conceptual bitmap to distinguish absence from stored values."
       ]
     },
     "lecture-03-scene-10": {
       "idea": "Large values can be compressed or stored separately from the main row.",
       "question": "Why not reserve two megabytes in every student row for an essay?",
-      "answer": "Most rows would waste space; out-of-line storage keeps the common row smaller.",
+      "answer": "Most essays need less space. Storing large values separately keeps the main rows smaller.",
       "builds": [
         "Show a small value stored inline.",
         "Compress a value and label the illustrated ratio as hypothetical.",
@@ -515,7 +515,7 @@
     "lecture-03-scene-15": {
       "idea": "Persisted catalog rows reconstruct table layouts after a restart.",
       "question": "How does the engine read the catalog without already knowing every schema?",
-      "answer": "A small set of hardcoded catalog layouts bootstraps the remaining metadata.",
+      "answer": "The engine knows the catalog’s layout in advance, so it can read the stored schemas for other tables.",
       "builds": [
         "Identify the layout currently held in Python objects.",
         "Persist that metadata in catalog rows.",
@@ -550,10 +550,10 @@
       "question": "Does streaming a Cartesian product remove its huge number of candidate pairs?",
       "answer": "No. It avoids materializing all pairs at once but still enumerates them.",
       "builds": [
-        "Show the fully materialized scan intermediate.",
+        "Show every row from the scan stored in memory before the next operator starts.",
         "Add a Cartesian product and ask where its result would fit.",
         "Multiply one million by one million to obtain a trillion candidate pairs.",
-        "Replace stored intermediates with a row stream and distinguish memory from work."
+        "Pass one pair at a time instead of storing all pairs. The memory requirement falls, but every pair still needs processing."
       ]
     },
     "lecture-04-scene-03": {
@@ -581,14 +581,14 @@
       ]
     },
     "lecture-04-scene-05": {
-      "idea": "Operators compose through the same five-method scan contract.",
+      "idea": "Operators can work together because each supports the same five scan methods.",
       "question": "Does Select require its child to be a TableScan?",
       "answer": "No. Any child implementing the scan interface can work, including a ListScan test double.",
       "builds": [
         "Introduce the common interface used by every operator.",
-        "Explain before_first and next as cursor operations.",
-        "Explain get_val and has_field as field access and schema inspection.",
-        "Explain close as resource release, including forwarding through wrappers."
+        "Use before_first to rewind the scan and next to advance to a row.",
+        "Use get_val to read a field and has_field to check whether the scan exposes it.",
+        "Follow close through each wrapper so the underlying scans release their resources."
       ]
     },
     "lecture-04-scene-06": {
@@ -637,7 +637,7 @@
       ]
     },
     "lecture-04-scene-10": {
-      "idea": "Filtering fewer results does not necessarily reduce the product's candidate work.",
+      "idea": "A filter can return fewer rows while ProductScan still creates every candidate pair.",
       "question": "What changes if the predicate rejects every pair?",
       "answer": "Only surviving results drop to zero; the product still enumerates all 18 candidate pairs.",
       "builds": [
@@ -648,7 +648,7 @@
       ]
     },
     "lecture-04-scene-11": {
-      "idea": "An empty or exhausted product must never invent another row.",
+      "idea": "ProductScan returns no pairs if either input is empty, and stays exhausted until rewound.",
       "question": "What should repeated next calls return after exhaustion?",
       "answer": "False every time, until the scan is explicitly rewound.",
       "builds": [
@@ -682,13 +682,13 @@
       ]
     },
     "lecture-04-scene-14": {
-      "idea": "A streaming interface does not guarantee that every operator uses constant state.",
+      "idea": "An operator can offer next() and still need substantial memory before it returns a row.",
       "question": "Can a sort emit the smallest row of arbitrary input before seeing the last row?",
       "answer": "Generally no. It must inspect all input and may need temporary storage.",
       "builds": [
         "Show a filter passing rows as matches arrive.",
         "Explain why sort needs to inspect the full unsorted input.",
-        "Accumulate hash-aggregation state for the groups.",
+        "Keep a running aggregate for each group in the hash table.",
         "Use already grouped input to finish one group before the whole input ends."
       ]
     },
@@ -704,7 +704,7 @@
       ]
     },
     "lecture-04-scene-16": {
-      "idea": "Caller demand, candidate counts, and cleanup explain how an iterator plan behaves.",
+      "idea": "Trace next() calls, count candidate rows, and follow close() to explain a plan’s work.",
       "question": "What can filter pushdown improve while preserving the query's answer?",
       "answer": "It can reduce input sizes and candidate work; close must still release every descendant's resources.",
       "builds": [
@@ -725,7 +725,7 @@
       ]
     },
     "one-row-every-block": {
-      "idea": "An unordered heap has no shortcut to an arbitrary matching row.",
+      "idea": "Without an index, a heap scan must examine rows to find a requested key.",
       "question": "Does caching turn a heap scan into an indexed lookup?",
       "answer": "No. It can reduce physical reads, but the scan still examines rows.",
       "builds": [
@@ -745,7 +745,7 @@
       ]
     },
     "four-storage-choices": {
-      "idea": "Access patterns determine the tradeoffs among heaps, sorted files, hashing, and B+ trees.",
+      "idea": "Compare lookup, range, and update work when choosing a heap, sorted file, hash table, or B+ tree.",
       "question": "Which structure directly supports sorted ranges while accommodating updates?",
       "answer": "A B+ tree balances ordered access with updates; hashing does not preserve range order.",
       "builds": [
@@ -816,7 +816,7 @@
       ]
     },
     "the-write-bill": {
-      "idea": "Every maintained index adds work to changes in the table.",
+      "idea": "Inserting, updating, or deleting a row can also require changes to its indexes.",
       "question": "What changes when a table has indexes on UID, name, and GPA?",
       "answer": "Inserts maintain all three; updates affect relevant entries, and deletes must remove stale entries.",
       "builds": [
@@ -846,7 +846,7 @@
       ]
     },
     "exit-trace": {
-      "idea": "Searches, splits, and leaf walks must preserve the tree's shared invariants.",
+      "idea": "After an insertion or split, searches and range walks must still reach every key and its complete RID list.",
       "question": "What changes for every leaf when the root splits?",
       "answer": "Every leaf gains one level of depth; equal depth is preserved.",
       "builds": [
@@ -868,7 +868,7 @@
       ]
     },
     "transaction": {
-      "idea": "A transaction groups changes under a shared commit boundary.",
+      "idea": "A transaction groups related changes so they can be committed together.",
       "question": "Does atomicity alone guarantee that an application transfers to the correct account?",
       "answer": "No. It groups the changes, but the application and constraints must still specify the right changes.",
       "builds": [
@@ -949,13 +949,13 @@
       ]
     },
     "two-policy-decisions": {
-      "idea": "Eviction and commit policies independently determine which changes may be missing or premature.",
+      "idea": "Eviction policy controls whether uncommitted pages may reach disk; commit policy controls whether changed pages must already be there.",
       "question": "Which policy creates a need for undo, and which creates a need for redo?",
       "answer": "STEAL permits uncommitted data on disk; NO-FORCE permits committed changes whose data pages are not durable.",
       "builds": [
-        "Separate the eviction choice from the acknowledgement choice.",
-        "Allow early uncommitted page writes with STEAL and derive undo.",
-        "Allow deferred committed page writes with NO-FORCE and derive redo."
+        "Ask two separate questions: may an uncommitted page be written, and must changed pages be saved before commit?",
+        "With STEAL, an uncommitted page can reach disk. Explain why recovery may need to undo it.",
+        "With NO-FORCE, a commit can finish before changed pages reach disk. Explain why recovery may need to redo them."
       ]
     },
     "four-recovery-duties": {
@@ -972,7 +972,7 @@
     "commit-boundary": {
       "idea": "A durable commit reply is safe only after required log records and, under FORCE, changed pages are durable.",
       "question": "What if the connection fails after durability but before the reply arrives?",
-      "answer": "The transaction may already be committed even though the client does not know its outcome.",
+      "answer": "The transaction may have committed even though the client never received the reply.",
       "builds": [
         "Identify the required durable log writes in each policy.",
         "Place the earliest safe acknowledgement on each lane.",
@@ -980,13 +980,13 @@
       ]
     },
     "recovery-at-scale": {
-      "idea": "Production recovery tracks transaction fate and durable progress beyond the simple lab protocol.",
+      "idea": "Production recovery tracks which transactions finished and which logged changes still need to be applied or undone.",
       "question": "Is an arbitrary timestamp enough to make a safe checkpoint cutoff?",
       "answer": "No. Recovery needs state and durability guarantees that account for unfinished transactions and required data.",
       "builds": [
         "Determine which transactions completed and which remain unfinished.",
         "Explain redo progress and the role of log sequence numbers.",
-        "Explain undo of losers and qualify differences from the lab and PostgreSQL."
+        "Explain how unfinished transactions are handled, noting differences between this general model, the lab, and PostgreSQL."
       ]
     },
     "place-the-crash": {
@@ -1005,9 +1005,9 @@
       "question": "Which must become durable first: recovery information or the associated changed page?",
       "answer": "Recovery information. Under the lab's FORCE policy, changed pages also precede the durable COMMIT log record.",
       "builds": [
-        "Narrate the recovery record and its sync.",
+        "Explain what the recovery record contains and when its fsync completes.",
         "In this lab, change the buffered page only after syncing its old-value log record.",
-        "Explain a commit and an interrupted transaction's repair without reading the script."
+        "Explain which writes complete a commit, then which old values recovery restores after an interrupted transaction."
       ]
     }
   },
@@ -1053,13 +1053,13 @@
       ]
     },
     "anomaly-gallery": {
-      "idea": "Different anomalies involve uncommitted values, changed rows, or changed predicate results.",
+      "idea": "Compare reading an uncommitted value, seeing a row change, and seeing a query return a different set of rows.",
       "question": "How does a phantom differ from a non-repeatable read?",
       "answer": "A phantom changes which rows satisfy a predicate; a non-repeatable read changes an existing row's observed value.",
       "builds": [
-        "Retell the dirty-read timeline before naming it.",
-        "Retell the changed-row timeline and identify the second observation.",
-        "Retell the changed-result-set timeline and identify the predicate."
+        "Follow the read of an uncommitted value, then introduce the term dirty read.",
+        "Compare the two reads of the same row and point to the changed value.",
+        "Repeat the same query and point to the new matching row."
       ]
     },
     "shared-and-exclusive": {
@@ -1112,11 +1112,11 @@
       ]
     },
     "isolation-ladder": {
-      "idea": "Isolation levels define guarantees, with important implementation differences.",
+      "idea": "An isolation level limits what concurrent transactions can observe, but its exact guarantees depend on the database.",
       "question": "Does PostgreSQL REPEATABLE READ prevent every serializability anomaly?",
       "answer": "No. Its transaction snapshot prevents these changing-result phantoms but can still allow write skew.",
       "builds": [
-        "Introduce READ UNCOMMITTED and qualify PostgreSQL's READ COMMITTED behavior.",
+        "Explain READ UNCOMMITTED, then note that PostgreSQL treats it as READ COMMITTED.",
         "Explain the committed-data guarantee of READ COMMITTED.",
         "Discuss transaction snapshots and the limits of REPEATABLE READ.",
         "Connect SERIALIZABLE to equivalence with a serial execution."
@@ -1143,7 +1143,7 @@
       ]
     },
     "the-version-bill": {
-      "idea": "A valid old snapshot can prevent obsolete versions from being reclaimed.",
+      "idea": "An open transaction’s snapshot can keep older row versions in use and delay their cleanup.",
       "question": "Why can an idle transaction hold back cleanup?",
       "answer": "Its snapshot may still need the old versions, even while it issues no new queries.",
       "builds": [
@@ -1169,7 +1169,7 @@
       "builds": [
         "Use a pin to protect a frame from eviction.",
         "Use a latch to protect a short shared-memory operation.",
-        "Use transaction locks to control conflicting access across transaction work."
+        "Use transaction locks to stop incompatible reads or writes while a transaction is active."
       ]
     },
     "exit-schedule": {
@@ -1244,11 +1244,11 @@
       ]
     },
     "watch-the-access-path-flip": {
-      "idea": "The preferred access path changes when estimated matches make index probes more costly.",
+      "idea": "As more rows match, fetching them through an index can cost more than scanning the table.",
       "question": "Where is the crossover in this toy model?",
       "answer": "Around 0.997%: (1,000 − 3) / 100,000. It is not a universal index threshold.",
       "builds": [
-        "Price a selective lookup as height three plus matching RIDs.",
+        "Estimate the index path as three page accesses to reach the leaf plus one per matching RID.",
         "Compare the index cost with 1,000 scan blocks near the crossover.",
         "Increase matches until the scan wins, then qualify the model's assumptions."
       ]
@@ -1258,8 +1258,8 @@
       "question": "Why is no join algorithm always best?",
       "answer": "Probe cost, build memory, ordering, duplicates, and output size change the work required.",
       "builds": [
-        "Use a tiny outer input with cheap indexed probes.",
-        "Build and probe a hash for an appropriate equality join.",
+        "Use an index nested-loop join when a small outer input can look up matches cheaply.",
+        "For an equality join, build a hash table on one input and look up matches from the other.",
         "Merge ordered inputs, producing all pairs from duplicate-key groups."
       ]
     },
@@ -1270,11 +1270,11 @@
       "builds": [
         "Join students and majors first and count the intermediate.",
         "Join students and enrollments first and compare the work.",
-        "Form the unconnected pair and distinguish intermediate growth from total-work ratios."
+        "Pair majors with enrollments and count the larger intermediate result. Its size alone does not give a total runtime ratio."
       ]
     },
     "search-without-enumerating-everything": {
-      "idea": "Optimizer search reuses subplans and can retain alternatives with useful physical properties.",
+      "idea": "The optimizer reuses plans for smaller joins and may keep an ordered plan that makes a later step cheaper.",
       "question": "Why retain a subplan that is not cheapest in raw local cost?",
       "answer": "Its ordering or another physical property may reduce the cost of the full plan.",
       "builds": [
@@ -1294,11 +1294,11 @@
       ]
     },
     "review-storage-and-memory": {
-      "idea": "Durability boundaries and working-set reuse explain storage behavior better than memorized ratios.",
+      "idea": "Explain when writes reach durable storage and whether requested pages remain in memory.",
       "question": "Why can a repeated 50-page loop miss in a 49-frame LRU pool?",
       "answer": "Each page is evicted before its next use; one additional frame lets later passes hit.",
       "builds": [
-        "Recall the difference between buffered acceptance and requested durable completion.",
+        "Recall why a buffered write can return before a write followed by fsync.",
         "Trace the repeated loop through 49 frames.",
         "Add the missing frame and distinguish initial misses from later hits."
       ]
@@ -1314,7 +1314,7 @@
       ]
     },
     "review-recovery-and-isolation": {
-      "idea": "Recovery preserves crash-safe ordering; isolation constrains concurrent schedules.",
+      "idea": "Recovery restores the required state after a crash; isolation controls how concurrent transactions interact.",
       "question": "Can recovery infer the intended deposit lost by a bad concurrent schedule?",
       "answer": "No. Logging and recovery preserve recorded actions; isolation must prevent the invalid schedule.",
       "builds": [
@@ -1406,7 +1406,7 @@
       "answer": "The reduction in bytes fetched can outweigh the decoding work.",
       "builds": [
         "Connect to column storage: values of the same field often have patterns. Identify the repeated values in this example.",
-        "Replace it with a compact encoding.",
+        "Encode those repeated values using fewer bytes.",
         "Reconstruct the original values and compare bytes saved with decode cost."
       ]
     },
@@ -1421,9 +1421,9 @@
       ]
     },
     "dictionary-and-deltas": {
-      "idea": "Dictionary and delta encodings exploit different patterns in data.",
+      "idea": "Dictionary encoding replaces repeated values with codes; delta encoding stores differences between numbers.",
       "question": "Which pattern favors a dictionary, and which favors deltas?",
-      "answer": "Repeated low-cardinality strings favor dictionary codes; smooth numeric sequences favor deltas.",
+      "answer": "A small set of repeated strings suits a dictionary; a number sequence with small differences suits delta encoding.",
       "builds": [
         "Identify the two repeated string values.",
         "Replace them with codes and recover one value through the dictionary.",
@@ -1431,7 +1431,7 @@
       ]
     },
     "batches-through-the-pipeline": {
-      "idea": "Batching changes the size of a handoff between operators. It builds on the scan, filter, and projection jobs from microdb.",
+      "idea": "Batching passes several values between operators at once while keeping the scan, filter, and projection tasks familiar from microdb.",
       "question": "If we pass the three fares as one batch, do we still test all three against fare > 25? What work can batching reduce?",
       "answer": "Yes: 36 passes, 24 fails, and 30 passes. The same two fare values are returned. Batching reduces repeated calls between operators; it does not remove the predicate checks or imply one disk read per row.",
       "builds": [
@@ -1464,7 +1464,7 @@
       ]
     },
     "predict-the-byte-ratio": {
-      "idea": "Read fewer columns, then fewer months. These two choices shrink the data in different directions.",
+      "idea": "Selecting the fare column skips other fields, and selecting December skips rides from other months.",
       "question": "The full table fills 144 equal-size squares. December fares occupy one square. What fraction of the value data do we need?",
       "answer": "One of 144 squares: 1/144 of the full value data. Each square is 5,000 values × 8 bytes = 40 KB. All 144 squares are 5.76 MB. Keeping fare divides the data by 12; keeping December divides it by 12 again. This compares value bytes before metadata, encoding, and compression, not query speed.",
       "builds": [
@@ -1483,13 +1483,13 @@
       "builds": [
         "Place the engine inside the application boundary.",
         "Connect its inputs to files or dataframes.",
-        "Return the query result and explain how dataframe and SQL work can compose."
+        "Return the query result and explain how one program can use both SQL queries and dataframes."
       ]
     },
     "storage-and-compute-separate": {
       "idea": "Separating storage from compute lets their resources scale independently.",
       "question": "What remains when a compute group stops or changes size?",
-      "answer": "The durable stored data remains available for later compute.",
+      "answer": "The stored data remains available when a new compute group starts.",
       "builds": [
         "Connect one compute group to durable storage.",
         "Resize compute without treating it as another full data copy.",
@@ -1542,7 +1542,7 @@
       ]
     },
     "choose-the-shape": {
-      "idea": "Choosing an access shape means matching the workload to layout and execution.",
+      "idea": "Choose a storage layout and execution plan that suit the queries you expect to run.",
       "question": "Which stage learns model coefficients, and which reuses them?",
       "answer": "Training aggregates learn the coefficients; inference applies the saved model without fitting it again.",
       "builds": [
@@ -1620,7 +1620,7 @@
         "Follow the input table into predict_fare(distances). DuckDB gathers a batch of distance values and supplies it as a PyArrow ChunkedArray, an Arrow column that can contain multiple chunks. The drawing shows just two values from the earlier invented example. Python receives the batch in one call, rather than a separate call for every scalar distance. This reduces Python call overhead and lets the model process tensors in batches. DuckDB chooses the UDF batch sizes. The earlier to_arrow_reader(batch_size=1024) controls the training-data reader, not these SQL prediction calls. Arrow carries the values; PyTorch computes the predictions.",
         "Follow the full callback: convert Arrow values to a tensor, scale the distances, run the fixed model, restore dollar units, and package the results with pa.array. pa is the pyarrow module imported by the lab script. Reveal the illustrative outputs 22 and 28 from the previous example. Each output must occupy the same batch position as its corresponding input, and the array lengths must match. Sorting the outputs inside the callback would misassign the fares. These positional requirements do not promise any overall SQL result order. Our callback uses torch.tensor, which copies data; Arrow alone does not make the whole path free of copying. No weights change during this prediction call.",
         "Read the filter month >= 11 and the SQL function call. These are 10,000 rides the model did not train on. Read the first two example predictions from the completed lab run: 15.17 versus 20.50 dollars, then 9.50 versus 10.00 dollars. SQL sends distances to PyTorch; the recorded fares are available for comparison but do not enter the prediction function. The network weights remain fixed.",
-        "The lab script saves both models’ outputs in predictions. Read avg(abs(fare - prediction)) as the average size of the dollar error. Compare 3.53 dollars for the straight line with 3.26 dollars for the network on the same reserved rides. This is one measured run, with 30 epochs and seed 6042; more complexity need not improve every distance group. Point to the optional lab for the plots, then introduce BigQuery ML as Google’s managed SQL alternative."
+        "The lab script saves both models’ outputs in predictions. Read avg(abs(fare - prediction)) as the average size of the dollar error. Compare 3.53 dollars for the straight line with 3.26 dollars for the network on the same reserved rides. This is one measured run, with 30 epochs and seed 6042; more complexity need not improve every distance group. Point to Lab 8 for the plots, then introduce the optional BigQuery ML example as Google’s managed SQL alternative."
       ]
     },
     "managed-model-sql": {
@@ -1660,9 +1660,9 @@
       ]
     },
     "embedding": {
-      "idea": "Queries and stored vectors must use compatible embedding conventions.",
+      "idea": "Embed questions and passages with compatible models and settings so their vectors can be compared.",
       "question": "Do equal vector dimensions make two different embedding models compatible?",
-      "answer": "No. Model version, preprocessing, dimensions, and similarity convention must form a compatible representation.",
+      "answer": "No. The model versions, preprocessing, dimensions, and similarity metric must also be compatible.",
       "builds": [
         "Keep the same recovery passage in mind as it moves through the model.",
         "Point to the four toy numbers. They illustrate a representation, not a measured embedding of the passage.",
@@ -1707,7 +1707,7 @@
       "builds": [
         "Noor suggests searching one region. Maya begins to nod, then asks: “What happens to a good passage in a region we skip?” Point to a nearby unsearched vector.",
         "Expand the candidate set under the same representation and metric.",
-        "Abstract the essential consequence in one sentence: “Searching fewer candidates can miss true neighbors; measure that loss against exact search.” Ask what saved result lets us measure it before naming recall."
+        "Say: “Searching fewer candidates can miss true neighbors; measure that loss against exact search.” Ask how the saved exact-result IDs let us count misses, then introduce recall."
       ]
     },
     "build-an-ivf-index": {
@@ -1726,7 +1726,7 @@
       "question": "What is the balanced-list estimate for n = 4,000, C = 20, and P = 4?",
       "answer": "20 + 4 × (4,000 / 20) = 820 distance evaluations, versus 4,000 exact.",
       "builds": [
-        "Envision before abstracting: remind students of the four-vector diagram they just traced. Ask which two operations consumed work: score the centroids, then score the selected lists. Now expand to four thousand stored vectors.",
+        "Return to the four-vector example. Count its two kinds of work: comparing centroids and comparing vectors in the selected lists. Now apply the same calculation to four thousand stored vectors.",
         "Count twenty centroid evaluations; the shortcut still does this work.",
         "Give pairs a minute to estimate four balanced lists with two hundred vectors each.",
         "Reveal 820, not the measured 924 from the later table. Ask why d cancels from the simplified ratio and why a timer is still needed."
@@ -1767,7 +1767,7 @@
     },
     "memory-and-update-budgets": {
       "idea": "Index comparisons must include storage, construction, and update costs.",
-      "question": "Where does memory go besides the index's headline structure?",
+      "question": "What uses memory besides the index’s lists or graph links?",
       "answer": "Into vectors, links or lists, metadata, and runtime overhead.",
       "builds": [
         "Maya asks what the index costs between queries. Count vectors, centroids, list entries, and overhead.",
@@ -1776,9 +1776,9 @@
       ]
     },
     "where-the-index-lives": {
-      "idea": "The deployment boundary determines who provides persistence and keeps source data synchronized.",
+      "idea": "Where the index runs determines which component saves it and updates it when source documents change.",
       "question": "What changes when an index moves from a database into a library or service?",
-      "answer": "Responsibility for storage, filtering, transactions, and synchronization moves between components and operators.",
+      "answer": "The application or service may need to provide storage, filtering, transactions, and updates that the database previously handled.",
       "builds": [
         "Maya reaches for the system diagram: “Who updates these vectors when a document changes?” Start beside database rows.",
         "Move to a library in the application process and assign responsibility for persistence, filtering, and synchronization.",
@@ -1786,7 +1786,7 @@
       ]
     },
     "diagnose-the-index": {
-      "idea": "Index recall and evidence relevance need different diagnostic experiments.",
+      "idea": "Compare neighbor IDs to test the index, then read the passages to test their relevance.",
       "question": "What if exact and ANN results agree but neither answers the question?",
       "answer": "Inspect chunking, embeddings, metadata, or ranking. More ANN exploration changes which vectors are scored, not their similarity scores.",
       "builds": [
@@ -1796,7 +1796,7 @@
       ]
     },
     "rebuild-the-retrieval-contract": {
-      "idea": "A defensible retrieval configuration starts with exact results and measures what approximation loses.",
+      "idea": "Choose a retrieval setting by comparing its results and work with exact search.",
       "question": "What would you show Noor to justify the retrieval configuration, and what would still need checking?",
       "answer": "Show the exact baseline, index settings, recall and work measurements, and measured latency and memory costs. Open the passages to check relevance; answer quality needs further evaluation.",
       "builds": [
@@ -1809,9 +1809,9 @@
   },
   "12": {
     "evidence-reaches-the-answer": {
-      "idea": "Select evidence, carry its source identity, and check the claims it supports.",
+      "idea": "Keep each retrieved passage with its source ID, then check whether it supports the answer’s claims.",
       "question": "Does a retrieved passage’s score identify its source or prove an answer is supported?",
-      "answer": "No. Resolve its stored position to the source record, then inspect the text behind the claim.",
+      "answer": "No. Use the result’s stored position to look up its source record, then read the passage to check the claim.",
       "builds": [
         "Calibrate: ask what an index position identifies and what geometric recall does not prove. Then enter Maya and Noor’s fictional recovery-question rehearsal. Show the source record before discussing the answer. Start with the changed source in the corpus.",
         "Retrieve the relevant subset with its source identifier.",
@@ -1835,7 +1835,7 @@
       "question": "Which approach can preserve an explicit, updateable source trail?",
       "answer": "Retrieval, provided source identities and versions survive through context assembly and citation.",
       "builds": [
-        "The evidence is now needed in the request. Compare the three supply paths by asking how a changed source becomes available and how much material each question processes. Discuss what learned weights encode and the limits of fresh fact lookup.",
+        "Compare three ways to supply information: model weights, the full corpus in the prompt, and retrieved passages. Ask how each approach handles a changed source and how much text each question must process. Start with the limits of retrieving fresh facts from learned weights.",
         "Place the corpus in context and consider its size and evidence-use costs.",
         "Retrieve a subset with source IDs and evaluate its support for the answer."
       ]
@@ -1856,7 +1856,7 @@
       "question": "Is the buffer-pool paraphrase failure caused by ANN approximation?",
       "answer": "No. The browser searches exactly; its hashed-word representation does not bridge the vocabulary change.",
       "builds": [
-        "The record plumbing works, but Maya’s paraphrase misses the source. Ask whether ANN is involved before revealing that this widget uses exact search. Read the first buffer-pool question and inspect the retrieved source.",
+        "Maya’s paraphrase misses the source even though result positions map to the correct records. Ask whether ANN caused the miss, then reveal that this widget uses exact search. Read the first buffer-pool question and its retrieved source.",
         "Read the paraphrase and compare the result.",
         "Confirm the shared information need, then test representation changes."
       ]
@@ -1866,7 +1866,7 @@
       "question": "Should the current system's answer decide which sources are relevant?",
       "answer": "No. Relevance needs an explicit evidence judgment independent of the system being evaluated.",
       "builds": [
-        "Noor asks how to recognize a fix rather than a lucky result. Have the class propose a question and label its evidence independently of the retriever. Have pairs write a question requiring a particular passage.",
+        "Noor asks how to tell whether a change helps beyond one question. Have pairs write a question requiring a particular passage and label that evidence before seeing the retriever’s results.",
         "Ask another person to label its supporting sources.",
         "Hold out partner questions and include paraphrases, negatives, and unanswerable cases."
       ]
@@ -1876,7 +1876,7 @@
       "question": "Does moving a relevant result from rank three to rank one change hit@3?",
       "answer": "No. Both are hits; two of the three pictured questions hit, giving 2/3.",
       "builds": [
-        "Envision the three-query example before the metric formula. Ask whether a rank-three relevant result is present in top three; score each row by hand. Read each ranked list.",
+        "Read the three ranked lists before showing the formula. Ask whether a relevant source at rank three counts as a hit in the top three.",
         "Mark independently labeled relevant items.",
         "Score whether each question hits within the first three results.",
         "Average the two hits and one miss to obtain about 0.67."
@@ -1887,7 +1887,7 @@
       "question": "What is the mean of reciprocal ranks 1, 1/3, and 0?",
       "answer": "4/9, approximately 0.444, for these truncated result lists.",
       "builds": [
-        "Keep those same three queries. Ask which measure rewards moving useful evidence earlier; score the reciprocals before taking their mean. Keep the same three ranked lists as the hit-rate example.",
+        "Keep the same three lists. Ask how we could reward placing relevant evidence earlier, then calculate each reciprocal rank before taking the mean.",
         "Find the first relevant result in each list.",
         "Assign reciprocal ranks 1, 1/3, and 0.",
         "Average them and separate ranking quality from answer faithfulness."
@@ -1904,11 +1904,11 @@
       ]
     },
     "context-has-a-budget": {
-      "idea": "Context assembly must balance evidence coverage against cost, redundancy, and noise.",
+      "idea": "Choose passages that cover the question without filling the prompt with repeated or irrelevant text.",
       "question": "Does sorting the same retrieval scores again create a reranker?",
       "answer": "No. Reranking needs another relevance signal over the candidate set.",
       "builds": [
-        "The retriever can produce more candidates than fit into the prompt. Ask which selected pages are worth their context cost and which merely repeat evidence. Inspect all retrieved candidates and identify repeated or irrelevant content.",
+        "The retrieved candidates do not all fit in the prompt. Inspect them for relevant evidence, repeated information, and unrelated text before choosing which to include.",
         "Use a new relevance signal to choose a smaller evidence set.",
         "Assemble the evidence with source IDs and deliberate ordering."
       ]
@@ -1935,32 +1935,32 @@
       ]
     },
     "a-changed-source-invalidates-copies": {
-      "idea": "Changing a source or embedding configuration invalidates stored derivatives.",
+      "idea": "Changing a document can make its chunks and vectors stale; changing the embedding model requires compatible replacement vectors.",
       "question": "What must change when the embedding model changes?",
       "answer": "Every stored vector must be regenerated compatibly; record model revision and preprocessing as well as its name.",
       "builds": [
-        "Maya edits D7. Ask which stored derivatives now describe the old text, then separate a source change from an embedding-model change. Identify the source and vector versions currently in use.",
+        "Maya edits D7. Find the chunks and vectors still based on its old text. Identify their source and model versions, then ask how changing the embedding model would affect the rest of the index.",
         "Change a document and locate its stale chunks.",
         "Build compatible replacement embeddings and index entries.",
-        "Switch versions in a controlled way and retain citation and evaluation provenance."
+        "Switch queries to the updated records and keep the source and model versions needed to check citations and reproduce evaluation."
       ]
     },
     "failure-diagnosis-workshop": {
-      "idea": "A useful diagnosis identifies the earliest failing stage and an observable artifact.",
+      "idea": "Find the first stage that went wrong by inspecting retrieved IDs, rankings, the assembled prompt, and the answer.",
       "question": "What should we inspect when the answer is unsupported despite correct retrieved evidence?",
       "answer": "Context assembly and generation, including whether cited passages support the claims.",
       "builds": [
-        "Ask partners to name the earliest failed artifact: retrieved IDs, rank, assembled prompt, or unsupported claim. Require a proposed experiment aimed at that boundary. For missing evidence, inspect labels, chunks, representation, recall, and filters.",
+        "Ask pairs where the first failure appears: missing source IDs, poor ranking, omitted prompt text, or an unsupported claim. Have them propose a check for that stage. For missing evidence, inspect relevance labels, chunks, embeddings, index recall, and filters.",
         "For wrong ranking, inspect scores and a possible reranking experiment.",
         "For an unsupported claim, inspect assembled context and citation support."
       ]
     },
     "a-measurable-rag-system": {
-      "idea": "A measurable RAG system keeps source identity and tests each stage separately.",
+      "idea": "Keep source IDs with retrieved passages and evaluate retrieval and answer quality separately.",
       "question": "A relevant source is in the prompt, but the answer makes an unsupported claim. Which artifact would you inspect next?",
       "answer": "Open the exact prompt and cited passage, then compare the claim with the evidence. Retrieval presence alone does not prove support.",
       "builds": [
-        "Repeat the same open-book model at the end. Have a student explain selected pages, references, and checked claims in ordinary language, then connect that explanation back to records and metrics. Record source identities with each chunk.",
+        "Return to the recovery question. Show the selected chunks and their source IDs so students can trace each passage back to its document.",
         "Retrieve evidence for one question.",
         "Evaluate retrieval and answer quality on held-out questions.",
         "Repeat the same open-book model at the end. Have a student explain selected pages, references, and checked claims in ordinary language, then connect that explanation back to records and metrics."
@@ -1979,9 +1979,9 @@
       ]
     },
     "partitioning": {
-      "idea": "Partitioning assigns responsibility through a routing rule.",
+      "idea": "Partitioning uses a routing rule to assign each record to a partition.",
       "question": "How does partitioning differ from replication?",
-      "answer": "Partitions divide responsibility; replicas copy responsibility for resilience or service.",
+      "answer": "Partitions hold different subsets of the data. Replicas keep copies so data can remain available when a worker fails or becomes busy.",
       "builds": [
         "Link ownership to sorting mail into destination trays. Map key to address and worker to owner. Name the limit: a routing rule does not ensure equal work or create replicas. Identify the keys that need owners.",
         "Assign keys to four partitions using a deterministic rule.",
@@ -1989,7 +1989,7 @@
       ]
     },
     "hash-routing": {
-      "idea": "Hash routing makes point ownership direct while scattering ordered ranges.",
+      "idea": "A hash tells us which partition holds one key, but nearby keys may land in different partitions.",
       "question": "How can a query find dee through fay without an ordering property?",
       "answer": "It must consult all hash partitions, even though only some contain matching keys.",
       "builds": [
@@ -2056,7 +2056,7 @@
       "question": "Can four local (log, 1) pairs travel as one (log, 4) pair?",
       "answer": "Yes for sum. The combine must preserve correct aggregation and does not replace the global reduce.",
       "builds": [
-        "Ask what can safely be reduced before the expensive transfer. Link valid local combining to doing useful reduction before data movement. Count the raw pairs awaiting movement.",
+        "Count the pairs waiting for shuffle. Ask which equal keys can be summed locally so fewer pairs need to travel between workers.",
         "Combine equal local keys with a sum.",
         "Send the smaller output and contrast sum with subtraction's incompatible behavior."
       ]
@@ -2066,7 +2066,7 @@
       "question": "When does this lazy word-count chain need to process the data?",
       "answer": "When an action such as collect requests the result.",
       "builds": [
-        "The group contract is settled. Now trace the plan that expresses it, keeping description separate from execution until the action. Identify the input without executing it.",
+        "Trace the Spark plan for grouping and counting equal words. Start with the input, then build each transformation without executing it; an action will request the result.",
         "Describe flatMap turning lines into words.",
         "Describe map turning words into (word, 1) pairs.",
         "Add the grouping dependency for reduceByKey.",
@@ -2078,7 +2078,7 @@
       "question": "Where does the stage boundary fall in this word-count chain?",
       "answer": "At the shuffle between map-side work and reduce-side work.",
       "builds": [
-        "Ask for the stage boundary before revealing it. A shuffle changes ownership; a narrow operation stays within its limited dependencies. Pipeline the narrow, partition-local operations.",
+        "Follow flatMap and map within each partition. They can run together because neither needs records from another partition. Ask where grouping equal words requires a shuffle.",
         "Locate the shuffle dependency.",
         "Ask where the shuffle separates map-side and reduce-side stages before revealing that division.",
         "Inspect the two stages and distinguish stages from a count of API calls."
@@ -2089,7 +2089,7 @@
       "question": "Is lineage a durable transaction log for external side effects?",
       "answer": "No. It is a recomputation recipe; replayable transformations and accessible dependencies are required.",
       "builds": [
-        "A worker fails. Ask what recipe and available inputs the engine needs before reconstructing its missing output. Contrast that recipe with a transaction log. Identify the recorded transformation recipe.",
+        "A worker loses an output partition. Follow the recorded transformations back to the inputs needed to recompute it. Ask whether those inputs remain available and explain how this recipe differs from a transaction log.",
         "Lose one worker's output partition.",
         "Find the necessary ancestors that remain available.",
         "Recompute replacement output and discuss the limits of replay."
@@ -2107,13 +2107,13 @@
       ]
     },
     "choose-the-execution-shape": {
-      "idea": "The execution framework should follow the workload and its measured bottleneck.",
+      "idea": "Choose an execution framework based on the work the job needs and the step that limits it.",
       "question": "What should justify paying distribution's movement and coordination costs?",
       "answer": "Evidence that the workload's size, latency, or concurrency requirements need it.",
       "builds": [
-        "Ask each pair for the bottleneck and a defensible starting engine. Keep local execution in the comparison; data size alone is not the decision. Consider a large joined aggregation as a relational dataflow.",
+        "Ask pairs which step limits the workload and which engine they would try first. Include a local engine in the comparison. Start with a large job that joins tables and groups the results.",
         "Consider independent Python calls as separate tasks.",
-        "Consider a workload comfortably served by one local engine and justify the starting choice."
+        "Consider a job that fits comfortably on one machine and explain why a local engine is a reasonable starting point."
       ]
     },
     "place-move-recover": {
@@ -2121,7 +2121,7 @@
       "question": "What stays the same when the two-record word count changes from two partitions to seven?",
       "answer": "The word totals stay the same. Placement and schedule may change; repeated occurrences and complete grouping must remain correct.",
       "builds": [
-        "Repeat assign, group, execute, recover on the original small count. Ask what changes with seven partitions and which result must stay unchanged. Explain ownership and locate skew.",
+        "Return to the small word count. Identify which worker owns each key, then ask how an uneven input could leave one worker with most of the work.",
         "Explain the movement needed to group equal keys.",
         "Explain the execution plan and when work starts.",
         "Repeat assign, group, execute, recover on the original small count. Ask what changes with seven partitions and which result must stay unchanged."
@@ -2144,7 +2144,7 @@
       "question": "Why reverse a domain name in an ordered row key?",
       "answer": "Related domains then share a prefix, helping prefix-local scans.",
       "builds": [
-        "First name a value’s logical address. Relate sorted row keys to the ordered ranges students already know, without conflating address with durable placement. Identify the row coordinate and its ordered key.",
+        "Identify a cell by its row key before asking where it is stored. Connect the sorted keys to familiar B+ tree ranges; the key names the row but does not specify a physical file location.",
         "Separate declared column families from qualifiers.",
         "Add the version timestamp and qualify its difference from a cross-row transaction snapshot."
       ]
@@ -2161,7 +2161,7 @@
     },
     "tablets-separate-placement-from-storage": {
       "idea": "Tablet placement and durable storage ownership are separate parts of the architecture.",
-      "question": "Why need a lost tablet server not mean lost durable data?",
+      "question": "Why can a tablet server fail without losing the stored data?",
       "answer": "In the original architecture, replicated GFS holds the logs and SSTables; reassignment and replay can rebuild service.",
       "builds": [
         "Link tablets to assigned intervals in an ordered key space. Ask why the serving owner can change while replicated durable files remain available. Divide the ordered keys into contiguous tablet ranges.",
@@ -2173,7 +2173,7 @@
     "splitting-cannot-fix-a-moving-hotspot": {
       "idea": "Splitting a range does not remove a hotspot created by ever-increasing keys.",
       "question": "Where does the next timestamp-prefixed burst go after the hot tablet splits?",
-      "answer": "To the newest tail range again; the split changes size without changing incoming key direction.",
+      "answer": "The burst goes to the newest range again. Splitting reduces the old range’s size, but the increasing timestamps still target its new end.",
       "builds": [
         "Predict the destination of the next timestamp key after a split. The incoming pattern, not just the tablet’s size, creates the hotspot. Begin with distributed writes.",
         "Send increasing timestamps to the tail.",
@@ -2218,7 +2218,7 @@
       "question": "Is merging free just because its input reads are sequential?",
       "answer": "No. It rewrites output and consumes bandwidth, and retained versions affect what may be discarded.",
       "builds": [
-        "The correct version is known. Ask what background work can reduce future lookup work without discarding required versions. Place the two immutable sorted files side by side.",
+        "Place two immutable sorted files side by side. Ask how merging them could make later lookups cheaper while retaining every version still needed by a reader.",
         "Choose the next key from their merge cursors.",
         "Resolve duplicate k2 versions under the visibility and retention rules.",
         "Write the merged output and account for the background work."
@@ -2232,7 +2232,7 @@
         "Return explicitly to the opening old file. Ask why removing a marker could expose bytes that were never edited. Locate the old value in an earlier file.",
         "Write a tombstone as the newer record.",
         "Stop the lookup at the tombstone.",
-        "Reclaim it only when older copies and relevant snapshots are safely covered."
+        "Remove the tombstone only when older values cannot reappear and no active snapshot still needs the retained history."
       ]
     },
     "a-one-sided-membership-test": {
@@ -2259,20 +2259,20 @@
       ]
     },
     "the-read-write-space-budget": {
-      "idea": "A storage choice needs a read, write, space, and durability budget for its workload.",
+      "idea": "Compare read work, write work, storage space, and durability requirements for the expected workload.",
       "question": "Why is fast log append alone insufficient for sustained LSM write performance?",
-      "answer": "Background compaction must keep pace, or accumulated work can constrain the system.",
+      "answer": "Compaction must keep up with incoming writes; otherwise files accumulate and writes may have to slow down.",
       "builds": [
-        "Noor asks whether the cheaper write path pays elsewhere. Compare the whole read/write/space/durability workload, including background maintenance. Identify B+ tree page organization and batching opportunities.",
+        "Noor asks what other work the fast write path creates. Compare reads, writes, space, and durability, including background maintenance. Begin with how B+ trees organize pages and can batch writes.",
         "Identify sorted LSM memory and files.",
         "Account for compaction's read, write, and space pressure.",
         "Choose a starting design from workload requirements and testable costs."
       ]
     },
     "a-network-partition-forces-a-choice": {
-      "idea": "A partition prevents an isolated replica from knowing an unseen completed write.",
+      "idea": "During a network partition, a replica may be unable to learn that another replica accepted a write.",
       "question": "What can replica 2 infer about v2 from silence alone?",
-      "answer": "It cannot know that update. Preserving linearizability can require refusing service during the partition.",
+      "answer": "Silence does not tell replica 2 whether v2 was written. To preserve linearizability, the system may need to refuse the isolated read.",
       "builds": [
         "Now cut the link between replicas. Ask what the isolated replica can know before naming guarantees; explain the concrete choice at the request. Begin with agreeing replicas.",
         "Write v2 at replica 1 and interrupt communication.",
@@ -2286,7 +2286,7 @@
       "question": "Why must a compaction retain DELETE@9 while an unmerged file still holds old@5?",
       "answer": "Dropping the marker could expose the old value again. Cover the older versions and required snapshots before reclaiming it.",
       "builds": [
-        "Repeat log, buffer, flush, resolve on k. Ask a student why the old file may remain while the current read is absent, then name the safety condition for compaction. Identify the durable recovery record.",
+        "Return to key k. Identify the durable log record that would let the engine rebuild its write after a crash.",
         "Place the write in ordered memory.",
         "Flush it into a sorted file and account for later compaction.",
         "Repeat log, buffer, flush, resolve on k. Ask a student why the old file may remain while the current read is absent, then name the safety condition for compaction."
@@ -2297,7 +2297,7 @@
     "the-path-is-the-answer": {
       "idea": "A graph query can ask for the path connecting records.",
       "question": "If two routes end at Dee, does a query for distinct reachable people need two copies of Dee?",
-      "answer": "No. Distinct reachability returns one Dee, while a route query can retain both paths. Decide the result contract first.",
+      "answer": "No. A query for distinct people returns Dee once; a query for routes can return both paths. Decide which result is required first.",
       "builds": [
         "Calibrate with the src/dst join students know. Introduce Maya’s whiteboard: two routes can end at Dee. Ask whether the result requires routes or distinct people before tracing a route to Fay. Identify the familiar student records as nodes.",
         "Add directed follows relationships and ask a one-hop question.",
@@ -2319,7 +2319,7 @@
       "question": "How would a relational edge table find ada's neighbors?",
       "answer": "Match src using an index or scan; stored adjacency maintains the neighbor relationship for later reads.",
       "builds": [
-        "The result contract is chosen. Ask how matching src finds the same neighbors that maintained adjacency can reference directly. Find outgoing edges in the relational edge table.",
+        "Find ada’s outgoing edges by matching src in the relational edge table. Then compare how a stored adjacency list can point directly to the same neighbors.",
         "Resolve endpoints while creating a relationship.",
         "Store and read the neighbor list, accounting for its write-time maintenance."
       ]
@@ -2387,11 +2387,11 @@
       ]
     },
     "choose-a-graph-workload": {
-      "idea": "Relationship depth and computation shape help determine a suitable graph tool.",
+      "idea": "Choose a graph tool based on how far queries traverse and whether they work on a few paths or the whole graph.",
       "question": "Does a graph engine automatically outperform relational execution on every relationship query?",
       "answer": "No. Compare equivalent semantics and include the cost of maintaining the relationships.",
       "builds": [
-        "Ask which result and workload justify a new datastore. Consider maintenance and synchronization as well as the path syntax. Consider a shallow department join using relational operations.",
+        "Ask whether the workload benefits enough from a graph store to justify maintaining another copy of the data. Start with a shallow department join that relational operators already handle.",
         "Consider unknown-depth dependency paths in a graph query engine.",
         "Consider whole-graph iterative analytics in a graph-compute framework."
       ]
@@ -2412,13 +2412,13 @@
       "question": "When could expansion make retrieval worse?",
       "answer": "Ambiguous entities or high-degree hubs can introduce irrelevant evidence and extra latency.",
       "builds": [
-        "Keep the vector-only baseline. Ask for one benefited and one harmed question before treating graph expansion as an improvement. Record the vector-only baseline.",
+        "Save the vector-only results. Ask for one question that extra graph neighbors might help and another for which those neighbors could add irrelevant evidence.",
         "Add relationship neighbors and predict a helped and a harmed question.",
         "Compare support, noise, context size, and latency on the same held-out questions."
       ]
     },
     "five-mechanisms-recur": {
-      "idea": "The same mechanisms recur across systems while their contracts differ.",
+      "idea": "Caches, indexes, logs, plans, and partitions recur across systems, but their guarantees differ.",
       "question": "Is Spark lineage the same mechanism as a write-ahead log?",
       "answer": "No. Lineage records a recomputation recipe; WAL records information for transaction durability and recovery.",
       "builds": [
@@ -2434,7 +2434,7 @@
       "question": "What evidence should follow a product's architectural claims?",
       "answer": "A workload-specific benchmark with equivalent results and measurements of the relevant costs and failures.",
       "builds": [
-        "Transfer the model to an unfamiliar system. Have students ask for a byte path, skipped work, recovery boundary, execution dependency, and owner. Ask what the system reads and writes in a block.",
+        "Apply the course’s questions to an unfamiliar system. Start with what one block contains and how the system reads or writes it. The next steps ask how it skips work, survives failure, executes queries, and assigns data to workers.",
         "Ask how it skips data for the workload.",
         "Ask which data or recovery log records are durable when the client receives a successful write reply.",
         "Ask how it turns queries into execution.",
@@ -2444,7 +2444,7 @@
     "finish-with-measured-decisions": {
       "idea": "A useful project explanation connects a measured result to a design decision.",
       "question": "What result requirement and experiment explain one design choice in your project?",
-      "answer": "State the same workload and result contract for both configurations, show their evidence, explain the choice, and demonstrate a diagnosed failure.",
+      "answer": "Compare both configurations on the same workload and required results. Show the measurements behind the choice and one failure whose cause you identified.",
       "builds": [
         "State the question the project answers and what a correct result contains. Ask another student to explain one observed failure and the experiment that identified its cause.",
         "Present the evidence behind a comparison.",
@@ -2473,10 +2473,10 @@
     1: {
       story: 'At a lab desk, Maya asks the database to list students with a GPA above 3.5. Both runs return ada, cyd, and eli. Noor points to the Disk reads counter: two on the first run, zero on the second. Maya asks why it did not read the file again. The first run kept the student data in memory, so the second can check the same rows there. This is a fictional classroom investigation.',
       calibrate: 'Does SELECT name with a GPA condition request matching names, or prescribe which stored blocks the engine must read?',
-      answer: 'It requests a result. The engine chooses and executes a plan; matching names and block reads describe different things.',
+      answer: 'It requests matching names. The engine chooses a plan, and that plan determines which blocks it reads.',
       opening: 'Read the query as asking for students with a GPA above 3.5. Explain that the slides store GPA in tenths, so 35 represents 3.5. Keep ada, cyd, and eli visible, and ask whether a second run must read their data from disk again before following either path.',
       analogy: ['lecture-01-scene-09','Use a workshop order to map responsibilities: SQL states the request, the plan supplies work instructions, operators request rows, and lower layers obtain their bytes. The actual interfaces determine what each station can do.'],
-      closing: 'Explain the same request again: SQL to plan, plan to rows, rows to bytes, bytes to resident or stored blocks. Change one condition by updating a row while its page stays cached.',
+      closing: 'Follow the same query from SQL through its plan to the rows and pages it reads. Then change a row while its page stays in memory and ask how the next result should change.',
       question: 'If a table changes between two runs while its pages stay cached, can zero new storage reads justify returning the old answer?',
       expected: 'No. Cached pages are inputs to execution, not a saved answer. Reevaluate the query against the current buffered data; distinguish examined rows, returned rows, and storage reads.',
       idea: 'A query’s answer and the work needed to produce it are separate properties.'
@@ -2487,9 +2487,9 @@
       answer: 'A frame is a reusable memory slot and can contain another numbered block. A positive pin count protects that frame’s current contents from replacement.',
       opening: 'Use the repeated B7 request as the opening task. Distinguish a cached block from a cached query result before revealing the shorter request path.',
       analogy: ['lecture-02-scene-03','Map books to blocks, work desks to frames, and active readers to pins. Replacing a book is safe only when its users finish. A reused frame retains its memory address while its bytes change.'],
-      closing: 'Return to B7 and narrate hit or miss, pin, use, unpin, and safe replacement. Keep the pool fixed and change the access order to explain a different hit rate.',
+      closing: 'Follow a request for B7: find or load it, pin it, read it, and unpin it. Explain when its frame can be replaced. Keep the pool size fixed and change the request order to explain a different hit rate.',
       question: 'The oldest frame is pinned and a newer one is unpinned and dirty. Which may be reused, and can correct replacement still produce zero scan hits?',
-      expected: 'Only the unpinned frame is eligible, after dirty write-back. A scan larger than the pool can evict each block before reuse. Safety and hit rate are separate checks.',
+      expected: 'The unpinned frame can be reused after its dirty page is written. A scan larger than the pool can still miss every time because each block is evicted before reuse. Correct replacement does not guarantee cache hits.',
       idea: 'Pins and dirty writes make frame reuse safe; access order determines how useful that reuse is.'
     },
     3: {
@@ -2498,24 +2498,24 @@
       answer: 'They manage bytes and blocks. A schema and layout supply field meanings, boundaries, and offsets.',
       opening: 'Point to the anonymous byte grid before naming its fields. Ask students to identify the missing interpretation rule; use the saved-address failure to motivate slots.',
       analogy: ['lecture-03-scene-04','Map equal tray compartments to slots and positions within each compartment to field offsets. Count bytes, including string prefixes and reserved content capacity; characters can take different numbers of UTF-8 bytes.'],
-      closing: 'Return to the saved address and trace slot number, field offset, page pin, and catalog lookup. Change the occupant of a deleted slot and ask what the unchanged address identifies now.',
+      closing: 'Use the saved address to find the slot, then use the layout to find its fields. Explain how the page pin and catalog support that read. Delete the row, reuse its slot, and ask which row the same address now identifies.',
       question: 'Can a reused RID still be the same physical address while naming a different row? Which rules let a new process interpret its fields?',
       expected: 'Yes. A RID is a block and slot address, not a permanent identity. The saved schema and layout specify how to interpret the new occupant’s bytes.',
-      idea: 'A layout gives bytes repeatable positions; the catalog preserves their interpretation.'
+      idea: 'The layout tells us where each field is stored, and the catalog saves those rules for the next run.'
     },
     4: {
-      story: 'Maya asks for the name after ada and expects ben. Noor watches selection skip ben before returning cyd. This is a fictional classroom investigation over the six-row student fixture.',
+      story: 'Maya runs the query for students with gpa > 35. After ada, she expects ben, but the filter skips ben’s GPA of 31 and returns cyd. Noor asks how many rows that one result required the scan to visit. This is a fictional classroom investigation using the six-row example.',
       calibrate: 'When TableScan.next() returns True, does it provide a whole result table or position the scan at one current row?',
       answer: 'It positions the scan at one row. The caller can read that row’s fields; another next call advances again.',
       opening: 'Start with the operator tree before any next() call. Have the class trace the first next() request down to TableScan before revealing a returned row.',
       analogy: ['lecture-04-scene-05','Link the interface to nested Python generators: asking for the next item resumes work and a wrapper can skip items. Rewind, field routing, and close remain explicit scan contracts. Blocking operators later qualify the streaming model.'],
       closing: 'Return to one requested name. Trace next() calls, skipped input rows, the caller’s field read, and close() calls on every input. Then compare equivalent plans with different candidate counts.',
-      question: 'What can moving an input-only filter below the product change, and what result and cleanup obligations must it preserve?',
-      expected: 'It can reduce candidates while preserving matching rows and duplicates. It must use fields available in that input, and closing the plan still releases all descendant resources. Counts do not by themselves establish timing.',
+      question: 'What work can a filter save by running before ProductScan, and what must stay correct?',
+      expected: 'It can reduce candidate pairs while returning the same rows and duplicates. The filter must use only fields from its input, and close must still release every underlying scan. Measure runtime separately from pair counts.',
       idea: 'One successful result request can cause many input visits; the plan determines that work.'
     },
     5: {
-      story: 'At the prompt, Maya circles the keyword FROM and the value “from” inside quotes. Noor asks for the tokens before a plan. This fictional classroom puzzle returns in the quotes scene; the opening first traces the ordinary SELECT request.',
+      story: 'At the prompt, Maya points to FROM and to “from” inside quotes. Noor asks why the lexer gives those same letters different token kinds. This fictional classroom puzzle returns in the quotes scene; first follow a simple SELECT through the front end.',
       calibrate: 'Has constructing a query description already executed the scan? Does a quoted string with keyword letters have to be a keyword token?',
       answer: 'No to both. Parsing records a request before execution; the lexer distinguishes a quoted string value from a keyword.',
       opening: 'Follow the visible SELECT through tokens, QueryData, and scan operators. Name each representation before moving to the next; reserve actual row reads for execution.',
@@ -2534,21 +2534,21 @@
       closing: 'Return to GPA 36, then explain the existing split-and-lookup sequence. Change the incoming row to a duplicate key and ask which list changes instead of adding a distinct-key slot.',
       question: 'Does adding a RID for an existing key force a distinct-key overflow, and what must every split preserve?',
       expected: 'In this lab’s model it extends that key’s RID list. Every split preserves actual keys and whole RID lists, sorted leaf order, routing, leaf links, and equal leaf depth. A returned RID still needs a heap fetch.',
-      idea: 'An index preserves routes to complete RID lists while the heap supplies the rows.'
+      idea: 'The index locates each key’s RID list, and those addresses lead to the rows in the heap.'
     },
     7: {
       story: 'Maya tries to transfer $50 from A, which holds $60, to B, which holds $90. A’s new $10 balance reaches disk, but a power failure interrupts the credit to B. After restarting, the saved total is $100 instead of $150. Noor opens the transaction log and asks how it can help restore the missing $50. This is a fictional classroom investigation; the displayed balances illustrate the recovery rule.',
       calibrate: 'Does a dirty page in memory prove that a transaction committed durably? What distinction did fsync introduce in Lab 1?',
-      answer: 'No. Working bytes, stored pages, durable recovery records, and completion records are separate states. The required synchronization order depends on the engine’s policy.',
+      answer: 'No. A dirty page may exist only in memory, or it may have reached disk before commit. Check the durable log and completion records; the required write order depends on the engine’s policy.',
       opening: 'Let students establish the original account total before applying a debit. Identify the incomplete transfer and the durable evidence available after interruption.',
       analogy: ['write-ahead-logging','Link WAL to preserving repair information before changing an item. The old value supplies physical undo in this lab; a note in RAM is insufficient. Required log information must reach durable storage before protected data.'],
-      closing: 'Return to the transfer and narrate log, page, commit, and repair boundaries under FORCE/STEAL. Change the crash point to recovery itself.',
+      closing: 'Return to the transfer under FORCE/STEAL. Explain when its log records, changed pages, and COMMIT record reach storage. Then interrupt recovery and ask what the next restart must repair.',
       question: 'Undo repaired the buffer. Why must its flush precede a durable ROLLBACK record?',
       expected: 'Otherwise another crash could leave damaged data beside a completion record that makes the next recovery skip the repair. Recovery must make its own changes durable before declaring completion.',
-      idea: 'The log and buffer policy determine which durable writes must precede completion.'
+      idea: 'The engine must save the required log records and pages before declaring a commit or repair complete.'
     },
     8: {
-      story: 'Maya and Noor each deposit ten into one hundred. Both read 100 and write 110. Maya asks where the second deposit went, although no crash occurred. This is a fictional classroom schedule that the later scheduler makes explicit.',
+      story: 'Maya and Noor each deposit $10 into an account holding $100. Both read $100 and write $110. Maya asks why the balance is not $120 even though both deposits completed. This is a fictional classroom schedule that the later animation traces.',
       calibrate: 'What balance would serial deposits produce, and can durable writes alone establish that result under concurrency?',
       answer: 'Serial deposits produce 120. Durability can preserve an incorrect 110; isolation must constrain the interleaving.',
       opening: 'Ask for the intended serial result before running the conflicting schedule. Distinguish this ordering problem from the earlier crash-recovery promise.',
@@ -2556,7 +2556,7 @@
       closing: 'Return to the deposits, identify the first incompatible lock upgrade, and then explain the separate reader/writer snapshot example. Change the second read from a statement snapshot to a transaction snapshot.',
       question: 'After a writer commits 120, what can a reader’s second ordinary PostgreSQL SELECT see at Read Committed and Repeatable Read, and what does snapshot isolation still leave possible?',
       expected: 'It can see 120 with a new statement snapshot at Read Committed and retains 100 with the existing transaction snapshot at Repeatable Read. A new transaction can see 120. Snapshot isolation can still permit write skew.',
-      idea: 'Lock conflicts and snapshot boundaries constrain different observable schedules.'
+      idea: 'Locks control conflicting access, while snapshots determine which row versions a reader sees.'
     },
     9: {
       story: 'Maya wants students with a GPA above 3.5 in one selected department. One plan pairs all 300 students with three majors before filtering; another pairs the 60 students above that GPA cutoff with one selected major. Both return twenty rows, from 900 versus sixty pairs. Noor asks which rows can be ruled out before making pairs. This is a fictional classroom investigation using the course’s join fixture.',
@@ -2564,36 +2564,36 @@
       answer: 'No. The join still checks candidates. Plans must return the same required rows, including duplicates, before their work is comparable.',
       opening: 'State the request: return students with a GPA above 3.5 in one selected department. The fixture stores GPA in tenths, so the SQL tests gpa > 35. Explain that each candidate pairs a student row with a major row. Point to the input-only filters and predict how many pairs each plan forms before discussing elapsed time.',
       analogy: ['optimizer','Compare choosing a query plan to choosing a route from a map: statistics summarize rows and value distributions, the cost model estimates operator work, and plan search compares combinations. Check the estimates against measured counts.'],
-      closing: 'Return to the twenty-row answer. Estimate candidate work, compare costs in common units, and check execution. Use the synthesis to explain one assumption whose failure could change the choice.',
+      closing: 'Return to the twenty-row answer. Estimate candidate work, compare costs in common units, and check execution. Name one incorrect assumption that could make the other plan cheaper.',
       question: 'With a scan cost of 1,000 page accesses and an index cost of 3 plus the match count, which choice follows at 100 and 2,000 matches? What assumptions could change it?',
       expected: 'The model gives 103 and 2,003 accesses: index for 100, scan for 2,000. Cache hits, shared heap pages, clustering, CPU costs, and inaccurate counts can change a real comparison.',
-      idea: 'Choose among equivalent results using estimated work, then check the estimate against execution.'
+      idea: 'Compare plans that return the same rows, estimate their work, then check those estimates by running them.'
     },
     10: {
       story: 'Maya groups the same three toy rides by ride and by field. Noor first asks for average fare, then every detail of Ride 2. This is a fictional classroom investigation; $36, $24, and $30 are illustrative fares, separate from the real taxi sample.',
       calibrate: 'Which fields contribute to average fare, and which are needed for a complete ride? Must either layout change the stored facts?',
       answer: 'The average needs fares across rides; a complete ride needs its fields. Both layouts preserve the same facts and can answer both queries.',
       opening: 'Read one ride in both layouts. Ask students to identify the values each query needs before revealing the average or discussing file formats.',
-      analogy: ['read-a-column-layout','Link a column to an ordered list of the same entry from each record. Positions align values across lists. Real pages or chunks, compression, and metadata determine which bytes the engine actually reads.'],
+      analogy: ['read-a-column-layout','Compare a column to a list of one field from every record, kept in the same row order. Matching positions connect the fields of a row. Pages, chunks, compression, and metadata determine the actual bytes read.'],
       closingId: 'choose-the-shape',
       closing: 'Return to the opening ride and average queries, then change the aggregate to one month. Have students identify needed columns and eligible files before naming projection and pruning.',
       question: 'How would a full-ride lookup, an average fare over all rides, and an average for one month differ in required values and possible skipping?',
-      expected: 'The first needs one ride’s fields, the second needs fares across all rides, and the third can also exclude other months when the layout and query permit pruning. Preserve equal results and measure real work.',
-      idea: 'Storage grouping and query predicates determine which irrelevant data can be skipped.'
+      expected: 'The first needs every field of one ride. The second needs the fares from all rides. The third may also skip files for other months if the layout and query support it. Check the results and measure the actual work.',
+      idea: 'The storage layout and query conditions determine which unneeded fields and rows the engine can skip.'
     }
   };
   const titles = {
-    1: ['One query, two runs','SQL text and an executable plan','Read blocks, return matching rows','Repeat the scan with resident blocks','Rows share a schema','Keys and physical addresses','Transaction guarantees','Equal results, different access paths','The query’s path through the engine','A model of storage access','Count accesses before pricing them','Schemas stored as catalog rows','Build the storage interfaces first','Integers and strings in page bytes','Buffered writes and durable storage','Explain the second run'],
-    2: ['One block, three requests','Compare your synchronization measurements','Blocks and reusable memory frames','A cyclic scan defeats reuse','A small hot set can stay resident','Pins protect active page users','Hits update recency too','Choose only an unpinned victim','Locate a resident block','Write dirty bytes before frame reuse','Database and operating-system caches','Protect reuse from one-pass scans','Price the misses as well as hits','One frame can change a workload','Buffer-manager responsibilities','Reuse and safe frame replacement'],
-    3: ['Which bytes belong to one row?','A packed update moves later bytes','Fixed slots preserve neighboring addresses','Schema fields become byte offsets','Locate a field by slot and offset','String capacity counts bytes','Deletion changes the slot flag','Reserved capacity changes scan work','Missing values and zero values','Store large values separately','Follow an external value only when needed','Interpret one pinned record page','Scan occupied slots across blocks','A RID identifies a current location','Save schema rules in catalog rows','Find the field after a restart'],
-    4: ['What starts the operator tree?','Materialized intermediates need space','Requests down, rows up','Count input visits and returned rows','The common scan interface','Selection skips rejected rows','Projection exposes selected fields','Predicates test terms in order','Product rewinds its right input','Candidate pairs and matching rows','Empty and exhausted inputs','Close every descendant scan','Filter inputs before forming pairs','Streaming and blocking operators','Compose a product, filter, and projection','Explain one result and its work']
+    1: ['One query, two runs','SQL text and an executable plan','Read blocks, return matching rows','Scan the cached blocks again','Rows share a schema','Keys and physical addresses','Transaction guarantees','Equal results, different access paths','The query’s path through the engine','A model of storage access','Count accesses before pricing them','Schemas stored as catalog rows','Build the storage interfaces first','Integers and strings in page bytes','Buffered writes and durable storage','Explain the second run'],
+    2: ['One block, three requests','Compare writes with and without fsync','Blocks and reusable memory frames','A cyclic scan defeats reuse','Frequently used blocks can stay cached','Pins protect active page users','Hits update recency too','Choose only an unpinned victim','Locate a resident block','Write dirty bytes before frame reuse','Database and operating-system caches','Keep scans from evicting useful pages','Count the time spent on misses','One frame can change a workload','Buffer-manager responsibilities','Reuse and safe frame replacement'],
+    3: ['Which bytes belong to one row?','A packed update moves later bytes','Fixed slots preserve neighboring addresses','Schema fields become byte offsets','Locate a field by slot and offset','String capacity counts bytes','Deletion changes the slot flag','Reserved capacity changes scan work','Missing values and zero values','Store large values separately','Follow an external value only when needed','Interpret one pinned record page','Scan occupied slots across blocks','A RID identifies a block and slot','Save schema rules in catalog rows','Find the field after a restart'],
+    4: ['What starts the operator tree?','Storing intermediate results needs space','Requests down, rows up','Count input visits and returned rows','The common scan interface','Selection skips rejected rows','Projection exposes selected fields','Predicates test terms in order','Product rewinds its right input','Candidate pairs and matching rows','Empty and exhausted inputs','Close every descendant scan','Filter inputs before forming pairs','Streaming and blocking operators','Compose a product, filter, and projection','Explain one result and its work']
   };
   const beats = {
     1: {'lecture-01-scene-03':'Predict a block read separately from a returned row. Explain why moving a whole block does not yet test its predicate.', 'lecture-01-scene-14':'Predict the bytes for integer 1 and the prefix length of a multibyte string before revealing their storage.'},
     2: {'lecture-02-scene-08':'Before selecting a victim, remove pinned frames from the eligible set; then predict the oldest remaining frame.', 'lecture-02-scene-13':'Predict whether one expensive miss can dominate several cheap hits before interpreting the average-time model.'},
     3: {'lecture-03-scene-02':'Keep the saved byte address visible while ben becomes benjamin. Predict which later row no longer starts there.', 'lecture-03-scene-05':'Calculate slot number times slot size plus field offset before revealing the highlighted byte.', 'lecture-03-scene-14':'Change the occupant after deletion and explain which address stays the same while row identity changes.'},
     4: {'lecture-04-scene-04':'Predict how many child next calls are required to return the next qualifying name, then count rejected inputs.', 'lecture-04-scene-09':'Predict the first pair after the right input ends. Identify which input advances and which rewinds.', 'lecture-04-scene-13':'Predict 300 × 3 versus 60 × 1 candidates before revealing the counts. Explain why both plans still need the join predicate.'},
-    5: {'lecture-05-scene-03':'Return to Maya’s quoted-from puzzle. Ask for token kinds before revealing how identical letters acquire different roles.', 'lecture-05-scene-08':'Predict the returned description and the next unread token before advancing the parser call.', 'lecture-05-scene-12':'Use the same result as the correctness contract. Predict candidate pairs separately from final rows and timing.'},
+    5: {'lecture-05-scene-03':'Return to Maya’s quoted-from puzzle. Ask for token kinds before revealing how identical letters acquire different roles.', 'lecture-05-scene-08':'Predict the returned description and the next unread token before advancing the parser call.', 'lecture-05-scene-12':'Check that both plans return the same rows. Predict their candidate pairs, then compare those counts with results and timings.'},
     6: {'find-37':'Predict the next child from the separator inequality before following its pointer. Keep the key, leaf entry, and heap address separate.', 'walk-a-range':'Predict whether every RID for key 31 contributes and where the inclusive upper bound stops the scan.', 'the-fifth-key':'Pause before overflow is repaired. Keep the whole RID list beside each key and predict the routing copy that appears in the parent.'},
     7: {'two-writes-reverse-undo':'Predict the buffer after undoing the newest SET before revealing 40; then predict the earlier restoration to 60. Keep the durable page state separate.', 'repair-can-crash-too':'Place a crash before and after the repair flush, then before and after the completion record. State what a second recovery must see.'},
     8: {'statement-or-transaction-snapshot':'Name the snapshot boundary before predicting the second read. Use the same reader/writer schedule under both isolation levels.', 'write-skew':'Predict both decisions from the original snapshot. Ask why updating different rows can evade a direct write-write conflict.'},

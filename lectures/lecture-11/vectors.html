@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="embedding-walkthrough.css?v=1">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
 <body>
@@ -19,6 +20,8 @@
   <ul>
     <li><a href="#plan">The question we will follow</a></li>
     <li><a href="#similar">The passage is there but the words differ</a></li>
+    <li><a href="#embedding-walkthrough-title">Watch a sentence become a vector</a></li>
+    <li><a href="#embedding-models">Compare current embedding models</a></li>
     <li><a href="#exact">Find the neighbors before taking a shortcut</a></li>
     <li><a href="#ann">Search less and risk missing a neighbor</a></li>
     <li><a href="#try-it">Watch a neighbor disappear</a></li>
@@ -89,12 +92,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 
 <p class="keep-in-present">Today’s main idea: <strong>searching fewer candidates can miss true neighbors; measure that loss against exact search.</strong> Choose search settings by measuring work and recall on queries representative of your application.</p>
-<p class="keep-in-present">Keep Maya’s question in view. First, find the nearest vectors with exact search. Then take a shortcut, catch a missed neighbor, and choose how much work to spend getting it back. Finally, read the returned passage: being nearby does not guarantee that it answers the question.</p>
+<p class="keep-in-present">Keep Maya’s question in view. First, find the nearest vectors with exact search. Then use an index to search fewer vectors. Compare the returned IDs with the exact results to identify any missed neighbors. Search more of the index to see which neighbors return, and decide whether finding them is worth the extra comparisons. Finally, read the returned passage: being nearby does not guarantee that it answers the question.</p>
 
 <!-- ============================================================ -->
 <h2 id="similar">The passage is there but the words differ</h2>
 
-<p class="keep-in-present"><q>Could we use the B+ tree we already built?</q> Maya asks. It can find an exact key or walk a range. But her next question will need a different ranking of the same passages. The index needs to answer <em>near this question</em>, with “near” defined by the embedding model.</p>
+<p class="keep-in-present"><q>Could we use the B+ tree we already built?</q> Maya asks. A B+ tree on passage IDs can quickly find passage 7 or all passages with IDs from 7 to 12. That ID order stays the same for every question.</p>
+<p class="keep-in-present">For her crash-recovery question, Maya wants a passage about replaying a log near the top of the results. If she asks how to speed up a query, she wants a passage about indexes near the top instead. The same passages need a different ranking for each question. An embedding model represents each question and passage as a vector. Search ranks passages by how similar their vectors are to the current question’s vector.</p>
 
 <p class="keep-in-present">A B+ tree stores a fixed key order; a hash index groups equal keys. In similarity search, the ranking depends on the query vector. A key order that works for one query generally does not give the nearest neighbors for another.</p>
 
@@ -109,13 +113,74 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <h3 class="new-slide" data-kicker="Similarity search">Turn the question and passage into comparable vectors</h3>
 
-<p class="keep-in-present">Noor sends the question and the stored chunks through a compatible embedding model. It maps each to coordinates. Those coordinates can place a paraphrase near the question even when the strings differ. Use compatible model versions, dimensions, and preprocessing for both sides; equal dimensions alone do not make two models’ spaces compatible.</p>
+<p class="keep-in-present">Noor sends Maya’s question and each stored passage through an embedding model. For each input, the model returns a fixed-length list of numbers: an <strong>embedding vector</strong>. Think of the vector as a location on a learned map. A question about crash recovery and a passage about replaying a log can land near each other even though they use different words.</p>
+<p class="keep-in-present">How does a sentence become numbers? A typical transformer embedding model splits the text into <strong>tokens</strong> (words or pieces of words), uses the surrounding tokens to build a representation of each token, and combines those representations into one vector. The walkthrough below shows mean pooling—averaging the token vectors—and normalization as one common recipe. Other models use different pooling methods.<sup class="src"><a href="#src-11" title="Sentence Transformers: model architecture">11</a></sup><sup class="src"><a href="#src-12" title="Hugging Face: tokenization algorithms">12</a></sup></p>
+
+<h3 class="new-slide" id="embedding-walkthrough-title" data-kicker="Inside an embedding model">Follow one sentence into a vector</h3>
+
+<div class="viz" id="embedding-walkthrough" role="region" aria-labelledby="embedding-walkthrough-title">
+  <div class="viz-title">Sentence → tokens → context → one vector → comparison</div>
+  <p class="ew-disclaimer"><strong>Teaching example.</strong> The token splits and intermediate numbers are chosen to illustrate the steps, not taken from a trained model. The averages and similarity scores are calculated from these numbers.</p>
+  <div class="ew-controls" id="ew-controls" hidden>
+    <div class="ew-query-control">
+      <label for="ew-query">Maya’s question</label>
+      <select id="ew-query">
+        <option value="recovery">Crash recovery</option>
+        <option value="restart">A paraphrase</option>
+        <option value="speed">Query speed</option>
+      </select>
+    </div>
+    <div class="ew-nav" aria-label="Embedding walkthrough steps">
+      <button type="button" class="btn" id="ew-back" aria-controls="ew-stage" disabled>← Back</button>
+      <button type="button" class="btn primary" id="ew-next" aria-controls="ew-stage">Next →</button>
+    </div>
+  </div>
+  <div id="ew-interactive" hidden>
+    <p class="ew-question" id="ew-question">How does a database recover after a crash?</p>
+    <ol class="ew-pipeline" aria-label="The five steps">
+      <li class="ew-step is-current" aria-current="step"><small>1</small>Sentence</li>
+      <li class="ew-step"><small>2</small>Tokens</li>
+      <li class="ew-step"><small>3</small>Context</li>
+      <li class="ew-step"><small>4</small>One vector</li>
+      <li class="ew-step"><small>5</small>Compare</li>
+    </ol>
+    <p class="ew-stage-label" id="ew-stage-label">Step 1 of 5 · Sentence</p>
+    <div class="ew-stage" id="ew-stage"></div>
+  </div>
+  <div class="ew-fallback ew-static" id="ew-fallback">
+    <p><strong>Start with Maya’s question:</strong> “How does a database recover after a crash?” Predict which passage would help: “After a crash, replay the durable log to restore committed changes” or “An index speeds up a query by finding matching rows without scanning the whole table.”</p>
+    <p><strong>Follow the mechanism:</strong> text → token pieces → context-aware token vectors → one fixed-size sentence vector → similarity comparison with saved passage vectors. For example, “database” and “crash” give context to “recover.” The model’s learned parameters stay fixed during search.</p>
+    <p>A common transformer recipe pools token representations and normalizes the resulting vector. This example averages the illustrative token vectors, divides the result by its magnitude, and computes cosine similarity. Different models may use different pooling methods. Enable JavaScript to inspect the arithmetic and switch questions.</p>
+  </div>
+  <div class="ew-print ew-static">
+    <p><strong>Follow one sentence:</strong> “How does a database recover after a crash?” → tokens such as “database,” “recover,” and “crash” → contextual token vectors → one sentence vector → cosine comparison with saved passage vectors.</p>
+    <p>Context layers use information across token positions: “database” and “crash” help interpret “recover.” This example averages the contextual token vectors and divides the result by its magnitude. The result has 3 coordinates regardless of token count. Pooling and normalization are one common recipe; models differ.</p>
+    <p><strong>Predict and compare:</strong> the recovery question and its restart/log paraphrase rank the recovery passage first in this illustration. The query-speed question ranks the index passage first. The saved passage vectors and model parameters stay fixed; changing the question changes its vector and the ranking. These illustrative results do not establish a real model’s retrieval quality.</p>
+  </div>
+  <p class="ew-essential"><strong>Keep this idea:</strong> use the same embedding model and compatible query/document settings so the question and passages have comparable vectors. Read the retrieved passage to check that it answers the question.</p>
+  <p class="ew-sr-only" id="ew-status" role="status" aria-live="polite" aria-atomic="true"></p>
+</div>
+
+<h3 class="new-slide" id="embedding-models" data-kicker="Embedding models">Which real models could Noor use?</h3>
+<p class="keep-in-present">Modern high-performing examples, checked <strong>October 15, 2026</strong>. These models use many more dimensions than the three-coordinate teaching example. Their published results make them useful candidates to compare; the best choice depends on your passages, questions, languages, and computing budget.</p>
+<table>
+  <thead><tr><th>Model</th><th>Dimensions</th><th>What this example shows</th></tr></thead>
+  <tbody>
+    <tr><td><a href="https://ai.google.dev/gemini-api/docs/embeddings">Gemini Embedding 2</a><sup class="src"><a href="#src-13" title="Google: Gemini Embedding 2">13</a></sup></td><td>3,072 by default</td><td>A hosted model that embeds text and other media into a shared space; our example uses text.</td></tr>
+    <tr><td><a href="https://docs.voyageai.com/docs/embeddings">Voyage 4 large</a><sup class="src"><a href="#src-14" title="Voyage AI: Voyage 4 family">14</a></sup></td><td>1,024 by default</td><td>A hosted retrieval model. The Voyage 4 family is explicitly trained to let different family members produce compatible vectors.</td></tr>
+    <tr><td><a href="https://huggingface.co/Qwen/Qwen3-Embedding-8B">Qwen3 Embedding 8B</a><sup class="src"><a href="#src-15" title="Qwen3 Embedding 8B model card">15</a></sup></td><td>Up to 4,096</td><td>Open weights under Apache 2.0, with multilingual support and query instructions that describe the retrieval task.</td></tr>
+  </tbody>
+</table>
+<p class="keep-in-present">Compare relevant retrieval tasks and languages on the <a href="https://huggingface.co/spaces/mteb/leaderboard">MTEB leaderboard</a>, then test your own question–passage pairs. A benchmark rank does not establish which model will retrieve the best evidence for your project.<sup class="src"><a href="#src-16" title="MTEB leaderboard">16</a></sup></p>
+<p class="keep-in-present"><strong>Keep the vectors comparable:</strong> use the same model and version, or a model family with documented compatibility. Match output dimensions and follow the model’s query and document instructions, which may differ. Equal dimensions alone do not make two models’ spaces compatible.</p>
+
+<h3 class="new-slide" data-kicker="Similarity search">Compare the vectors with a similarity score</h3>
 
 <div class="math">
 <p>Store <em>n</em> vectors of <em>d</em> dimensions. A query asks for the top <em>k</em> by similarity. Follow the model’s recommended metric. For unit
 vectors cosine similarity is just the dot product<sup class="src"><a href="#src-2" title="OpenAI Platform: Vector embeddings guide">2</a></sup>:</p>
 \[ \text{sim}(q, v) \;=\; q \cdot v \;=\; \sum_{i=1}^{d} q_i\, v_i \]
-<p>Normalize each stored vector once by dividing it by its length, and normalize each query vector before searching. The exact search then computes <em>n</em> dot products per query:</p>
+<p>Normalize each stored vector once by dividing every coordinate by the vector’s magnitude (Euclidean norm), and normalize each query vector before searching. The exact search then computes <em>n</em> dot products per query:</p>
 \[ \text{exact cost} \;=\; n \cdot d \text{ multiplications} \]
 <p>At one million vectors and 1536 dimensions, each query requires about 1.5 billion multiplications, before accounting for additions and result selection.<sup class="src"><a href="#src-2" title="OpenAI Platform: Vector embeddings guide">2</a></sup></p>
 </div>
@@ -123,9 +188,9 @@ vectors cosine similarity is just the dot product<sup class="src"><a href="#src-
 <!-- ============================================================ -->
 <h2 id="exact">Find the neighbors before taking a shortcut</h2>
 
-<p class="keep-in-present">Maya writes a loop: score every stored vector, then keep the ten highest scores. Noor points to the result IDs. <q>Save that list. When we try an index, how else will we know what it missed?</q> This is their exact baseline. They still have to open the passages and check whether they answer the question.</p>
+<p class="keep-in-present">Maya writes a loop that compares her question vector with every stored passage vector and keeps the ten highest-scoring results. Noor saves their IDs so they can later identify which neighbors an approximate index misses. These saved results are their <strong>exact-search baseline</strong> for the chosen similarity metric. They still need to read the passages to check whether they answer Maya’s question.</p>
 
-<p class="keep-in-present">Exact search scores all <em>n</em> vectors and keeps the top <em>k</em>. This gives the reference result for the chosen similarity metric. The dot products are independent, so they can run in parallel. Total work grows with the number of stored vectors, their dimensions, and the query rate.</p>
+<p class="keep-in-present">The comparisons can run in parallel because each dot product is independent. Even so, every query scores all <em>n</em> stored vectors, using all <em>d</em> coordinates in each vector. More stored passages, more dimensions, or more queries per second therefore increase the total work.</p>
 
 <h3 class="new-slide" data-kicker="Exact search">Exact-search work grows with dataset size and query rate</h3>
 
@@ -405,6 +470,12 @@ document that supports the claim it is attached to.</p>
   <li id="src-8"><a href="https://github.com/nmslib/hnswlib">hnswlib README</a></li>
   <li id="src-9"><a href="https://docs.pinecone.io/guides/get-started/overview">Pinecone documentation overview</a></li>
   <li id="src-10"><a href="https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index">FAISS wiki: Guidelines to choose an index</a></li>
+  <li id="src-11"><a href="https://sbert.net/docs/sentence_transformer/usage/custom_models.html">Sentence Transformers: model architecture and pooling</a> <span class="src-note">Transformer, pooling, and optional normalization; the walkthrough’s numbers are hand-authored teaching fixtures.</span></li>
+  <li id="src-12"><a href="https://huggingface.co/docs/transformers/tokenizer_summary">Hugging Face: tokenization algorithms</a></li>
+  <li id="src-13"><a href="https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-embedding-2-generally-available/">Google: Gemini Embedding 2 generally available, April 22, 2026</a> · <a href="https://ai.google.dev/gemini-api/docs/embeddings">model documentation and output dimensions</a></li>
+  <li id="src-14"><a href="https://blog.voyageai.com/2026/01/15/voyage-4/">Voyage AI: Voyage 4 model family, January 15, 2026</a> · <a href="https://docs.voyageai.com/docs/embeddings">model documentation and output dimensions</a></li>
+  <li id="src-15"><a href="https://huggingface.co/Qwen/Qwen3-Embedding-8B">Qwen3 Embedding 8B: official model card</a> <span class="src-note">Model family released June 5, 2025; its dated leaderboard claim is not a current ranking.</span></li>
+  <li id="src-16"><a href="https://huggingface.co/spaces/mteb/leaderboard">MTEB: live embedding-model leaderboard</a> <span class="src-note">Compare task and language coverage; results change as models and evaluations are added.</span></li>
 </ol>
 
 </main>
@@ -413,10 +484,11 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=3"></script>
+<script src="embedding-walkthrough.js?v=2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
-<script src="../../labs/_shared/teaching-traces.js?v=1"></script>
+<script src="../../labs/_shared/teaching-traces.js?v=4"></script>
 <script src="../../labs/_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

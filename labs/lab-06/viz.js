@@ -13,11 +13,11 @@
     },
     'occupancy': {
       title: 'Occupancy',
-      body: "<p>The fraction of a node’s capacity that is in use. Splitting near the middle distributes entries across both resulting nodes. Very uneven splits can preserve search order while leaving many nodes sparsely filled, increasing space use and tree height.</p>",
+      body: "<p>How much of a node’s available space is filled. A split near the middle divides entries fairly evenly between the two nodes. A very uneven split can still allow correct searches, but it leaves more space unused and can make the tree taller.</p>",
     },
     'covering-idea': {
       title: 'Covering index',
-      body: "<p>An index contains everything needed for a query when it includes all required keys and column values. This can avoid heap reads. Some engines still need to visit the heap for visibility checks; PostgreSQL can avoid those checks when its visibility information permits an index-only scan.</p>",
+      body: "<p>An index that stores every key and field value a query needs. The engine may then answer the query without reading the table rows. Some engines still check the table to confirm which row versions the transaction can see. PostgreSQL can skip those checks when its saved visibility information allows an index-only scan.</p>",
     },
     'stale-index': {
       title: 'Stale index',

@@ -11,7 +11,7 @@
     },
     'invariant': {
       title: 'Invariant',
-      body: "<p>A condition an implementation must preserve at the points where other code relies on it. In this lab, a pinned frame must never be selected for eviction. Each method must maintain that rule.</p>",
+      body: "<p>A rule the code must keep true so other code can rely on it. For example, the buffer manager must never evict a pinned frame. Every method must respect that rule.</p>",
     },
     'working-set': {
       title: 'Working set',
@@ -23,7 +23,7 @@
     },
     'page-table': {
       title: 'Page table (of a buffer pool)',
-      body: "<p>A mapping from a stored block’s identifier to the buffer frame that currently holds it. A hash table can provide expected constant-time lookup. The lab starts with a linear scan of its small frame pool; an optional extension replaces that search with a dictionary.</p>",
+      body: "<p>A lookup table that tells the buffer manager which frame holds a given block. A hash table usually finds the frame without checking every entry. This lab first searches the small pool one frame at a time; an optional extension replaces that search with a dictionary.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);

@@ -44,7 +44,7 @@
   <div class="byline">Follows Lecture 3 (Record Layout &amp; the Catalog) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 17 at class start</div>
 </header>
 
-<p class="lede">A cached block contains bytes; the record layer determines which bytes belong to each row and field. Store records in fixed-size slots, calculate field offsets from the schema, and scan occupied slots one block at a time. The provided catalog uses those operations to store table names, field definitions, offsets, and slot sizes.</p>
+<p class="lede">Your buffer manager gives you a block’s bytes. To read a row, you still need to know where that row and its fields begin. In this lab, give each row a fixed-size slot, use the schema to locate its fields, and scan the occupied slots one block at a time. The supplied catalog uses the same record operations to store table definitions.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6–7 ·
@@ -63,15 +63,15 @@
 
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
-  <p>Use a toy 24-byte slot with GPA at offset 20. Where is GPA in slot 3? If slot 1 is deleted, must the later occupied slots shift left?</p>
-  <details><summary>Check your explanation</summary><p>GPA begins at byte 92. Fixed-size slots remain in place; deletion changes the slot’s status flag. Compute offsets from the layout rather than from the number of earlier occupied rows.</p></details>
+  <p>Suppose each slot takes 24 bytes and GPA starts 20 bytes into the slot. Where does GPA begin in slot 3, counting slots from 0? If you delete the row in slot 1, do later rows move?</p>
+  <details><summary>Check your explanation</summary><p>GPA begins at byte 3 × 24 + 20 = 92. Deleting a row changes its slot’s status flag; the slots stay in place. A field’s address depends on the layout and slot number, even when earlier slots are empty.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
 
 <h2 id="try-it">Scanning a table one block at a time</h2>
 
-<p class="keep-in-present">Before advancing the scan, predict the next occupied slot and which block remains pinned. Explain the unpin/pin transition at a block boundary.</p>
+<p class="keep-in-present">Before advancing the scan, predict which occupied slot it will find. When the scan reaches a new block, watch it unpin the old block and pin the new one. Explain why it needs only one pin at a time.</p>
 
 <p>The example below shows a scan of a table with three blocks and five slots per block. <code>TableScan.next()</code> visits the occupied slots while keeping <strong>one block pinned at a time</strong>. Step through the scan and watch the pin move when the scan reaches the next block.</p>
 
@@ -106,7 +106,7 @@
 <!-- ============================================================ -->
 <h2 id="big-idea">Record layout and slot addresses</h2>
 
-<p class="keep-in-present">Think of a fixed compartment for each record. Slot number chooses the compartment; the layout locates fields inside it; the flag says whether it is occupied. Deleting a row frees its compartment without moving neighboring rows or erasing all its old bytes.</p>
+<p class="keep-in-present">Think of each slot as a fixed compartment for one row. The slot number tells you which compartment to open, the layout tells you where each field begins, and the flag tells you whether a row is stored there. Deleting a row marks the compartment empty. It leaves the old field bytes and neighboring rows in place.</p>
 
 <p class="keep-in-present">Each record occupies a fixed-size slot: a <strong>four-byte status flag</strong> followed by the fields in schema order, <code>[flag][fields]</code>. Slot <code>k</code> starts at byte <code>k * slot_size</code>. Deleting a row sets its <span class="gloss" data-gloss="tombstone">status flag to EMPTY</span> so a later insert can reuse the slot. The other rows stay in place.</p>
 
@@ -313,7 +313,7 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
 
 <h3 id="function-tests">Test one function at a time</h3>
-<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests provide sample data and working versions of any helper methods you have not written yet. They run your code for the function you select.</p>
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_records.py --list</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_records.py --unit RecordPage.get_int</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_records.py --unit</span></code></pre>
@@ -390,10 +390,10 @@ full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
   <p>A deleted slot is reused by a new row. Which address can remain the same, which bytes may still be old, and which fields must the caller initialize?</p>
-  <details><summary>Check your explanation</summary><p>The block and slot address can stay the same while the row’s identity changes. Deletion leaves field bytes behind, so the caller must write every field before treating the reused slot as the new record. A RID names a location, not a permanent person.</p></details>
+  <details><summary>Check your explanation</summary><p>The new row can use the same block number and slot number as the deleted row. Because deletion leaves the field bytes behind, the caller must write every field of the new row. A RID identifies that storage location; a different row may occupy it later.</p></details>
 </div>
 
-<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+<p>This question is for practice and class discussion. You do not need to submit an answer.</p>
 
 <h2 id="assignment">Assignment</h2>
 
@@ -466,7 +466,7 @@ full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
+<script src="viz.js?v=4"></script>
 <script src="scan-walkthrough-model.js?v=1"></script>
 <script src="scan-walkthrough.js?v=1"></script>
 </body>

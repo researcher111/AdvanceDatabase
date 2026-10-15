@@ -40,7 +40,7 @@
     foot(d,'Storage reads: '+(s>=3?2:s>=1?1:0)+'  ·  Rows tested: '+(s>=4?6:s>=2?3:0)+'  ·  Names returned: '+names.length);
   });
   use(2,'lecture-02-scene-03',(d,s)=>{
-    label(d,'stored',250,224,'Persistent block identities');label(d,'resident',865,224,'Reusable memory frames');
+    label(d,'stored',250,224,'Block numbers in the file');label(d,'resident',865,224,'Reusable memory frames');
     [7,8,9].forEach((n,i)=>card(d,'block-'+n,95,278+i*105,260,79,'Block '+n,'',s===2?n===8:n===7));
     for(let i=0;i<2;i++)card(d,'frame-'+i,675,306+i*150,370,105,'Frame '+i,s===0?'empty':i===0?'contains block '+(s===2?8:7):'empty',i===0&&s>0);
     if(s>0)d.arrow('load',370,s===2?423:318,655,360,P.orange,4);
@@ -48,14 +48,14 @@
   });
 
   use(7,'two-writes-reverse-undo',(d,s)=>{
-    label(d,'log-title',337,210,'Durable log · oldest at top');label(d,'durable-page-heading',930,210,s===5?'Repaired durable page A':'Recovery buffer: A');
+    label(d,'log-title',337,210,'Durable log · oldest at top');label(d,'durable-page-heading',930,210,s===5?'Repaired page A on disk':'Recovery buffer: A');
     const entries=['tx1: SET A, old = 100','tx1: COMMIT','tx2: SET A, old = 60','tx2: SET A, old = 40'];
     const active=[3,3,2,1,0,-1][s];
     entries.forEach((v,i)=>d.box('log-'+i,80,247+i*77,520,62,v,i===active?P.orangeLight:P.white,i===active?P.orange:P.line,25));
     if(active>=0){d.arrow('cursor',43,278+active*77,73,278+active*77,P.orange,3);label(d,'backward',335,592,'Read backward ↑',P.orange);}
     const value=s===0?10:s===1?40:60;
     card(d,'page',800,313,260,157,'A',String(value),s===1||s===2);
-    if(s===1||s===2){d.arrow('restore',622,278+active*77,780,391,P.orange,4);label(d,'restore-label',930,513,'Assign logged old value',P.orange);}
+    if(s===1||s===2){d.arrow('restore',622,278+active*77,780,391,P.orange,4);label(d,'restore-label',930,513,'Restore the logged old value',P.orange);}
     if(s>=3)label(d,'finished',930,264,'Finished set: {tx1}',P.green,25);
     if(s===4){d.line('skip',92,262,585,292,P.muted,3);label(d,'skip-label',930,513,'Keep tx1’s committed 60',P.green);}
     foot(d,s===5?'Flush repaired A = 60, then record durable ROLLBACK for tx2.':'Reverse undo restores 10 → 40 → 60; undoing forward would leave the wrong value.');
@@ -153,7 +153,7 @@
 
   use(11,'diagnose-the-index',(d,s)=>{
     label(d,'diagnostic-question',640,235,'Noor opens the passage: “Does it explain recovery?”',P.ink,29);
-    label(d,'index-heading',340,331,'ANN missed useful exact neighbors',P.orange,27);
+    label(d,'index-heading',340,331,'ANN missed exact-search neighbors',P.orange,27);
     if(s>=1){
       d.arrow('index-test',340,359,340,438,P.orange,3);
       label(d,'index-fix',340,485,'Increase search breadth',P.ink,29);
@@ -166,7 +166,7 @@
       label(d,'representation-fix',951,485,'Inspect chunks and embeddings',P.ink,28);
       label(d,'representation-check',951,534,'Check metadata and ranking too',P.muted,25);
     }
-    label(d,'diagnostic-foot',640,633,'Neighbor agreement and evidence usefulness need different checks.',P.muted,24);
+    label(d,'diagnostic-foot',640,633,'Matching exact neighbors does not prove the passages answer the question.',P.muted,24);
   });
 
   use(11,'rebuild-the-retrieval-contract',(d,s)=>{
@@ -222,9 +222,9 @@
     foot(d,'Toy record and score · a source reference makes a claim checkable, not automatically correct');
   });
   if(ragOpening){
-    ragOpening.states=['Identify the source','Select evidence with identity','Check the supported claim'];
+    ragOpening.states=['Identify the source','Keep the source ID with the text','Check the claim against the source'];
     ragOpening.teaching.builds=[
-      'Calibrate with the difference between a stored position and a source ID. Introduce the fictional recovery-question rehearsal. Read the toy source record before asking what the model will see.',
+      'Ask how a chunk’s list position differs from its source ID. Introduce the fictional recovery-question rehearsal. Read the toy source record before asking what the model will see.',
       'Use the open-book comparison: a selected page needs its reference beside the text. Trace position 2 to source wal. This fixed score illustrates the interface, not a measured semantic ranking.',
       'Noor asks: “Which sentence supports the answer?” A valid citation identifies where to look; it does not prove support. The lab’s echo mode exposes this context before a model call.'
     ];
@@ -249,7 +249,7 @@
     lsmOpening.teaching.builds=[
       'Calibrate using WAL and buffer-pool memory from microdb. In the fictional debugging session, Maya opens an immutable file with old@5. Ask how an engine can update a key without editing these bytes.',
       'Reveal new@8 in another file. Ask which record a current read should honor. Link the coming design to an ordered notebook that is sealed into immutable sorted pages.',
-      'Reveal DELETE@9. Noor asks what stops the old value returning. Keep the three records in view: the delete is itself newer state, and compaction must preserve its protection until reclamation is safe.'
+      'Reveal DELETE@9. Noor asks what stops the old value returning. Keep the three records in view: the deletion is the newest record. Compaction must keep it while an older value could still reappear.'
     ];
     lsmOpening.teaching.reference='The opening follows the same old@5, new@8, DELETE@9 sequence as the worked trace. It motivates immutable runs, read-version resolution, and safe tombstone reclamation. The later discussion connects this storage choice to Bigtable’s address model, tablets, and durable logging.';
   }
@@ -272,13 +272,13 @@
   });
   use(13,'place-move-recover',(d,s)=>{
     repeatModel(d,s,'“WAL, wal!” + “Page wal.” must keep the same word totals',[
-      ['Assign owners'],['Group equal keys'],['Execute the','dependencies'],['Recover lost work']
+      ['Assign owners'],['Group equal keys'],['Run each stage','when ready'],['Recover lost work']
     ]);
     if(s===3)foot(d,'Changing placement should change the schedule, not wal = 3 and page = 1');
   });
   use(14,'trace-an-acknowledged-write',(d,s)=>{
     repeatModel(d,s,'Return to k: old@5, new@8, DELETE@9',[
-      ['Log durably'],['Buffer in order'],['Flush sorted files'],['Resolve visible','records']
+      ['Log durably'],['Buffer in order'],['Flush sorted files'],['Read the newest','visible record']
     ]);
     if(s===3)foot(d,'A current read returns absent; old bytes may remain until safe compaction');
   });
@@ -304,7 +304,7 @@
     }
     if(s>=2){label(d,'owner0',850,328,'P0: wal',P.blue,25);label(d,'owner1',850,557,'P1: page',P.green,25);}
     if(s>=3){d.arrow('sum-wal',936,343,994,343,P.blue,3);d.box('wal-total',1005,311,190,64,'wal = 3',P.blueLight,P.blue,28);d.arrow('sum-page',936,557,994,557,P.green,3);d.box('page-total',1005,525,190,64,'page = 1',P.greenLight,P.green,28);}
-    foot(d,s===4?'Toy ownership: wal → P0, page → P1. Use a consistent partition function on all workers.':'Every occurrence survives mapping; the shuffle co-locates equal words before addition.');
+    foot(d,s===4?'Toy ownership: wal → P0, page → P1. Use a consistent partition function on all workers.':'Every occurrence survives mapping; the shuffle groups equal words before adding their counts.');
   });
 
   use(14,'read-the-newest-visible-value',(d,s)=>{
@@ -327,7 +327,7 @@
     });
     const frontier=s===0?['ben','cyd']:s<=2?['dee','eli']:s===3?['fay']:['ben','cyd','dee','eli','fay'];
     Object.entries(graphNodes).forEach(([name,[x,y]])=>{d.circle('person-'+name,x,y,44,frontier.includes(name)?P.greenLight:P.white,frontier.includes(name)?P.green:P.line,3);label(d,'person-label-'+name,x,y,name,P.ink,26);});
-    const lines=[['Walk endpoints','ben, cyd','BFS frontier','ben, cyd'],['Walk endpoints','dee, ada, dee, eli','BFS frontier','dee, eli'],['Visited people','ada, ben, cyd,','dee, eli','6 edges examined'],['Depth 3 walks: 5','All walk rows: 11','BFS frontier: fay','8 edges examined'],['Within 3 hops','11 walk rows','5 unique people','Contracts differ']][s];
+    const lines=[['Walk endpoints','ben, cyd','BFS frontier','ben, cyd'],['Walk endpoints','dee, ada, dee, eli','BFS frontier','dee, eli'],['Visited people','ada, ben, cyd,','dee, eli','6 edges examined'],['Depth 3 walks: 5','All walk rows: 11','BFS frontier: fay','8 edges examined'],['Within 3 hops','11 walk rows','5 unique people','Different results']][s];
     d.rect('result-panel',922,237,305,353,P.white,P.line,10,2);
     lines.forEach((t,i)=>label(d,'result-line-'+i,1074,285+i*83,t,i===0?P.ink:P.green,i===1?23:24));
     foot(d,'Directed edges · walks may revisit nodes · BFS adds only previously unvisited endpoints');
@@ -423,14 +423,14 @@
   cues(2,'lecture-02-scene-03',['Empty frames','Load a page','Replace the page'],[
     'Distinguish the block numbers in the persistent file from the numbered empty frames in memory.',
     'Load block 7 into frame 0. Point to the frame number and its separate resident block label.',
-    'This replacement illustration assumes frame 0 is eligible. Replace its resident with block 8; block 7 remains stored in the file.'
+    'This replacement illustration assumes frame 0 is eligible. Load block 8 into that frame; block 7 remains stored in the file.'
   ]);
-  cues(13,'reduce-sees-the-complete-group',['Input documents','Map both documents','Shuffle by word','Reduce complete groups','Check the contract'],[
+  cues(13,'reduce-sees-the-complete-group',['Input documents','Map both documents','Shuffle by word','Reduce complete groups','Check the word totals'],[
     'Read both source records and predict four word occurrences. Two copies of WAL occur in the first record.',
     'Follow the four emitted pairs. Each repeated occurrence retains its own stable card rather than disappearing into a set.',
     'Move the three wal cards to P0 and the page card to P1. A real partition can hold multiple different keys, each with its own value group.',
     'Add the values within each key group. The final totals sum to four, preserving all mapped occurrences.',
-    'Separate the invariant word totals from partition numbering and output order. The toy owner labels are illustrative; Python hash bucket numbers can vary.'
+    'The word totals must stay the same even if partition numbers or output order change. The toy owner labels are illustrative; Python hash bucket numbers can vary.'
   ]);
   // Keep the shared worked examples, adding a prediction before their first reveal.
   const tracePredictions=[

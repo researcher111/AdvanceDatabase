@@ -5,15 +5,15 @@
   const GLOSSARY = {
     'star-schema': {
       title: "Star schema",
-      body: "<p>An analytical schema with a fact table of events or measurements connected to dimension tables that describe related entities. In this lab, rides records trips and zones describes taxi zones. Q8 joins rides to zones, groups by borough, and sums recorded revenue.</p>",
+      body: "<p>A layout with an event table in the center and descriptive tables linked to it. Here, rides stores trips and zones describes their locations. These are called a fact table and a dimension table. Q8 joins the two, groups trips by borough, and adds their recorded revenue.</p>",
     },
     'window-fn': {
       title: "Window function",
-      body: "<p>A function computed over a defined set of rows related to the current row, without collapsing those rows into one group. Examples include ranks, running totals, and moving averages. In Q6, a window SUM accumulates the monthly totals produced by GROUP BY. Its ORDER BY determines the accumulation order.</p>",
+      body: "<p>A calculation that can look at other rows while keeping one result for each current row. Window functions can add a rank, running total, or moving average beside each row. In Q6, a window SUM adds monthly totals from the first month through the current month; ORDER BY sets that order.</p>",
     },
     'projection-pushdown': {
       title: "Projection pushdown",
-      body: "<p>Passing the required-column list down to the data scan. A Parquet reader can then skip columns that no part of the query needs. Columns used in filters or joins are needed even if they are absent from the SELECT list. This reduces data reads and decoding work.</p>",
+      body: "<p>Telling the file reader which columns the query needs, so it can skip the others. A Parquet reader can avoid reading and decoding those unused columns. It must still read columns used by filters or joins, even when SELECT does not return them.</p>",
     },
     'hive-partitioning': {
       title: "Hive partitioning",
@@ -21,7 +21,7 @@
     },
     'row-group': {
       title: "Row group",
-      body: "<p>A horizontal subset of a Parquet table stored as one column chunk per column. A reader can use column statistics to skip row groups that cannot satisfy a filter. Row-group size is configurable and affects skipping, compression, and scan efficiency; it is not a fixed-size database page.</p>",
+      body: "<p>A group of rows stored together in a Parquet file, with a separate chunk for each column. Column statistics can tell the reader that no row in the group matches a filter, allowing it to skip that group. You can choose the row-group size; the choice affects compression, skipping, and scan speed. Row groups are different from fixed-size database pages.</p>",
     },
     'decimal-type': {
       title: "DECIMAL type",

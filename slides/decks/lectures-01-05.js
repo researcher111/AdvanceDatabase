@@ -47,7 +47,7 @@
   const STUDENTS = [['1','ada','39'],['2','ben','31'],['3','cyd','37'],['4','dee','28'],['5','eli','36'],['6','fay','34']];
 
   // ── Lecture 1: the same result, very different physical work ──────────
-  add(1,0,['The same query','A cold trip','A warm trip','Compare the model'],(d,s)=>{
+  add(1,0,['The same query','Read from storage','Read from memory','Compare access costs'],(d,s)=>{
     text(d,'cover',640,120,'Inside a database',54);
     box(d,'sql',330,195,620,65,'SELECT name … WHERE gpa > 35',P.white,P.line,28);
     disk(d,'ssd',230,390);page(d,'ram',860,375,180,135,true,'RAM');
@@ -56,7 +56,7 @@
     ['ada','cyd','eli'].forEach((v,i)=>box(d,'r'+i,460+i*125,555,110,55,v,P.greenLight,P.green,25));
     if(s>=3){text(d,'t1',310,590,'50 µs',39,P.blue);text(d,'t2',960,590,'0.2 µs',39,P.green);}
   });
-  add(1,1,['Characters','Tokens','An executable tree','One boundary'],(d,s)=>{
+  add(1,1,['Characters','Tokens','An executable tree','From parsing to execution'],(d,s)=>{
     text(d,'sql',640,120,'SELECT name FROM students WHERE gpa > 35',32);
     const toks=['SELECT','name','FROM','students','WHERE','gpa','>','35'];
     if(s>=1)toks.forEach((v,i)=>box(d,'tok'+i,100+i*137,200,125,55,v,i%2===0?P.blueLight:P.white,P.blue,23));
@@ -142,7 +142,7 @@
     if(s>=2)text(d,'int',850,245,'0x12345678',38,P.green);
     if(s>=3){d.arrow('flip',615,430,1080,430,P.orange,5);text(d,'misread',850,520,'0x78563412',40,P.orange);}
   });
-  add(1,14,['Buffered acceptance','Request durability','Durable completion','Failure boundary'],(d,s)=>{
+  add(1,14,['write() returns','Call fsync()','fsync() completes','Power fails'],(d,s)=>{
     const labels=['Process','OS cache','Storage'];labels.forEach((l,i)=>box(d,'layer'+i,130+i*375,250,280,190,l,i===2?P.blueLight:P.white,i===2?P.blue:P.line,32));
     [0,1].forEach(i=>d.arrow('a'+i,425+i*375,345,485+i*375,345,P.green,4));
     page(d,'write',170+Math.min(s,2)*375,460,160,100,true,'');
@@ -163,7 +163,7 @@
     d.arrow('cold',620,265,350,370,P.orange,4);d.arrow('warm',665,265,860,355,P.green,4);
     text(d,'block',640,220,'B7 → B7 → B7',38);if(s>=2)text(d,'reuse',640,615,'3 → 1 I/O',42,P.green);
   });
-  add(2,1,['Your observations','Buffered acceptance','Durable completion','Interpret the gap'],(d,s)=>{
+  add(2,1,['Your measurements','write() returns','fsync() completes','Explain the time difference'],(d,s)=>{
     box(d,'buffered',190,140,300,90,'write()',P.greenLight,P.green,40);box(d,'synced',800,140,300,90,'fsync()',P.orangeLight,P.orange,40);
     page(d,'cache',225,360,230,170,true,'OS cache');disk(d,'storage',845,370,200,150);
     d.arrow('bufferpath',340,245,340,335,P.green,5);d.arrow('syncpath',950,245,950,345,P.orange,5);
@@ -247,7 +247,7 @@
     d.circle('loop',1000,300,135,'none',P.orange,4);dot(d,'cursor',1000+120*Math.cos(s*1.6),300+120*Math.sin(s*1.6),22,P.orange);
     text(d,'capacity',445,560,s>=3?'50 / 50':'49 / 50',45);if(s>=2)text(d,'hits',995,565,s===2?'0%':'100%*',45,s===2?P.orange:P.green);
   });
-  add(2,14,['Lookup','Choose','Load or reuse','Release'],(d,s)=>{
+  add(2,14,['Find the block','Choose a frame','Load or reuse','Release the pin'],(d,s)=>{
     const labels=['lookup','victim','pin','unpin'];labels.forEach((v,i)=>{box(d,'step'+i,95+i*300,280,250,160,v,i===s?P.greenLight:P.white,i===s?P.green:P.line,35);if(i<3)d.arrow('a'+i,350+i*300,360,385+i*300,360,P.green,4);});
     dot(d,'request',220+s*300,235,19,P.orange);
     if(s>=1)pin(d,'eligibility',520,520,0);if(s>=2)page(d,'load',775,485,140,90,true,'');if(s>=3)pin(d,'released',1130,520,0);
@@ -271,7 +271,7 @@
     if(s>=2){d.arrow('shift',740,210,830,210,P.orange,4);text(d,'five',785,175,'+5 B',36,P.orange);}
     if(s>=3){text(d,'wrong',990,565,'?',60,P.red);d.line('wrongline',965,515,625,420,P.red,3);}
   });
-  add(3,2,['Fixed reservations','Insert ben','Rename in place','Reject overflow'],(d,s)=>{
+  add(3,2,['Fixed-size slots','Insert ben','Rename in place','Reject an oversized name'],(d,s)=>{
     for(let i=0;i<4;i++)row(d,'slot'+i,190,275+i*78,[i===1&&s>=1?'1':'0',i===1?'2':'',i===1?(s>=2?'benjamin':'ben'):'',i===1?'31':''],-1,210);
     if(s>=2){d.rect('capacity',624,343,210,66,'none',P.green,3,4);}
     if(s>=3){box(d,'overflow',735,590,330,50,'bartholomew',P.redLight,P.red,28);d.line('stop',1075,580,1075,640,P.red,5);}
@@ -287,7 +287,7 @@
     text(d,'formula',860,260,s>=2?'3 × 24 + 20 = 92':'3 × 24 + ?',40);
     if(s>=3){box(d,'new',645,430,520,80,'cid · title[12] · credits',P.blueLight,P.blue,28);text(d,'challenge',905,585,'slot = 28 B',36,P.green);}
   });
-  add(3,5,['Eight bytes','ASCII','UTF-8','Reject before mutation'],(d,s)=>{
+  add(3,5,['Eight bytes','ASCII','UTF-8','Reject before changing bytes'],(d,s)=>{
     grid(d,'capacity',160,250,8,1,115,100,Array.from({length:s===0?0:s===1?3:s===2?6:8},(_,i)=>i),s===3?P.redLight:P.greenLight);
     const values=s===1?['a','d','a']:s===2?['C3','A9','F0','9F','98','80']:['62','61','72','74','68','6F','6C','6F'];
     if(s>=1)values.forEach((v,i)=>text(d,'byte'+i,215+i*115,310,v,29,s===3?P.red:P.ink));
@@ -372,13 +372,13 @@
     if(s>=1){d.arrow('requestpath',950,290,950,570,P.blue,5);dot(d,'request',950,Math.min(575,275+s*90),18,P.blue);}
     if(s>=4){d.arrow('returnpath',320,565,320,290,P.green,5);box(d,'row',150,270,200,70,'ada',P.greenLight,P.green,35);}
   });
-  add(4,3,['Predict the first pull','ada uses one row','cyd uses two more','eli uses two more','Exhaustion uses the last'],(d,s)=>{
+  add(4,3,['Predict the first pull','Read one row for ada','Read two more for cyd','Read two more for eli','Read fay and finish'],(d,s)=>{
     STUDENTS.forEach((r,i)=>box(d,'r'+i,100+i*195,180,175,80,r[1]+' · '+r[2],([0,2,4].includes(i)&&s>=1)?P.greenLight:P.white,P.line,27));
     const consumed=[0,1,3,5,6][s];d.line('progress',100,315,100+Math.max(1,consumed)*190,315,P.orange,7);
     ['ada','cyd','eli'].forEach((v,i)=>{if(s>=i+1)box(d,'out'+i,330+i*230,425,190,90,v,P.greenLight,P.green,37);});
     text(d,'counts',640,610,consumed+' → '+Math.min(3,s),50,s===4?P.ink:P.green);
   });
-  add(4,4,['A common socket','Rewind and advance','Read and inspect','Release'],(d,s)=>{
+  add(4,4,['A shared interface','Rewind and advance','Read and inspect','Release resources'],(d,s)=>{
     const names=['before_first','next','get_val','has_field','close'];
     const pos=[[170,180],[1080,180],[170,495],[1080,495],[640,610]];
     const edges=[[295,180,450,305],[955,180,830,305],[295,495,450,435],[955,495,830,435],[640,575,640,465]];
@@ -421,7 +421,7 @@
       text(d,'f',640,610,'F("mid2") → read majors.mid2 → 1',30,P.orange);
     } else text(d,'result',640,580,['AND: both terms must be True','31 > 35 → False','return False · second term skipped'][s],34,s?P.red:P.ink);
   });
-  add(4,8,['Initialize the left','ada × ds','ada × stat','ada × econ','Carry to ben'],(d,s)=>{
+  add(4,8,['Initialize the left','ada × ds','ada × stat','ada × econ','Rewind right and advance to ben'],(d,s)=>{
     ['ada','ben','cyd'].forEach((v,i)=>box(d,'left'+i,210,195+i*125,240,85,v,(s===4?i===1:i===0)?P.greenLight:P.white,P.green,36));
     ['ds','stat','econ'].forEach((v,i)=>box(d,'right'+i,830,195+i*125,240,85,v,s>0&&i===(s===4?0:s-1)?P.orangeLight:P.white,P.orange,36));
     if(s>=1){d.line('link1',460,s===4?360:235,650,360,P.green,4);d.line('link2',820,235+(s===4?0:s-1)*125,650,360,P.orange,4);box(d,'pair',500,565,330,75,s===4?'(ben, ds)':'(ada, '+['','ds','stat','econ'][s]+')',P.greenLight,P.green,33);}
@@ -583,7 +583,7 @@
     }
     text(d,'sequence',640,680,'One token stream. Each call continues where the previous call stopped.',25,P.muted);
   });
-  add(5,7,['parse_query is about to consume WHERE','It calls _parse_predicate','That calls _parse_term','The term returns its tuple','The predicate returns its object','The query returns QueryData'],(d,s)=>{
+  add(5,7,['parse_query is about to consume WHERE','parse_query calls _parse_predicate','_parse_predicate calls _parse_term','The term returns its tuple','The predicate returns its object','The query returns QueryData'],(d,s)=>{
     l5title(d,'A parser call returns data to its caller');
     ['where','gpa','>','35','EOF'].forEach((v,i)=>box(d,'token'+i,90+i*225,155,205,60,v,P.white,P.line,29));
     const cursor=s===0?0:s<3?1:4;d.arrow('cursor',192+cursor*225,265,192+cursor*225,230,P.green,4);
@@ -648,7 +648,7 @@
     text(d,'simple-label',335,355,'Product first',33,P.orange);text(d,'early-label',945,355,'Filter inputs first',33,P.green);
     if(s>=1){text(d,'simple',335,440,'300 × 3 = 900 pairs',39,P.orange);text(d,'late',335,510,'Then test all WHERE terms',26);}
     if(s>=2){text(d,'early',945,440,'60 × 1 = 60 pairs',39,P.green);text(d,'local',945,510,'60 students and 1 major pass',26);}
-    if(s>=3){text(d,'rows',640,595,'Same answer: 20 rows',36);text(d,'timing',640,655,'15× fewer pairs does not establish a 15× speedup.',28,P.muted);}
+    if(s>=3){text(d,'rows',640,595,'Same answer: 20 rows',36);text(d,'timing',640,655,'15× fewer pairs does not guarantee a 15× speedup.',28,P.muted);}
   });
   add(5,12,['The parser needs FROM','The lexer supplied ID form','expect reports the mismatch'],(d,s)=>{
     l5title(d,'expect identifies the grammar mismatch');
@@ -709,7 +709,7 @@
         "title": "Same query, different trip",
         "minutes": 3,
         "kind": "title",
-        "notes": "Open by asking what could change when both SQL and answer stay identical. Give thirty seconds for individual predictions, then collect two explanations. Do not reveal the cache immediately. Explain afterward that these figures are a simplified block-access model, not a benchmark of complete Python execution. Transition by opening the engine and following the first run.",
+        "notes": "Ask why the same query might run faster the second time even though it returns the same names. Give students thirty seconds to predict, then collect two explanations before revealing the cache. The displayed times count only modeled block accesses; they are not timings of a complete Python query. Follow the first run through the engine next.",
         "id": "lecture-01-scene-01",
         "demo": "viz-query-journey",
         "sources": [
@@ -720,7 +720,7 @@
         "title": "Open the machine",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Follow one statement from characters through token groups to Project above Select above Scan. Ask which box still cares about SQL spelling. The front end does; operators below execute a plan. Describe the lexer/parser distinction accurately even though the original widget compresses the two. Preview that students build the engine from the bottom upward.",
+        "notes": "Follow one statement from characters to tokens, then to a plan with Project above Select above Scan. Ask which part reads the SQL text. The front end does; the operators execute the resulting plan. Explain that the lexer identifies tokens and the parser checks their arrangement. Students will build these engine layers from the bottom upward.",
         "id": "lecture-01-scene-02",
         "demo": "viz-query-journey",
         "sources": [
@@ -742,7 +742,7 @@
         "title": "Warm replay",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask pairs to predict three counters before running: disk reads, rows examined, rows returned. Expected 0,6,3. Let a student direct the next steps. Explain that a buffer cache is not a query-result cache: the engine still filters all six rows and parses/plans again. End by returning to the opening timing contrast.",
+        "notes": "Before the second run, ask pairs to predict disk reads, rows examined, and rows returned: 0, 6, and 3. Let a student lead the next steps. The buffer pool retains table pages, so the engine can read them from memory. It still parses the query, builds the plan, and checks all six rows. Compare the two runs using these counters.",
         "id": "lecture-01-scene-04",
         "demo": "viz-query-journey",
         "sources": [
@@ -753,7 +753,7 @@
         "title": "A table is a contract",
         "minutes": 4,
         "kind": "definition",
-        "notes": "Introduce schema and relation using the familiar student table. Distinguish mathematical relations from SQL duplicate-handling without opening a long aside. Ask whether a column type is a property of just today’s rows or a rule for future writes. Explain gpa 39 means 3.9 in runnable microdb; examples displaying decimals are presentation shorthand.",
+        "notes": "Introduce schema and relation using the student table. Briefly distinguish a mathematical relation from a SQL table that can contain duplicate rows. Ask whether a column type describes only today’s rows or also limits future writes. In microdb, gpa 39 means 3.9; decimal GPAs in other diagrams show the human-readable value.",
         "id": "lecture-01-scene-05",
         "definition": "The named fields and types that define a table’s rows.",
         "term": "Schema",
@@ -766,7 +766,7 @@
         "title": "Choosing identity",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask students to nominate a key, then reveal counterexamples to name and to(name, gpa). A key is a minimal set of fields that uniquely identifies every valid row, including future rows. Mutable values can be unique but create maintenance problems as references change. Do not claim an artificial identifier alone guarantees uniqueness without enforcement.",
+        "notes": "Ask students to suggest a key, then reveal two students with the same name and GPA. A key is a minimal set of fields that uniquely identifies every valid row, including future rows. Changing a key can require changes to references elsewhere. Even an assigned ID needs a constraint that prevents duplicates.",
         "id": "lecture-01-scene-06",
         "sources": [
           "lectures/lecture-01/anatomy.html"
@@ -776,7 +776,7 @@
         "title": "Four promises",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Use one transfer rather than four unrelated examples. Ask what a crash between debit and credit would do to two naive CSV saves. Name atomicity, consistency, isolation and durability orally. Clarify that consistency means preserving declared invariants, isolation depends on the chosen level, and durability assumes the system’s failure model. Explain why plain pandas plus CSV supplies none of this automatically.",
+        "notes": "Follow one transfer through all four guarantees. Ask what happens if a program saves the debit to one CSV file and crashes before saving the credit. Name atomicity, consistency, isolation, and durability. Consistency preserves declared rules, isolation controls which overlapping actions are allowed, and durability covers the failures the system promises to survive. Separate pandas and CSV writes do not provide these guarantees automatically.",
         "id": "lecture-01-scene-07",
         "sources": [
           "lectures/lecture-01/anatomy.html"
@@ -796,7 +796,7 @@
         "title": "The stack",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Have the class explain each boundary using what crosses it. Front end creates the plan; operators pull rows; records map fields to bytes; buffer pool supplies resident pages; file manager transfers blocks. Ask which layer knows the name ada and which only sees an offset. Treat this as a useful teaching decomposition, not a claim every production engine has identical boundaries.",
+        "notes": "Follow what each layer receives and produces. The front end builds a plan; operators request rows; the record layer locates fields in page bytes; the buffer pool supplies pages in memory; the file manager reads and writes blocks. Ask which layer understands the name ada and which receives only a byte offset. Production engines may divide these responsibilities differently.",
         "id": "lecture-01-scene-09",
         "demo": "viz-layer-stack",
         "sources": [
@@ -828,7 +828,7 @@
         "title": "The catalog loop",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Ask where the engine remembers a table after restart. Reveal that schema metadata persists as data, then ask how it reads the catalog before knowing any schema. Explain the small bootstrap of catalog layouts; detailed implementation comes in Lecture 3. Avoid mixing Lecture 1’s hand-packed offsets 0,4,11 with later fixed-slot offsets.",
+        "notes": "Ask how the engine finds a table’s fields after a restart. Its catalog stores the schema as rows. To read those rows, the engine starts with a few built-in catalog layouts; Lecture 3 explains the implementation. Keep the earlier packed offsets 0, 4, and 11 separate from the fixed-slot offsets used here.",
         "id": "lecture-01-scene-12",
         "definition": "Stored metadata describing tables, fields and other database objects.",
         "term": "Catalog",
@@ -840,7 +840,7 @@
         "title": "Build from the floor",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Map lecture concepts to the seven cumulative labs: files, buffers, records/catalog, scans, SQL, B+tree, recovery. Explain that supplied reference lower layers prevent an earlier unfinished lab from blocking the next one. Students still learn the frozen interfaces. Ask which layer Thursday requires and which first lets a typed query run; expected file manager andLab 5.",
+        "notes": "Connect the engine layers to Labs 1–7: files, buffers, records and catalog, scans, SQL, B+ tree, and optional recovery practice. Supplied lower layers let students continue even if an earlier implementation is unfinished. The interfaces stay the same across labs. Ask which layer comes first and which first runs typed SQL: the file manager in Lab 1 and the front end in Lab 5.",
         "id": "lecture-01-scene-13",
         "demo": "viz-microdb-plan",
         "sources": [
@@ -862,7 +862,7 @@
         "title": "When the write is real",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Use this to distinguish a successful buffered write from persistence. Ask what the Lab 1 sync/no-sync throughput comparison measures. Explain fsync requests durable completion and can raise an error; exact guarantees depend on the storage stack. Preview a side rail of log records without teaching recovery yet. A process kill is also different from power loss, which matters later.",
+        "notes": "A write can return while its bytes are still in a buffer. Ask what changes in Lab 1 when the program also calls fsync. A successful fsync waits for the file-sync request to complete; it can fail, and its durability guarantees depend on the storage stack. Briefly introduce the log as saved recovery information. Explain that killing a process and losing power can leave different data available.",
         "id": "lecture-01-scene-15",
         "sources": [
           "lectures/lecture-01/anatomy.html"
@@ -872,7 +872,7 @@
         "title": "Reconstruct the engine",
         "minutes": 3,
         "kind": "recap",
-        "notes": "Ask three students to narrate separate boundaries: SQL to plan, row to page, page to disk. Final retrieval question: the second run has no disk reads; what work still happens? Expected parsing/planning, scanning and filtering. Assign reading theLab 1 spec, running the untouched harness and bringing Python plus starter files; place all logistics in notes rather than projected bullet points.",
+        "notes": "Ask three students to explain how SQL becomes a plan, how a row is located in a page, and how a block reaches memory. Then return to the second run: with no disk reads, what work remains? The engine still parses, plans, scans, and filters. Before Lab 1, students should read the specification, run the unchanged test harness, and have Python and the starter files ready.",
         "id": "lecture-01-scene-16",
         "sources": [
           "lectures/lecture-01/anatomy.html"
@@ -890,7 +890,7 @@
         "title": "Repeated reads",
         "minutes": 3,
         "kind": "title",
-        "notes": "A block requested three times is the same physical data, but a file-only engine may issue three reads. Ask the class to sketch where a useful copy could stay. Build 1 sends each request to storage; build 2 routes later requests to a resident memory frame. Explain that the query still executes: caching a page is different from caching a query result. This three-minute opening is teaching time. The scheduled ten-minute quiz takes place separately.",
+        "notes": "The engine requests B7 three times. Without a buffer pool, it may read the file three times. Ask where it could keep a copy. In build 1, each request goes to storage; in build 2, later requests use the page already in memory. The query still runs against those bytes. This three-minute opening is teaching time; the scheduled ten-minute quiz is separate.",
         "id": "lecture-02-scene-01",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -900,7 +900,7 @@
         "title": "Bring the measured gap",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask two students to report the sync/no-sync ratio measured in Lab1 and state their method. The two paths show different completion boundaries without inventing a class measurement: buffered acceptance on the left and requested durable completion on the right. Record the reported ratio orally or with the annotation tool. Distinguish Python buffering, OS caching and durable completion. A fast buffered result is not necessarily SSD throughput. Ask how a cached page can avoid another storage request entirely, then move to the fixed frames.",
+        "notes": "Ask two students to share their Lab 1 sync/no-sync ratios and explain how they measured them. The left path stops when the bytes enter a buffer; the right waits for fsync. Use the students’ measurements rather than inventing a class result. Distinguish Python buffers, the OS cache, and durable storage: a fast buffered write does not directly measure SSD throughput. Next, ask how keeping a page in memory can avoid a file read.",
         "id": "lecture-02-scene-02",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -922,7 +922,7 @@
         "title": "A scan breaks reuse",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Pause before the second 0 and ask whether it is still resident. Continue until the class sees that every request misses. Have a student explain why a second pass does not imply a warm-cache hit: the working set exceeds capacity and reuse distance is too large. The preset has 16 accesses and 0 hits. Do not rely on #bs-step, which currently has no listener.",
+        "notes": "Pause before the second request for B0 and ask whether it is still in memory. It has already been evicted. Continue through the second pass: each block is evicted before its next request because eight blocks cycle through only three frames. The example has 16 accesses and no hits.",
         "id": "lecture-02-scene-04",
         "demo": "viz-bufsim",
         "sources": [
@@ -933,7 +933,7 @@
         "title": "The hot set fits",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask for a predicted hit rate before running and count the compulsory first misses. The exact preset has 11 hits and 5 misses; the rounded page prose says about 70%. Explain that hot blocks 0 and 1 keep returning soon enough to remain in memory. Have pairs state the workload difference from the previous scene without using the vague phrase bigger cache.",
+        "notes": "Ask students to predict the hit rate, then count each block’s first miss. The example produces 11 hits and 5 misses, about 69% hits. Blocks 0 and 1 are requested often enough to remain in memory. Ask pairs to explain how the request order changed from the previous scene even though the pool size stayed the same.",
         "id": "lecture-02-scene-05",
         "demo": "viz-bufsim",
         "sources": [
@@ -944,9 +944,9 @@
         "title": "Hold the page",
         "minutes": 4,
         "kind": "definition",
-        "notes": "Ask what goes wrong if a scan retains a reference to a frame while the pool replaces its contents. Pinning prevents that eviction. Nested users need a count rather than a boolean. The original buffer simulator automatically pins/unpins each access and cannot demonstrate persistent holds; use this separate stateful visual. A pin does not itself provide transactional isolation.",
+        "notes": "Ask what a scan would read if the pool replaced its page before the scan finished. A pin prevents that replacement. When two callers use the same page, the count stays positive until both release their pins. Use this diagram to show those overlapping holds; the earlier simulator releases each pin immediately. Pinning prevents eviction but does not stop another transaction from changing a row.",
         "id": "lecture-02-scene-06",
-        "definition": "Hold a buffer frame ineligible for eviction until its users release it.",
+        "definition": "Keep a buffer frame from being replaced while callers use its page.",
         "term": "Pin",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -967,7 +967,7 @@
         "title": "Pins outrank age",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Work through two cases aloud. With no pins, E evictsC andB evictsA; withA pinned, the second victim isD. Then ask what an all-pinned pool should do rather than corrupting an active page. microdb raises BufferAbortError. Invite a student to identify the missing-unpin failure pattern: enough leaked holds eventually make every frame ineligible.",
+        "notes": "Compare two cases. With no pins, E replaces C and B replaces A. With A pinned, B must replace D instead. Ask what happens when every frame is pinned: microdb raises BufferAbortError because it cannot safely replace any page. Forgetting to unpin pages can eventually cause this failure.",
         "id": "lecture-02-scene-08",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -977,7 +977,7 @@
         "title": "Tracking residents",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Connect back to immutable, hashable BlockId fromLab 1. Ask why a linear scan is acceptable for 3 or 50 frames but expensive at hundreds of thousands. Explain expected constant-time hashing without promising worst-case O(1). Both approaches still implement the same pin interface, so higher layers are unaffected by the implementation choice.",
+        "notes": "Recall the immutable, hashable BlockId from Lab 1. Searching 3 or 50 frames is cheap; searching hundreds of thousands on every pin is much more work. A hash map can locate a frame in expected constant time, though its worst case is not O(1). Both implementations offer the same pin interface to callers.",
         "id": "lecture-02-scene-09",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -997,7 +997,7 @@
         "title": "One cache above another",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Explain why an OS cache is helpful but does not implement the database’s entire protocol. Avoid claiming that operating systems cannot lock memory at all: database pinning, eviction and recovery ordering are a stronger combined requirement. Ask what happens if both tiers retain the same bytes and the application claims nearly all RAM. Introduce double caching and swapping as resource-budget issues.",
+        "notes": "The OS cache can reuse file bytes, but the database must also track active page users, choose safe replacements, and write recovery records in the required order. Operating systems can lock memory; that alone does not implement the database protocol. If both caches keep the same pages, those copies compete for RAM and can contribute to swapping.",
         "id": "lecture-02-scene-11",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -1017,7 +1017,7 @@
         "title": "Misses dominate time",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Compute at 90%:0.9×100 ns+0.1×25000 ns=2590 ns. Ask what share comes from misses; about 96.5%. Then compare 99% yielding 349 ns and 99.6% yielding 199.6 ns. Each extra percentage point saves the same absolute 249 ns in this model; the percentage reduction grows near 100%. These are representative access costs, not end-to-end query latency.",
+        "notes": "At 90% hits, compute 0.9 × 100 ns + 0.1 × 25,000 ns = 2,590 ns. Misses account for about 96.5% of that time. Compare averages of 349 ns at 99% hits and 199.6 ns at 99.6%. Each additional percentage point saves 249 ns in this model, a larger fraction of the remaining time as hits approach 100%. These figures model individual accesses, not complete queries.",
         "id": "lecture-02-scene-13",
         "demo": "viz-eat",
         "sources": [
@@ -1038,7 +1038,7 @@
         "title": "The four responsibilities",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Translate diagrams into the four Lab 2 methods without showing a code listing. Have students narrate the three invariants: pin counts reflect current users, every successful pin updates recency, and dirty contents are saved before frame reuse. Supplied Buffer plumbing performs flushes. Ask where an implementation should invoke that plumbing rather than overwrite raw fields.",
+        "notes": "Connect the diagram to the four Lab 2 methods. Pin counts track current users; every successful pin updates recency; dirty bytes must be saved before a frame is reused. The supplied Buffer methods perform the flushes. Ask where the buffer manager must call them before loading a replacement page.",
         "id": "lecture-02-scene-15",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -1110,7 +1110,7 @@
         "title": "One multiply, one add",
         "minutes": 4,
         "kind": "activity",
-        "notes": "First ask the address of gpa in slot 3; expected 92. Then give partners one minute for the new schema: cid 4, title 8, credits 24, slot 28,146 rows per 4096-byte block and 8 spare bytes. Have a student explain why Schema declares types while Layout computes offsets. One centralized computation keeps storage readers and writers consistent.",
+        "notes": "Ask for the byte offset of gpa in slot 3: 3 × 24 + 20 = 92. Give pairs one minute to calculate the new schema: cid at byte 4, title at 8, credits at 24, and a 28-byte slot. A 4096-byte block holds 146 slots with 8 bytes left. Schema declares fields and types; Layout computes the offsets used by both readers and writers.",
         "id": "lecture-03-scene-05",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1152,7 +1152,7 @@
         "title": "Missing is not zero",
         "minutes": 4,
         "kind": "definition",
-        "notes": "Explain that microdb currently has noNULL. Real engines can represent absence through null metadata rather than choosing a special ordinary value. Ask why treating missing GPA as 0 biases an average. Do not say every null costs exactly one extra physical bit independently: actual headers, bitmap allocation and alignment are format-dependent. The conceptual distinction is the lesson.",
+        "notes": "microdb does not currently support NULL. Other engines can use metadata, such as a null bitmap, to distinguish a missing value from zero or an empty string. Ask how counting an unknown GPA as zero changes an average. Actual storage costs depend on the header, bitmap allocation, and alignment; this diagram shows the distinction, not an exact space cost.",
         "id": "lecture-03-scene-09",
         "definition": "A marker for a missing or unknown value, distinct from zero and empty text.",
         "term": "NULL",
@@ -1164,7 +1164,7 @@
         "title": "When a value outgrows a page",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Walk through inline, compressed-inline and out-of-line cases. Ask why reserving 2 MBfor every student would be wasteful. PostgreSQL TOAST can compress and/or move large values, depending on storage settings and compressibility; the widget’s 3×compression is illustrative. Production tuples remain variable-sized, so do not claim TOAST gives every row an immutable fixed shape.",
+        "notes": "Compare storing a value in the row, compressing it there, and moving it to separate storage. Ask why reserving 2 MB for every student’s essay would waste space. PostgreSQL TOAST can compress or move large values depending on the settings and data; the illustrated 3× compression is hypothetical. PostgreSQL rows remain variable-sized.",
         "id": "lecture-03-scene-10",
         "demo": "viz-toast",
         "sources": [
@@ -1175,7 +1175,7 @@
         "title": "Only fetch what is needed",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Before each query, ask which pages must be read. Selecting name can avoid fetching the out-of-line essay; selecting essay follows the pointer and gathers its chunks. Explain that actual execution can depend on expression evaluation and storage choices, while this case illustrates deferred access. Connect pointer indirection to preserving locality for commonly used small fields.",
+        "notes": "Before each query, ask which pages it needs. Selecting name can leave the separately stored essay unread. Selecting essay follows the row’s pointer and fetches the essay chunks. Expressions and storage settings can change actual reads, but this example shows the benefit of keeping common small fields together and fetching large values only when needed.",
         "id": "lecture-03-scene-11",
         "demo": "viz-toast",
         "sources": [
@@ -1196,7 +1196,7 @@
         "title": "Across block boundaries",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask students to narrate TableScan.next: search current block, move if exhausted, stop only at end of file. It holds one record page at a time for this scan. Show empty blocks and the finalFalse explicitly. For insertion, the provided algorithm searches for reusable slots before growing the file; appending supplies zero flags and therefore valid empty space.",
+        "notes": "Trace TableScan.next: search the current block for a used slot, move to the next block when necessary, and return False only when the file has no more rows. This scan holds one record page at a time. Show how it skips empty blocks. Insertion searches for free slots before appending; a new block’s zero flags mark its slots as empty.",
         "id": "lecture-03-scene-13",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1206,7 +1206,7 @@
         "title": "An address is not forever",
         "minutes": 4,
         "kind": "definition",
-        "notes": "DefineRIDas a physical location for this heap file, not a permanent business identifier. Live in-place microdb updates preserve it; after deletion another row may use the same slot. PostgreSQL MVCC updates can create a new physical tuple location. Ask why an index cannot retain an old entry after deletion merely because the address still exists.",
+        "notes": "A RID identifies a block and slot in this heap file. Updating a live row in place preserves its RID in microdb, but deleting the row lets another row reuse that address. PostgreSQL MVCC updates can create a new physical row location. Ask why an index entry must be removed after deletion even though its old address still exists.",
         "id": "lecture-03-scene-14",
         "definition": "A record’s physical address, represented here by its block number and slot number.",
         "term": "RID",
@@ -1218,7 +1218,7 @@
         "title": "Store the rules as rows",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Use a restart scenario: how does the engine recover the layout once Python objects vanish? Persisted catalog rows reconstruct it. Then expose the circular dependency and explain the small hardcoded catalog layouts. The supplied catalog is a real first customer of the students’ record layer, so passing catalog tests is evidence that lower abstractions compose.",
+        "notes": "After a restart, the Python Layout objects are gone. Ask how the engine rebuilds them from catalog rows. To read the catalog itself, it starts with a few hardcoded layouts. The supplied catalog uses the students’ record layer, so its tests check that fields, slots, and scans work together.",
         "id": "lecture-03-scene-15",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1228,7 +1228,7 @@
         "title": "Rebuild the row",
         "minutes": 3,
         "kind": "recap",
-        "notes": "Ask for four statements: what fixes offsets; what owns a pin; what skipsEMPTYslots; what remembers the schema after restart. ExpectedLayout, RecordPage, TableScan, catalog. End with a fresh schema to compute beforeThursday and theLab 3 harness expectation 0/12 on unedited starters. Next Tuesday the same scan interface begins answering queries.",
+        "notes": "Ask which component computes field offsets, holds a page pin, skips empty slots, and remembers schemas after restart: Layout, RecordPage, TableScan, and the catalog. Give students a new schema to calculate before Thursday. The unchanged Lab 3 starters should pass 0 of 12 tests. Next Tuesday, scans will supply rows to query operators.",
         "id": "lecture-03-scene-16",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1256,7 +1256,7 @@
         "title": "An intermediate mountain",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Build0 shows a full intermediate in memory. Ask where the next stage can put its result. Build1 introduces a Cartesian product; build2 scales the example to one million times one million rows. The arithmetic is a trillion candidate pairs, not a measured runtime. Do not claim that pandas equality merge always constructs this product. Build3 replaces the intermediate bins with one flowing row. Explain that streaming reduces intermediate storage, while better join algorithms must also reduce work. Transition to demand.",
+        "notes": "First show a complete scan result stored in memory and ask where the next operator will put its output. Add a Cartesian product, then grow each input to one million rows: the product has one trillion candidate pairs. This is a count, not a timing or a model of every pandas merge. Finally, pass one pair at a time. Streaming saves intermediate storage; avoiding unnecessary pairs requires a better plan or join algorithm.",
         "id": "lecture-04-scene-02",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1339,7 +1339,7 @@
         ]
       },
       {
-        "title": "How much does the join touch",
+        "title": "How many rows does the join visit?",
         "minutes": 4,
         "kind": "activity",
         "notes": "Ask students to predict four counts before revealing the grid: left deliveries, total right deliveries, candidate pairs, surviving pairs. With six students, three majors and one matching major per student, the counts are 6, 18, 18 and 6. Now make the predicate always false. Only the last count changes to zero. The product enumerates every pair before a filter rejects it. This separates candidate work from result size and motivates pushing local filters toward their inputs.",
@@ -1353,7 +1353,7 @@
         "title": "Empty means empty",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Hide all rows from the left input and ask for the number of pairs: zero. Repeat with an empty right input: also zero. Restore both two-row inputs and enumerate four pairs. At exhaustion, press next repeatedly and insist on False each time until a rewind. A common bug restarts the right scan and emits pairs after exhaustion, or emits a right row without a valid left row. These are state invariants, not special cases to ignore.",
+        "notes": "Hide all rows from the left input and ask for the number of pairs: zero. Repeat with an empty right input: also zero. Restore both two-row inputs and enumerate four pairs. At exhaustion, press next repeatedly and insist on False each time until a rewind. A common bug restarts the right scan and emits pairs after exhaustion, or emits a right row without a valid left row. The implementation must handle both cases.",
         "id": "lecture-04-scene-11",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1553,7 +1553,7 @@
           "lectures/lecture-05/parsing.html#descent"
         ],
         "teaching": {
-          "idea": "The cursor marks the next token to process. Looking at a token leaves the cursor in place. Consuming it moves the cursor forward.",
+          "idea": "The cursor points to the next unread token and advances only when a helper consumes that token.",
           "builds": [
             "Point to the arrow under select. This is the cursor: it identifies the next token a helper will use. The token boxes will stay on screen throughout this example. Consuming a token means moving past it, not deleting it.",
             "Call peek(). It returns the kind and value of select: (\"KEYWORD\", \"select\"). The arrow stays under select. We have looked at the token, but the next helper will still see it.",
@@ -1598,7 +1598,7 @@
           "lectures/lecture-05/parsing.html#parser-calls"
         ],
         "teaching": {
-          "idea": "Nested grammar rules create nested calls. Each completed call returns data and leaves the stack.",
+          "idea": "Parser methods call one another to read nested grammar rules, then return their results to their callers.",
           "builds": [
             "We join parse_query just before WHERE. It has already read SELECT name FROM students. The cursor points to where.",
             "parse_query consumes WHERE and calls _parse_predicate. The cursor now points to gpa. Both grammar methods are active.",
@@ -1622,7 +1622,7 @@
           "lectures/lecture-05/parsing.html#field-reference"
         ],
         "teaching": {
-          "idea": "The student row says which major the student chose. The major row has its own ID. The join keeps a pair when those two IDs match.",
+          "idea": "The join keeps a student–major pair when the student’s chosen major ID matches the major row’s ID.",
           "builds": [
             "Introduce the two example rows. ben has mid = 2, meaning his chosen major has ID 2. The statistics row has mid2 = 2, meaning statistics is major 2. mid and mid2 are column names in different tables. Neither is the student’s own ID.",
             "ProductScan pairs ben with the statistics row and makes both rows’ fields available. That is all “combined row” means here. Point to name and mid from the student, then mid2 and dept from the major. The predicate has not decided whether to keep the pair yet.",
@@ -1690,7 +1690,7 @@
           ],
           "question": "Why would putting this projection below the selection cause trouble?",
           "answer": "Projecting only name and dept hides mid and mid2. The selection still needs those fields to test the join.",
-          "context": "Arrows show the direction rows will flow during execution. Building the tree does not enumerate pairs. A single table needs no ProductScan, no WHERE needs no SelectScan, and SELECT * needs no ProjectScan."
+          "context": "Arrows show the direction rows will flow during execution. Building the tree does not enumerate pairs. A single table needs no ProductScan. A query without WHERE needs no SelectScan, and SELECT * needs no ProjectScan."
         }
       },
       {
@@ -1744,7 +1744,7 @@
           "https://docs.python.org/3/library/sqlite3.html#how-to-use-placeholders-to-bind-values-in-sql-queries"
         ],
         "teaching": {
-          "idea": "The application supplies a fixed SQL statement and a separate value. Binding associates that value with ? without letting it change the statement’s structure.",
+          "idea": "Parameter binding fills the ? placeholder with a separately supplied value that cannot change the SQL structure.",
           "builds": [
             "Start with the task: an app wants the name of the student whose ID a user enters. Read the two example rows: ID 42 belongs to ada and ID 43 belongs to ben. The variable sql holds the statement shown above. The question mark is a placeholder for one comparison value. It is neither a wildcard nor an instruction to return every student.",
             "Read the call aloud: execute the statement in sql with a list containing one value, 42. These are two Python arguments. The database associates 42 with the single question mark, compares each sid against 42, and returns the name ada. This association is called parameter binding. The SQL text still contains ?.",
@@ -1804,7 +1804,7 @@
           "lectures/lecture-05/parsing.html#thursday"
         ],
         "teaching": {
-          "idea": "Returned rows measure the answer size. Table row visits measure one part of the work.",
+          "idea": "Count both the rows the query returns and the table rows it visits to produce them.",
           "builds": [
             "Compare the two queries on the 300-student fixture. Before advancing, ask students to predict table row visits and returned rows for each query.",
             "Reveal 300 visits for both. TableScan has no index that can skip students based on GPA. The filtered query must read each candidate row to test it.",

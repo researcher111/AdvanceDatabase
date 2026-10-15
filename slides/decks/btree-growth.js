@@ -13,12 +13,12 @@
     ['Insert 4: full but legal', [1,2,3,4], null, 'Four keys fit. A full leaf is still legal.', 'Insert 4 with RID d. Stop and ask whether full means invalid. With a capacity of four keys, this leaf is full but legal.'],
     ['Predict insertion of 5', [1,2,3,4], 5, 'Where can a fifth distinct key go?', 'Hold 5 above the full leaf. Predict the result before inserting. Adding another RID for an existing key would not create a fifth distinct key.'],
     ['Insert 5: overflow', [1,2,3,4,5], null, 'Five keys exceed the capacity of four.', 'Place 5 with RID e into a temporary overflow state. A wider drawing makes the fifth entry visible; it does not increase the permitted node capacity.'],
-    ['Split the entries', [[1,2],[3,4,5]], null, 'Move the entries into two leaves: 2 keys and 3 keys.', 'Split near the middle. Move keys 1 and 2 with their RIDs left, and keys 3, 4, and 5 with their RIDs right. No entry or RID is lost. Parent repair is still in progress.'],
+    ['Split the entries', [[1,2],[3,4,5]], null, 'Move the entries into two leaves: 2 keys and 3 keys.', 'Split near the middle. Move keys 1 and 2 with their RIDs left, and keys 3, 4, and 5 with their RIDs right. No entry or RID is lost. The parent still needs a separator and child pointers.'],
     ['Link the two leaves', [[1,2],[3,4,5]], null, 'Connect the left leaf to its next leaf.', 'Connect the sorted leaves with a sibling link. A range scan can use this link after its initial descent. The new root is the next part of the same insertion.'],
     ['Copy 3 into a new root', [[1,2],[3,4,5]], null, 'Copy separator 3 upward. Keep 3 and RID c in the leaf.', 'Create a new root with separator 3 and two child pointers. Copy the first key of the right leaf upward. The actual entry 3 with RID c remains in the leaf. Both leaves are now one edge below the root.'],
     ['Insert 6 without splitting', [[1,2],[3,4,5,6]], null, '6 goes right. Four keys still fit in that leaf.', 'Compare 6 with root separator 3, take the right child, and insert 6 with RID f. The right leaf now has four keys and remains legal.'],
     ['Predict insertion of 7', [[1,2],[3,4,5,6]], 7, 'The right leaf is full. Predict the next split.', 'Hold 7 above the tree. Ask whether splitting this leaf must make the tree taller. The current root has room for another separator.'],
-    ['The right leaf overflows', [[1,2],[3,4,5,6,7]], null, 'Only the right leaf overflows.', 'Insert 7 with RID g into the right leaf temporarily. The left leaf is unaffected. Repair proceeds along the insertion path, not by rebuilding every leaf.'],
+    ['The right leaf overflows', [[1,2],[3,4,5,6,7]], null, 'Only the right leaf overflows.', 'Insert 7 with RID g into the right leaf temporarily. The left leaf is unaffected. The insert repairs the affected leaf and its ancestors; the other leaves stay as they are.'],
     ['Split the right leaf', [[1,2],[3,4],[5,6,7]], null, 'Keep 3 and 4; move 5, 6, and 7 to a new leaf.', 'Split the overfull right leaf into [3,4] and [5,6,7], carrying each RID with its key. Repair the sibling links. The parent still needs the new child pointer and separator.'],
     ['Copy 5 into the existing root', [[1,2],[3,4],[5,6,7]], null, 'The root becomes [3, 5]. The tree stays two levels tall.', 'Copy the first key of the new right leaf, 5, into the existing root and add its child pointer. The root has only two keys, so it does not overflow. Keep key 5 and RID e in the leaf.'],
     ['Read the completed tree', [[1,2],[3,4],[5,6,7]], null, 'All seven entries remain in leaves at the same depth.', 'Read the routes: below 3, at least 3 but below 5, and at least 5. Point to both copied separators still present in leaves. A leaf split grows the tree only when a new root is required.']
@@ -106,11 +106,11 @@
   }
   const questions=[
     ['Where are the entries in an empty tree?', 'There are no entries yet; the single leaf is also the root.'],
-    ['What moves together when this entry later splits?', 'Key 1 and its RID list [a] stay together in a leaf.'],
+    ['When its leaf later splits, what must stay with key 1?', 'Key 1 and its RID list [a] stay together in a leaf.'],
     ['Do we need a parent yet?', 'No. The single leaf still has room.'],
     ['How many distinct keys can still fit?', 'One more key fits before reaching the capacity of four.'],
     ['Does full mean the leaf must split now?', 'No. Four keys are legal; a fifth distinct key creates overflow.'],
-    ['What happens if another RID is added for an existing key?', 'Its RID list grows; it does not create another distinct key slot.'],
+    ['What happens if another RID is added for an existing key?', 'Its RID list grows; it does not use another key slot.'],
     ['Why is this state temporary?', 'Five distinct keys exceed the leaf capacity of four, so insertion must repair the overflow.'],
     ['Did key 3 lose its row address when it moved?', 'No. Its RID list [c] moves with it into the new right leaf.'],
     ['What will a range scan use after reaching the left leaf end?', 'The next-leaf link lets it continue in key order.'],
@@ -131,7 +131,7 @@
     idea:'A leaf split moves whole entries into two leaves and copies a separator to the parent.',
     builds:frames.map(frame=>frame[4]),checks:questions,
     question:'When does a split make the tree taller?',
-    answer:'Only when a new root is needed. A leaf split can instead add a separator to an existing parent that still has room.',
+    answer:'Only when a new root is needed. If the existing parent has room, add the new separator there.',
     context:'Toy B+ tree with capacity four distinct keys per node. Letters a–g stand for RID lists. Split frames show temporary intermediate states; the repaired states preserve equal leaf depth and every key/RID entry. The later internal-node scene distinguishes moving a routing separator upward from copying a leaf separator.'
   };
   scene.notes=[scene.teaching.idea,...scene.teaching.builds,'Ask: '+scene.teaching.question,'Expected answer: '+scene.teaching.answer,scene.teaching.context].join('\n\n');

@@ -9,11 +9,11 @@
     },
     'recursive-descent': {
       title: 'Recursive descent',
-      body: "<p>A parsing technique in which functions implement grammar rules. Each function consumes the tokens for its rule and calls other rule functions for nested parts. The complete supplied parser illustrates this approach. Lab 5 walks through SELECT parsing and the planner before the query experiments.</p>",
+      body: "<p>A way to parse text with one function for each grammar rule. A function reads the tokens for its part of the statement and calls other functions for smaller parts. The supplied parser uses this approach; the SELECT walkthrough shows how the functions work together.</p>",
     },
     'ast': {
       title: 'AST (abstract syntax tree)',
-      body: "<p>An abstract syntax tree represents the structure of parsed input without retaining every detail of its spelling. Microdb’s <code>QueryData</code>, <code>InsertData</code>, and <code>CreateData</code> are simple structured descriptions passed from the parser to later processing stages.</p>",
+      body: "<p>A structured description of what parsed text means. It keeps the statement’s parts instead of its exact spelling and spacing. Microdb uses simple objects such as <code>QueryData</code>, <code>InsertData</code>, and <code>CreateData</code> to pass the parser’s description to the next stage.</p>",
     },
     'token': {
       title: 'Token',

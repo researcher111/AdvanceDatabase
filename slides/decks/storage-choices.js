@@ -12,7 +12,7 @@
   const starts = [70, 360, 650, 940];
   // Each frame is a deliberate pause, advanced by the existing player controls.
   const frames = [
-    ['Same keys, four organizations', -1, 'Each picture stores the same six keys.', 'Name the four structures before asking about speed. Read the same six keys in each. The pictures show organization, not four different datasets.'],
+    ['Same keys, four structures', -1, 'Each picture stores the same six keys.', 'Name the four structures before asking about speed. Read the same six keys in each. The pictures show organization, not four different datasets.'],
     ['Heap: check the first three rows', 0, 'No key order: check rows one by one.', 'Request key 7. Read the heap in physical order: 9, then 1, then 11. None matches. The blue outlines mark checked rows.'],
     ['Heap: reach the matching row', 0, 'The fifth checked row contains 7.', 'Continue through 3 and then 7. This lookup has examined five rows. We assume unique keys for this toy comparison; a general scan returning all matches may need to continue.'],
     ['Sorted array: compare with 5', 1, '7 is greater than 5: keep the right half.', 'Reset the lookup to the sorted array. Binary search first compares against 5 at the lower middle position. Discard 1, 3, and 5 from the candidate interval.'],
@@ -20,9 +20,9 @@
     ['Sorted array: find 7', 1, 'Three comparisons locate 7.', 'Compare with 7 and finish. The array is drawn in rows only to fit the slide; read its positions left to right, then top to bottom.'],
     ['Hash index: choose bucket 1', 2, '7 mod 3 = 1: inspect bucket 1.', 'Introduce the deliberately simple hash rule key mod 3. It routes 7 to bucket 1, which also contains 1. Routing chooses a bucket, not a guaranteed match.'],
     ['Hash index: check the bucket', 2, 'Check 1, then find 7 in the same bucket.', 'Compare the entries in bucket 1. The first key is 1; the next is 7. Keep collisions visible so students do not mistake a hash result for the row itself.'],
-    ['B+ tree: compare at the root', 3, '7 is at least 7: take the right child.', 'The root separator is 7. Keys below 7 go left; keys at least 7 go right. Equality goes right because the matching entry lives in that leaf.'],
+    ['B+ tree: compare at the root', 3, '7 equals the separator: take the right child.', 'The root separator is 7. Keys below 7 go left; keys at least 7 go right. Equality goes right because the matching entry lives in that leaf.'],
     ['B+ tree: find the leaf entry', 3, 'The leaf contains 7 and its row address.', 'Follow the highlighted branch and find 7 in the right leaf. A secondary index returns its RID list; heap-row fetching is omitted from this organization comparison.'],
-    ['Insert 6: predict the changes', -1, 'Where can the new key go?', 'Change the request from finding 7 to inserting 6. Begin with the original six keys in all four structures. Ask which structure must move existing entries.'],
+    ['Insert 6: predict the changes', -1, 'Where can the new key go?', 'Change the request from finding 7 to inserting 6. Begin with the original six keys in all four structures. Ask which structure must move entries to make room.'],
     ['Heap: use a free slot', 0, 'Place 6 in free space; keep physical order.', 'Put 6 into the illustrated free heap slot. Finding free space has its own policy; the point here is that inserting does not require sorting the existing rows.'],
     ['Sorted array: make a gap', 1, 'Shift 7, 9, and 11 one position right.', 'Pause before placing 6. Watch the existing keys move to make position four free. The unchanged keys 1, 3, and 5 remain where they were.'],
     ['Sorted array: fill the gap', 1, 'Place 6 between 5 and 7.', 'Insert 6 in the gap. Read the complete sequence across rows: 1, 3, 5, 6, 7, 9, 11. The comparison assumes a packed sorted array with spare capacity.'],
@@ -151,7 +151,7 @@
   }
 
   const question='Why can a B+ tree follow a range while this hash index must inspect every bucket?';
-  const answer='The tree keeps leaf entries in key order and links neighboring leaves. Hash routing groups keys by their hash, so a numeric range is scattered across buckets.';
+  const answer='The tree keeps leaf entries in key order and links neighboring leaves. Hashing sends keys to buckets by hash value, so a numeric range can span several buckets.';
   const checks=[
     ['Do these pictures store different data?', 'No. Each starts with the same six unique keys; only their organization differs.'],
     ['Can we rule out the remaining heap rows?', 'No. Their physical positions tell us nothing about their key values.'],
@@ -165,7 +165,7 @@
     ['Is the root separator itself the matching data entry?', 'No. It routes the search; the leaf entry holds the key and its row addresses.'],
     ['Which structure must make a gap for 6?', 'The packed sorted array must shift 7, 9, and 11.'],
     ['Must the heap reorder its existing rows?', 'No. This example uses an available slot without imposing key order.'],
-    ['Which keys moved, and why?', '7, 9, and 11 each moved one position to leave a sorted insertion gap after 5.'],
+    ['Which keys moved, and why?', '7, 9, and 11 each moved one position to leave room for 6 after 5.'],
     ['What order should we read across these drawn rows?', 'Left to right, then top to bottom: 1, 3, 5, 6, 7, 9, 11.'],
     ['Does bucket 0 now contain sorted values?', 'No. It contains 3, 9, 6. Hash routing does not establish global key order.'],
     ['Will inserting 6 overflow the left leaf?', 'No. It has three keys and room for a fourth.'],
@@ -174,7 +174,7 @@
     ['Can the heap stop when it encounters 11?', 'No. Later physical rows still include matching keys.'],
     ['Why locate the first key at least 3?', 'Every earlier sorted key is outside the range, so the forward scan can start at this lower bound.'],
     ['Why can the array stop at 11?', 'Every later key is also greater than 9 because the array is sorted.'],
-    ['Why does this range need every hash bucket?', 'Matching keys occur in all three buckets, and the hash gives no contiguous key-order interval.'],
+    ['Why does this range need every hash bucket?', 'Matching keys occur in all three buckets, and the hash does not put neighboring keys in neighboring buckets.'],
     ['Must the tree restart at its root for every matching key?', 'No. Descend once for the lower bound, then use the sorted leaf entries and sibling links.'],
     ['Where should the range scan go after 6?', 'Follow the next-leaf link to the right leaf, where 7 and 9 are still in range.'],
     ['What tells the tree to stop before returning 11?', '11 exceeds the upper bound 9, and subsequent leaf entries cannot be smaller.'],

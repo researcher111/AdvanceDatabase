@@ -9,7 +9,7 @@
     },
     'delegation': {
       title: 'Delegation',
-      body: "<p>Implementing a method by forwarding its work to another object. For example, <code>SelectScan.get_val</code> calls <code>self.scan.get_val(fld)</code>. The selection changes which rows are returned while using its input scan to read their field values.</p>",
+      body: "<p>Letting another object do a method’s work. For example, <code>SelectScan.get_val</code> calls <code>self.scan.get_val(fld)</code>. The selection changes which rows are returned while using its input scan to read their field values.</p>",
     },
     'cartesian-product': {
       title: 'Cartesian product',
@@ -17,7 +17,7 @@
     },
     'predicate-pushdown': {
       title: 'Predicate pushdown',
-      body: "<p>Moving a filter earlier in a query plan when the transformation preserves the result. For example, a filter that refers only to the left input of a product can run before that product. The lab’s measurement shows 15 times fewer candidate pairs with this change.</p>",
+      body: "<p>Moving a filter earlier in a query plan while keeping the same result. For example, a filter that refers only to the left input of a product can run before that product. The lab’s measurement shows 15 times fewer candidate pairs with this change.</p>",
     },
     'materialization': {
       title: 'Materialization',
@@ -89,7 +89,7 @@
   function reset() {
     tree.innerHTML = '';
     stats.textContent = '';
-    msg.textContent = 'Choose a plan. The tree renders, then runs row by row.';
+    msg.textContent = 'Choose a plan to see its operators and follow the rows they process.';
   }
 
   $('st-q1').addEventListener('click', q1);

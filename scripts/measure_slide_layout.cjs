@@ -5,7 +5,7 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),context=vm.createContext({window:{},console});
-for(const file of ['slides/_shared/visuals.js','labs/_shared/rag-measurements.js','labs/_shared/teaching-traces.js','slides/_shared/trace-scenes.js','slides/decks/lectures-01-05.js','slides/decks/lectures-06-10.js','slides/decks/lectures-11-15.js','slides/decks/teaching-notes.js','slides/decks/clarity-diagrams.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
+for(const file of ['slides/_shared/visuals.js','labs/_shared/rag-measurements.js','labs/_shared/teaching-traces.js','slides/_shared/trace-scenes.js','slides/decks/lectures-01-05.js','slides/decks/lectures-06-10.js','slides/decks/lectures-11-15.js','slides/decks/teaching-notes.js','slides/decks/clarity-captions.js','slides/decks/clarity-diagrams.js','lectures/lecture-11/embedding-walkthrough.js','slides/decks/embedding-walkthrough.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const hidden=new Set(['cover','title','heading','title0','title1','title2']);
 const esc=x=>String(x).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 (async()=>{

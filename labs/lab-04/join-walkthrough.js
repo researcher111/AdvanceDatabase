@@ -11,9 +11,9 @@
   let index = 0, timer = null, playing = false, manualSlot = null, chosenOperator = null;
   const slots = [], blocks = [];
   const jobs = {
-    project: ['Project(name, dept)', 'next() delegates to Select. After True, get_val() allows only name and dept, then delegates each read to the current input row. It does not advance either table.'],
+    project: ['Project(name, dept)', 'next() asks Select for a row. When Select returns True, get_val() can read name or dept from that row. Reading a field does not advance either table.'],
     select: ['Select(mid = mid2 AND gpa > 35)', 'next() keeps asking ProductScan for pairs. It compares the two major IDs first. Only when they match does it read GPA. A rejected pair stays below Select; a passing pair becomes its current row.'],
-    product: ['ProductScan(students, majors)', 'Hold a student while advancing majors. On right exhaustion, rewind majors, advance students, and try the first major. get_val() routes each field to the child whose schema contains it; no combined row is copied by the Python operator.'],
+    product: ['ProductScan(students, majors)', 'Keep one student selected while visiting each major. After the last major, reset the majors scan, move to the next student, and start with the first major again. get_val() reads each field from the input that contains it. The Python operator keeps two cursors rather than copying a combined row.'],
     students: ['TableScan(students)', 'RecordPage.next_after() checks four-byte slot flags after the cursor. It skips EMPTY slots. TableScan unpins the old block and pins the next block when necessary. get_val() uses the catalog layout to locate a field within the current slot.'],
     majors: ['TableScan(majors)', 'The inner scan repeats for each student. before_first() returns to block 0, slot -1. This block has six slots; only the first three are USED. Closing the plan releases its pin.']
   };

@@ -44,7 +44,7 @@
   <div class="byline">Follows Lecture 2 (Memory &amp; the Buffer Pool) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 10 at class start</div>
 </header>
 
-<p class="lede">Your file manager can fetch a block. Now decide whether that block is already in memory and whether another frame is safe to reuse. Implement the four buffer-manager methods, preserving active pins and dirty data, then compare hit rates under different access patterns.</p>
+<p class="lede">Your file manager can read a block from a file. The buffer manager first checks whether that block is already in memory. If it needs room for another block, it must choose a frame that no caller is using and save any changes before replacing its contents. Implement those rules, then measure how often different workloads reuse cached blocks.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 4 ·
@@ -65,10 +65,10 @@
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
   <p>Two callers pin the same cached block, then one unpins it. Is its frame eligible for eviction? Does the second pin need another file read?</p>
-  <details><summary>Check your explanation</summary><p>One active pin remains, so the frame is protected. The second pin reuses the resident block and counts as a hit. Only the final unpin makes the frame eligible; dirty data still needs write-back before reuse.</p></details>
+  <details><summary>Check your explanation</summary><p>One caller still has a pin, so the frame cannot be evicted. The second pin found the block in memory and counted as a hit; it needed no file read. After the last caller unpins it, the frame can be reused, but any modified bytes must be written back first.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
 
 <h2 id="try-it">Explore a three-frame buffer pool</h2>
 
@@ -77,7 +77,7 @@
 <p>The widget models a buffer pool with three frames and six disk blocks. Select a block, pin it, modify it, and unpin it. Then load other blocks to see when the modified page is written back. Try pinning when all frames are in use, modifying an unpinned block, and unpinning a block that is not pinned.</p>
 
 <div class="viz" id="viz-pool">
-  <div class="viz-title">The protocol playground · 3 frames, LRU, <span class="gloss" data-gloss="write-back">write-back</span></div>
+  <div class="viz-title">Try the buffer pool · 3 frames, LRU, <span class="gloss" data-gloss="write-back">write-back</span></div>
   <p class="viz-description">Each disk block stores one number. Pinning loads or finds that block in memory and prevents its frame from being evicted. Modify adds one to its value in memory and marks the frame dirty. Unpinning reduces the pin count; the frame becomes eligible for eviction when the count reaches zero. Evicting a dirty frame first writes its changes to disk. The disk display shows the stored values.</p>
   <div class="qj-controls">
     <span class="pp-sel-label">selected block:</span><span class="pp-sel" id="pp-sel">B0</span>
@@ -87,7 +87,7 @@
     <button type="button" class="btn" id="pp-flush">flush_all()</button>
     <button type="button" class="btn" id="pp-reset">Reset</button>
   </div>
-  <div class="qj-msg" id="pp-msg">Select a block below, pin it, and start breaking things.</div>
+  <div class="qj-msg" id="pp-msg">Select a block below, pin it, and try changing its value.</div>
   <div class="bs-frames" id="pp-frames"></div>
   <div class="bs-disk" id="pp-disk"></div>
   <div class="bs-stats" id="pp-stats"></div>
@@ -122,7 +122,7 @@
   <div class="code-step" data-step="victim" data-step-name="_choose_victim" data-explain="Among frames with pins == 0, select the frame with the smallest last_used value. Return None if every frame is pinned.">def _choose_victim() -> Buffer | None           # LRU among unpinned</div>
   <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Increment self._tick. If the block is cached, count a hit. Otherwise choose an unpinned victim, or raise BufferAbortError if none exists; count the miss and call assign_to_block to flush and load it. On either successful path, increment pins and set last_used to the new tick.">def pin(block) -> Buffer                        # hit, or evict + load</div>
   <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="If pins is already zero, raise ValueError. Otherwise decrement it by one. Each successful pin must have one matching unpin.">def unpin(buf)                                  # release one pin</div>
-  <div class="code-explain-panel">Hover a line for its spec and the tool that implements it.</div>
+  <div class="code-explain-panel">Hover or tap a line to read what the method must do.</div>
 </div>
 
 <p>The tests check these LRU and pin-count rules:</p>
@@ -133,7 +133,7 @@
     <tr><td><strong>Stamp on every pin</strong></td><td>each successful <code>pin</code> sets <code>last_used</code> to a fresh tick, <em>hits included</em></td><td><code>recency order, not insertion order</code></td></tr>
     <tr><td><strong>Victim = oldest unpinned</strong></td><td>smallest <code>last_used</code> among frames with <code>pins == 0</code></td><td><code>full pool evicts least recently used</code></td></tr>
     <tr><td><strong>Never evict pinned frames</strong></td><td>a frame with <code>pins &gt; 0</code> is never a victim, no matter how old</td><td><code>pinned frames are never evicted</code></td></tr>
-    <tr><td><strong>Abort when all frames are pinned</strong></td><td>all pinned → <code>BufferAbortError</code>, not a wait, not a crash</td><td><code>all-pinned pool raises</code></td></tr>
+    <tr><td><strong>Abort when all frames are pinned</strong></td><td>raise <code>BufferAbortError</code> immediately if every frame is pinned</td><td><code>all-pinned pool raises</code></td></tr>
     <tr><td><strong>Flush dirty frames before reuse</strong></td><td>the victim is flushed before reuse; <code>assign_to_block</code> does this if you call it</td><td><code>dirty page written back</code></td></tr>
   </tbody>
 </table>
@@ -150,9 +150,9 @@
 
 <ol>
   <li>Read <code>buffer_manager.py</code> (5 min). The <code>Buffer</code> class is complete. Its <code>assign_to_block</code> method flushes a dirty page before loading another block. Your four methods manage frames and pin counts; they use the provided methods to move bytes.</li>
-  <li><strong><code>_find_existing</code></strong>: a loop and an <code>==</code>.</li>
-  <li><strong><code>_choose_victim</code></strong>: filter unpinned, <code>min</code> by
-  <code>last_used</code>, or <code>None</code>.</li>
+  <li><strong><code>_find_existing</code></strong>: search the pool for a frame whose block matches the requested block.</li>
+  <li><strong><code>_choose_victim</code></strong>: among unpinned frames, choose the one with the smallest
+  <code>last_used</code>. Return <code>None</code> if all frames are pinned.</li>
   <li><strong><code>pin</code></strong>: follow the docstring's spec exactly: tick, lookup,
   hit-count or victim/abort/load/miss-count, then <code>pins += 1</code> and the stamp.</li>
   <li><code>unpin</code>: reject a zero pin count with <code>ValueError</code>, then decrement the count. Run all ten tests.</li>
@@ -171,7 +171,7 @@
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
 
 <h3 id="function-tests">Test one function at a time</h3>
-<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests provide sample data and working versions of any helper methods you have not written yet. They run your code for the function you select.</p>
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_buffermanager.py --list</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_buffermanager.py --unit BufferManager._find_existing</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_buffermanager.py --unit</span></code></pre>
@@ -208,7 +208,7 @@
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
-<p class="keep-in-present">Predict whether the next request reuses a block before eviction. Compare the scan and hot-set traces at the same capacity; explain the hit-rate difference from access order.</p>
+<p class="keep-in-present">Will the next request find its block in memory, or will that block have been evicted? Compare the scan and hot-set workloads with the same number of frames. Use the order of requests to explain their different hit rates.</p>
 
 <p>Use the hit and miss counters to compare a repeated full scan with a workload that frequently revisits a small set of blocks.</p>
 
@@ -259,10 +259,10 @@ the same size from the reference table, and whether the scan column changed at a
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
   <p>The oldest frame is pinned, and a newer unpinned frame is dirty. Which may be reused? Why can correct LRU behavior still give zero hits on a repeated scan?</p>
-  <details><summary>Check your explanation</summary><p>Only the unpinned frame is eligible, and its dirty bytes must be written first. A cyclic scan larger than the pool can evict each block before its next request. Correct protection and replacement rules do not guarantee useful reuse.</p></details>
+  <details><summary>Check your explanation</summary><p>Only the unpinned frame can be reused, after its changed bytes are written back. When a repeated scan is larger than the pool, LRU can evict each block before the scan requests it again. The buffer manager can follow every rule correctly and still get no cache hits.</p></details>
 </div>
 
-<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+<p>This question is for practice and class discussion. You do not need to submit an answer.</p>
 
 <h2 id="assignment">Assignment</h2>
 
@@ -279,8 +279,8 @@ instructions, by Thursday Sep 10 at class start.</strong> One file; the harness 
 <p>Use the measurement and reflection questions to explain your results. They are not graded, but bring your measurements and answers to class for discussion.</p>
 <ul>
   <li>The full hit-rate table, plus your answers to the three
-  questions <code>measure_hits.py</code> prints (why the scan gets 0%, why the hot set doesn't
-  care, and which one your own ML pipelines resemble).</li>
+  questions <code>measure_hits.py</code> prints (why the scan gets 0%, why the hot-set workload
+  still gets hits with a small pool, and which workload your own ML pipelines resemble).</li>
   <li>Reflection (3–5 sentences total): (1)&nbsp;Why must <code>last_used</code> be stamped on
   hits, not just misses? (2)&nbsp;Why does <code>unpin</code> raise on a double-release instead
   of ignoring it?</li>
@@ -336,6 +336,6 @@ pin) or eviction is choosing a different victim than smallest-<code>last_used</c
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=1"></script>
+<script src="viz.js?v=2"></script>
 </body>
 </html>

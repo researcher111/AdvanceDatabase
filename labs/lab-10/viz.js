@@ -17,11 +17,11 @@
     },
     'stop-words': {
       title: 'Stop words',
-      body: "<p>Words removed before embedding, often because they are frequent and provide little discrimination between documents. The lab uses a fixed list including the, of, and and. Such lists depend on the task: removing a word can also remove useful meaning, so evaluate the choice.</p>",
+      body: "<p>Words left out before embedding because they are common across many documents. The lab’s list includes <code>the</code>, <code>of</code>, and <code>and</code>. Removing a word can also remove useful meaning, so test whether the list helps your retrieval task.</p>",
     },
     'mrr': {
       title: 'MRR (mean reciprocal rank)',
-      body: "<p>For each question, take the reciprocal of the first relevant result’s rank: 1 for rank 1, 0.5 for rank 2, and zero if no relevant result is returned. MRR is the average across questions. It distinguishes early and late relevant results even when both count as a hit@k.</p>",
+      body: "<p>Find the first relevant result for each question and score it as 1 divided by its rank: 1 for rank 1, 0.5 for rank 2, and so on. Give the question zero if no relevant result appears within the cutoff. MRR averages these scores, so finding the right source earlier earns more credit.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);

@@ -20,7 +20,7 @@
     <li><a href="#try-it">Inspecting a record’s bytes</a></li>
     <li><a href="#big-idea">Locating fixed-size blocks</a></li>
     <li><a href="#file-vs-page">Memory and persistent storage</a></li>
-    <li><a href="#the-api">Classes and byte-storage rules</a></li>
+    <li><a href="#the-api">The three classes and how they store data</a></li>
     <li><a href="#build">Part 1 · Build</a></li>
     <li><a href="#verify">Part 2 · Verify</a></li>
     <li><a href="#measure">Part 3 · Measure</a></li>
@@ -42,11 +42,11 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 1 · Thursday August 27, 2026 · microdb part 1 of 7</div>
   <h1>Disk &amp; File Manager</h1>
-  <div class="subtitle">Read and write fixed-size blocks, inspect their bytes, and measure the cost of synchronizing writes to storage.</div>
+  <div class="subtitle">Build a file manager that reads and writes blocks of data, then measure how long it takes to save them.</div>
   <div class="byline">Follows Lecture 1 (Anatomy of a Database) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 3 at class start</div>
 </header>
 
-<p class="lede">Reading a value back from memory does not test whether it was saved correctly. Store its bytes in the required format, write them to the intended file block, then close and reopen the file to read them again. Later microdb layers use these same byte formats and block addresses.</p>
+<p class="lede">In this lab, you’ll build the part of microdb that saves data to files and reads it back. Start by turning a value, such as a student’s name, into bytes. Write those bytes to a block in the file, then close and reopen the file to check that you can read the value back. Also check the bytes themselves: later labs need your code to use the same format and put each block in the right place.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 3 (SimpleDB's file manager) ·
@@ -66,14 +66,14 @@
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
   <p>With 4096-byte blocks, where does block 2 begin? If the string <code>é</code> occupies two UTF-8 bytes, should its stored length be one or two?</p>
-  <details><summary>Check your explanation</summary><p>Block 2 begins at byte 8192. The string length prefix records two bytes, not one character. Reading and writing must follow the published byte format, including little-endian integers.</p></details>
+  <details><summary>Check your explanation</summary><p>Block 2 begins at byte 8192: multiply its block number, 2, by 4096. Store 2 as the length of <code>é</code> because the reader needs to know how many bytes to read. Store that length as a little-endian integer, just like other integers in this lab.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+<p class="keep-in-present">Before running a check, predict what it will show. Afterward, explain why you got that result. If it differs from your prediction, work out why before changing your code.</p>
 
 <h2 id="try-it">Inspecting a record’s bytes</h2>
 
-<p class="keep-in-present">Predict the four bytes for integer 1 before choosing the preset. Then store a multibyte string and inspect both its length prefix and content bytes.</p>
+<p class="keep-in-present">What four bytes would you use to store the integer 1? Make a prediction, then click <code>set_int(0, 1)</code>. Next, try a string containing <code>é</code> and compare its stored length with its number of characters.</p>
 
 <p>The widget shows a 64-byte <span class="gloss" data-gloss="page-mem">page</span> so each byte is visible. The default block size in your code is 4096 bytes. Use the presets to store the lecture’s example row (<code>id=1</code>, <code>name="ada"</code>, <code>gpa=39</code>, representing a GPA of 3.9), then try your own values and read them back.</p>
 
@@ -118,7 +118,7 @@
 <!-- ============================================================ -->
 <h2 id="big-idea">Locating fixed-size blocks</h2>
 
-<p class="keep-in-present">A file is like a numbered row of equally sized storage boxes: the number determines the starting position. A <code>BlockId</code> names the file and box; a <code>Page</code> is its working byte copy in memory. This comparison explains addressing, while <code>write</code> and <code>fsync</code> determine persistence.</p>
+<p class="keep-in-present">Think of a file as a row of numbered boxes, all the same size. Each box is a block. A <code>BlockId</code> tells you which file and block to use. A <code>Page</code> holds one block’s bytes in memory, where your code can read or change them. To save those changes, you must write the page back to the file.</p>
 
 <p>The file manager reads and writes fixed-size blocks. In microdb, the default block size is 4 KB. Fixed sizes make blocks easy to locate: block <code>k</code> starts at byte <code>k * block_size</code>. They also allow the next lab’s buffer pool to hold blocks in equally sized memory frames. Reading a whole block can make nearby data available for later requests, although the transfer still has a cost.</p>
 
@@ -128,12 +128,12 @@
 read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 </div>
 
-<p>A file write usually reaches the operating system’s <span class="gloss" data-gloss="os-cache">page cache</span> before it reaches durable storage. <code><span class="gloss" data-gloss="fsync">fsync</span></code> requests that the pending data be synchronized to storage. Part 3 measures the cost of that request. Lab 7 builds on this distinction to explain write-ahead logging.</p>
+<p>The operating system usually keeps newly written data in its <span class="gloss" data-gloss="os-cache">page cache</span> in RAM before sending it to storage. Calling <code><span class="gloss" data-gloss="fsync">fsync</span></code> asks the operating system to finish saving the file’s pending writes to storage. Part 3 measures how much time that adds. In Lab 7, you’ll use this distinction to understand when a database can safely report that a transaction has committed.</p>
 
 <!-- ============================================================ -->
 <h2 id="file-vs-page">Memory and persistent storage</h2>
 
-<p class="keep-in-present">A database keeps working copies of data in RAM and persistent copies on storage. To illustrate the latency difference, compare a 100 ns memory access with a 25 µs SSD access: the SSD access takes 250 times as long in this example. Actual times depend on the hardware and workload. The file manager reads stored blocks into memory pages and writes changed pages back to storage.</p>
+<p class="keep-in-present">A database works on copies of data in RAM and saves them to storage. Reading from RAM is much faster: in this example, a 100 ns memory access takes 1/250 of the time of a 25 µs SSD access. Actual times depend on the machine and the work it is doing. Your file manager will copy blocks into memory and write changed pages back to storage.</p>
 
 <h3 class="new-slide" data-kicker="Disk vs RAM">RAM and SSD storage</h3>
 
@@ -221,35 +221,35 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
   <div class="fp-stage"><svg id="fp-svg" viewBox="0 0 960 430" role="img"
     aria-label="Diagram: a file of blocks on disk, the FileManager, and one page in memory"></svg></div>
   <div class="fp-controls fp-freeplay">
-    <span class="fp-label">Or drive it yourself (click a block to aim first):</span>
+    <span class="fp-label">Try your own steps (click a block to select it first):</span>
     <button type="button" class="btn" id="fp-read">fm.read(blk, page)</button>
     <button type="button" class="btn" id="fp-write">fm.write(blk, page)</button>
     <button type="button" class="btn" id="fp-append">fm.append(…)</button>
     <span class="fp-label">page.set_string(4, "<input type="text" id="fp-name" value="zoe" maxlength="5">")</span>
     <button type="button" class="btn" id="fp-edit">edit the page</button>
   </div>
-  <p class="viz-caption"><code>BlockId</code> contains a filename and a block number. It identifies the stored block involved in a read or write without containing the block’s bytes. Lab 2 compares these identifiers when looking for a cached block. Because <code>BlockId</code> is hashable, it can also serve as a dictionary key in a more efficient lookup implementation.</p>
+  <p class="viz-caption">A <code>BlockId</code> is an address: a filename and a block number. The bytes live in the file or in a <code>Page</code>. In Lab 2, you’ll compare <code>BlockId</code> values to find a block that is already in memory. You can also use them as dictionary keys to speed up that search.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="the-api">Classes and byte-storage rules</h2>
+<h2 id="the-api">The three classes and how they store data</h2>
 
 <p>The file manager has three classes: <code>BlockId</code>, <code>Page</code>, and <code>FileManager</code>. Read their responsibilities below, then use the byte-layout table while implementing the methods. The tests check that exact layout.</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="blockid" data-step-name="BlockId" data-explain="Identifies a stored block by filename and block number. BlockId is immutable and hashable, so it can be compared safely and used as a dictionary key. Lab 2 initially searches its frame list by comparing these identifiers.">class BlockId:                                # ('students.tbl', 1), a name, not data</div>
+  <div class="code-step" data-step="blockid" data-step-name="BlockId" data-explain="A BlockId names a file and a block within it. Keep these values unchanged so it can safely serve as a dictionary key. Lab 2 compares BlockIds to find a block already held in a memory frame.">class BlockId:                                # ('students.tbl', 1), a name, not data</div>
   <div class="code-step" data-step="blockid" data-explain="Provided complete in the starter; read it, don't write it.">    filename: str; blknum: int                # provided for you</div>
-  <div class="code-step" data-step="page" data-step-name="Page" data-explain="One block's worth of memory: a bytearray plus layout rules. It doesn't know what file it came from; it's just bytes.">class Page:                                   # a block-sized bytearray + typed get/set</div>
+  <div class="code-step" data-step="page" data-step-name="Page" data-explain="A Page holds one block's worth of bytes in a bytearray. Its methods read and change values in that memory. FileManager handles the connection to a stored file.">class Page:                                   # a block-sized bytearray + typed get/set</div>
   <div class="code-step" data-step="page-int" data-step-name="ints" data-explain="Use struct.unpack_from('&lt;i', buf, off)[0] to read an integer and struct.pack_into('&lt;i', buf, off, val) to write one. The required format is a signed four-byte little-endian integer.">    def get_int(off) -> int                   # read 4 bytes as an int</div>
   <div class="code-step" data-step="page-int" data-explain="Use struct.unpack_from('&lt;i', buf, off)[0] to read an integer and struct.pack_into('&lt;i', buf, off, val) to write one. The required format is a signed four-byte little-endian integer.">    def set_int(off, val)                     # write an int as 4 bytes</div>
   <div class="code-step" data-step="page-bytes" data-step-name="bytes" data-explain="Length-prefixed: set_bytes writes the length as a 4-byte int at off, then the raw payload at off+4. get_bytes reads the length first, then that many bytes.">    def get_bytes(off) -> bytes               # read [length][payload]</div>
   <div class="code-step" data-step="page-bytes" data-explain="Length-prefixed: set_bytes writes the length as a 4-byte int at off, then the raw payload at off+4. get_bytes reads the length first, then that many bytes.">    def set_bytes(off, b)                     # write [length][payload]</div>
   <div class="code-step" data-step="page-str" data-step-name="strings" data-explain="Encode strings as UTF-8 before calling set_bytes, and decode the result of get_bytes as UTF-8. The tests include 'héllo wörld' to check multibyte characters.">    def get_string(off) -> str                # get_bytes, then decode UTF-8</div>
   <div class="code-step" data-step="page-str" data-explain="Encode strings as UTF-8 before calling set_bytes, and decode the result of get_bytes as UTF-8. The tests include 'héllo wörld' to check multibyte characters.">    def set_string(off, s)                    # encode UTF-8, then set_bytes</div>
-  <div class="code-step" data-step="fm" data-step-name="FileManager" data-explain="The only class that touches the OS. Owns a directory; caches open file handles; all I/O is whole blocks.">class FileManager:                            # db_dir, block_size=4096</div>
-  <div class="code-step" data-step="fm-read" data-step-name="read" data-explain="Bounds-check against length(), seek to blknum × block_size, read block_size bytes into the page. Past-the-end reads must raise ValueError; the tests check.">    def read(block, page)                     # disk → page</div>
+  <div class="code-step" data-step="fm" data-step-name="FileManager" data-explain="FileManager reads and writes files in the database directory. It keeps open file handles for later calls and transfers one whole block at a time.">class FileManager:                            # db_dir, block_size=4096</div>
+  <div class="code-step" data-step="fm-read" data-step-name="read" data-explain="First use length() to check that the block exists. Then seek to blknum × block_size and read block_size bytes into the page. Raise ValueError if the requested block is past the end of the file.">    def read(block, page)                     # disk → page</div>
   <div class="code-step" data-step="fm-write" data-step-name="write" data-explain="Seek to the block offset, write page.contents(), and flush the file buffer. If sync=True, also call os.fsync. Part 3 measures the additional cost of synchronization.">    def write(block, page, sync=True)         # page → disk (+fsync if sync)</div>
-  <div class="code-step" data-step="fm-append" data-step-name="append" data-explain="Grow the file by one block. Write block_size zero bytes at the end, then hand back a BlockId naming the block you just made, so the caller can write to it. Lab 3 relies on those bytes being zeros.">    def append(filename) -> BlockId           # grow the file by one empty block</div>
+  <div class="code-step" data-step="fm-append" data-step-name="append" data-explain="Write block_size zero bytes at the end of the file to create a new block. Return its BlockId so the caller can write data there. Lab 3 relies on new blocks containing zeros.">    def append(filename) -> BlockId           # grow the file by one empty block</div>
   <div class="code-step" data-step="fm-length" data-step-name="length" data-explain="How many blocks does this file already hold? Take the file's size in bytes and divide by block_size. read() uses it to reject a read past the end of the file.">    def length(filename) -> int               # how many blocks the file holds</div>
   <div class="code-explain-panel">Hover any line to see what it does and which Python call implements it.</div>
 </div>
@@ -279,7 +279,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
     len('héllo')                  = 5 characters
     len('héllo'.encode('utf-8'))  = 6 bytes      ← reserve this many, or you truncate</code></pre>
 
-<h3 class="new-slide" data-kicker="Three classes, one layout"><code>pack_into</code> returns nothing; it writes into your buffer in place</h3>
+<h3 class="new-slide" data-kicker="Three classes, one layout">How <code>pack_into</code> changes a buffer</h3>
 
 <p><code>struct.pack_into</code> writes a value into an existing buffer at a specified offset and returns <code>None</code>. It changes only the bytes needed for that value. This lets several fields share a page without rewriting the whole page. Try the widget before implementing <code>set_int</code>.</p>
 
@@ -309,7 +309,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
-<p class="keep-in-present">First check that each page method stores the required bytes. Then check that file reads and writes reach the intended block. Finally, close and reopen the file to check the saved values. Use the matching function check after each implementation step.</p>
+<p class="keep-in-present">Build and test one method at a time. Start with the <code>Page</code> methods and check the bytes they produce. Then implement <code>FileManager</code> and check which block each read or write uses. Once these work together, close and reopen the file to check that the values are still there.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -322,19 +322,16 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
   <li><code>set_bytes / get_bytes</code>: store the payload length at <code>off</code> and its bytes starting at <code>off + 4</code>. Read that length to determine the payload slice.</li>
   <li><code>set_string / get_string</code>: encode and decode UTF-8 using the byte methods. All four PAGE tests should now pass.</li>
   <li><strong><code>FileManager</code>: <code>length</code>, then <code>append</code>, then
-  <code>write</code>, then <code>read</code></strong>, in that order, because each uses the
-  previous. Seek arithmetic is the equation from <a href="#big-idea">above</a>; <code>read</code>
+  <code>write</code>, then <code>read</code></strong>. This order lets you create a block before
+  testing writes and reads. Use <code>blknum * block_size</code> to find its byte offset, as shown <a href="#big-idea">above</a>. <code>read</code>
   must raise <code>ValueError</code> past the end of the file.</li>
 </ol>
 
 <div class="callout note">
   <span class="label">Common implementation mistakes</span>
-  <p><code>"w+b"</code> <em>truncates</em> an existing file (the mode letters are pulled
-  apart in the table below). The starter's <code>_file()</code> helper already
-  creates-without-truncating; use it, don't reopen files yourself.
-  <code>struct.pack</code> <em>returns</em> bytes while <code>pack_into</code> writes in place;
-  you want <code>pack_into</code>. And slicing a bytearray <em>copies</em>: write with
-  <code>self._data[a:b] = payload</code>, not <code>chunk = self._data[a:b]; chunk[:] = payload</code>.</p>
+  <p>Opening an existing file with <code>"w+b"</code> erases its contents. Use the starter’s <code>_file()</code> helper to preserve existing data.</p>
+  <p>Use <code>struct.pack_into</code> to write directly into your page’s buffer. <code>struct.pack</code> returns a separate <code>bytes</code> object.</p>
+  <p>Assign to a slice with <code>self._data[a:b] = payload</code> to update the page. If you first copy the slice into <code>chunk</code>, changing <code>chunk</code> leaves the original page unchanged.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="Part 1 · Build">Opening an existing file without truncating it</h3>
@@ -349,7 +346,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
     <tr><td><code>a</code></td><td>append</td><td>Open for writing only, keeping the contents. Creates if missing. Every write lands at the end of the file no matter where you <code>seek</code>.</td></tr>
     <tr><td><code>x</code></td><td>exclusive create</td><td>Create and open for writing, but raise <code>FileExistsError</code> rather than touch an existing file.</td></tr>
     <tr><td><code>+</code></td><td>read and write</td><td>Enables both reading and writing. It does not change truncation behavior: <code>w+</code> still truncates an existing file.</td></tr>
-    <tr><td><code>b</code></td><td>binary</td><td>Read and write raw <code>bytes</code>: no text decoding, no newline translation. Without it you get <code>str</code>, and your page bytes get corrupted on the way through.</td></tr>
+    <tr><td><code>b</code></td><td>binary</td><td>Read and write raw <code>bytes</code>. Text mode works with <code>str</code> instead and can translate newlines, so it cannot preserve arbitrary page bytes.</td></tr>
   </tbody>
 </table>
 
@@ -370,20 +367,12 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 <div class="callout note">
   <span class="label">Why <code>_file()</code> opens the file twice</span>
   <p>The starter’s <code>_file()</code> helper creates the file if it is missing, then opens it with <code>"r+b"</code>. This preserves existing contents and allows writes at specific offsets. Use the provided helper rather than reopening a data file with a mode that could truncate it.</p>
-  <p>The <code>b</code> is not optional either. Drop it and Python decodes your page as text and
-  rewrites line endings on the way through: the four bytes <code>0D 0A C3 A9</code> read back in
-  text mode as the two characters <code>'\né'</code>: <code>0D 0A</code> silently collapsed to one
-  newline, and two bytes fused into one <code>é</code>. A page of student records would come back
-  a different length than it went in.</p>
+  <p>Keep the <code>b</code> so Python reads and writes bytes. For example, with UTF-8 decoding and universal newlines, text mode reads the four bytes <code>0D 0A C3 A9</code> as the two characters <code>'\né'</code>. Binary mode gives you all four original bytes, which your page layout needs.</p>
 </div>
 
-<h3 class="new-slide" data-kicker="Part 1 · Build"><code>seek</code> before every <code>read</code> and <code>write</code>, every time</h3>
+<h3 class="new-slide" data-kicker="Part 1 · Build">The file cursor and <code>seek</code></h3>
 
-<p>Every open file object carries one number. The docs call it the <em>stream position</em>;
-everyone else calls it the cursor. It is the byte offset where the next <code>read</code> or
-<code>write</code> will happen. It starts at 0 when <code>_file()</code> opens the file, and every
-<code>read(n)</code> or <code>write(b)</code> moves it forward by the number of bytes moved. Two
-methods let you move it and ask where it is:</p>
+<p>An open file keeps track of where the next read or write will start. This byte offset is its <em>cursor</em>, also called the stream position. The starter’s <code>_file()</code> helper opens the file at byte 0. Each read or write advances the cursor by the number of bytes it reads or writes. Use <code>seek</code> to move it and <code>tell</code> to check its position:</p>
 
 <pre class="equation"><code>f.seek(offset, whence=0)    move the cursor. Returns the new absolute position.
 f.tell()                    report the cursor's absolute byte position.</code></pre>
@@ -428,9 +417,7 @@ f.tell()                    report the cursor's absolute byte position.</code></
     <path class="st-head" d="M774,166 L786,166 L780,176 Z"/>
     <text class="st-note" x="800" y="206">f.tell() → 12288</text><text class="st-note st-sub" x="800" y="220">= file size → 3 blocks</text>
   </svg>
-  <p class="viz-caption">Each row is the same file. <code>seek</code> only changes the number; it
-  does not touch the disk. A block is moved when you <code>read</code> or <code>write</code> from
-  wherever the cursor is.</p>
+  <p class="viz-caption">Each row shows the same file with the cursor in a different position. <code>seek</code> chooses where the next read or write starts. The file manager then calls <code>read</code> or <code>write</code> to transfer the block’s bytes.</p>
 </div>
 
 <p>To implement <code>length()</code>, seek to the end with <code>f.seek(0, 2)</code> and read the byte count with <code>f.tell()</code>. Divide by <code>block_size</code> to get the number of blocks. Alternatively, <code>os.fstat(f.fileno()).st_size</code> returns the size without moving the file position.</p>
@@ -451,7 +438,7 @@ f.tell()                    report the cursor's absolute byte position.</code></
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
 
 <h3 id="function-tests">Test one function at a time</h3>
-<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests provide sample data and working versions of helper methods, so you can check a function before finishing the rest of the lab. They run your code for the function you select.</p>
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_filemanager.py --list</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_filemanager.py --unit Page.get_int</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_filemanager.py --unit</span></code></pre>
@@ -479,7 +466,7 @@ neighbor.</p>
 
 <div class="exercise">
   <span class="ex-label">Exercise · read the failure</span>
-  <p>A classmate stores the 15-byte ada row. <code>get_int(11)</code> returns 39, but <code>get_string(4)</code> reads past the three bytes of the name. Which parts of the byte-storage contract should they inspect?</p>
+  <p>A classmate stores the 15-byte ada row. <code>get_int(11)</code> correctly returns 39, but <code>get_string(4)</code> reads past the end of <code>ada</code>. What should they check in the stored bytes and the code that reads the string?</p>
   <details><summary>Show answer</summary>
   <p>Check the length prefix at offset 4, the payload start at offset 8, and the slice used by <code>get_bytes</code>. The stored length must be 3, and the read must return exactly those three payload bytes. The symptom alone does not identify one faulty method.</p>
   </details>
@@ -488,9 +475,9 @@ neighbor.</p>
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
 
-<p class="keep-in-present">Predict which run requests synchronization after every block write. Compare the measured write rates and explain when each call returns: after a buffered write, or after the synchronization request completes.</p>
+<p class="keep-in-present">Which will write more blocks per second: <code>sync=False</code> or <code>sync=True</code>? Make a prediction, then run the measurement. Explain your result by describing what each write call waits for before returning.</p>
 
-<p>The file manager’s <code>write(…, sync=True)</code> option ends with <code>fsync</code>. Compare its throughput with <code>sync=False</code> to measure the cost of requesting synchronization to storage.</p>
+<p>With <code>sync=True</code>, each <code>write</code> call ends by calling <code>fsync</code> and waiting for it to finish. Compare the number of blocks written per second with <code>sync=False</code> to measure the cost of that wait.</p>
 
 <p>Run it and note all three numbers; you will want them in class:</p>
 
@@ -499,9 +486,9 @@ buffered writes (sync=False):      465,849 blocks/sec
 durable  writes (sync=True):        30,788 blocks/sec
 ratio (buffered / durable):           15.1x</code></pre>
 
-<p class="key-fact keep-in-present"><strong>15×</strong> faster buffered writes in this sample run; synchronization accounts for the difference</p>
+<p class="key-fact keep-in-present">In this sample run, buffered writes were about <strong>15×</strong> faster than writes that called <code>fsync</code> after each block.</p>
 
-<p>Change <code>BLOCK_SIZE</code> in <code>measure_io.py</code> from 4096 to 512 and run the script. Then repeat with 65536. Report both write rates and their ratio at each size. Explain whether your results suggest that transferring more bytes or requesting synchronization contributes more to the observed time.</p>
+<p>Change <code>BLOCK_SIZE</code> in <code>measure_io.py</code> from 4096 to 512 and run the script. Then repeat with 65536. Report both write rates and their ratio at each size. Do your results suggest that most of the time goes into transferring the bytes or waiting for <code>fsync</code>? Explain your reasoning.</p>
 
 <div class="viz" id="viz-fsync">
   <div class="viz-title">What one machine measured</div>
@@ -510,7 +497,7 @@ ratio (buffered / durable):           15.1x</code></pre>
   <p class="viz-caption"><code>sync=False</code> allows a write to return while data may still be buffered by the operating system. <code>sync=True</code> requests synchronization to storage before returning. The macOS FAQ below explains an additional device-cache limitation.</p>
 </div>
 
-<p class="keep-in-present">Keep your measured ratio for Lab 7. It helps explain why databases carefully schedule durable writes and often synchronize a log at commit while writing data pages separately. The lab’s simple recovery design and production database designs use different write policies.</p>
+<p class="keep-in-present">Bring your measured ratio to Lab 7. You’ll see why the cost of <code>fsync</code> matters when a database commits a transaction. Many databases save the log at commit and write data pages separately. Lab 7 uses a simpler policy, which you’ll compare with that approach.</p>
 
 <h3 class="new-slide" data-kicker="Part 3 · Measure">Where storage costs affect data workflows</h3>
 
@@ -533,8 +520,8 @@ ratio (buffered / durable):           15.1x</code></pre>
 
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
-  <p>Your reader and writer both use the wrong byte order, but their round-trip test passes. Has the file-format contract passed? What extra observation would reveal the problem?</p>
-  <details><summary>Check your explanation</summary><p>No. Both mistakes can agree with each other. Compare the actual stored bytes with the required little-endian format, then check block position and reopen behavior. Timing a write tests a different property from interpreting its bytes correctly.</p></details>
+  <p>Your code writes the integer 1 and reads it back correctly, but both methods use big-endian byte order. Does your code meet this lab’s little-endian requirement? How could you catch the mistake?</p>
+  <details><summary>Check your explanation</summary><p>No. The reader and writer make matching mistakes, so reading back the value hides the problem. Inspect the bytes: this lab requires <code>01 00 00 00</code> for the integer 1, but big-endian code stores <code>00 00 00 01</code>. You also need separate checks that the bytes reach the right file block and that you can read them after closing and reopening the file.</p></details>
 </div>
 
 <p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
@@ -613,7 +600,7 @@ result, and remember the measurements are ungraded; bring the median and your in
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=9"></script>
+<script src="viz.js?v=10"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>

@@ -49,7 +49,7 @@
   <div class="byline">Follows Lecture 4 (The Iterator Model) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 24 at class start</div>
 </header>
 
-<p class="lede">Request one result row from a query plan and trace the source rows and candidate pairs its operators examine. Implement selection, projection, and product through the common scan interface. Then compare two plans that return the same rows and explain why filtering before the product can reduce the number of pairs examined.</p>
+<p class="lede">A query may examine many rows before returning one result. In this lab, build three operators: selection keeps matching rows, projection exposes selected fields, and product pairs rows from two inputs. Then run two plans for the same query and see how filtering earlier reduces the pairs the product must examine.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 8 ·
@@ -68,15 +68,15 @@
 
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
-  <p>In a toy product, three left rows and two right rows are fully enumerated. How many candidate pairs exist? If the join keeps only two, did the other pairs disappear before ProductScan formed them?</p>
-  <details><summary>Check your explanation</summary><p>There are six candidates. A selection above the product rejects nonmatching pairs after enumeration. Returned rows and candidate pairs count different things; neither is automatically a disk-read count.</p></details>
+  <p>A product pairs each of three left rows with each of two right rows. How many pairs does it produce? If a selection above the product keeps only two pairs, did the product still have to produce the others?</p>
+  <details><summary>Check your explanation</summary><p>The product produces all six pairs. The selection then rejects four and returns two. Count the pairs examined and the rows returned separately. Neither count tells you how many blocks were read from disk.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
 
 <h2 id="try-it">Combining operators into a query plan</h2>
 
-<p class="keep-in-present">Predict the rows delivered at the root separately from the rows or pairs touched below it. Run the same plan and connect each counter to the operator that performs that work.</p>
+<p class="keep-in-present">Predict how many rows the whole plan returns and how many rows or pairs each operator examines along the way. Run the plan, then use the counters to check each prediction.</p>
 
 <p>Use the widget to combine operators over the <code>students</code> and <code>majors</code> tables. Run a plan and compare how many rows each operator processes. Start with the join preset to see the behavior you will implement.</p>
 
@@ -89,7 +89,7 @@
     <button type="button" class="btn" id="st-q3">bare product</button>
     <button type="button" class="btn" id="st-reset">Reset</button>
   </div>
-  <div class="qj-msg" id="st-msg">Choose a plan. The tree renders, then runs row by row.</div>
+  <div class="qj-msg" id="st-msg">Choose a plan to see its operators and follow the rows they process.</div>
   <div class="pl-tree" id="st-tree"></div>
   <div class="bs-stats" id="st-stats"></div>
   <div class="chat-downloads">
@@ -516,7 +516,7 @@ predicate <em>is</em> the join.</p>
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~30 min in class</span></h2>
 
-<p class="keep-in-present">Trace one accepted row and one rejected row before implementing selection. For product, trace the right input’s exhaustion, its rewind, and the next left row. Keep exhausted scans exhausted until a rewind.</p>
+<p class="keep-in-present">Before implementing selection, trace a row that passes the filter and one that fails. For product, follow what happens when the right input runs out: reset it and advance the left input. Once the whole product returns <code>False</code>, it must keep returning <code>False</code> until it is reset.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -541,7 +541,7 @@ predicate <em>is</em> the join.</p>
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
 
 <h3 id="function-tests">Test one function at a time</h3>
-<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests provide sample data and working versions of any helper methods you have not written yet. They run your code for the function you select.</p>
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_scans.py --list</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_scans.py --unit ProductScan.before_first</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_scans.py --unit</span></code></pre>
@@ -572,7 +572,7 @@ predicate <em>is</em> the join.</p>
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~20 min · finish as homework</span></h2>
 
-<p class="keep-in-present">Predict the candidate pairs in each plan before reading the printed counts. First verify equal results, then explain which input-only filters reduce the product’s inputs.</p>
+<p class="keep-in-present">Predict how many pairs each plan will produce before reading the output. Check that both plans return the same rows. Then identify which filters remove rows before the product pairs them.</p>
 
 <p>Reference output is deterministic, yours must match:</p>
 
@@ -587,7 +587,7 @@ same query, same answer, two shapes (300 students x 3 majors):
 
   pair-building work ratio, A / B: 15x</code></pre>
 
-<p class="key-fact keep-in-present"><strong>15×</strong> less pair-building work from moving one filter below the join, with the same 20 rows out</p>
+<p class="key-fact keep-in-present">Filtering before the product produces <strong>15× fewer pairs</strong> and still returns the same 20 rows.</p>
 
 <p class="keep-in-present">Filtering before the product reduces the number of pairs examined by a factor of 15 in this example, while returning the same rows. The right input is scanned once per left row, so input order also affects the work. Caching the inner input can reduce repeated reads; Lecture 9 introduces hash joins as another way to avoid enumerating every pair.</p>
 
@@ -620,10 +620,10 @@ one sentence why Plan A's count never moves while the ratio does.</p>
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
   <p>Two plans return twenty rows from 900 and 60 candidate pairs. What changed in the plan, what stayed equal, and what must <code>close()</code> still release?</p>
-  <details><summary>Check your explanation</summary><p>Applying valid input-only filters before the product reduces its candidates while preserving matching rows and duplicates. Both plans must close every descendant scan and release pins. Use repeated timings to evaluate elapsed time separately from these work counts.</p></details>
+  <details><summary>Check your explanation</summary><p>A filter that needs only one table can remove that table’s nonmatching rows before the product forms pairs. Both plans still return the same rows, including duplicates. Both must close all their input scans and release the buffer pins. To find out whether fewer pairs also means a faster query, measure elapsed time over several runs.</p></details>
 </div>
 
-<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+<p>This question is for practice and class discussion. You do not need to submit an answer.</p>
 
 <h2 id="assignment">Assignment</h2>
 
@@ -682,10 +682,7 @@ score you see locally is the grade.</p>
 <p class="keep-in-present">Check field routing first. <code>ProductScan.get_val("mid2")</code> must ask the child that contains <code>mid2</code>. Use each child’s <code>has_field</code> method to choose which child supplies the value.</p>
 
 <h3 class="keep-in-present">Does the order of terms inside a Predicate matter?</h3>
-<p class="keep-in-present">For correctness, no: it's a conjunction. For speed, mildly:
-<code>is_satisfied</code> stops at the first failing term, so putting the cheapest,
-most-often-failing test first saves comparisons. Real optimizers reorder terms for exactly
-this reason.</p>
+<p class="keep-in-present">The result stays the same because every AND term must be true. The amount of work can change: <code>is_satisfied</code> stops at the first false term. Checking a cheap condition that often fails can save the later comparisons. Query optimizers can use this idea when ordering conditions.</p>
 
 <h3 class="keep-in-present">Why "left wins ties" instead of an error on ambiguous fields?</h3>
 <p class="keep-in-present">Microdb checks the left input first when both inputs have the same field name. The tests avoid that ambiguity. SQL normally requires a qualified name such as <code>students.id</code> when an unqualified reference is ambiguous; supporting that would require a name-resolution layer beyond this lab.</p>
@@ -700,9 +697,9 @@ this reason.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
+<script src="viz.js?v=4"></script>
 <script src="join-walkthrough-model.js?v=1"></script>
-<script src="join-walkthrough.js?v=1"></script>
+<script src="join-walkthrough.js?v=2"></script>
 <script src="statement-traces.js?v=1"></script>
 <script src="statement-walkthrough.js?v=1"></script>
 </body>

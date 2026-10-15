@@ -9,7 +9,7 @@
     },
     'idempotent-recall': {
       title: "Idempotence",
-      body: "<p>Repeating an idempotent operation has the same effect as applying it once. Restoring a logged old value is idempotent. After recovery flushes its repairs and syncs ROLLBACK records, another pass skips those completed repairs. The harness checks both unchanged balances and an empty list of newly undone transactions on the second run.</p>",
+      body: "<p>An operation is idempotent if repeating it has the same effect as doing it once. Setting a balance to its logged old value is one example. After recovery writes its repairs and syncs ROLLBACK, the next pass skips those completed transactions. The tests check that a second pass leaves the balances unchanged and returns no newly undone transactions.</p>",
     },
     'stolen-page': {
       title: "Page flushed before commit",
@@ -110,7 +110,7 @@
                 : v === 'fate' ? 'a completion record: mark this transaction finished and skip its earlier SET records'
                 : 'skippable: it is a START record or a SET from a transaction whose completion was already found';
     msg.innerHTML = `Record ${i} (<code>${scen.recs[i]}</code>) is ${label}.` +
-      (cursor < 0 ? ' <strong>The backward scan is complete. Recovery must now flush restored values and record completed undo. Load another scenario to practice.</strong>' : '');
+      (cursor < 0 ? ' <strong>The backward scan is complete. Recovery must now write the restored values to disk, then sync ROLLBACK records for the repaired transactions. Load another scenario to practice.</strong>' : '');
     if (cursor < 0) autoBtn.hidden = true;
     render();
   }

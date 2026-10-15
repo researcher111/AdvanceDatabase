@@ -47,7 +47,7 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">Two workers may each count a word, but those partial counts must be combined to get its total across the corpus. Route every occurrence of the same word to the same partition before adding its values. Implement these MapReduce phases in one process, then explore the optional Spark word-count and Ray nearest-neighbor examples over the same 4,000-abstract corpus.</p>
+<p class="lede">How do we count a word that appears in many documents? Emit one pair for each occurrence, group all pairs with the same word, and add their counts. Implement these MapReduce steps in one Python process. Then try the optional Spark word-count and Ray nearest-neighbor examples using the same 4,000 abstracts.</p>
 
 <div class="cite">
   Builds on: <a href="../lab-10/microrag.html">Lab 10 · micro-rag</a> (same corpus) ·
@@ -57,8 +57,7 @@
 </div>
 
 <p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+Terms with a dotted underline have definitions. Hover or tap a term to read its explanation.
 </p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
@@ -71,7 +70,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
   <p>How many <code>wal</code> occurrences are in <code>“WAL, wal!”</code>? If another record adds one, what must be preserved while routing the pairs? Can every worker use a different partition rule?</p>
-  <details><summary>Check your explanation</summary><p>The first record has two occurrences after normalization; the second contributes another. Preserve all three contributions and route equal keys consistently. Separately launched workers need a compatible partition function; this graded exercise runs within one process.</p></details>
+  <details><summary>Check your explanation</summary><p>Lowercasing the first record gives two occurrences of wal; the other record adds a third. Keep all three pairs and send them to the same partition so reduction returns 3. Separate workers must agree on the routing rule. The graded exercise runs in one process.</p></details>
 </div>
 
 <p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict the emitted pairs, their destination partitions, and the final word totals; run the trace or function check; then explain how each occurrence contributes to its word’s total.</p>
@@ -109,7 +108,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="big-idea">Separate computation from scheduling and data transfer</h2>
 
-<p class="keep-in-present">Think of sorting mail into destination trays. The address determines the tray, not the sender or arrival order. Here the word is the address, the partition is the tray, and each occurrence contributes a value. The lab’s specified hash rule supplies the actual routing; correct counts must not depend on the tray number.</p>
+<p class="keep-in-present">Think of sorting mail into trays by address. Here, each word is an address, and each partition is a tray. The hash rule sends every occurrence of a word to the same tray so its counts can be added together. Changing the number of trays may change the destination, but it must not change the final word count.</p>
 
 <p class="keep-in-present">Parts 1 and 2 count words in the same 4,000 abstracts. Part 3 runs independent nearest-neighbor searches on their vectors. Compare the code that computes results with the code or framework that schedules work and transfers data:</p>
 
@@ -124,7 +123,7 @@ Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vecto
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace map output into independent partition dictionaries</h2>
 
-<p class="keep-in-present">Predict the number of emitted pairs before advancing. Watch both copies of <code>wal</code> survive mapping and arrive in the same group. Distinguish a partition dictionary from each key’s value list inside it.</p>
+<p class="keep-in-present">Predict how many pairs mapping will emit. Watch both occurrences of <code>wal</code> become separate pairs and arrive in the same group. Each partition has a dictionary, and each word in that dictionary has its own list of counts.</p>
 
 <p>Follow two tiny records before processing the corpus. The displayed bucket numbers are a fixed teaching choice. Your required implementation uses Python’s <code>hash(key) % n_partitions</code> within one process.</p>
 <div data-teaching-trace="shuffle">
@@ -200,7 +199,7 @@ Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vecto
 <!-- ============================================================ -->
 <h2 id="ray">Part 3 · Ray <span class="part-time">~15 min in class</span></h2>
 
-<p class="keep-in-present">This workload asks for independent neighbor searches rather than word groups. Before timing it, sketch two schedules: launch-and-wait repeatedly, or launch all tasks and wait once. Check equality with serial results before interpreting elapsed time.</p>
+<p class="keep-in-present">Each neighbor search can run independently. Before timing Ray, compare two schedules: launch one task and wait for it, or launch all tasks and then wait for their results. Explain which allows work to overlap. Check that the results match the serial version before comparing times.</p>
 
 <p>For each abstract, find its ten nearest neighbors among the other 3,999 vectors. Each search is independent, so Ray can distribute the work across worker processes. This builds part of a k-nearest-neighbor graph; HNSW adds layers and neighbor-selection rules. In <code>ray_speedup.py</code>, define a remote search task, launch all tasks, then gather their results once.</p>
 
@@ -215,7 +214,7 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
    Novel Table Search [Technical Report]
    Toward Multi-Database Query Reasoning for Text2Cypher</code></pre>
 
-<p class="key-fact keep-in-present"><strong>3.5×</strong> faster on 10 cores, identical results, from two lines of Ray</p>
+<p class="key-fact keep-in-present">The reference Ray run was <strong>3.5× faster on 10 cores</strong> and returned the same neighbors as the serial run.</p>
 
 <p class="keep-in-present">The reference run was faster in parallel but did not scale in direct proportion to core count. Worker setup, scheduling, and data transfer add work, and some resources are shared. Increasing the number of searches may amortize some setup cost, while other overheads also grow. Measure the behavior on your machine rather than assuming a fixed speedup.</p>
 
@@ -228,10 +227,10 @@ it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the
 <!-- ============================================================ -->
 <h2 id="verify">Routing bugs hide at n=1, so the harness varies n</h2>
 
-<p class="keep-in-present">A single partition can hide a routing bug. Predict which properties must survive changing the partition count, then read the OFFLINE checks as tests of those properties. Optional engine checks add separate execution behavior.</p>
+<p class="keep-in-present">With only one partition, every pair arrives in the same place even if the routing code is wrong. Try several partition counts and check that each word still gets one correct total. The OFFLINE tests check these rules; the optional tests also run the Spark and Ray implementations.</p>
 
 <h3 id="function-tests">Test one function at a time</h3>
-<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests provide sample data and working versions of any helper methods you have not written yet. They run your code for the function you select.</p>
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_sparkray.py --list</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_sparkray.py --unit shuffle</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_sparkray.py --unit</span></code></pre>
@@ -239,7 +238,7 @@ it at 1000 and start Ray with <code>ray.init(num_cpus=2, ...)</code>. Report the
 
 <h3>Run the full tests</h3>
 
-<p>The passing output below is the target after completing the required methods or queries. On a fresh starter, failures marked <code>not implemented yet</code> or missing-query failures are expected. A unit check can pass while the remaining integration tests still fail.</p>
+<p>Once you finish the methods, the full test run should pass as shown below. With a fresh starter, <code>not implemented yet</code> failures are expected. Passing one function check does not mean the whole implementation is ready.</p>
 
 <p>The OFFLINE tests check the graded Part 1 implementation. The optional SPARK and RAY groups run when their dependencies are available and otherwise report a skip. The combined local score counts whichever tests ran; Gradescope uses the seven OFFLINE tests only.</p>
 
@@ -337,11 +336,11 @@ OFFLINE group, and that is the whole grade; Parts 2 and 3 are for class discussi
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=1"></script>
+<script src="viz.js?v=2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
-<script src="../_shared/teaching-traces.js?v=1"></script>
+<script src="../_shared/teaching-traces.js?v=4"></script>
 <script src="../_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

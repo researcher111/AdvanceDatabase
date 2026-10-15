@@ -260,7 +260,7 @@ assert.equal(text('jw-inspector-title'), 'students.tbl · block 1 · slot 3');
 click('jw-product');
 assert(get('jw-operator-detail').open);
 assert(text('jw-operator-title').startsWith('ProductScan'));
-assert(text('jw-operator-description').includes('rewind majors'));
+assert(text('jw-operator-description').includes('reset the majors scan'));
 checkFrame();
 
 // Traverse every snapshot to catch byte reads, cursor highlights, and shape drift.

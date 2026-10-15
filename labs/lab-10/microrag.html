@@ -46,7 +46,7 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">The search result gives you a score and an integer position. The answer needs the correct text and a source ID. In this lab, follow one hit through the chunk record and assembled prompt, then measure whether the right evidence returns. You implement retrieval and prompt assembly; the starter supplies the other stages and an offline echo mode.</p>
+<p class="lede">Vector search returns a score and a position in a list. Your retriever must use that position to find the right passage, then put its text and source ID into the prompt. Build those two steps and test whether each question retrieves the passages needed to answer it. The starter supplies the other stages, including an offline echo mode that lets you inspect the prompt.</p>
 
 <div class="cite">
   Builds on: <a href="../lab-09/microvector.html">Lab 9 · microvector</a> (shipped as a reference implementation in this starter) ·
@@ -55,8 +55,7 @@
 </div>
 
 <p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+Terms with a dotted underline have definitions. Hover or tap a term to read its explanation.
 </p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
@@ -69,7 +68,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
   <p>Search returns <code>(0.9, 2)</code>. If chunk 2 has <code>doc = "wal"</code>, which value selects the record and which belongs in its citation? Can a high similarity score prove that an answer is supported?</p>
-  <details><summary>Check your explanation</summary><p>Position 2 selects the stored chunk; <code>wal</code> is its source ID. The score is query-specific. Even the correct source ID and a high score do not establish support for every generated claim; inspect the text.</p></details>
+  <details><summary>Check your explanation</summary><p>Position 2 selects the stored chunk, and <code>wal</code> identifies its source in a citation. The similarity score belongs to this question and chunk. Read the passage to check whether it supports the answer; the score and citation alone cannot tell you that.</p></details>
 </div>
 
 <p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict which chunk a search position selects and which source ID appears in the prompt, run the trace or function check, then explain the returned text, citation, and rank.</p>
@@ -144,7 +143,7 @@ return [x / norm for x in v]</div>
 <!-- ============================================================ -->
 <h2 id="worked-example">Follow one hit into the prompt and evaluation</h2>
 
-<p class="keep-in-present">Trace one hit by hand before calling the real index. Predict the original chunk, the returned copy, its score, and its citation ID. After a second query, ask which stored fields should remain unchanged.</p>
+<p class="keep-in-present">Follow one search result by hand before calling the index. Which stored chunk does its position select? What score and source ID will the returned copy contain? After another query, check that the stored chunk still has its original fields.</p>
 
 <p>The tuple returned by vector search is <code>(similarity, integer_position)</code>. The chunk’s <code>doc</code> is a source ID string. Step through the mapping before implementing the retriever.</p>
 <div data-teaching-trace="rag">
@@ -200,10 +199,10 @@ return [x / norm for x in v]</div>
 <!-- ============================================================ -->
 <h2 id="verify">Part 2 · Verify <span class="part-time">~10 min in class</span></h2>
 
-<p class="keep-in-present">Match each test group to an observable artifact: returned chunk records, relevant-source ranks, or literal prompt sections. A plausible score is not enough if the vector position points to the wrong source.</p>
+<p class="keep-in-present">For each test group, identify what to inspect: the returned chunks, the rank of the relevant source, or the prompt’s exact text. Check the source even when the score looks reasonable; the vector may point to the wrong chunk.</p>
 
 <h3 id="function-tests">Test one function at a time</h3>
-<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests provide sample data and working versions of any helper methods you have not written yet. They run your code for the function you select.</p>
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_rag.py --list</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_rag.py --unit Retriever.retrieve</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_rag.py --unit</span></code></pre>
@@ -211,7 +210,7 @@ return [x / norm for x in v]</div>
 
 <h3>Run the full tests</h3>
 
-<p>The passing output below is the target after completing the required methods or queries. On a fresh starter, failures marked <code>not implemented yet</code> or missing-query failures are expected. A unit check can pass while the remaining integration tests still fail.</p>
+<p>Once you finish the methods, the full test run should pass as shown below. With a fresh starter, <code>not implemented yet</code> failures are expected. Passing one function check does not mean the whole implementation is ready.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_rag.py</span>
 <span class="t-head">RETRIEVE group</span>
@@ -238,7 +237,7 @@ return [x / norm for x in v]</div>
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Measure <span class="part-time">~25 min · finish as homework</span></h2>
 
-<p class="keep-in-present">Predict whether increasing embedding width can fix both hash collisions and synonyms. Run the same questions under each setting, then open a missed result. Decide which failure the next experiment should address.</p>
+<p class="keep-in-present">Will more vector dimensions help with hash collisions, different word forms, and synonyms equally? Predict the answer, run the same questions at each width, then inspect a missed result. Use that example to decide what to change next.</p>
 
 <p>Run the measurement script with the supplied corpus and default settings, then compare your output with the reference values below:</p>
 
@@ -341,7 +340,7 @@ Embedding 4000 abstracts with your hashed embedder (DIM=2048)...
 <div class="exercise learning-check">
   <span class="ex-label">Explain the result without reading your code</span>
   <p>Draw <code>position → chunk copy → source ID → prompt</code>. Explain what hit@3 and MRR@3 check, and what they leave unproved. Why must the real-paper experiment’s MRR@10 be kept separate?</p>
-  <details><summary>Check your explanation</summary><p>The mapping must preserve the source behind each ranked hit while leaving stored chunks unchanged. Hit checks presence; reciprocal rank rewards an earlier relevant result. Neither evaluates all generated claims. MRR cutoffs differ, so compare scores under the same cutoff and question set. This check is practice, not an additional submission.</p></details>
+  <details><summary>Check your explanation</summary><p>Each search position must lead to the right passage and source ID, and retrieval must leave stored chunks unchanged. Hit@3 asks whether a relevant source appears in the first three results. MRR@3 also rewards finding it earlier. Neither checks the generated answer’s claims. Compare MRR scores using the same question set and result cutoff. This question is for practice; you do not need to submit an answer.</p></details>
 </div>
 
 <h2 id="assignment">Assignment</h2>
@@ -357,7 +356,7 @@ Embedding 4000 abstracts with your hashed embedder (DIM=2048)...
 
 <h3>Discussion prompts (not graded)</h3>
 <p>Bring the measurement output and your answers to class for discussion. These experiments explain the behavior of your pipeline but are not submitted for the lab grade.</p>
-<p class="key-fact keep-in-present"><strong>0.30 vs 0.90</strong> hit@3, hashed versus MiniLM on the real corpus: the number to bring</p>
+<p class="key-fact keep-in-present">On the ten-question evaluation, <strong>hit@3 is 0.30 for hashing and 0.90 for MiniLM</strong>. Bring the results and explain which papers each method missed.</p>
 <ul>
   <li>Bring <code>measure_rag.py</code> output and discuss: which questions fail at DIM=256 but pass at 2048; how you would evaluate a score threshold for declining unsupported answers; and how stemming might help “deleted” versus “Deleting” while leaving synonym mismatches unresolved.</li>
   <li>The <code>measure_real.py</code> output and its three questions: which shared words let the
@@ -404,8 +403,8 @@ Embedding 4000 abstracts with your hashed embedder (DIM=2048)...
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
 <script src="../_shared/rag-measurements.js?v=1"></script>
-<script src="viz.js?v=2"></script>
-<script src="../_shared/teaching-traces.js?v=1"></script>
+<script src="viz.js?v=3"></script>
+<script src="../_shared/teaching-traces.js?v=4"></script>
 <script src="../_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

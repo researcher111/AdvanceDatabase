@@ -94,7 +94,7 @@
   register('index','A key gives an address, then a row',
     'A leaf entry maps a search-key value to one or more RIDs.',[
       frame('Choose the value','Search the GPA index for 36.','Point to the value 36. It is a search key, not a page number or a complete student row.'),
-      frame('Read the address list','The leaf entry for 36 contains RID (0, 4).','Reveal the address list. A RID is a pair: block number and slot number. Several rows can share one indexed value, so the entry owns a list.'),
+      frame('Read the address list','The leaf entry for 36 contains RID (0, 4).','Reveal the address list. A RID is a pair: block number and slot number. Several rows can share one indexed value, so the entry stores a list.'),
       frame('Decode the RID','Block 0, slot 4 tells the table where to look.','Separate the two fields of the address and point to their labels. Follow the RID rather than searching the table by GPA again.'),
       frame('Fetch the fields','The heap row supplies name = eli and GPA = 36.','Reveal the fetched row. The index lookup and the heap fetch are separate operations. A covering index can sometimes avoid a heap fetch, but this lab index stores only keys and RIDs.')
     ],(d,s)=>{
@@ -133,7 +133,7 @@
       frame('Name the parts','The root’s 36 divides the two key ranges.','Identify the routing key and two child pointers. The left subtree contains keys below 36; equality takes the right subtree.'),
       frame('Inspect the leaf entry','36 also appears in a leaf, with its row address.','Highlight the actual leaf entry for 36. The root copy does not replace it. Point to its RID (0, 4).'),
       frame('Follow the leaf order','The next-leaf link continues through keys in order.','Highlight the sibling link. It is for moving between leaves during a range scan, not for fetching a row from the heap.'),
-      frame('Check duplicate keys and depth','Key 31 has two RIDs; both leaves have the same depth.','Point to the two addresses under 31, then to the two root-to-leaf paths. Distinct key count, row count, and leaf depth describe different properties.')
+      frame('Check duplicate keys and depth','Key 31 has two RIDs; both leaves have the same depth.','Point to the two addresses under 31, then to the two root-to-leaf paths. Count keys, rows, and levels separately: 31 is one key with two rows.')
     ],(d,s)=>{
       fixture(d,{path:s===1?1:null,active:s===1?36:s===3?31:null,link:s===2});
       foot(d,['Routing key: choose a child; do not stop at the root.','Actual entry: key 36 → [(0, 4)]','Leaf links follow key order, not heap-page order.','6 distinct keys · 7 matching row addresses · 2 levels'][s]);
@@ -178,7 +178,7 @@
       d.text('result',640,609,'Accepted keys: '+(accepted.length?accepted.join(', '):'none')+' · RIDs collected: '+count,28,P.green,'middle',650);
       foot(d,s===7?'Returned RIDs: (0, 1), (1, 0), (0, 5), (0, 4), (0, 2)':'Inclusive means both 31 and 37 are accepted.',P.muted,660);
     },'Why do four matching keys produce five matching rows?',
-    'Key 31 owns two RIDs, so its two rows are both included. Keys 34, 36, and 37 each add one row.',
+    'Key 31 has two RIDs, so the range includes both rows. Keys 34, 36, and 37 each add one row.',
     'Uses the exact keys, duplicate RID lists, and inclusive bounds of the shared btree-range example.');
 
   function smallNode(d,id,x,y,keys,{width=240,hot=false,leaf=true}={}) {
@@ -213,7 +213,7 @@
     'Split an internal node around its middle separator, move that separator up, and preserve every child.',[
       frame('A full internal root','After inserting 1–12: 4 root keys and 5 child pointers.','Count the four routing keys [3,5,7,9] and five leaf children. The last leaf holds [9,10,11,12]; full is still legal.'),
       frame('Insert 13','13 goes into the last leaf, which is already full.','Predict the local leaf split before discussing the root. A root split is caused by the extra child and separator from below.'),
-      frame('Split the last leaf','The new leaf starts at 11; the parent still needs its pointer.','Split [9,10,11,12,13] into [9,10] and [11,12,13]. Keep all actual entries in leaves and link the new leaf. The parent repair is pending.'),
+      frame('Split the last leaf','The new leaf starts at 11; the parent still needs its pointer.','Split [9,10,11,12,13] into [9,10] and [11,12,13]. Keep all actual entries in leaves and link the new leaf. The parent still needs the new pointer and separator.'),
       frame('The root now overflows','Copy 11 up: 5 root keys now need 6 child pointers.','Add the copied separator 11 and its child. The root exceeds its four-key capacity. Highlight the middle routing key 7.'),
       frame('Divide the internal node','Move 7 upward; split the other keys and the six children.','Left keeps routing keys [3,5] and its first three children. Right keeps [9,11] and its last three children. The routing copy of 7 leaves this internal level.'),
       frame('Install the new root','A new root [7] makes every leaf one level deeper.','Attach the two internal nodes under the new root. Each has two separators and three children. Tree height grows from two levels to three for every leaf together.'),
@@ -250,7 +250,7 @@
       d.text('depth',640,610,split?(s===4?'Reattach both internal nodes to finish the split.':'3 levels · all leaves have equal depth'):'2 levels · all entries stay in leaves',25,split&&s===4?P.orange:P.green);
       foot(d,'Leaf split: COPY a key up. Internal split: MOVE a routing key up.',P.muted,667);
     },'What happens to the actual key 7 when the internal separator moves?',
-    'Its leaf entry and RID list remain in leaf [7,8]. Only a routing key moves between internal levels.',
+    'Its leaf entry and RID list remain in leaf [7,8]. Only the routing copy moves to a different internal level.',
     'Toy capacity four keys per node. RID lists are omitted; every leaf entry carries its list unchanged. Intermediate split frames are temporary until parent pointers are repaired.');
 
   register('fan-out','More children mean fewer levels',
@@ -307,7 +307,7 @@
 
   register('the-write-bill','Each index adds maintenance work',
     'Inserting a row updates the heap and every index on that table.',[
-      frame('Store the row','Insert uid 42, name mia, GPA 36 into the heap.','Start with a table that has no indexes and store the new row. The heap provides RID r; the letter stands for its actual block-and-slot address.'),
+      frame('Store the row','Insert uid 42, name mia, GPA 36 into the heap.','Start with a table that has no indexes and store the new row. Call the new row’s RID r: its block number and slot number.'),
       frame('One index','With a uid index, also add 42 → [r].','Compare the same insert into a table with one index. The operation maintains the heap plus one index. Do not describe two structures as exactly two physical writes.'),
       frame('Two indexes','With uid and name indexes, also add mia → [r].','Add the name index to the comparison. Both index entries point to the same inserted heap row, using the same RID.'),
       frame('Three indexes','With three indexes, maintain the heap and all three indexes.','Add the GPA entry 36 → [r]. If GPA 36 already exists, append the RID to its list. Splits, buffering, and logging determine the physical writes.')
@@ -326,7 +326,7 @@
       d.text('total',640,594,(s+1)+' maintained structure'+(s?'s':'')+' = 1 heap + '+s+' index'+(s===1?'':'es'),30,P.ink,'middle',650);
       foot(d,'Count maintained structures, not physical writes.',P.muted,656);
     },'When only GPA changes, must the name index entry change too?',
-    'If the RID stays the same and indexed name is unchanged, the name entry need not change. The GPA index must remove or replace the old key association and add the new one.',
+    'If the RID and name stay the same, the name entry need not change. In the GPA index, remove this RID from the old GPA’s list and add it to the new GPA’s list.',
     'The builds compare tables with zero, one, two, and three indexes. They do not depict creating an entire new index after each inserted row. RID r abbreviates the same physical row address in every index.');
 
   register('when-scanning-wins','Many matches can favor a scan',
@@ -334,7 +334,7 @@
       frame('Few matches','One matching RID reaches just one of the six heap pages.','Use twelve toy rows stored two per page. The index returns one RID, so fetching its result touches only one distinct heap page in this illustration.'),
       frame('Many scattered matches','Eight matching RIDs are spread across all six heap pages.','Broaden the predicate. Highlight eight matching rows across all six pages and read the scattered RID order. The index now requires heap access throughout the table.'),
       frame('Try the sequential scan','Read the heap in page order; test every row as it arrives.','Show the scan halfway through, after three pages and six rows. Four of those six rows match the same broad predicate. It needs no index descent or scattered RID lookup.'),
-      frame('Compare the complete work','The scan visits six pages and finds the same eight matching rows.','Finish the scan and compare outputs, not just the pictures. A scan may be cheaper when the index also needs most pages. Cache state, locality, coverage, and CPU costs decide the actual tradeoff.')
+      frame('Compare the complete work','The scan visits six pages and finds the same eight matching rows.','Finish the scan and compare outputs, not just the pictures. A scan may be cheaper when the index also needs most pages. Cached pages, nearby rows, fields stored in the index, and CPU work affect which plan is cheaper.')
     ],(d,s)=>{
       const hits=s===0?[1]:[1,2,3,5,7,9,10,11],pageCount=s===0?1:s===2?3:6;
       d.text('layout',640,212,'Toy heap: 6 pages × 2 rows = 12 rows',27,P.muted);
@@ -354,7 +354,7 @@
       d.text('counts',640,594,s===0?'1 result · 1 distinct heap page':s===1?'8 results · 6 distinct heap pages':s===2?'6 rows checked · 4 matches so far':'12 rows checked · 8 results · 6 heap pages',29,P.ink,'middle',650);
       foot(d,'Page visits are not a prediction of disk reads or elapsed time.',P.muted,661);
     },'Does the same number of distinct heap pages guarantee the same runtime?',
-    'No. The index adds traversal and RID processing; locality, repeated visits, caching, coverage, and row-test costs also matter. Compare measured or modeled total work.',
+    'No. The index adds traversal and RID processing; locality, repeated visits, caching, coverage, and row-test costs also matter. Compare the total work using measurements or stated cost estimates.',
     'Toy comparison, not a universal selectivity threshold. Broad-predicate matches are rows 1,2,3,5,7,9,10,11. The illustrated index RID order is rows 1,9,3,11,5,7,2,10, which visits pages 0,4,1,5,2,3,0,4.');
 
   register('build-and-test','A routing key cannot replace a leaf entry',

@@ -55,7 +55,7 @@
       });
     });
     d.text('trace-progress',85,653,`Step ${step+1} of ${example.frames.length}`,23,P.muted,'start');
-    d.text('trace-prompt',1200,653,'Explain the next state before advancing.',23,P.muted,'end');
+    d.text('trace-prompt',1200,653,'Predict what changes in the next step.',23,P.muted,'end');
   }
   function apply(deck) {
     const rules = replacements[deck.id];

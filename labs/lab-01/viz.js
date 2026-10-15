@@ -7,27 +7,27 @@
   const GLOSSARY = {
     'block': {
       title: 'Block',
-      body: "<p>A fixed-size unit of file storage in microdb. The default block size is 4096 bytes: block 0 occupies bytes 0–4095, block 1 occupies 4096–8191, and so on. The file manager reads and writes complete blocks. Other storage systems may use different transfer units.</p>",
+      body: "<p>microdb divides each file into fixed-size blocks. By default, each block holds 4096 bytes: block 0 covers bytes 0–4095, block 1 covers bytes 4096–8191, and so on. The file manager reads or writes one whole block at a time. Other storage systems may read and write data in different-sized units.</p>",
     },
     'page-mem': {
       title: 'Page',
-      body: "<p>An in-memory buffer containing one block’s worth of bytes. In this course, a block refers to stored file data and a page refers to its memory representation. The <code>Page</code> class reads and writes typed values within those bytes.</p>",
+      body: "<p>A page holds one block’s worth of bytes in memory. In this course, we call the data stored in the file a block and the buffer in memory a page. The <code>Page</code> methods let you read and change values, such as integers and strings, in that buffer.</p>",
     },
     'fsync': {
       title: 'fsync',
-      body: "<p>A system call that requests synchronization of pending file changes to storage and waits for completion. It can take much longer than a buffered write. The exact guarantee depends on the operating system and storage stack; see the macOS FAQ for the distinction between <code>fsync</code> and <code>F_FULLFSYNC</code>.</p>",
+      body: "<p>A system call that asks the operating system to send pending file changes to storage, then waits for that request to finish. This can take much longer than leaving the changes in memory. The exact guarantee depends on the operating system and storage device. The macOS FAQ explains how <code>fsync</code> differs from <code>F_FULLFSYNC</code>.</p>",
     },
     'os-cache': {
       title: 'OS page cache',
-      body: "<p>The operating system’s cache of file data in RAM. Buffered reads may be served from it, and buffered writes may remain there before reaching storage. Cached writes can be lost in a crash if they have not been synchronized. <code>measure_io.py</code> compares buffered writes with writes that request synchronization.</p>",
+      body: "<p>The operating system keeps some file data in RAM. It can read from this cache without accessing the storage device, and it can hold new writes here before sending them to storage. A crash can lose writes that are still waiting in the cache. <code>measure_io.py</code> compares writes that can wait in memory with writes that call <code>fsync</code>.</p>",
     },
     'durability': {
       title: 'Durability',
-      body: "<p>The transaction property that committed changes remain available after the failures the system is designed to tolerate, under its configured guarantees. It is the D in ACID. A close-and-reopen test checks persistence across normal program restarts; it does not establish crash durability. Lab 7 introduces logging and recovery.</p>",
+      body: "<p>Durability means a database keeps committed changes after the failures it promises to handle. The promise depends on the system and its settings. Durability is the D in ACID. Closing and reopening a file checks whether the data can be read again during normal operation; it does not show what would happen in a crash. Lab 7 introduces logging and recovery.</p>",
     },
     'hexdump': {
       title: 'hexdump',
-      body: "<p>A tool for displaying file bytes in hexadecimal. For example, <code>hexdump -C students.tbl</code> shows offsets, byte values, and printable characters. Comparing this output with the expected byte layout can help locate encoding or offset errors.</p>",
+      body: "<p>A tool that shows a file’s bytes as hexadecimal numbers. For example, <code>hexdump -C students.tbl</code> shows each byte’s position and value, along with any printable characters. Compare the output with the expected layout to check whether you stored the right bytes in the right places.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -67,51 +67,51 @@
   }
 
   function setInt(off, val) {
-    if (off < 0 || off + 4 > SIZE) { msgEl.textContent = `set_int(${off}, …): needs bytes ${off}–${off + 3}, page is 0–${SIZE - 1}.`; return; }
+    if (off < 0 || off + 4 > SIZE) { msgEl.textContent = `set_int(${off}, …) needs bytes ${off}–${off + 3}, but this page only has bytes 0–${SIZE - 1}.`; return; }
     const dv = new DataView(data.buffer);
     dv.setInt32(off, val, true); // little-endian
     for (let i = off; i < off + 4; i++) role[i] = 'int';
     const bytes = [...data.slice(off, off + 4)].map(b => b.toString(16).padStart(2, '0')).join(' ');
     msgEl.innerHTML = `<code>set_int(${off}, ${val})</code> wrote <code>${bytes}</code>: ` +
-      `4 bytes, least-significant first (little-endian).`;
+      `4 bytes, with the least significant byte first. This order is called little-endian.`;
     render([off, off + 4]);
   }
 
   function setString(off, s) {
     const enc = new TextEncoder().encode(s);
-    if (off < 0 || off + 4 + enc.length > SIZE) { msgEl.textContent = `set_string(${off}, "${s}"): needs ${4 + enc.length} bytes, not enough room.`; return; }
+    if (off < 0 || off + 4 + enc.length > SIZE) { msgEl.textContent = `set_string(${off}, "${s}") needs ${4 + enc.length} bytes starting at offset ${off}. That range does not fit in this page.`; return; }
     const dv = new DataView(data.buffer);
     dv.setInt32(off, enc.length, true);
     data.set(enc, off + 4);
     for (let i = off; i < off + 4; i++) role[i] = 'len';
     for (let i = off + 4; i < off + 4 + enc.length; i++) role[i] = 'int';
-    msgEl.innerHTML = `<code>set_string(${off}, "${s}")</code> wrote the length ` +
-      `<code>${enc.length}</code> as a 4-byte int (green), then ${enc.length} UTF-8 byte${enc.length === 1 ? '' : 's'} (warm)` +
-      (enc.length !== s.length ? `. Note that ${s.length} characters became ${enc.length} bytes.` : '.');
+    msgEl.innerHTML = `<code>set_string(${off}, "${s}")</code> stored the byte count, ` +
+      `<code>${enc.length}</code>, as a 4-byte integer (green), followed by the text’s ${enc.length} UTF-8 byte${enc.length === 1 ? '' : 's'} (warm)` +
+      (enc.length !== s.length ? '. UTF-8 can use more than one byte for a character.' : '.');
     render([off, off + 4 + enc.length]);
   }
 
   function getInt(off) {
-    if (off < 0 || off + 4 > SIZE) { msgEl.textContent = 'get_int: out of range.'; return; }
+    if (off < 0 || off + 4 > SIZE) { msgEl.textContent = `get_int needs 4 bytes starting at offset ${off}. That range does not fit in this page.`; return; }
     const dv = new DataView(data.buffer);
     const v = dv.getInt32(off, true);
-    msgEl.innerHTML = `<code>get_int(${off})</code> read 4 bytes little-endian → <code>${v}</code>.`;
+    msgEl.innerHTML = `<code>get_int(${off})</code> read 4 bytes in little-endian order and returned <code>${v}</code>.`;
     render(null, [off, off + 4]);
   }
 
   function getString(off) {
-    if (off < 0 || off + 4 > SIZE) { msgEl.textContent = 'get_string: out of range.'; return; }
+    if (off < 0 || off + 4 > SIZE) { msgEl.textContent = `get_string needs 4 bytes at offset ${off} to read the string length. That range does not fit in this page.`; return; }
     const dv = new DataView(data.buffer);
     const len = dv.getInt32(off, true);
     if (len < 0 || off + 4 + len > SIZE) {
-      msgEl.innerHTML = `<code>get_string(${off})</code>: the 4 bytes there decode to length ` +
-        `<code>${len}</code>, which runs off the page. Is there really a string at ${off}?`;
+      msgEl.innerHTML = `<code>get_string(${off})</code> read <code>${len}</code> as the string’s byte count. ` +
+        `That count is negative or extends past the end of the page. Check whether a string starts at offset ${off}.`;
       render(null, [off, off + 4]);
       return;
     }
     const s = new TextDecoder().decode(data.slice(off + 4, off + 4 + len));
-    msgEl.innerHTML = `<code>get_string(${off})</code> read length <code>${len}</code>, then ` +
-      `${len} byte${len === 1 ? '' : 's'} of UTF-8 → <code>"${s}"</code>.`;
+    msgEl.innerHTML = `<code>get_string(${off})</code> read the byte count, <code>${len}</code>, then ` +
+      `decoded the next ${len} UTF-8 byte${len === 1 ? '' : 's'} as <code>"${s}"</code>.`;
     render(null, [off, off + 4 + len]);
   }
 
@@ -120,7 +120,7 @@
   $('pg-ada3').addEventListener('click', () => setInt(11, 39));
   $('pg-reset').addEventListener('click', () => {
     data.fill(0); role.fill(null);
-    msgEl.textContent = 'Page zeroed. Press the three presets in order to store the ada row.';
+    msgEl.textContent = 'All 64 bytes are now zero. Press the three preset buttons in order to store the ada row.';
     render();
   });
   $('pg-set-int').addEventListener('click', () =>
@@ -140,7 +140,7 @@
   // Measured on the instructor's machine (see lab page prose): representative, not a target.
   const ROWS = [
     { name: 'buffered (sync=False)', v: 465849, cls: 'buffered' },
-    { name: 'durable (sync=True)',   v: 30788,  cls: 'durable'  },
+    { name: 'fsync (sync=True)',     v: 30788,  cls: 'durable'  },
   ];
   const max = Math.max(...ROWS.map(r => r.v));
   holder.innerHTML = ROWS.map(r =>
@@ -148,7 +148,7 @@
     `<span class="fs-track"><span class="fs-bar ${r.cls}" style="width:${(100 * r.v / max).toFixed(1)}%"></span></span>` +
     `<span class="fs-val">${r.v.toLocaleString()} blk/s</span></div>`).join('') +
     `<div class="fs-row"><span></span><span style="font-family:var(--sans);font-size:12px;color:var(--ink-mute)">` +
-    `ratio: 15.1× on this machine; your result may differ</span><span></span></div>`;
+    `buffered writes: 15.1× as many blocks/s on this machine; your result may differ</span><span></span></div>`;
 })();
 
 /* ---------------- Widget: struct.pack_into ---------------- */
@@ -194,12 +194,12 @@
     bytesFor(val, little).forEach((b, k) => { buf[off + k] = b; writtenAt[off + k] = off; });
     hot = [off, off + 1, off + 2, off + 3]; read = [];
     callEl.textContent = "struct.pack_into('" + fmtEl.value + "', buf, " + off + ", " + val + ")";
-    let msg = 'Wrote ' + WIDTH + ' bytes at ' + off + '..' + (off + WIDTH - 1) +
-              '. Every other byte is exactly as it was.';
+    let msg = 'Wrote ' + WIDTH + ' bytes at offsets ' + off + '–' + (off + WIDTH - 1) +
+              '. The other bytes did not change.';
     if (clobbered.size) {
-      msg += ' <strong class="pk-warn">It also overwrote part of the value you packed at offset ' +
+      msg += ' <strong class="pk-warn">This write overlaps an earlier value at offset ' +
              [...clobbered].sort((a, b) => a - b).join(' and ') +
-             ', so reading that earlier value may now give a different result. Overlapping writes do not raise an error.</strong>';
+             '. Reading the earlier value may now return a different number. Overlapping writes do not raise an error.</strong>';
     }
     noteEl.innerHTML = msg;
     render();
@@ -212,9 +212,9 @@
     const got = dv.getInt32(0, little);
     read = [off, off + 1, off + 2, off + 3]; hot = [];
     callEl.textContent = "struct.unpack_from('" + fmtEl.value + "', buf, " + off + ")[0]";
-    noteEl.innerHTML = 'Read those 4 bytes back as <code>' + got + '</code>. ' +
-      'The <code>[0]</code> selects the first value: <code>unpack_from</code> always returns a tuple, ' +
-      'because a format string can describe several values.';
+    noteEl.innerHTML = 'Read the 4 bytes at offset ' + off + ' as <code>' + got + '</code>. ' +
+      '<code>unpack_from</code> returns a tuple because a format string can describe several values. ' +
+      'Here, <code>[0]</code> selects the one integer we asked it to read.';
     render();
   }
   function reset() {
@@ -279,7 +279,7 @@
 
     /* ---- disk ---- */
     s += panel(16, 16, 304, 398, 'DISK · db_dir/students.tbl',
-               'survives a power cut · ~25 µs away',
+               'stored file data · read takes ~25 µs',
                `one byte array · ${disk.length * BS} bytes · ${disk.length} blocks`);
     disk.forEach((b, k) => {
       const y = blockY(k);
@@ -302,14 +302,14 @@
 
     /* ---- file manager ---- */
     s += `<rect class="fp-fm" x="${FM.x}" y="${FM.y}" width="${FM.w}" height="${FM.h}" rx="8"/>` +
-      t(FM.x + FM.w / 2, FM.y + 26, 'FileManager · the ferry', 'fp-fm-title', 'middle') +
+      t(FM.x + FM.w / 2, FM.y + 26, 'FileManager · moves bytes', 'fp-fm-title', 'middle') +
       t(FM.x + FM.w / 2, FM.y + 52, `seek(${sel} × ${BS}) → byte ${sel * BS}`, 'fp-fm-code', 'middle') +
-      t(FM.x + FM.w / 2, FM.y + 72, `move ${BS} bytes, no more, no less`, 'fp-fm-code', 'middle') +
-      t(FM.x + FM.w / 2, FM.y + 90, 'the only class that calls the OS', 'fp-fm-sub', 'middle');
+      t(FM.x + FM.w / 2, FM.y + 72, `read or write ${BS} bytes`, 'fp-fm-code', 'middle') +
+      t(FM.x + FM.w / 2, FM.y + 90, 'handles this lab’s file I/O', 'fp-fm-sub', 'middle');
 
     /* ---- memory ---- */
     s += panel(640, 16, 304, 398, 'MEMORY · your Python process',
-               'gone when the process exits · ~100 ns away',
+               'lost on exit · access takes ~100 ns',
                'one page = one block-sized bytearray');
     const pcls = 'fp-page' + (glow.page ? (glow.kind === 'read' ? ' g-read' : ' g-write') : '');
     s += `<rect class="${pcls}" x="${PAGE.x}" y="${PAGE.y}" width="${PAGE.w}" height="${PAGE.h}" rx="6"/>` +
@@ -318,19 +318,19 @@
       t(PAGE.x + 12, PAGE.y + 50, page.rows === null ? FRESH : page.rows,
         page.rows === null ? 'fp-blk-zero' : 'fp-blk-rows') +
       t(PAGE.x + 12, PAGE.y + 72,
-        page.blk === null ? 'never read: these bytes came from nowhere'
+        page.blk === null ? 'new page: all 4096 bytes are zero'
                           : `showing a copy of block ${page.blk}`,
         'fp-page-sub') +
       t(PAGE.x + 12, PAGE.y + 94,
         page.dirty ? 'EDITED: the disk still has the old bytes'
-                   : 'in step with the disk',
+                   : 'no unsaved edits',
         page.dirty ? 'fp-page-dirty' : 'fp-page-clean');
 
     /* ---- BlockId card ---- */
     s += `<rect class="fp-card" x="${PAGE.x}" y="228" width="${PAGE.w}" height="84" rx="6"/>` +
-      t(PAGE.x + 12, 252, 'BlockId · the name of a block', 'fp-card-title') +
+      t(PAGE.x + 12, 252, 'BlockId · identifies a block', 'fp-card-title') +
       t(PAGE.x + 12, 278, `BlockId('students.tbl', ${sel})`, 'fp-card-code') +
-      t(PAGE.x + 12, 298, 'a filename and a number. no bytes in here.', 'fp-page-sub');
+      t(PAGE.x + 12, 298, 'filename + block number; holds no data', 'fp-page-sub');
 
     /* ---- trip counter ---- */
     s += `<rect class="fp-card" x="${PAGE.x}" y="330" width="${PAGE.w}" height="76" rx="6"/>` +
@@ -345,8 +345,8 @@
     svg.querySelectorAll('.fp-blockg').forEach(g =>
       g.addEventListener('click', () => { sel = +g.dataset.blk; glow = {}; freePlay(
         `blk = BlockId('students.tbl', ${sel})`,
-        `Selected block ${sel}. That click built a <code>BlockId('students.tbl', ${sel})</code> ` +
-        `and moved no bytes at all: naming a block is free, fetching it is not.`);
+        `Selected block ${sel} by creating <code>BlockId('students.tbl', ${sel})</code>. ` +
+        `This identifies the block; it does not read or write any bytes.`);
         render(); }));
   }
 
@@ -375,10 +375,10 @@
     page = { blk: sel, rows: disk[sel].zero ? null : disk[sel].rows, dirty: false };
     trips.r++;
     glow = { kind: 'read', block: sel, page: true };
-    let note = `Seek to byte ${sel * BS}, copy ${BS} bytes disk → memory. The disk did not ` +
-      `change; the page now holds <em>a copy</em> of block ${sel}.`;
+    let note = `The file manager seeks to byte ${sel * BS} and copies ${BS} bytes from the file into memory. ` +
+      `The file stays the same. The page now holds <em>a copy</em> of block ${sel}.`;
     if (lost) note += ' <strong class="fp-warn">Loading the block overwrote your unsaved edit. ' +
-      'Page does not automatically save modified bytes before a read.</strong>';
+      'A read replaces the page’s bytes without saving your changes first.</strong>';
     return { call: `fm.read(BlockId('students.tbl', ${sel}), page)`, note };
   }
 
@@ -388,12 +388,12 @@
     page = { blk: sel, rows: page.rows, dirty: false };
     trips.w++;
     glow = { kind: 'write', block: sel, page: true };
-    let note = `Seek to byte ${sel * BS}, copy ${BS} bytes memory → disk, then <code>fsync</code>. ` +
-      `<strong>This call replaces the contents of the selected stored block.</strong> ` +
-      `It writes the entire ${BS}-byte page, however little of it you edited.`;
-    if (wasFresh) note = `Seek to byte ${sel * BS}, copy ${BS} bytes memory → disk. The page was ` +
-      `never read, so <strong class="fp-warn">you just wrote 4096 zeros over block ${sel}, ` +
-      `erasing it</strong>. FileManager writes the bytes currently in the page.`;
+    let note = `The file manager seeks to byte ${sel * BS}, copies ${BS} bytes from memory into the file, ` +
+      `then calls <code>fsync</code>. <strong>This replaces the selected block’s contents.</strong> ` +
+      `The call writes the whole page, even if you changed just one value.`;
+    if (wasFresh) note = `The page contains ${BS} zero bytes. The file manager copies them into block ${sel} ` +
+      `and calls <code>fsync</code>, <strong class="fp-warn">replacing the block’s contents with zeros</strong>. ` +
+      `FileManager writes whatever bytes are currently in the page.`;
     return { call: `fm.write(BlockId('students.tbl', ${sel}), page, sync=True)`, note };
   }
 
@@ -411,7 +411,7 @@
       note: `The file grew by ${BS} zero bytes, from ${disk.length - 1} to ${disk.length} blocks, ` +
         `and <code>append</code> returned the <code>BlockId</code> of the new block. ` +
         `The existing memory page is unchanged. ` +
-        `Lab 3 uses the new block’s zero bytes as EMPTY slot flags.` };
+        `In Lab 3, a zero slot flag tells the record manager that a slot is EMPTY.` };
   }
 
   function doEdit(forced) {
@@ -425,8 +425,8 @@
     page.dirty = true;
     glow = { kind: 'write', block: null, page: true };
     return { call: `page.set_string(4, "${name}")`,
-      note: `The bytes at offset 4 <em>of the page</em> changed. Look left: the disk is exactly ` +
-        `as it was. <code>set_int</code> and <code>set_string</code> modify memory only. ` +
+      note: `The name starting at offset 4 changed <em>in the page</em>. The file on the left still ` +
+        `has the old bytes. <code>set_int</code> and <code>set_string</code> modify memory only. ` +
         `Call <code>fm.write</code> to store those changes in a file block.` };
   }
 
@@ -443,25 +443,25 @@
     'memory is still all zeros. Press <strong>Next step</strong> to run the first call.';
   const STORY = [
     { run: () => { sel = 0; return doRead(); },
-      note: `<code>fm.read</code> loads block 0: seek to byte 0, move 4096 bytes, ` +
-        `disk → memory. The disk did not change; the page now holds <em>a copy</em> of ada's block.` },
+      note: `<code>fm.read</code> seeks to byte 0 and copies block 0’s 4096 bytes into the page. ` +
+        `The file stays the same. The page now holds <em>a copy</em> of the block containing ada.` },
     { run: () => doEdit('zoe'),
-      note: `<code>set_string</code> edits <em>the copy</em>. Look left: the disk still says ada. ` +
-        `The edit is still only in memory.` },
+      note: `<code>set_string</code> changes ada to zoe <em>in the memory copy</em>. ` +
+        `The file on the left still contains ada.` },
     { run: () => { sel = 1; return doRead(); },
-      note: `The same page object is reused for block 1, and the zoe edit was never written, so ` +
-        `the edit is <strong class="fp-warn">lost</strong>. Loading another block replaces the page’s bytes ` +
-        `without automatically saving them.` },
+      note: `Reading block 1 replaces the bytes in the same page object. ` +
+        `The name zoe is <strong class="fp-warn">lost</strong> because we never wrote it to the file. ` +
+        `Reading a block does not save the page’s previous contents.` },
     { run: () => { sel = 0; return doRead(); },
-      note: `Read block 0 again: it still contains ada. The edit was never passed to ` +
-        `<code>fm.write</code>, so it did not change this stored block.` },
+      note: `Read block 0 again: it still contains ada. We never called ` +
+        `<code>fm.write</code> to save the change to zoe, so the file still has the original name.` },
     { run: () => doEdit('zoe'),
       note: `Change the name to zoe again. The next step writes the modified page ` +
         `back to block 0 before the page is reused.` },
     { run: () => { sel = 0; return doWrite(); },
-      note: `<code>fm.write</code> writes all 4096 page bytes to block 0 and requests ` +
-        `<code>fsync</code>. The stored name is now zoe. The earlier read calls left ` +
-        `the file contents unchanged; this write saved the edit.` },
+      note: `<code>fm.write</code> copies all 4096 bytes from the page into block 0, then calls ` +
+        `<code>fsync</code>. The file now contains zoe. We can reuse the page and read block 0 again ` +
+        `to retrieve the saved name.` },
   ];
   let pos = 0; // 0 = setup, k = after story step k
 

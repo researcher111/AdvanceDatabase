@@ -19,7 +19,7 @@
     },
     'internal-fragmentation': {
       title: 'Internal fragmentation',
-      body: "<p>Unused space within an allocated region. A 40-byte value in a field with a 200-byte capacity leaves 160 reserved bytes unused. Fixed-size slots simplify addressing but can waste space when values are much shorter than the field capacity.</p>",
+      body: "<p>Space reserved for a value but left unused. For example, a 40-byte value in a field with a 200-byte capacity leaves 160 bytes unused. Fixed-size slots make fields easy to locate, but short values can leave much of their reserved space empty.</p>",
     },
     'latch': {
       title: 'Latch',

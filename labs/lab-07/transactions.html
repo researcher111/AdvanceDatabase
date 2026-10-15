@@ -47,7 +47,7 @@
   <div class="byline">Follows bonus Lectures 7–8 · self-paced · optional and ungraded · no submission deadline</div>
 </header>
 
-<p class="lede">In this optional lab, restart a database after a process exits during a transfer. Log old values before changing pages, commit in the required order, and undo unfinished changes from newest to oldest. Use the saved log records and balances to explain why recovery keeps the committed transfer and reverses the incomplete one.</p>
+<p class="lede">What happens if the program stops halfway through a bank transfer? In this optional lab, save each old balance in a log before changing it. After restarting the database, use that log to undo unfinished transfers in reverse order. Check the balances to see that recovery keeps the completed transfer and reverses the interrupted one.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 5 ·
@@ -57,8 +57,7 @@
 </div>
 
 <p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+Terms with a dotted underline have definitions. Hover or tap a term to read its explanation.
 </p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
@@ -70,11 +69,11 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
-  <p>An unfinished transaction changed 60 to 40 to 10. Which old value should reverse undo restore first? If a newer COMMIT belongs to another transaction, does it complete this one?</p>
+  <p>An unfinished transaction changed a value from 60 to 40, then from 40 to 10. Which old value should recovery restore first? Does a later COMMIT record for a different transaction mean this transaction finished?</p>
   <details><summary>Check your explanation</summary><p>Restore 40 first, then 60. Completion is tracked by transaction ID; another transaction’s COMMIT does not complete this transaction. Preserve committed work while undoing unfinished work.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
 
 <h2 id="try-it">Read completion records before earlier changes</h2>
 
@@ -110,7 +109,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="big-idea">Sync the old value before changing the page</h2>
 
-<p class="keep-in-present">Imagine recording an account’s original balance before changing it. The undo log saves that old value so recovery can restore it. The log record must reach durable storage before the changed data page does. This lab’s FORCE/STEAL policy also specifies when to flush data pages and completion records.</p>
+<p class="keep-in-present">Before changing an account balance, write down its old value. That is what the undo log does: it keeps the value recovery will need if the transaction fails. The log record must reach storage before the changed data page. The lab’s FORCE/STEAL rules below specify when to write the pages and completion records.</p>
 
 <p class="keep-in-present">The <span class="gloss" data-gloss="undo-log">write-ahead rule</span> is precise: recovery information must reach durable storage before the data it protects. This lab syncs each log append by default, then uses FORCE at commit: flush dirty data pages before syncing COMMIT. JSON lines make the log readable; production formats add checksums and recovery metadata.</p>
 
@@ -119,7 +118,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace the exact order of undo and completion</h2>
 
-<p class="keep-in-present">Before revealing each undo, predict both the buffer value and the last durable page value. Then predict what the next restart sees if recovery stops at that point.</p>
+<p class="keep-in-present">Before each undo step, predict the value in memory and the value saved on disk. Then ask what recovery would find if the program stopped at that point and restarted.</p>
 
 <p>Before coding, predict the value after undoing each SET record. The example separates buffer changes from the final flush and completion record. All unfinished transactions must be recovered before new ones begin.</p>
 <div data-teaching-trace="undo">
@@ -168,15 +167,15 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <h2 id="verify">Part 2 · Verify <span class="part-time">~20 min in class</span></h2>
 
 <h3 id="function-tests">Test one function at a time</h3>
-<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests supply known data and working helpers for unfinished dependencies. The selected function always uses your code.</p>
+<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests provide sample data and working versions of any helper methods you have not written yet. They run your code for the function you select.</p>
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_tx.py --list</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_tx.py --unit Transaction.set_string</span>
 <span class="t-prompt">$</span> <span class="t-cmd">python3 test_tx.py --unit</span></code></pre>
-<p>Unit results are practice feedback. Run <code>python3 test_tx.py</code> without flags to check that your functions work together. The integration tests below determine your grade.</p>
+<p>Unit results are practice feedback. Run <code>python3 test_tx.py</code> without flags to check that your functions work together. The full tests below check the complete implementation. This lab is optional and ungraded.</p>
 
 <h3>Run the full tests</h3>
 
-<p>The passing output below is the target after completing the required methods or queries. On a fresh starter, failures marked <code>not implemented yet</code> or missing-query failures are expected. A unit check can pass while the remaining integration tests still fail.</p>
+<p>Once you finish the methods, the full test run should pass as shown below. With a fresh starter, <code>not implemented yet</code> failures are expected. Passing one function check does not mean the whole implementation is ready.</p>
 
 <p>The nine tests cover four groups. WAL checks that each change logs the old value and its location. COMMIT checks <span class="gloss" data-gloss="the-fsync">commit ordering</span> and rollback behavior, including repeated changes to one slot. RECOVER starts a subprocess, commits one transfer, interrupts another with <code>os._exit</code>, then checks that recovery preserves the first and undoes the second. Running recovery twice must leave the data unchanged and return no newly undone transactions on the second run. LOCKS checks shared reads and conflicting writes.</p>
 
@@ -207,7 +206,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="measure">Part 3 · Test an abrupt exit <span class="part-time">~25 min · finish as homework</span></h2>
 
-<p class="keep-in-present">Predict the stored balances before restart and after recovery. In the no-steal variation, explain why undo can be harmless even when disk already holds the earlier value.</p>
+<p class="keep-in-present">Predict the balances on disk before restart and after recovery. Then try the variation that leaves the unfinished change in memory. Explain what undo does when the file already contains the old value.</p>
 
 <p>Run <code>crash_demo.py</code> to observe a committed transfer followed by an incomplete one. The script flushes an uncommitted dirty page under the <span class="gloss" data-gloss="stolen-page">STEAL policy</span>, then exits with <code>os._exit(1)</code>. On restart, compare the balances before and after recovery. Reference output:</p>
 
@@ -251,11 +250,11 @@ right balances; say what your undo wrote and why it was harmless.</p>
 
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
-  <p>A recovery pass has repaired the buffer but has not flushed it. Can it sync ROLLBACK and declare completion? Which failure would the opposite order permit?</p>
-  <details><summary>Check your explanation</summary><p>Flush the repair before syncing ROLLBACK. Otherwise another crash could leave the old damaged data beside a completion record that makes later recovery skip the repair. This ordering protects recovery as well as ordinary transactions.</p></details>
+  <p>Recovery has restored a balance in memory but has not written it to disk. Can it record ROLLBACK and report that it has finished? What could go wrong if the program crashes before the repaired balance is saved?</p>
+  <details><summary>Check your explanation</summary><p>Write the repaired page to disk before syncing ROLLBACK. Otherwise, a crash could leave the incorrect balance on disk alongside a record saying recovery finished. The next recovery would skip that transaction and leave the balance wrong.</p></details>
 </div>
 
-<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+<p>This question is for practice and class discussion. You do not need to submit an answer.</p>
 
 <h2 id="assignment">Assignment</h2>
 
@@ -328,8 +327,8 @@ nothing. The bug is in the write path, not the recovery.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=1"></script>
-<script src="../_shared/teaching-traces.js?v=1"></script>
+<script src="viz.js?v=2"></script>
+<script src="../_shared/teaching-traces.js?v=4"></script>
 <script src="../_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

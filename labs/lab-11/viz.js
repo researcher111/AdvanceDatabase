@@ -13,7 +13,7 @@
     },
     'combiner': {
       title: 'Combiner',
-      body: "<p>A local aggregation performed before the shuffle. For word count, many (the, 1) pairs can become one (the, total) pair per mapper. This preserves the final sum while reducing data movement. A combiner must be valid when applied any number of times; intermediate types and aggregation rules must support that use.</p>",
+      body: "<p>A step that combines repeated keys locally before sending them through the shuffle. For word count, a mapper can replace many (the, 1) pairs with one (the, total) pair. The final sum stays the same, but fewer pairs move between workers. The operation must still be correct if the framework applies the combiner zero, one, or several times.</p>",
     },
     'gil': {
       title: 'GIL (Global Interpreter Lock)',
@@ -87,7 +87,7 @@
       },
     },
     {
-      label: 'Phase 3 · group — inside each partition, values collect per key: {word: [1, 1, …]}',
+      label: 'Phase 3 · group — collect each word’s counts in one list: {word: [1, 1, …]}',
       render() {
         const parts = [{}, {}];
         for (const d of DOCS) for (const w of d.split(' ')) {
@@ -102,7 +102,7 @@
       },
     },
     {
-      label: 'Phase 4 · reduce — sum each key’s grouped values within its assigned partition.',
+      label: 'Phase 4 · reduce — add each word’s counts to get its total.',
       render() {
         const parts = [{}, {}];
         for (const d of DOCS) for (const w of d.split(' ')) {

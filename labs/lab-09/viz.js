@@ -17,7 +17,7 @@
     },
     'recall-at-k': {
       title: 'recall@k',
-      body: "<p>Count how many of the exact top-k ids also appear in the approximate top-k result, then divide by k. Average the scores across evaluation queries. Average recall@10 of 0.95 means five exact neighbors were missed per ten queries on average, not that every query missed the same number.</p>",
+      body: "<p>Count how many exact top-k IDs appear in the approximate result, then divide by k. If it finds 9 of the exact top 10, recall@10 is 0.9 for that query. Average these scores across the evaluation questions. A mean of 0.95 does not mean every query misses the same number of neighbors.</p>",
     },
     'embedding-drift': {
       title: 'Embedding drift',

@@ -5,24 +5,24 @@ window.CourseClarityCaptions = {
       "Both runs return ada, cyd, and eli. Must the second run read their data from disk again?",
       "The first run reads the two table blocks from disk, then checks the six students’ GPAs.",
       "The second run checks the students again, using the two blocks kept in memory.",
-      "Compare modeled block-access costs separately from whole-query timings."
+      "This model counts block accesses. Measure the whole query to find its actual runtime."
     ],
     "lecture-01-scene-02": [
       "SQL starts as a sequence of characters.",
       "The lexer groups characters into tokens.",
-      "Scan supplies rows, Select filters them, and Project exposes name.",
-      "The front end builds the plan before operators execute it."
+      "Scan reads rows. Select keeps matches, and Project returns each matching name.",
+      "The front end builds a plan, then the operators run it."
     ],
     "lecture-01-scene-03": [
       "The buffer frames are empty before the first scan.",
       "Read all of block 0 into a memory frame.",
       "ada and cyd pass the filter in block 0.",
       "Read block 1 and continue testing its rows.",
-      "Two block reads examine six rows and return three names."
+      "The engine reads two blocks, checks six rows, and returns three names."
     ],
     "lecture-01-scene-04": [
       "Predict the reads, rows examined, and rows returned on a second run.",
-      "Both needed blocks are still resident in memory.",
+      "Both blocks are still in memory from the first run.",
       "The engine evaluates the filter again and returns the same names.",
       "Warm run: zero storage reads, six rows examined, three results."
     ],
@@ -35,10 +35,10 @@ window.CourseClarityCaptions = {
       "Two different students can share the same name.",
       "A repeated name rules out name alone as a unique identifier.",
       "Name and GPA can repeat together as well.",
-      "An enforced identifier distinguishes rows independently of their locations."
+      "A unique ID identifies a row even if the row moves to another location."
     ],
     "lecture-01-scene-07": [
-      "A transfer needs guarantees across both balance changes.",
+      "The transfer must subtract from one account and add to the other.",
       "Atomicity makes the two changes complete or roll back together.",
       "Consistency preserves declared rules, such as a nonnegative balance.",
       "Isolation controls how overlapping transactions affect each other.",
@@ -48,17 +48,17 @@ window.CourseClarityCaptions = {
       "Both access paths must produce the same answer.",
       "The scan model visits all 500 table blocks.",
       "The example index path needs seven total block accesses.",
-      "The answer is equal even though the access work differs."
+      "Both plans return the same answer, but read different numbers of blocks."
     ],
     "lecture-01-scene-09": [
       "The SQL front end interprets the statement.",
       "Operators request rows through next().",
-      "Records interpret field values inside a row.",
-      "The buffer pool manages resident pages.",
+      "The record layer reads field values from the bytes in a row.",
+      "The buffer pool keeps copies of stored blocks in memory.",
       "The file manager translates block k into byte offset k × 4096."
     ],
     "lecture-01-scene-10": [
-      "Access latencies differ by orders of magnitude in this illustrative model.",
+      "This example compares the time needed to access each kind of memory or storage.",
       "RAM is far faster than a storage access in this model.",
       "Bar lengths use a logarithmic scale, not a linear time scale.",
       "If 1 ns became 1 second, the modeled disk trip would take 116 days."
@@ -71,12 +71,12 @@ window.CourseClarityCaptions = {
     ],
     "lecture-01-scene-12": [
       "The layout assigns a byte offset to each field.",
-      "Catalog rows persist the field names and offsets.",
-      "Known catalog layouts let the engine read its own metadata after restart."
+      "The catalog saves each field’s name and byte offset.",
+      "The engine knows the catalog’s layout, so it can read the saved schemas after a restart."
     ],
     "lecture-01-scene-13": [
-      "The file layer supplies addressed blocks.",
-      "Buffers manage pages; records interpret their bytes.",
+      "The file manager reads a block using its filename and block number.",
+      "The buffer pool keeps pages in memory. The record layer reads their fields.",
       "Operators scan, filter, and project rows; SQL describes the requested result.",
       "Indexes and recovery build on the lower layers’ interfaces."
     ],
@@ -89,31 +89,31 @@ window.CourseClarityCaptions = {
     "lecture-01-scene-15": [
       "write() can return after the OS accepts buffered data.",
       "fsync() requests durable storage of the file’s writes.",
-      "Successful fsync() completes the sync request; power-loss guarantees depend on the storage stack.",
+      "fsync() waits for synchronization. Protection from power loss also depends on the OS and device.",
       "A power failure can lose writes that remain only in volatile caches."
     ],
     "lecture-01-scene-16": [
       "Return to the same request: which layers connect SQL to stored blocks?",
-      "Trace SQL to a plan, then rows to pages and blocks.",
-      "Reusing pages can remove storage reads while scanning and filtering still run."
+      "Follow the SQL request through its plan to the rows, pages, and stored blocks it needs.",
+      "Reusing pages avoids reading them from storage again. The query still scans and filters rows."
     ]
   },
   "2": {
     "lecture-02-scene-01": [
       "Request B7 three times. Where can a useful copy stay between requests?",
-      "Without reuse, repeated requests can repeat storage work.",
-      "With B7 resident, later requests reuse the first read."
+      "Without a saved copy, each request may need another storage read.",
+      "Once B7 is in memory, later requests can read that copy."
     ],
     "lecture-02-scene-02": [
       "Compare when write() and fsync() finish in your Lab 1 measurements.",
       "write() can finish when the OS cache accepts the data.",
       "fsync() waits for file synchronization; the storage stack determines its durability guarantee.",
-      "Explain the measured gap using those different boundaries."
+      "Explain the timing difference by describing what each call waits for."
     ],
     "lecture-02-scene-03": [
       "A buffer pool contains reusable memory frames.",
       "Load page B7 into frame 0.",
-      "Frame identity stays fixed while its resident page can change."
+      "Frame 0 stays in place, but it can hold a different page later."
     ],
     "lecture-02-scene-04": [
       "Three frames hold the first three blocks of an eight-block scan.",
@@ -123,24 +123,24 @@ window.CourseClarityCaptions = {
     ],
     "lecture-02-scene-05": [
       "Blocks 0 and 1 recur much more often than the other blocks.",
-      "Repeated touches keep the hot blocks recent.",
-      "A cold block uses the third frame while the hot pair stays resident.",
+      "Frequent requests keep blocks 0 and 1 near the top of the LRU list.",
+      "The other blocks share the third frame while blocks 0 and 1 stay in memory.",
       "This request sequence has 11 hits out of 16 accesses."
     ],
     "lecture-02-scene-06": [
       "One caller holds a pin on B7, so its frame cannot be replaced.",
       "A second caller raises the pin count to two.",
-      "Releasing one hold leaves another active pin.",
+      "One caller unpins B7, but the other caller still needs it.",
       "At zero pins, the frame becomes eligible for replacement."
     ],
     "lecture-02-scene-07": [
-      "The first touches give A, B, and C increasing recency timestamps.",
+      "The first requests load A, then B, then C and record when each was last used.",
       "A hit on A refreshes its timestamp from 1 to 4.",
       "B is now the least-recently used unpinned page.",
       "D replaces B and receives the newest timestamp."
     ],
     "lecture-02-scene-08": [
-      "Pinned A is ineligible for replacement, regardless of age.",
+      "A stays in memory because a caller has pinned it.",
       "E replaces the oldest eligible page, C.",
       "B next replaces D, leaving pinned A untouched.",
       "If every frame is pinned, the lab raises BufferAbortError."
@@ -148,15 +148,15 @@ window.CourseClarityCaptions = {
     "lecture-02-scene-09": [
       "Find which frame holds (students.tbl, 7).",
       "A linear search checks frames until it finds B7.",
-      "A mapping sends the BlockId directly to its resident frame.",
-      "Linear lookup grows with the pool; hashing is expected constant time."
+      "A dictionary maps each BlockId to the frame holding that block.",
+      "A larger pool takes longer to scan. A dictionary lookup takes constant time on average."
     ],
     "lecture-02-scene-10": [
       "B7 is clean before its field changes.",
       "Changing 39 to 40 marks the resident page dirty.",
-      "Unpin releases the hold but does not write the dirty page.",
+      "Unpin says the caller has finished. The changed page still needs to be written.",
       "Flush B7’s updated contents before reusing its frame.",
-      "Load B8 into the reusable frame after preserving B7."
+      "After writing B7, load B8 into the same frame."
     ],
     "lecture-02-scene-11": [
       "The database pool and the OS cache serve different roles.",
@@ -167,8 +167,8 @@ window.CourseClarityCaptions = {
     "lecture-02-scene-12": [
       "A, B, and C form a useful hot set.",
       "A long scan can displace that useful working set.",
-      "A small scan ring limits how much of the pool the scan pollutes.",
-      "Approximate recency policies trade bookkeeping cost against reuse quality."
+      "A scan ring reuses a few frames so the scan evicts fewer frequently used pages.",
+      "An approximate LRU policy tracks usage less precisely but costs less to maintain."
     ],
     "lecture-02-scene-13": [
       "At 90% hits, expensive misses dominate the modeled average.",
@@ -179,24 +179,24 @@ window.CourseClarityCaptions = {
     "lecture-02-scene-14": [
       "A cycle of 50 blocks exceeds a 49-frame pool by one block.",
       "Predict what remains when the next pass returns to block 0.",
-      "Each reuse comes too late, so the repeated cycle has zero hits.",
+      "Each block has already been evicted when it is needed again, so every request misses.",
       "With 50 frames, later passes can hit every block after warm-up."
     ],
     "lecture-02-scene-15": [
-      "First look for an already-resident page.",
+      "First check whether the requested page is already in memory.",
       "On a miss, choose an eligible replacement frame.",
-      "Load or reuse the page and register the caller’s pin.",
-      "Release the hold when the caller finishes using the page."
+      "Use the cached page or load it into a frame, then increase its pin count.",
+      "Unpin the page when the caller finishes using it."
     ],
     "lecture-02-scene-16": [
       "Keep the same three frames while changing the access order.",
-      "The cyclic scan misses; the hot pair gets repeated reuse before eviction.",
-      "Pins protect active users even when reuse is poor."
+      "The cyclic scan misses every time. The two hot blocks get reused while still in memory.",
+      "Pins keep pages available to their callers, even when the cache has few hits."
     ]
   },
   "3": {
     "lecture-03-scene-01": [
-      "Cached bytes need interpretation rules before they become a student row.",
+      "To read a student row, the engine needs to know where each field sits in the cached bytes.",
       "A layout identifies a row and the fields inside it.",
       "RID (0, 1) names block 0, slot 1; it does not permanently identify a student."
     ],
@@ -204,13 +204,13 @@ window.CourseClarityCaptions = {
       "Packed rows sit directly beside one another.",
       "Save the byte offset where cyd currently begins.",
       "Growing ben shifts later packed rows to new offsets.",
-      "The old byte offset no longer identifies the same row boundary."
+      "cyd now starts at a different byte offset, so the saved address is wrong."
     ],
     "lecture-03-scene-03": [
       "Every slot reserves the same space for its fields.",
       "Inserting ben marks its slot in use.",
-      "benjamin fits inside the existing name reservation.",
-      "Reject a name that exceeds the reserved byte capacity."
+      "The space reserved for the name is large enough for benjamin.",
+      "Reject a name whose encoded bytes do not fit in its field."
     ],
     "lecture-03-scene-04": [
       "The in-use flag and integer ID each occupy four bytes.",
@@ -228,7 +228,7 @@ window.CourseClarityCaptions = {
       "The name field reserves eight encoded bytes.",
       "The ASCII name ada uses three bytes.",
       "é and 😀 use six UTF-8 bytes despite being only two characters.",
-      "Validate encoded length before writing, so GPA bytes stay intact."
+      "Check the name’s byte length before writing, so it cannot overwrite GPA."
     ],
     "lecture-03-scene-07": [
       "The in-use flag marks a live row.",
@@ -243,27 +243,27 @@ window.CourseClarityCaptions = {
       "Ten thousand rows now need 556 blocks in this layout model."
     ],
     "lecture-03-scene-09": [
-      "Zero is a present numeric value.",
-      "Empty text is also a present value.",
+      "A stored zero means the value is 0.",
+      "An empty string is a value too.",
       "A missing value needs a distinct NULL marker.",
       "The bitmap identifies NULL separately from the field’s payload bytes."
     ],
     "lecture-03-scene-10": [
       "Small values can stay inline with the row.",
       "Compression can reduce a larger value’s stored size.",
-      "An out-of-line value leaves a compact pointer in the main row.",
+      "When a value is stored elsewhere, the row holds a pointer to it.",
       "Follow that pointer to gather the value’s separate chunks."
     ],
     "lecture-03-scene-11": [
       "The heap row points to the separately stored essay.",
       "Reading only name can use the heap row without fetching essay chunks.",
       "Reading essay follows the pointer and gathers its chunks.",
-      "Requested fields determine which storage path this example needs."
+      "The query needs the extra chunks only if it asks for the essay."
     ],
     "lecture-03-scene-12": [
       "RecordPage pins the block that contains the row.",
       "Layout supplies each field’s offset within a slot.",
-      "Updating GPA changes the resident page from 39 to 40.",
+      "Updating GPA changes its value from 39 to 40 in the page held in memory.",
       "Mark the page dirty, then release the pin when RecordPage closes."
     ],
     "lecture-03-scene-13": [
@@ -280,13 +280,13 @@ window.CourseClarityCaptions = {
     ],
     "lecture-03-scene-15": [
       "The current layout maps fields to byte offsets.",
-      "Persist the schema as catalog rows.",
+      "Save the schema in the catalog.",
       "After restart, read those rows to reconstruct the layout.",
-      "Known catalog layouts make this first metadata read possible."
+      "The engine already knows how to read the catalog’s own rows."
     ],
     "lecture-03-scene-16": [
-      "Return to the saved address: locate a field from slot size and offset.",
-      "Interpret one pinned block, then scan occupied slots across blocks.",
+      "Use the slot size and field offset to find the field’s bytes in the page.",
+      "Read the occupied slots in the pinned block, then move to the next block.",
       "Recover the schema from the catalog to interpret the bytes after restart."
     ]
   },
@@ -294,16 +294,16 @@ window.CourseClarityCaptions = {
     "lecture-04-scene-01": [
       "The operator tree is ready. What call starts work for one result row?",
       "The request travels from Project down to its input.",
-      "A qualifying row returns through the common scan interface."
+      "A matching row returns to the caller through the Scan interface."
     ],
     "lecture-04-scene-02": [
       "Materializing a scan stores its intermediate rows.",
       "A Cartesian product can create far more rows than either input.",
       "A million rows on each side creates a trillion candidate pairs.",
-      "Streaming avoids storing the whole intermediate, but still needs an efficient plan."
+      "Streaming handles pairs one at a time. A poor plan can still test too many pairs."
     ],
     "lecture-04-scene-03": [
-      "Without a next() request, this iterator plan does no row work.",
+      "This iterator plan starts reading rows when the caller asks for next().",
       "The caller requests the next row from Project.",
       "Project forwards that request to Select.",
       "Select asks Scan for candidate rows until one passes.",
@@ -314,7 +314,7 @@ window.CourseClarityCaptions = {
       "ada passes immediately: one examined row produces one result.",
       "ben fails and cyd passes: three examined rows produce two results.",
       "dee fails and eli passes: five examined rows produce three results.",
-      "Checking fay discovers exhaustion: six examined rows, three results."
+      "fay is the last row and fails the filter: six rows checked, three results returned."
     ],
     "lecture-04-scene-05": [
       "Every operator exposes the same Scan interface.",
@@ -360,7 +360,7 @@ window.CourseClarityCaptions = {
       "Once exhausted, next() remains false until an explicit rewind."
     ],
     "lecture-04-scene-12": [
-      "The product holds resources through both child scans.",
+      "Both input scans hold pins on the pages they are reading.",
       "Closing the root begins cleanup.",
       "Product forwards close() to both branches.",
       "Both child pins reach zero after cleanup."
@@ -370,7 +370,7 @@ window.CourseClarityCaptions = {
       "It forms 900 candidates before filtering.",
       "Local filters keep 60 students and one major before the product.",
       "The revised product forms only 60 candidate pairs.",
-      "Both plans return 20 rows; candidate work falls by a factor of 15."
+      "Both plans return 20 rows. The second plan tests 15 times fewer pairs."
     ],
     "lecture-04-scene-14": [
       "A filter can return a qualifying row before its input ends.",
@@ -385,22 +385,22 @@ window.CourseClarityCaptions = {
       "Project returns the requested student name and department."
     ],
     "lecture-04-scene-16": [
-      "Use the common interface to compose the plan.",
-      "Trace demand downward and qualifying rows upward.",
-      "Explain candidate work as well as results, then close every descendant scan."
+      "Connect the operators using their shared Scan interface.",
+      "Follow each next() call down the tree and each matching row back up.",
+      "Count the rows and pairs tested, then close the plan and all its input scans."
     ]
   },
   "5": {
     "lecture-05-scene-01": [
-      "Read the SQL request before execution reads any table rows.",
-      "Record fields, tables, and predicates in QueryData.",
-      "Create scan objects that can execute the described request."
+      "The parser reads the SQL statement before the engine reads any table rows.",
+      "Save the requested fields, tables, and filter in QueryData.",
+      "Build the scan objects that will run the query."
     ],
     "lecture-05-scene-02": [
       "The SELECT list becomes fields = [name].",
       "The FROM list becomes tables = [students].",
       "The WHERE expression becomes a predicate over GPA.",
-      "QueryData is a description of the request, not its result rows."
+      "QueryData describes which rows and fields the query asks for."
     ],
     "lecture-05-scene-03": [
       "The unquoted FROM and quoted 'from' have different roles.",
@@ -414,19 +414,19 @@ window.CourseClarityCaptions = {
     ],
     "lecture-05-scene-05": [
       "The root represents the SELECT statement.",
-      "Field and table children record what to read and where.",
-      "The WHERE clause contributes a comparison subtree.",
+      "The field and table nodes show which columns to read and which table holds them.",
+      "The WHERE branch shows the comparison that each row must pass.",
       "Field(gpa) reads a row value; Number(35) supplies a literal."
     ],
     "lecture-05-scene-06": [
       "The grammar requires a SELECT list and a FROM list.",
       "Square brackets mark an optional WHERE clause.",
       "The field list can be a star or named fields.",
-      "Braces allow repeated comma-and-field pairs."
+      "Braces mean you can add more fields, each preceded by a comma."
     ],
     "lecture-05-scene-07": [
       "The cursor marks the next unread token.",
-      "peek() observes the token without moving the cursor.",
+      "peek() reads the token without moving the cursor.",
       "match() checks its kind and value without consuming it.",
       "next() consumes select and advances the cursor to name.",
       "expect(ID) consumes name after verifying its token kind."
@@ -460,7 +460,7 @@ window.CourseClarityCaptions = {
       "Both plans answer the same query over the same data.",
       "Pairing first creates 300 × 3 = 900 candidates.",
       "Filtering first creates 60 × 1 = 60 candidates.",
-      "Both return 20 rows; fewer candidates alone do not prove the runtime ratio."
+      "Both return 20 rows. Time both queries to compare their actual runtimes."
     ],
     "lecture-05-scene-13": [
       "The grammar expects the FROM keyword at this position.",
@@ -468,10 +468,10 @@ window.CourseClarityCaptions = {
       "expect reports the mismatch without consuming the invalid token."
     ],
     "lecture-05-scene-14": [
-      "The question mark reserves one value supplied separately from SQL.",
+      "The question mark marks where a separately supplied value belongs.",
       "Binding 42 returns ada without changing the statement text.",
       "Binding 43 uses the same statement and returns ben.",
-      "SQL-looking parameter text stays one value and adds no new condition."
+      "A parameter containing SQL syntax is treated as a value, so it cannot add a condition."
     ],
     "lecture-05-scene-15": [
       "The scan tree is ready, but has not produced a row yet.",
@@ -482,14 +482,14 @@ window.CourseClarityCaptions = {
     "lecture-05-scene-16": [
       "Predict source visits and result counts for the same table with and without WHERE.",
       "Both scan-based queries visit all 300 table rows.",
-      "Selection returns sixty names after those rows are examined; fewer results do not prove a timing ratio."
+      "The filter keeps sixty names, but both queries check 300 rows. Measure their runtimes separately."
     ]
   },
   "7": {
     "money-disappears": [
-      "Establish the account total before a transfer: 60 + 90 = 150.",
+      "Before the transfer, the two accounts hold 60 + 90 = 150.",
       "Only the debit reaches storage, reducing the stored total to 100.",
-      "A crash leaves an incomplete transfer. What durable evidence could repair it?"
+      "The crash interrupts the transfer. What information must we have saved to undo the debit?"
     ],
     "transaction": [
       "A transaction groups the debit and credit into one unit.",
@@ -509,13 +509,13 @@ window.CourseClarityCaptions = {
     "write-ahead-logging": [
       "The lab’s undo record saves the value needed to reverse a change.",
       "Synchronize the recovery record before allowing the protected data write.",
-      "The ordering rule is durable log before durable changed page."
+      "The log record must reach storage before the changed page does."
     ],
     "a-complete-transfer": [
       "Start a transfer of 40 from A to B.",
       "Record A’s old value 100 before changing A to 60 in memory.",
       "Record B’s old value 50 before changing B to 90 in memory.",
-      "FORCE commit flushes the changed pages before durable COMMIT."
+      "With FORCE, save the changed pages before saving the COMMIT record."
     ],
     "crash-after-eviction": [
       "tx2 changes A from 60 to 10 in memory without committing.",
@@ -538,12 +538,12 @@ window.CourseClarityCaptions = {
     "repair-can-crash-too": [
       "Assign the logged old value 60 to repair the page.",
       "Another crash can interrupt that repair.",
-      "Repeating the assignment leaves 60 unchanged and permits safe completion."
+      "Writing 60 again leaves the correct value in place, so recovery can safely repeat this step."
     ],
     "two-policy-decisions": [
       "Eviction policy and commit policy are independent choices.",
-      "STEAL allows uncommitted data onto disk, creating an undo duty.",
-      "NO-FORCE can leave committed data off disk, creating a redo duty."
+      "STEAL allows uncommitted pages onto disk, so recovery may need to undo their changes.",
+      "NO-FORCE can leave committed changes in memory, so recovery may need to redo them."
     ],
     "four-recovery-duties": [
       "FORCE plus NO-STEAL needs neither update undo nor redo in this simplified model.",
@@ -552,14 +552,14 @@ window.CourseClarityCaptions = {
       "NO-FORCE plus STEAL needs both undo and redo."
     ],
     "commit-boundary": [
-      "Each policy has a required durability boundary before a safe reply.",
-      "FORCE waits for changed pages; NO-FORCE relies on durable recovery information.",
+      "What must reach storage before the database tells the client that commit succeeded?",
+      "FORCE waits for changed pages to reach storage. NO-FORCE needs a saved log that can redo them.",
       "NO-FORCE permits the data-page flush to occur after the commit reply."
     ],
     "recovery-at-scale": [
-      "Analysis determines transaction fate and the recovery starting state.",
-      "Redo uses logged progress to repeat necessary history.",
-      "Undo removes unfinished work under the production recovery protocol."
+      "Analysis finds which transactions finished and where recovery should begin.",
+      "Redo uses the log to restore changes that are missing from stored pages.",
+      "Undo reverses changes from transactions that did not finish."
     ],
     "place-the-crash": [
       "Before durable logging, the changed page must not have reached storage.",
@@ -569,8 +569,8 @@ window.CourseClarityCaptions = {
     ],
     "from-promise-to-code": [
       "Return to the write order: make recovery information durable first.",
-      "Only then allow the protected changed page to become durable.",
-      "Preserve completed work, undo unfinished work, and make the repair durable before completion."
+      "The changed page can reach storage once its log record is safely stored.",
+      "Keep committed changes. Undo unfinished ones and save the repaired pages before marking recovery complete."
     ]
   },
   "8": {
@@ -592,7 +592,7 @@ window.CourseClarityCaptions = {
     "serializability": [
       "Running T1 and then T2 produces 120.",
       "Running T2 and then T1 also produces 120.",
-      "A serializable interleaving must have the effect of a valid serial order."
+      "A serializable schedule has the same effect as some order of running transactions one at a time."
     ],
     "anomaly-gallery": [
       "A dirty read observes a value that its writer later rolls back.",
@@ -601,7 +601,7 @@ window.CourseClarityCaptions = {
     ],
     "shared-and-exclusive": [
       "Compatible shared locks let multiple readers access the row.",
-      "An exclusive lock conflicts with another transaction’s shared or exclusive hold."
+      "An exclusive lock cannot be granted while another transaction holds a shared or exclusive lock."
     ],
     "replay-with-locks": [
       "Both transactions obtain shared locks and read 100.",
@@ -611,17 +611,17 @@ window.CourseClarityCaptions = {
     "two-phases": [
       "The growing phase acquires locks without releasing them.",
       "After releasing a lock, basic two-phase locking acquires no new locks.",
-      "Holding the required locks until completion prevents premature access."
+      "Keeping the locks until the transaction finishes prevents others from using unfinished changes."
     ],
     "deadlock": [
       "T1 holds A while T2 holds B.",
       "Each waits for the resource held by the other, forming a cycle.",
-      "Aborting a victim releases resources so another transaction can proceed."
+      "Abort one transaction and release its locks so the other can continue."
     ],
     "protect-the-empty-space": [
       "Locking existing rows protects those rows only.",
       "A new value can enter the unlocked gap and change a range result.",
-      "Predicate or range protection must also cover relevant insertions."
+      "A range or predicate lock must also block inserts that would change the query’s result."
     ],
     "isolation-ladder": [
       "The standard minimum guarantees allow dirty reads at Read Uncommitted.",
@@ -649,7 +649,7 @@ window.CourseClarityCaptions = {
     "the-version-bill": [
       "An active reader still needs an old version.",
       "Cleanup must retain versions required by valid snapshots.",
-      "Once the reader ends, eligible obsolete versions can be reclaimed."
+      "After the reader finishes, cleanup can remove versions that no remaining snapshot needs."
     ],
     "write-skew": [
       "At least one of the two doctors must remain on call.",
@@ -662,21 +662,21 @@ window.CourseClarityCaptions = {
       "A transaction lock controls conflicting access across transaction operations."
     ],
     "exit-schedule": [
-      "Return to the deposits: two stale read-modify-write sequences can leave 110.",
+      "Both deposits read 100 and write 110, losing one deposit.",
       "Lock conflict handling prevents that invalid schedule from completing.",
-      "Snapshot boundaries control visible versions; a consistent snapshot can still permit write skew."
+      "A snapshot determines which versions a reader sees. Snapshot isolation can still allow write skew."
     ]
   },
   "9": {
     "same-answer-different-work": [
       "Both plans find students above the GPA cutoff in the selected department; keep duplicates.",
-      "Input-only filters reduce the pairs formed before the final join check.",
+      "Filter each input first so the join has fewer student-major pairs to test.",
       "Both return twenty rows, from 900 versus sixty candidates. Compare timing separately."
     ],
     "optimizer": [
       "Stored statistics summarize relation sizes and value distributions.",
       "The optimizer estimates costs for valid candidate plans.",
-      "It chooses an estimated good plan without executing every alternative."
+      "It chooses a plan using estimated costs, without running every alternative."
     ],
     "read-a-plan": [
       "Start at the student input and compare estimated with actual rows.",
@@ -694,13 +694,13 @@ window.CourseClarityCaptions = {
     ],
     "when-estimates-fail": [
       "A uniform estimate assumes values occur at similar frequencies.",
-      "Skew can concentrate far more rows on one value.",
-      "Correlated fields make independent selectivity multiplication misleading."
+      "Some values can occur far more often than others.",
+      "Multiplying selectivities can give a poor estimate when the fields are correlated."
     ],
     "price-the-work": [
       "Model 100,000 rows, 1,000 heap pages, and an index of height 3.",
       "At 0.1% selectivity, 100 rows match.",
-      "The model prices an index path at 103 accesses versus a scan’s 1,000.",
+      "The model predicts 103 block accesses for the index and 1,000 for the scan.",
       "At 2%, 2,003 modeled index accesses exceed a scan’s 1,000.",
       "The crossover is 997 matches under these assumptions only."
     ],
@@ -717,7 +717,7 @@ window.CourseClarityCaptions = {
     "join-order": [
       "Joining students to majors first produces 300 intermediate rows.",
       "Joining students to enrollments first produces 3,000 intermediate rows.",
-      "An unconnected first pair forms 9,000 rows before the final join condition."
+      "Joining two tables without a condition first creates 9,000 pairs for the final join to test."
     ],
     "search-without-enumerating-everything": [
       "Begin with access paths for individual relations.",
@@ -753,9 +753,9 @@ window.CourseClarityCaptions = {
       "Conflict protection must handle that concurrency problem separately."
     ],
     "exit-mechanism": [
-      "Explain how a storage mechanism obtains and preserves the needed bytes.",
-      "Explain how an execution choice changes candidate work while preserving the result.",
-      "Explain the failure a transaction mechanism prevents and the guarantee it supplies."
+      "Explain how the file manager reads a block and saves changes to it.",
+      "Explain how filtering before a join reduces the pairs tested while keeping the same result.",
+      "Explain which failure a transaction rule prevents and how the rule prevents it."
     ]
   },
   "10": {
@@ -789,19 +789,19 @@ window.CourseClarityCaptions = {
       "The query changes which values we need. That is why different layouts suit different jobs."
     ],
     "compression": [
-      "Repeated values contain redundant information.",
+      "Repeated values can take less space when stored as a value and a count.",
       "Encode twelve repetitions as a value and a count.",
       "Decoding reconstructs the original values exactly."
     ],
     "runs": [
-      "Twenty-four values form three consecutive equal-value runs.",
+      "These 24 values form three runs, each with eight copies of the same value.",
       "Store (1, 8), (2, 8), and (3, 8) as value-count pairs.",
       "This teaching byte model reduces the payload from 96 to 24 bytes."
     ],
     "dictionary-and-deltas": [
       "Repeated strings can share a small dictionary.",
       "Codes 0 and 1 stand for card and cash.",
-      "A smooth numeric sequence can use one starting value and repeated deltas."
+      "Store the first number, then each change from the previous number."
     ],
     "batches-through-the-pipeline": [
       "Microdb already has a pipeline: find a row, test it, and expose the requested fields.",
@@ -862,7 +862,7 @@ window.CourseClarityCaptions = {
     "performance-becomes-cost": [
       "Reading more data can increase both data movement and compute work.",
       "Projection reduces the columns the query needs.",
-      "Partition pruning can reduce the relevant files as well."
+      "Partition pruning skips files that cannot contain matching rows."
     ],
     "choose-the-shape": [
       "Return to a complete ride: its fields sit together in row storage.",
@@ -900,7 +900,7 @@ window.CourseClarityCaptions = {
   "11": {
     "meaning-becomes-geometry": [
       "Maya asks about crash recovery. The passage uses different words, so an exact string search fails.",
-      "Embed the question and the passage with compatible conventions so their vectors can be compared.",
+      "Use compatible embedding settings for the question and passage so their vectors can be compared.",
       "Nearby vectors suggest candidates. Open the passage to check whether it answers the question."
     ],
     "embedding": [
@@ -914,7 +914,7 @@ window.CourseClarityCaptions = {
       "Normalize both vectors to unit length so their dot product equals cosine similarity."
     ],
     "the-exact-baseline": [
-      "Maya keeps every stored vector in the exact-search candidate set.",
+      "Exact search compares Maya’s query with every stored vector.",
       "Score the first 24 of 72 vectors and retain the best candidates so far.",
       "Score the next 24; a better neighbor could still be among the unscored vectors.",
       "After all 72 scores, save the top neighbors as the reference for testing a shortcut."
@@ -926,7 +926,7 @@ window.CourseClarityCaptions = {
     ],
     "skipping-with-a-contract": [
       "Noor searches one region. A true neighbor in another region can be skipped.",
-      "Search another region to evaluate more candidates under the same similarity metric.",
+      "Search another region and score its vectors using the same similarity measure.",
       "Searching fewer candidates can miss true neighbors; measure that loss against exact search."
     ],
     "build-an-ivf-index": [
@@ -951,9 +951,9 @@ window.CourseClarityCaptions = {
     "navigate-a-graph": [
       "Noor tries a graph instead of centroid lists, starting at its upper-layer entry point.",
       "Follow an upper-layer connection toward the query.",
-      "A long connection crosses the space before local refinement.",
+      "A long link takes the search closer to the query before it follows shorter links.",
       "Descend to the denser lower layer.",
-      "Follow local links to refine the candidates.",
+      "Follow nearby links to look for closer vectors.",
       "Increase ef_search to explore more candidates, then measure the change in recall."
     ],
     "measure-a-miss": [
@@ -996,21 +996,21 @@ window.CourseClarityCaptions = {
     ],
     "retrieval-augmented-generation": [
       "Keep each chunk as a retrievable record with its source identity.",
-      "Represent those records with compatible embeddings.",
-      "Build the index during ingestion, before the question arrives.",
+      "Use compatible embedding settings to turn each chunk into a vector.",
+      "Build the index when you load the documents, before anyone asks a question.",
       "For each question, select a ranked set of candidate passages.",
       "Assemble their text and source IDs, then check the generated answer against that evidence."
     ],
     "three-places-for-knowledge": [
       "Trained weights can contain knowledge, but do not expose the current source pages.",
-      "Sending every page again uses context and processing work for every question.",
+      "Sending every page with every question uses more context space and processing time.",
       "Like an open-book answer, retrieval selects pages; the generator must still use them correctly."
     ],
     "design-the-retrieval-record": [
       "Inspect the source’s topics before deciding where one record ends.",
       "Keep a claim with the context needed to interpret it.",
       "A tiny fragment can return “it does this” while omitting what “it” means.",
-      "Overlap can keep boundary context, but adds duplicated text to the index and prompt."
+      "Overlapping chunks keep some surrounding text, but repeat it in the index and prompt."
     ],
     "keep-the-source-identity": [
       "The toy hit contains position 2, not the source ID wal. Predict which record it selects.",
@@ -1021,7 +1021,7 @@ window.CourseClarityCaptions = {
     ],
     "a-synonym-failure": [
       "The first wording retrieves the intended buffer-pool source.",
-      "Maya changes the wording; the same information need now gets different evidence.",
+      "Maya asks the same question in different words and gets different passages.",
       "Exact search already scored every chunk; more probes would not change those scores."
     ],
     "build-an-evaluation-set": [
@@ -1047,7 +1047,7 @@ window.CourseClarityCaptions = {
       "Ninety-word chunks tie those scores here. The fixture does not establish a universal chunk size."
     ],
     "context-has-a-budget": [
-      "Collect candidates before choosing the final evidence packet.",
+      "Retrieve candidate passages before choosing which ones to put in the prompt.",
       "Keep a useful subset that fits the context budget; extra text can add noise and cost.",
       "Keep source IDs beside the chosen text so the final claims can be checked."
     ],
@@ -1058,15 +1058,15 @@ window.CourseClarityCaptions = {
       "Rerank the merged set, then measure whether the extra stage fixes the observed failure."
     ],
     "filters-change-the-candidate-set": [
-      "The collection includes sources with different access scopes.",
-      "Constrain the evidence to sources the current user may access.",
+      "Some sources are available only to certain users.",
+      "Search only the sources this user is allowed to read.",
       "Find top-k within that allowed set; an unrestricted ranking is not an authorization check."
     ],
     "a-changed-source-invalidates-copies": [
-      "D7’s text and searchable representation begin at version 1.",
+      "D7’s source text, chunks, and vectors all start at version 1.",
       "Changing D7’s source text alone leaves its old chunks and vectors in the index.",
-      "Build the new source representation before making it searchable.",
-      "Switch compatible source and index versions together; a model change also needs re-embedding."
+      "Create new chunks and vectors from the updated text before using them in search.",
+      "Switch the source and index to the new version together. A new embedding model also needs new vectors."
     ],
     "failure-diagnosis-workshop": [
       "Missing evidence: inspect the corpus and retrieved source IDs first.",
@@ -1076,7 +1076,7 @@ window.CourseClarityCaptions = {
     "a-measurable-rag-system": [
       "Return to Maya’s question: record the source identity and version.",
       "Select the evidence and keep its ranking visible.",
-      "Check presence and rank against independently labeled sources.",
+      "Check whether the expected sources appear and how high they rank.",
       "Select passages, keep their source IDs, and check each answer claim against the cited text."
     ]
   },
@@ -1088,8 +1088,8 @@ window.CourseClarityCaptions = {
     ],
     "partitioning": [
       "Treat a key like a destination address: it determines the responsible worker.",
-      "Apply one compatible routing rule to every record.",
-      "Use that rule to find the owner of a point query; partitions divide responsibility."
+      "Use the same routing rule for every record.",
+      "For a lookup, apply the routing rule to its key to find the worker that holds it."
     ],
     "hash-routing": [
       "Keep the same twelve names while changing only the routing rule.",
@@ -1109,7 +1109,7 @@ window.CourseClarityCaptions = {
       "At 80%, one worker gets 6,600 rows. More workers do not divide that same-key group."
     ],
     "salt-and-combine": [
-      "The repeated key A concentrates its work on one owner.",
+      "Every record with key A goes to the same worker.",
       "Split it into four salted keys only if the operation supports correct partial results.",
       "Count each salted group separately.",
       "Combine 25 + 25 + 25 + 25 to recover A = 100; placement changes, the answer does not."
@@ -1120,8 +1120,8 @@ window.CourseClarityCaptions = {
       "Emit four (word, 1) pairs. Both occurrences of “the” must survive."
     ],
     "shuffle-manufactures-locality": [
-      "Local mappers have pairs for words whose other occurrences may be elsewhere.",
-      "Like sorting mail by destination, send equal keys to the same owner.",
+      "The same word can appear in records processed by different mappers.",
+      "Like sorting mail by destination, send pairs with the same word to the same worker.",
       "Group each key’s values at that owner before reduction; moving records costs work."
     ],
     "reduce-sees-the-complete-group": [
@@ -1144,9 +1144,9 @@ window.CourseClarityCaptions = {
       "An action triggers work; collect returns the small result to the driver."
     ],
     "stages-follow-dependencies": [
-      "Partition-local operations can stay in a narrow chain.",
+      "Operations on one partition can run together without moving data between workers.",
       "Grouping can require a shuffle across workers.",
-      "That dependency separates stages in this simple word-count plan.",
+      "The shuffle divides this word-count plan into stages.",
       "Schedule tasks within each stage; stage count is not simply the number of API calls."
     ],
     "lineage-rebuilds-lost-partitions": [
@@ -1156,20 +1156,20 @@ window.CourseClarityCaptions = {
       "Replay the required transformations on another worker. Lineage describes recomputation, not transaction recovery."
     ],
     "launch-before-waiting": [
-      "Waiting immediately after each launch serializes these independent calls.",
+      "Waiting for each call before starting the next makes the calls run one at a time.",
       "Submit the independent calls before waiting for their results.",
       "Concurrency is now possible; resources and overhead determine actual speedup.",
       "Actors keep explicit state across calls. Treat state reuse separately from the timing result."
     ],
     "choose-the-execution-shape": [
-      "A joined aggregation suggests a relational dataflow and its grouping dependencies.",
+      "Use a relational plan when the job joins tables and calculates totals for groups.",
       "Independent Python calls suggest tasks; state that persists across calls may suggest actors.",
       "If one machine meets the workload target, a cluster can add coordination and movement costs."
     ],
     "place-move-recover": [
       "Return to the count: choose owners using the key, not the sending worker.",
       "Move matching keys together or combine valid partial results.",
-      "Execute the dependencies, allowing independent work to overlap.",
+      "Run each step when its inputs are ready, and run independent steps at the same time.",
       "Plan retries using retained inputs and task information; preserve the same word totals."
     ]
   },
@@ -1180,20 +1180,20 @@ window.CourseClarityCaptions = {
       "DELETE at sequence 9 makes a current read return absent. Keep its tombstone while old values could reappear."
     ],
     "a-multidimensional-map": [
-      "Name the logical row before deciding where its bytes live.",
+      "Choose the row key before deciding where to store the row.",
       "The family and qualifier identify a column within that row.",
       "A timestamp names a cell version; the application interprets its byte value."
     ],
     "sparse-cells-and-versions": [
       "Store present cells without allocating every missing cell.",
       "Add a qualifier to one row without filling that column in every row.",
-      "Retain eligible timestamped versions; version storage is not free."
+      "Keep the versions required by the retention policy. Each version uses storage."
     ],
     "tablets-separate-placement-from-storage": [
       "Cut the sorted key space into contiguous tablet ranges.",
       "Assign each range to a serving tablet server.",
       "In the original Bigtable design, replicated storage holds the durable files.",
-      "Move serving responsibility without assuming all durable bytes must move with it."
+      "Another server can take over a tablet while its files stay in shared storage."
     ],
     "splitting-cannot-fix-a-moving-hotspot": [
       "Writes with distributed prefixes can reach several ranges.",
@@ -1209,7 +1209,7 @@ window.CourseClarityCaptions = {
     ],
     "the-memtable-stays-ordered": [
       "Entries arrive out of order: k8, k2, k5, k1, k7.",
-      "Keep an ordered notebook: the memtable prepares a sorted flush.",
+      "Like an ordered notebook, the memtable keeps entries sorted for writing to a file.",
       "A later k2 record changes its newest visible value without editing an old file."
     ],
     "freeze-a-sorted-file": [
@@ -1241,8 +1241,8 @@ window.CourseClarityCaptions = {
       "Begin with zero bits and predict an absent query.",
       "Insertion sets the selected bits for each key.",
       "Any required zero bit proves absence, so the file can be skipped.",
-      "All required bits set means only possible presence, not a found record.",
-      "Check the data to reject a false positive. The filter has ruled in work, not proved a match."
+      "If every required bit is 1, the key might be present. Search the file to find out.",
+      "A false positive sends us to a file that does not contain the key."
     ],
     "skip-files-then-find-a-block": [
       "Use a negative Bloom-filter result to rule out a file.",
@@ -1253,7 +1253,7 @@ window.CourseClarityCaptions = {
     "the-read-write-space-budget": [
       "A B+ tree modifies searchable pages as updates arrive.",
       "An LSM buffers entries and writes immutable sorted runs.",
-      "Compaction pays read and write work to merge those runs.",
+      "Compaction reads the sorted runs and writes their merged output.",
       "Choose from measured reads, writes, space, and durability needs, not the SQL or NoSQL label."
     ],
     "a-network-partition-forces-a-choice": [
@@ -1267,7 +1267,7 @@ window.CourseClarityCaptions = {
       "Return to k: sync its recovery log record before acknowledging a durable write.",
       "Buffer its ordered record, including a deletion when needed.",
       "Flush immutable sorted files and merge them without exposing obsolete records.",
-      "Log, buffer, flush, resolve. The newest visible record determines the read result."
+      "A read checks the memtable and stored files to find the newest visible record."
     ]
   },
   "15": {
@@ -1284,7 +1284,7 @@ window.CourseClarityCaptions = {
     "store-adjacency-at-write-time": [
       "A relational edge table names each source and destination.",
       "Resolve ada’s outgoing relationships to ben and cyd.",
-      "Store neighbor references for later expansion, paying maintenance work when edges change."
+      "Store references to neighbors so queries can follow them. Update those references when edges change."
     ],
     "one-hop": [
       "Start at ada and keep edge direction explicit.",
@@ -1316,25 +1316,25 @@ window.CourseClarityCaptions = {
     ],
     "find-the-shortest-path": [
       "Start a shortest-route search at ada.",
-      "Explore candidates while retaining the predecessor information needed for a route.",
+      "As the search visits each person, remember who led to them so we can rebuild the route.",
       "Reach fay under the search’s stopping rule.",
       "Reconstruct ada → cyd → eli → fay, a shortest route of three directed edges here."
     ],
     "a-supernode-is-skew-again": [
       "A small neighbor list is easy to locate and inspect.",
-      "A hub has thirty illustrated neighbors. Direct adjacency does not remove their expansion work.",
+      "Expanding all thirty neighbors still takes work, even with stored links.",
       "Inspecting only eight reduces work but changes coverage; this is a hypothetical query budget."
     ],
     "choose-a-graph-workload": [
       "A fixed shallow relationship can fit a relational join plan.",
-      "Variable-depth routes benefit from explicit path operators when their semantics fit.",
+      "Path operators can follow a variable number of edges when the query needs those routes.",
       "Whole-graph analytics is another workload; measure equivalent results and maintenance costs."
     ],
     "connections-augment-similarity": [
       "Return to RAG: retrieve nearby passages as starting evidence.",
       "Identify entities in those passages, such as WAL and buffers.",
       "Follow a justified relationship to find potentially connected evidence.",
-      "Combine the evidence while keeping source identity; graph links can introduce noise too."
+      "Keep the source ID with each added passage. Some linked passages may be irrelevant."
     ],
     "does-graph-expansion-help": [
       "Keep vector-only retrieval as the baseline for the same questions.",
@@ -1346,14 +1346,14 @@ window.CourseClarityCaptions = {
       "Ask which maintained structure lets a query skip work.",
       "Ask how lost data is restored: lineage replays transformations; WAL supports transaction recovery.",
       "Ask which plan turns the requested result into operations.",
-      "Ask who owns data and work, and where an uneven distribution can dominate."
+      "Ask which worker holds each partition and whether one worker has most of the work."
     ],
     "read-a-new-system": [
       "Find the blocks and caches in the unfamiliar system.",
       "Identify the access paths and the updates needed to maintain them.",
       "Trace an acknowledged write through its failure and recovery rules.",
-      "Read the execution dependencies for the question you care about.",
-      "Inspect partition ownership and skew before choosing a workload-specific benchmark."
+      "Follow the query’s steps and identify which inputs each step needs.",
+      "Check how data is divided among workers before choosing a benchmark for your workload."
     ],
     "finish-with-measured-decisions": [
       "State the opening question and its required result.",

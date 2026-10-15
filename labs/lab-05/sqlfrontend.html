@@ -50,7 +50,7 @@
   <div class="byline">Follows Lecture 5 (From SQL Text to Plan) · in class: 75 min · walk through · write queries · predict and measure · due Thu Oct 1 at class start</div>
 </header>
 
-<p class="lede">The parser and planner are supplied. Trace a SQL statement from its text to a parsed description and a tree of scan operators. Then predict and measure the row visits, candidate pairs, and predicate comparisons for six SQL queries. Explain those counts before interpreting elapsed time; no front-end implementation is required.</p>
+<p class="lede">You can now write SQL instead of building scan operators by hand. The supplied parser reads your statement, and the planner builds the scan tree that runs it. Follow that process, then write six queries and predict how many rows, pairs, and comparisons each plan will examine. Run the measurements to check your reasoning. You do not need to implement the parser or planner.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 9–10 ·
@@ -73,11 +73,11 @@
   <details><summary>Check your explanation</summary><p>No. The supplied scan-based plan visits all three hundred rows, then filters them. Parsing creates a description of the request; execution later asks scans for rows. Use the measured counters to identify the work.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
 
 <h2 id="try-it">Run SQL in the browser</h2>
 
-<p class="keep-in-present">Choose one statement and predict its result before running it. Then open the worked trace to distinguish the request’s tokens and description from the rows execution returns.</p>
+<p class="keep-in-present">Choose a statement and predict its result before running it. Then open the walkthrough to see how the parser describes the request and how execution produces the rows.</p>
 
 <p class="keep-in-present">The browser widget demonstrates the microSQL syntax supported by this lab. Use it to create tables, insert rows, and run queries before running the same syntax in the supplied Python engine.</p>
 
@@ -169,7 +169,7 @@ SELECT label FROM readings WHERE value &gt; 20;</code></pre>
 <!-- ============================================================ -->
 <h2 id="big-idea">Part 2 · Walk through the implementation <span class="part-time">25 min</span></h2>
 
-<p class="keep-in-present">Compare the front end to reading instructions before following them. The lexer recognizes tokens, the parser records the requested fields, tables, and conditions, and the planner builds scan operators. Compare the tokens, parsed query, and scan tree to find the first stage that differs from the SQL request.</p>
+<p class="keep-in-present">The front end reads the instructions before the engine follows them. The lexer splits SQL into tokens, the parser records the fields, tables, and conditions, and the planner builds scan operators. Follow the same query through all three stages and check that each still describes what you asked for.</p>
 <p class="keep-in-present">Open <a href="starter/sql_frontend.py"><code>sql_frontend.py</code></a> alongside this page. Everything below is supplied. Follow the token cursor, the data returned by each method, and the scan objects built from that data. No parser or planner code is required for this lab.</p>
 
 <h3 id="worked-example">Follow your query from text to a scan plan</h3>
@@ -250,7 +250,7 @@ value     := number | 'string' | field</code></pre>
 <div class="exercise"><span class="ex-label">Pause and predict</span><p>For <code>SELECT * FROM majors</code>, which branch runs, what are the two lists, and is a predicate built?</p><details><summary>Check your trace</summary><p>The star branch stores <code>fields=["*"]</code>; the table list is <code>["majors"]</code>; no WHERE means <code>predicate=None</code>.</p></details></div>
 
 <h3 id="parse-predicate">2 · AND repeats terms; each term distinguishes values from fields</h3>
-<p><code>_parse_predicate</code> reads at least one term, then collects any additional terms after AND. <code>Predicate(*terms)</code> packages a conjunction; it does not evaluate it during parsing.</p>
+<p><code>_parse_predicate</code> reads one condition, then collects any others joined by AND. <code>Predicate(*terms)</code> stores those conditions so execution can later check whether a row satisfies all of them.</p>
 <pre data-source-method="Parser._parse_predicate"><code class="language-python">def _parse_predicate(self) -&gt; Predicate:
     terms = [self._parse_term()]
     while self.lex.match(&quot;KEYWORD&quot;, &quot;and&quot;):
@@ -328,7 +328,7 @@ ProjectScan[name]
 <!-- ============================================================ -->
 <h2 id="build">Part 3 · Write queries and predict <span class="part-time">20 min</span></h2>
 
-<p class="keep-in-present">Keep your original predictions before running measurements. Identify the source rows, possible product pairs, predicate checks, and requested output cells for each query.</p>
+<p class="keep-in-present">Write down your predictions before running the measurements. For each query, count the table rows visited, pairs formed, conditions checked, and field values returned. Keep the original predictions so you can explain any surprises.</p>
 <p>Complete <a href="starter/queries.sql" download><code>queries.sql</code></a> from these English requests. Save your predictions in the <a href="starter/lab5_report.md" download>report template</a> <strong>before</strong> running the measurement script.</p>
 <p>The measurement fixture has 300 students and three majors. Student <code>i</code>, for <code>i=0…299</code>, has <code>sid=i</code>, <code>name='s'+str(i)</code>, <code>gpa=20+i%20</code>, and <code>mid=1+i%3</code>. The major rows are <code>(1,'ds'), (2,'stat'), (3,'econ')</code>. GPA 35 represents 3.5. Use the distinct join fields <code>students.mid</code> and <code>majors.mid2</code>; microSQL queries spell them as <code>mid</code> and <code>mid2</code>.</p>
 <table><thead><tr><th>Query</th><th>Write a SELECT that…</th></tr></thead><tbody>
@@ -342,12 +342,12 @@ ProjectScan[name]
 <p>For each, sketch the simple plan and predict table row visits, candidate pairs, returned rows, and output cells. For joins, also predict the early-filter plan below. Use the mechanics of <code>TableScan</code>, <code>SelectScan</code>, <code>ProductScan</code>, and <code>ProjectScan</code> to justify every prediction.</p>
 <div class="callout note"><span class="label">A model to reason from</span>
 <p>A sequential scan visits every row. A filter can reject rows after they are read. A product of <code>L</code> left rows and <code>R</code> right rows produces <code>L × R</code> candidate pairs. Projection changes the number of output fields. It does not provide an index or make the heap scan skip records.</p>
-<p>Separate those kinds of work. Fewer returned rows, fewer candidate pairs, fewer predicate comparisons, and fewer disk reads are different claims.</p></div>
+<p>A smaller result does not tell you how much work the query did. Count rows visited, pairs formed, and comparisons separately. None of those counters directly measures disk reads.</p></div>
 
 <!-- ============================================================ -->
 <h2 id="measure">Part 4 · Measure and explain <span class="part-time">25 min · finish as homework</span></h2>
 
-<p class="keep-in-present">Verify that both plans return the same rows including duplicates. Explain a counter difference from the plan before deciding whether the repeated timing samples support a speedup.</p>
+<p class="keep-in-present">Check that both plans return the same rows, including duplicates. If a counter differs, point to the operator that did more or less work. Then compare several timing samples to see whether the change also made the query faster.</p>
 <p>The supplied <a href="starter/measure_sql.py"><code>measure_sql.py</code></a> runs every SELECT through two plans, checks that the results match <em>including duplicates</em>, and reports counters and repeated timings. No implementation changes are needed.</p>
 <pre class="terminal"><code>python3 measure_sql.py
 python3 measure_sql.py --queries queries.sql --repeat 7
@@ -391,7 +391,7 @@ WHERE mid = mid2 AND gpa &gt; 35 AND dept = 'ds';</code></pre>
 <li><strong>J1 vs J3:</strong> predict how many students pass each GPA test. Which plan reduces its pair count as the filter becomes more selective?</li>
 <li><strong>300 vs 600 students:</strong> identify which counts double, then explain why elapsed time need not double exactly.</li>
 </ol>
-<p>Keep an incorrect prediction in your report and explain what changed your model. A strong explanation names the operator, counts its work, and then uses the measurement as evidence. “The database optimizes it” is insufficient for this engine: identify the actual plan and rewrite.</p>
+<p>Keep an incorrect prediction in your report and explain what you learned from the result. Name the operator, count the work it performs, and compare that count with the measurement. If you say the database optimized the query, show which filter moved and why that reduced the work.</p>
 
 <!-- ============================================================ -->
 <h2 id="explain-it">Explain what your result means</h2>
@@ -399,10 +399,10 @@ WHERE mid = mid2 AND gpa &gt; 35 AND dept = 'ds';</code></pre>
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
   <p>Moving valid filters before the product reduces pairs, while reversing two AND terms can change comparisons without changing pairs. How can both changes preserve the same result?</p>
-  <details><summary>Check your explanation</summary><p>Input-only filters remove rows before pairing. AND still requires every term to be true, but short-circuit evaluation can stop at the first false term. Placement changes candidates; term order changes checks within a candidate. Preserve duplicates and compare the same query under both plans.</p></details>
+  <details><summary>Check your explanation</summary><p>A filter that needs only one table can remove its nonmatching rows before pairing starts. Reordering AND conditions changes which comparison fails first, but a row must still pass every condition. One change reduces the pairs formed; the other can reduce the checks on each pair. Compare the same query under both plans, including duplicate rows.</p></details>
 </div>
 
-<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+<p>This question is for practice and class discussion. You do not need to submit an answer.</p>
 
 <h2 id="assignment">Assignment</h2>
 <p><strong>Submit four files to the Lab 5 programming assignment on Gradescope by Thursday Oct 1 at class start.</strong> The <a href="starter/lab5_report.md" download>report template</a> lists the questions and evidence.</p>
@@ -447,7 +447,7 @@ python3 measure_sql.py --queries queries.sql --students 600 --repeat 7 --json &g
 <h3>Does the smaller output prove the query is faster?</h3>
 <p>No. The engine may visit the same source rows and evaluate extra predicates to return fewer rows. Account for scanning, comparisons, pairing, and output work separately, then inspect repeated timings.</p>
 <h3>Why does reversing FROM sometimes help?</h3>
-<p>ProductScan restarts its right input for every left row. Reversing the inputs changes the repeated work, even when the Cartesian product size is unchanged. There is no ORDER BY here, so compare result multisets rather than row order. The measurement runner checks multiplicities too.</p>
+<p>ProductScan restarts its right input for every left row. Reversing the inputs changes that repeated work, even when the number of possible pairs stays the same. Without ORDER BY, rows may come back in a different order. Compare which rows appear and how many times each appears; the measurement runner checks both.</p>
 <h3>Can I use my own tables in the measurement runner?</h3>
 <p>The runner creates only the documented students and majors fixture in a temporary directory. Use <code>microdb.py</code> for your own persistent tables. For the required comparisons, keep the fixture fixed and change only the specified query or student count.</p>
 <h3>Why did my SQL file stop with a ParseError?</h3>
@@ -462,7 +462,7 @@ python3 measure_sql.py --queries queries.sql --students 600 --repeat 7 --json &g
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 <script src="query-trace-source.js?v=1"></script>
 <script src="query-trace.js?v=1"></script>
 <script src="query-walkthrough.js?v=2"></script>

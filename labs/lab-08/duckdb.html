@@ -66,7 +66,7 @@
   <p><a href="#pytorch"><strong>DuckDB + PyTorch →</strong></a> Train a neural network, then call it from a SQL query.</p>
 </nav>
 
-<p class="lede">Can a curve predict taxi fares better than a straight line? Run the two models on the same reserved rides, inspect an error pattern, and explain your comparison. DuckDB prepares and queries the data; PyTorch trains the neural network. The measured evidence, rather than model complexity, supports your conclusion.</p>
+<p class="lede">Can a neural network predict taxi fares more accurately than a straight line? Train both models, then compare their predictions on the same rides kept out of training. Look for groups where each model makes larger errors. DuckDB prepares the data and queries the results; PyTorch trains the network. Use the measured errors to explain which model worked better.</p>
 
 <div class="callout note" id="database-ml-intro">
   <span class="label">SQL and machine learning in one Python program</span>
@@ -83,8 +83,7 @@
 </div>
 
 <p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+Terms with a dotted underline have definitions. Hover or tap a term to read its explanation.
 </p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
@@ -99,7 +98,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <details><summary>Check your explanation</summary><p>One row is one sampled trip; distance is the input and fare is the target. Reserving November and December allows the supplied experiment to check predictions on rides the model did not train on. Evaluate both models on the same rides with the same metric.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: predict one state or count, run the relevant trace or check, then explain why the result follows before changing the code or experiment.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
 
 <h2 id="setup">Set up the local lab <span class="part-time">~10 min</span></h2>
 <p>Use Python 3.11 or later and clone the complete repository so the bundled taxi data is included. Install the packages before class if possible. Everything runs locally on your CPU; no cloud account or database server is needed.</p>
@@ -154,7 +153,7 @@ python gen_data.py</code></pre>
 <!-- ============================================================ -->
 <h2 id="going-further">Fit a straight-line model with SQL <span class="part-time">~10 min</span></h2>
 
-<p class="keep-in-present">Predict what one output row represents at each stage: a training ride, a saved coefficient pair, or a test ride with a prediction. Identify whether each plan operator reads rows, filters rows, selects fields, or pairs rows before revealing the explanation.</p>
+<p class="keep-in-present">At each stage, ask what one output row contains: a training ride, the model’s slope and intercept, or a test ride with a prediction. Before revealing the explanation, identify which operator reads, filters, selects, or pairs those rows.</p>
 
 <p class="keep-in-present"><strong>Train and apply a model in SQL.</strong> Run Lecture 10’s
 <a href="../../lectures/lecture-10/analytics.html#in-database-ml">in-database machine learning example</a>
@@ -257,7 +256,7 @@ are called <strong>query execution plans</strong>.</p>
     </div>
     <p id="plan-match-status" class="plan-match-status" role="status" aria-live="polite">Choose all four matches to enable the download.</p>
   </form>
-  <p>Download your matches, then include <code>plan_mapping.txt</code> with the <a href="#assignment">four files listed under “What to submit”</a>. The text file contains your selections; downloading it does not check whether they are correct.</p>
+  <p>Download your matches as <code>plan_mapping.txt</code>, one of the <a href="#assignment">four files listed under “What to submit”</a>. The file contains your selections; downloading it does not check whether they are correct.</p>
   <p class="viz-caption">If the controls are unavailable, download the <a href="starter/plan_mapping.txt" download>text template</a> and fill in one operator after each equals sign.</p>
 </section>
 
@@ -632,11 +631,11 @@ python explore_predictions.py --query five_plus.sql --predictions data/pytorch-t
 
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
-  <p>A changed model improves error on all reserved rides but makes the five-mile-and-longer group worse. Has it solved the model challenge? Which evidence should accompany your conclusion?</p>
-  <details><summary>Check your explanation</summary><p>The challenge asks about the five-mile-and-longer group, so inspect that group on the same reserved rides and metric. Keep the script, command, trial results, and chart consistent, and explain both improvement and remaining errors. Follow the existing Problem 1 and Problem 2 submission instructions below.</p></details>
+  <p>A changed model lowers the overall error but raises the error for rides of five miles or more. Has it met the model challenge? Which measurements would you use to explain your answer?</p>
+  <details><summary>Check your explanation</summary><p>No. The challenge asks you to improve predictions for rides of five miles or more. Compare that group’s MAE across the same rides for the line, starter network, and changed network. Make sure your script, command, results, and chart all describe the same trial. Follow the Problem 1 and Problem 2 submission instructions below.</p></details>
 </div>
 
-<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+<p>This question is for practice and class discussion. You do not need to submit an answer.</p>
 
 <h2 id="assignment">What to submit <span class="part-time">4 files · due Tue Oct 20</span></h2>
 <p class="keep-in-present"><strong>Submit Problems 1 and 2 together to the Lab 8 Gradescope assignment by Tuesday October 20 at class start.</strong> Upload these four files directly, using the exact filenames below. Do not upload a folder or ZIP.</p>
@@ -882,7 +881,7 @@ LIMIT 5;</code></pre>
 <!-- ============================================================ -->
 <h2 id="worked-example">Follow the intermediate rows in Q6</h2>
 
-<p class="keep-in-present">Predict monthly row count and totals before adding the window. The window keeps the monthly rows; its running frame adds prior monthly values without returning the original trip rows.</p>
+<p class="keep-in-present">First predict how many monthly rows the grouping produces and what each total will be. Then add the running window. It adds earlier months’ totals to the current month’s total while keeping one row per month.</p>
 
 <p>Use four toy trips to separate grouped totals from a running window. The example names the grouped result <code>monthly</code>, which makes it clear what one row represents at each stage.</p>
 <div data-teaching-trace="analytics">
@@ -951,7 +950,7 @@ con.execute("""
 <!-- ============================================================ -->
 <h2 id="measure">Compare file formats <span class="part-time">optional</span></h2>
 
-<p class="keep-in-present">For the optional storage experiment, predict which columns and files the query needs. Read the plan and timing together; the reference machine’s ratio is an example, not a required target.</p>
+<p class="keep-in-present">Before the optional storage experiment, predict which columns and files the query needs to read. Use the plan to explain the timing you measure. Your machine does not need to match the example speedup.</p>
 
 <p>Example run on an Apple-silicon laptop. Timings and plan formatting vary by machine, cache state, and DuckDB version:</p>
 
@@ -1061,12 +1060,12 @@ how useful that partitioning is for these queries (consider the two folder sizes
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../_shared/lab-base.js?v=14"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=3"></script>
 <script src="window-demo.js?v=1"></script>
 <script src="arrow-batches.js?v=1"></script>
 <script src="prediction-batch.js?v=1"></script>
 <script src="plan-matching.js?v=3"></script>
-<script src="../_shared/teaching-traces.js?v=3"></script>
+<script src="../_shared/teaching-traces.js?v=4"></script>
 <script src="../_shared/teaching-trace.js?v=1"></script>
 <script src="../_shared/paragraph-speech.js?v=5"></script>
 </body>

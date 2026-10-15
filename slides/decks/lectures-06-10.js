@@ -312,7 +312,7 @@ function analyticsTrainSQL(d,step) {
   if(step<3) {
     d.text('ml-data-heading',1020,207,'fare_features',25,P.ink,'middle',650);
     d.table('ml-input',825,230,[150,100,155],[['distance','fare','split'],[1,6,'train'],[2,6,'train'],[3,8,'train'],[4,12,'train'],[2.5,9,'test'],[4.5,11,'test']],{rowHeight:47,fontSize:25,highlightRows:step>0?[1,2,3,4]:[]});
-    d.text('ml-kept',1027,582,step===0?'4 training rides + 2 test rides':'Only the four train rows fit the line.',22,step===0?P.muted:P.orange);
+    d.text('ml-kept',1027,582,step===0?'4 training rides + 2 test rides':'Fit the line with these four rides.',22,step===0?P.muted:P.orange);
   } else {
     d.text('ml-data-heading',1020,207,'Saved table: fare_model',25,P.green,'middle',650);
     d.table('ml-model',825,257,[145,105,155],[['intercept','slope','training_rows'],[3,2,4]],{rowHeight:66,fontSize:22});
@@ -865,7 +865,7 @@ const plans = [
         "title": "Internal nodes route; leaves hold entries",
         "minutes": 3,
         "kind": "visual",
-        "notes": "The root gives directions and the leaves hold keys with row addresses.\n\nUse the GPA tree. At separator 36, smaller values go left and equal or larger values go right.\n\nReveal next. Both leaves have the same depth, and the link puts them in key order.\n\nThe leaf entry for 36 owns the RID list [(0, 4)]. The separator at the root has no RID list.\n\nAsk: Is matching the root separator enough to return a row?\n\nExpected answer: No. Follow the right child and find the RID list in the leaf.",
+        "notes": "The root gives directions and the leaves hold keys with row addresses.\n\nUse the GPA tree. At separator 36, smaller values go left and equal or larger values go right.\n\nReveal the next-leaf link. Both leaves are equally deep, and the link follows key order.\n\nThe leaf entry for 36 stores the RID list [(0, 4)]. The separator at the root has no RID list.\n\nAsk: Is matching the root separator enough to return a row?\n\nExpected answer: No. Follow the right child and find the RID list in the leaf.",
         "definition": "A B+ tree routes searches to sorted, linked leaves.",
         "id": "b-tree",
         "steps": 3,
@@ -882,8 +882,8 @@ const plans = [
           "idea": "The root gives directions and the leaves hold keys with row addresses.",
           "builds": [
             "Use the GPA tree. At separator 36, smaller values go left and equal or larger values go right.",
-            "Reveal next. Both leaves have the same depth, and the link puts them in key order.",
-            "The leaf entry for 36 owns the RID list [(0, 4)]. The separator at the root has no RID list."
+            "Reveal the next-leaf link. Both leaves are equally deep, and the link follows key order.",
+            "The leaf entry for 36 stores the RID list [(0, 4)]. The separator at the root has no RID list."
           ],
           "question": "Is matching the root separator enough to return a row?",
           "answer": "No. Follow the right child and find the RID list in the leaf."
@@ -963,7 +963,7 @@ const plans = [
         "title": "Full is allowed; overfull needs a split",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Insert 6 fits; insert 7 creates a fifth key and needs a split.\n\nShow root [3] over [1, 2] and [3, 4, 5]. Ask partners to draw the result of inserting 6.\n\nReveal [3, 4, 5, 6]. Four keys fit, so no split occurs. Now ask them to insert 7.\n\nSplit into [3, 4] and [5, 6, 7]. Copy 5 into the parent, which becomes [3, 5]. Height stays at two levels.\n\nAsk: Why does the tree not grow taller here?\n\nExpected answer: The parent has room for the new separator; it does not need a new parent.",
+        "notes": "Inserting 6 fills the leaf; inserting 7 adds a fifth key, so the leaf must split.\n\nShow root [3] over [1, 2] and [3, 4, 5]. Ask partners to draw the result of inserting 6.\n\nReveal [3, 4, 5, 6]. Four keys fit, so no split occurs. Now ask them to insert 7.\n\nSplit into [3, 4] and [5, 6, 7]. Copy 5 into the parent, which becomes [3, 5]. Height stays at two levels.\n\nAsk: Why does the tree not grow taller here?\n\nExpected answer: The parent has room for the new separator; it does not need a new parent.",
         "id": "predict-the-next-split",
         "steps": 3,
         "states": [
@@ -976,7 +976,7 @@ const plans = [
         ],
         "demo": "viz-btree",
         "teaching": {
-          "idea": "Insert 6 fits; insert 7 creates a fifth key and needs a split.",
+          "idea": "Inserting 6 fills the leaf; inserting 7 adds a fifth key, so the leaf must split.",
           "builds": [
             "Show root [3] over [1, 2] and [3, 4, 5]. Ask partners to draw the result of inserting 6.",
             "Reveal [3, 4, 5, 6]. Four keys fit, so no split occurs. Now ask them to insert 7.",
@@ -1098,7 +1098,7 @@ const plans = [
         "title": "Many matches can make a scan cheaper",
         "minutes": 5,
         "kind": "activity",
-        "notes": "The index benefit depends on the work needed to fetch its matching rows.\n\nFew matches mean only a few heap rows to fetch. The picture illustrates addresses, not measured disk reads.\n\nAs more rows match, the index returns more RIDs. Scattered addresses can revisit heap pages.\n\nAt 99% matches, a sequential scan may be cheaper. Locality, cached pages, and covered columns can change the choice.\n\nAsk: Does an available index have to be used?\n\nExpected answer: No. The planner can choose a scan when it estimates less work.",
+        "notes": "An index saves work only if finding and fetching its matches is cheaper than a scan.\n\nFew matches mean only a few heap rows to fetch. The picture illustrates addresses, not measured disk reads.\n\nAs more rows match, the index returns more RIDs. Scattered addresses can revisit heap pages.\n\nAt 99% matches, a sequential scan may be cheaper. Locality, cached pages, and covered columns can change the choice.\n\nAsk: Does an available index have to be used?\n\nExpected answer: No. The planner can choose a scan when it estimates less work.",
         "id": "when-scanning-wins",
         "steps": 3,
         "states": [
@@ -1110,7 +1110,7 @@ const plans = [
           "lectures/lecture-06/btrees.html#costs"
         ],
         "teaching": {
-          "idea": "The index benefit depends on the work needed to fetch its matching rows.",
+          "idea": "An index saves work only if finding and fetching its matches is cheaper than a scan.",
           "builds": [
             "Few matches mean only a few heap rows to fetch. The picture illustrates addresses, not measured disk reads.",
             "As more rows match, the index returns more RIDs. Scattered addresses can revisit heap pages.",
@@ -1219,7 +1219,7 @@ const plans = [
         "title": "Two kinds of unfinished",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Let students predict the survivors before each interruption. Process termination leaves the OS cache alive; power failure does not. An application write reaching the OS is not the same as an acknowledged fsync. The lab uses abrupt process termination, not arbitrary power-loss or torn-write testing. This distinction is essential before showing the scripted bank recovery; avoid implying that kill -9 proves all hardware failure behavior.",
+        "notes": "Before each failure, ask which copies of the data will survive. Process termination leaves the OS cache alive; power failure does not. An application write reaching the OS is not the same as an acknowledged fsync. The lab uses abrupt process termination, not arbitrary power-loss or torn-write testing. This distinction is essential before showing the scripted bank recovery; avoid implying that kill -9 proves all hardware failure behavior.",
         "id": "two-kinds-of-unfinished",
         "steps": 3,
         "states": [
@@ -1235,7 +1235,7 @@ const plans = [
         "title": "Durable first",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask students what must be durable before a changed data page is flushed. The required ordering is durable recovery information before the associated changed data page can become durable. The lab enforces a stronger simple rule by syncing each log append before changing the buffer page. Production engines can batch log writes, but must make the log durable through the page’s latest logged change before flushing that page. A log sequence number (LSN) identifies that change.",
+        "notes": "Ask students what must be durable before a changed data page is flushed. The recovery record must reach durable storage before the changed page does. The lab enforces a stronger simple rule by syncing each log append before changing the buffer page. Production engines can batch log writes. Before flushing a page, they must make every log record through that page’s latest change durable. A log sequence number (LSN) identifies that change.",
         "id": "durable-first",
         "steps": 3,
         "states": [
@@ -1287,7 +1287,7 @@ const plans = [
         "title": "Crash after eviction",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Let students choose what they would preserve or restore. The second transaction begins a 50 transfer but only its debit has reached disk. The old value 60 is already durable in its SET record. Ask whether a dirty-page eviction implicitly commits the transaction. Expected: no. Point out why buffer management cannot infer logical completion from a page write. Do not run recovery until the class has identified tx2 as unfinished. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Let students choose what they would preserve or restore. The second transaction begins a 50 transfer but only its debit has reached disk. The old value 60 is already durable in its SET record. Ask whether a dirty-page eviction implicitly commits the transaction. Expected: no. Writing one page does not tell the buffer manager whether the transaction has finished. Do not run recovery until the class has identified tx2 as unfinished. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
         "id": "crash-after-eviction",
         "steps": 3,
         "states": [
@@ -1304,7 +1304,7 @@ const plans = [
         "title": "Read the log backward",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Walk the reasoning, not just the result. A backward scan encounters completion records before earlier writes from the same transaction. It restores records for unfinished transactions and skips finished ones. Ask why tx1 must not return to 100/50. Expected: its commit is durable and the FORCE policy placed its data on disk first. Repaired pages must become durable before the recovery completion receipt is synced. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Explain why each log record is restored or skipped. A backward scan encounters completion records before earlier writes from the same transaction. It restores records for unfinished transactions and skips finished ones. Ask why tx1 must not return to 100/50. Expected: its commit is durable and the FORCE policy placed its data on disk first. Flush the repaired pages before saving the record that says recovery is complete. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
         "id": "read-the-log-backward",
         "steps": 3,
         "states": [
@@ -1321,7 +1321,7 @@ const plans = [
         "title": "Two writes, reverse undo",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask partners to predict both replay directions before revealing the values. The reverse order is not arbitrary: each before-image reverses the most recent remaining change. Tie the exercise directly to rollback and records_backwards. Recovery must also identify transaction fate and obey locking assumptions; this toy demonstration concerns a serial stream of field changes. Avoid presenting before-image assignment alone as a complete general recovery algorithm.",
+        "notes": "Ask partners to predict both replay directions before revealing the values. Each saved old value undoes one change. Start with the latest change and work backward. Tie the exercise directly to rollback and records_backwards. Recovery must also determine which transactions finished and follow the locking rules; this toy demonstration concerns a serial stream of field changes. Avoid presenting before-image assignment alone as a complete general recovery algorithm.",
         "id": "two-writes-reverse-undo",
         "steps": 3,
         "states": [
@@ -1337,7 +1337,7 @@ const plans = [
         "title": "Repair can crash too",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define idempotence with assignment rather than subtraction. Ask why writing a ROLLBACK receipt before flushing repaired pages is unsafe: the next restart could skip a repair that never became durable. In the lab, repeated full recovery passes reach the same repaired state under its assumptions. Production ARIES adds compensation records and more bookkeeping for robust partial-progress recovery.",
+        "notes": "Define idempotence with assignment rather than subtraction. Ask what happens if ROLLBACK reaches disk before the repaired pages: the next restart could skip changes that still need undoing. In the lab, repeated full recovery passes reach the same repaired state under its assumptions. Production ARIES adds compensation records and more bookkeeping for robust partial-progress recovery.",
         "definition": "Idempotence means repeating an operation has the same effect as performing it once.",
         "id": "repair-can-crash-too",
         "steps": 3,
@@ -1355,7 +1355,7 @@ const plans = [
         "title": "Two policy decisions",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Introduce STEAL and FORCE orally, then use the axes to derive consequences before naming quadrants. STEAL admits uncommitted data on disk, so undo support is needed in this simple in-place model. NO-FORCE admits committed changes whose data pages are missing, so redo support is needed. Keep buffer eviction policy and transaction acknowledgement policy visibly separate; students commonly collapse them into one choice.",
+        "notes": "Introduce STEAL and FORCE orally, then use the axes to derive consequences before naming quadrants. STEAL lets pages reach disk before their transaction commits, so this model needs undo. NO-FORCE lets a transaction commit before its changed pages reach disk, so this model needs redo. Treat page eviction and commit acknowledgement as separate decisions.",
         "id": "two-policy-decisions",
         "steps": 3,
         "states": [
@@ -1389,7 +1389,7 @@ const plans = [
         "title": "Commit boundary",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask where acknowledgement may appear in each lane. Microdb commits can require several syncs and dirty-page flushes. A NO-FORCE engine can make commit wait on durable log progress and defer page writes, with group commit sharing the cost. If the connection fails after durability but before acknowledgement, the client may not know the outcome. Treat this as a normal distributed acknowledgement ambiguity, not evidence that commit failed.",
+        "notes": "Ask where acknowledgement may appear in each lane. Microdb commits can require several syncs and dirty-page flushes. A NO-FORCE engine can acknowledge a commit once its log is durable, then write the pages later. Group commit lets transactions share a log flush. If the connection fails after durability but before acknowledgement, the client may not know the outcome. A missing reply leaves the client unsure; it does not prove that the commit failed.",
         "id": "commit-boundary",
         "steps": 3,
         "states": [
@@ -1405,13 +1405,13 @@ const plans = [
         "title": "Recovery at scale",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Provide the bridge to production without teaching ARIES as merely three generic loops. LSNs track progress; checkpoints record enough state to bound work; redo may repeat history and undo removes losers. PostgreSQL uses WAL redo with MVCC visibility instead of the exact physical-undo lab design. A simple lab checkpoint is safe only after unfinished transactions are resolved and relevant data is durable; an arbitrary timestamp is not a safe cutoff.",
+        "notes": "Provide the bridge to production without teaching ARIES as merely three generic loops. LSNs track logged changes. Checkpoints save state to reduce restart work. Redo may replay changes, then undo reverses unfinished transactions. PostgreSQL uses WAL redo with MVCC visibility instead of the exact physical-undo lab design. A simple lab checkpoint is safe only after unfinished transactions are resolved and relevant data is durable; an arbitrary timestamp is not a safe cutoff.",
         "id": "recovery-at-scale",
         "steps": 3,
         "states": [
-          "Analyze transaction fate",
+          "Find which transactions finished",
           "Redo progress",
-          "Undo losers"
+          "Undo unfinished transactions"
         ],
         "sources": [
           "lectures/lecture-07/wal.html"
@@ -1478,7 +1478,7 @@ const plans = [
         "title": "Two deposits",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Ask students what should happen after both deposits complete. No crash or durability failure will occur in this example. Each individual read-compute-write sequence is correct in isolation. The mystery is how the combined execution can reach 110. Keep expected and actual balances spatially distinct so the later discrepancy reads immediately without a paragraph.",
+        "notes": "Ask students what should happen after both deposits complete. No crash or durability failure will occur in this example. Each individual read-compute-write sequence is correct in isolation. The mystery is how the combined execution can reach 110. Keep the expected and actual balances apart so students can see the lost deposit.",
         "id": "two-deposits",
         "steps": 3,
         "states": [
@@ -1494,7 +1494,7 @@ const plans = [
         "title": "Schedule the failure",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Let two volunteers alternate the buttons and predict each shared balance. Both read 100 and compute 110; the second write overwrites the first result. Both commit and final A is 110. Ask whether a WAL can infer the missing intended deposit. Expected: recovery preserves committed actions; it cannot repair an incorrect concurrent schedule from business intent. Reuse lecture-08/styles.css and viz.js; consider hiding verbose message and stats elements. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Let two volunteers alternate the buttons and predict each shared balance. Both read 100 and compute 110; the second write overwrites the first result. Both commit and final A is 110. Ask whether a WAL can infer the missing intended deposit. Expected: recovery preserves committed writes; it cannot infer the missing deposit that the users intended. Reuse lecture-08/styles.css and viz.js; consider hiding verbose message and stats elements. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
         "id": "schedule-the-failure",
         "steps": 4,
         "states": [
@@ -1512,7 +1512,7 @@ const plans = [
         "title": "Serializability",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Introduce serializability as equivalence to some serial execution, not a requirement to execute literally one transaction at a time. Ask whether every interleaving is bad. Expected: no; many preserve the same dependencies and result. The deposit example is commutative, so use dependency arrows to emphasize why this property is more general than comparing one number.",
+        "notes": "Introduce serializability as equivalence to some serial execution, not a requirement to execute literally one transaction at a time. Ask whether every interleaving is bad. Expected: no; many preserve the same dependencies and result. Either deposit can go first and still give 120. Use dependency arrows to show that serializability concerns all reads and writes, not just the final balance.",
         "definition": "A serializable execution is equivalent to some serial order of its transactions.",
         "id": "serializability",
         "steps": 3,
@@ -1612,7 +1612,7 @@ const plans = [
         "title": "Protect the empty space",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Use the phantom example to show why locking existing rows does not protect a predicate’s future members. Expected fix in a locking design: protect a range or equivalent predicate, rather than an absent row. Serializable MVCC systems may detect dangerous read/write dependencies instead and retry. This scene prevents the false inference that basic per-row S/X rules alone solve every anomaly.",
+        "notes": "Use the phantom example to show that locking existing rows does not stop a new row from matching the same condition. In a locking design, protect the matching range or condition, including space where new rows could appear. Serializable MVCC systems may detect dangerous read/write dependencies instead and retry. This scene prevents the false inference that basic per-row S/X rules alone solve every anomaly.",
         "id": "protect-the-empty-space",
         "steps": 3,
         "states": [
@@ -1646,7 +1646,7 @@ const plans = [
         "title": "Versions instead of waiting",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define MVCC once. Ordinary snapshot reads can coexist with updates because they can use different versions. This does not make writers independent of writers, nor eliminate all blocking, explicit locking reads or schema locks. Ask what new resource pays for this concurrency. Expected: version storage and cleanup, plus visibility bookkeeping.",
+        "notes": "Define MVCC once. Ordinary snapshot reads can coexist with updates because they can use different versions. This does not make writers independent of writers, nor eliminate all blocking, explicit locking reads or schema locks. Ask what extra work MVCC needs. Expected: store and clean up versions, and track which version each reader may see.",
         "definition": "MVCC keeps row versions so each reader can see the version allowed by its snapshot.",
         "id": "versions-instead-of-waiting",
         "steps": 3,
@@ -1697,7 +1697,7 @@ const plans = [
         "title": "The version bill",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Explain why old versions cannot be reclaimed while a valid snapshot may still need them. Ask why an idle transaction can grow a table even without producing queries. Expected: its snapshot can hold back cleanup. MVCC moves work into version management; it does not erase the cost of isolation. Distinguish VACUUM reclamation from the immediate slot reuse in the teaching record manager.",
+        "notes": "Explain why old versions cannot be reclaimed while a valid snapshot may still need them. Ask why an idle transaction can grow a table even without producing queries. Expected: other transactions add versions, while its old snapshot prevents cleanup. MVCC moves work into version management; it does not erase the cost of isolation. Distinguish VACUUM reclamation from the immediate slot reuse in the teaching record manager.",
         "id": "the-version-bill",
         "steps": 3,
         "states": [
@@ -1713,7 +1713,7 @@ const plans = [
         "title": "Write skew",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Give pairs thirty seconds to find the missing conflict. Expected: they wrote different rows, so no direct write/write conflict stopped them, but the joint invariant fails. In any serial execution the second doctor would see nobody else on call and remain. Serializable Snapshot Isolation can detect dangerous dependency patterns and abort a transaction; snapshot isolation alone does not guarantee serializability.",
+        "notes": "Give pairs thirty seconds to find the missing conflict. Expected: they wrote different rows, so no direct write/write conflict stopped them, but both doctors leave, breaking the rule that someone must stay on call. In any serial execution the second doctor would see nobody else on call and remain. Serializable Snapshot Isolation can detect dangerous dependency patterns and abort a transaction; snapshot isolation alone does not guarantee serializability.",
         "id": "write-skew",
         "steps": 3,
         "states": [
@@ -1770,7 +1770,7 @@ const plans = [
         "title": "Same answer, different work",
         "minutes": 4,
         "kind": "visual",
-        "notes": "No quiz is scheduled today. Ask why two equivalent plans can do radically different amounts of intermediate work. Reuse the Lab 4 setting and make both predicates explicit orally: gpa > 35 and dept = cs, plus the join condition. The pushed plan produces 60 candidate pairs, not automatically 60 final rows. The last twenty minutes are reserved for an optional engine synthesis.",
+        "notes": "No quiz is scheduled today. Ask why two plans that return the same rows can examine very different numbers of candidate pairs. Reuse the Lab 4 setting and make both predicates explicit orally: gpa > 35 and dept = cs, plus the join condition. The pushed plan produces 60 candidate pairs, not automatically 60 final rows. The last twenty minutes are reserved for an optional engine synthesis.",
         "id": "same-answer-different-work",
         "steps": 3,
         "states": [
@@ -1786,7 +1786,7 @@ const plans = [
         "title": "Optimizer",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define the optimizer and separate correctness from efficiency. The supplied Lab 5 planner translates a correct query into a fixed shape; optimization searches alternatives. It estimates candidate cost rather than executing every plan. Estimates, physical properties and a limited search budget all affect the choice. Ask which plan transformations students measured in Lab 5 and what an automatic optimizer must now choose.",
+        "notes": "Define the optimizer and separate correctness from efficiency. The supplied Lab 5 planner translates a correct query into a fixed shape; optimization searches alternatives. It estimates each plan’s cost without running every alternative. Estimates, physical properties and a limited search budget all affect the choice. Ask which plan transformations students measured in Lab 5 and what an automatic optimizer must now choose.",
         "definition": "A query optimizer chooses an execution plan using estimated costs and data statistics.",
         "id": "optimizer",
         "steps": 3,
@@ -1820,7 +1820,7 @@ const plans = [
         "title": "Selectivity",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define the fraction kept. Smaller selectivity fractions mean fewer surviving rows, while people sometimes say a predicate is highly selective to mean it keeps few rows. Ask students to identify N and survivors rather than memorize the phrase. Row estimates feed the costs of later operators, so errors near the bottom can multiply above.",
+        "notes": "Define the fraction kept. Smaller selectivity fractions mean fewer surviving rows, while people sometimes say a predicate is highly selective to mean it keeps few rows. Ask students to identify N and survivors rather than memorize the phrase. Later operators use these row estimates to predict their own work, so an early error can distort the rest of the plan.",
         "definition": "Selectivity is the fraction of rows a predicate keeps.",
         "id": "selectivity",
         "steps": 2,
@@ -1935,7 +1935,7 @@ const plans = [
         "title": "Search without enumerating everything",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Explain dynamic programming as reusable subproblems, not trying every complete tree. Physical properties such as sorted output can justify retaining multiple plans for the same subset; the cheapest local raw cost is not always the only useful survivor. The 10!×Catalan(9) count is about 17.6 billion labeled binary join trees under one counting convention, not the number every optimizer actually enumerates. Larger joins often trigger restricted search or heuristics.",
+        "notes": "Explain dynamic programming by showing how a plan for two tables can be reused when planning a larger join. Physical properties such as sorted output can justify retaining multiple plans for the same subset; a slightly more expensive plan may be worth keeping if its sorted output saves work later. The 10!×Catalan(9) count is about 17.6 billion labeled binary join trees under one counting convention, not the number every optimizer actually enumerates. Larger joins often trigger restricted search or heuristics.",
         "id": "search-without-enumerating-everything",
         "steps": 3,
         "states": [
@@ -1951,7 +1951,7 @@ const plans = [
         "title": "Diagnose, then review",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Give students one minute to identify the earliest major divergence rather than blaming the slowest top node. Expected investigation: data distribution, stale or correlated statistics, row-width/memory assumptions and alternative plans. Explain why measuring actual behavior matters. Close the optimizer segment by having the class name statistics, costing and search. At elapsed minute 40 transition explicitly to an optional twenty-minute engine synthesis.",
+        "notes": "Give students one minute to find the first large gap between estimated and actual row counts. Expected investigation: data distribution, stale or correlated statistics, row-width/memory assumptions and alternative plans. Explain why measuring actual behavior matters. Close the optimizer segment by having the class name statistics, costing and search. At elapsed minute 40 transition explicitly to an optional twenty-minute engine synthesis.",
         "id": "diagnose-then-review",
         "steps": 3,
         "states": [
@@ -1999,7 +1999,7 @@ const plans = [
         "title": "Review: SQL and indexes",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask what each stage accepts and produces, why parsing a query does not optimize it, and why the copied separator must remain in a leaf. Expected distinctions: tokens versus syntax structure versus query description versus executable scans; leaf copy-up versus internal move-up; one descent followed by leaf traversal. Follow with a broad-selectivity predicate to check that students do not insist every available index must be used.",
+        "notes": "Ask what each stage accepts and produces, why parsing a query does not optimize it, and why the copied separator must remain in a leaf. Expected distinctions: tokens versus syntax structure versus query description versus executable scans; leaf copy-up versus internal move-up; one descent followed by leaf traversal. Then ask about a filter that keeps most rows: would the index still be worth using?",
         "id": "review-sql-and-indexes",
         "steps": 3,
         "states": [
@@ -2167,7 +2167,7 @@ const plans = [
         "title": "Lossless compression",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define lossless compression and ask why it can make scans faster despite decode work. Expected: fewer bytes to fetch can outweigh decompression cost. The pattern and type distribution drive suitable encoding choices; no fixed compression factor is guaranteed. Distinguish encoding from a general-purpose compression codec, while noting they can combine.",
+        "notes": "Define lossless compression and ask why it can make scans faster despite decode work. Expected: fewer bytes to fetch can outweigh decompression cost. Repeated values and data types help determine which encoding works well; no fixed compression factor is guaranteed. Distinguish encoding from a general-purpose compression codec, while noting they can combine.",
         "definition": "Lossless compression stores the same information using fewer bytes.",
         "id": "compression",
         "steps": 3,
@@ -2296,7 +2296,7 @@ const plans = [
         "title": "An engine inside the process",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Explain the embedded deployment: no separate database server is required for the lab. DuckDB provides analytical SQL over files and in-process dataframes. It supports transactions and WAL and can have concurrent writers within one process; cross-process write coordination differs from a client-server database. Pandas and DuckDB can compose. Keep code invocation details in presenter notes so the audience sees the dataflow.",
+        "notes": "Explain the embedded deployment: no separate database server is required for the lab. DuckDB provides analytical SQL over files and in-process dataframes. It supports transactions and WAL and can have concurrent writers within one process; cross-process write coordination differs from a client-server database. DuckDB can query data held in a Pandas dataframe. Keep code invocation details in presenter notes so the audience sees the dataflow.",
         "id": "an-engine-inside-the-process",
         "steps": 3,
         "states": [
@@ -2454,7 +2454,7 @@ const plans = [
         "title": "Choose the shape",
         "minutes": 1,
         "kind": "recap",
-        "notes": "Have students choose the access shape and narrate the savings: fewer unrelated columns, encodings, batches and skipping. Lab 8 uses a fixed sample of real 2024 NYC taxi trips to compare SQL and neural-network fare models and investigate test errors; project proposals are due Thursday October 29. Direct setup details to notes or the lab link. Next lecture asks what happens when the column stores an embedding and the query asks for similarity. Quizzes follow the revised schedule; this material also supports optional review. Add one final retrieval question: which stage learns coefficients and which reuses them? Expected: training aggregates learn them; inference applies the saved model without fitting again.",
+        "notes": "Ask how the plan saves work: skip unused columns and rows, compress values, and process rows in batches. Lab 8 uses a fixed sample of real 2024 NYC taxi trips to compare SQL and neural-network fare models and investigate test errors; project proposals are due Thursday October 29. Direct setup details to notes or the lab link. Next lecture asks what happens when the column stores an embedding and the query asks for similarity. Quizzes follow the revised schedule; this material also supports optional review. Add one final retrieval question: which stage learns coefficients and which reuses them? Expected: training aggregates learn them; inference applies the saved model without fitting again.",
         "id": "choose-the-shape",
         "steps": 3,
         "states": [
