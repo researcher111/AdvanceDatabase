@@ -1,6 +1,8 @@
 # Guides for agents
 
-Read these files when revising lecture writing, slide explanations, presenter notes, or teaching videos in this repository.
+Read these files before creating or revising readings, slides, presenter notes, labs, interactive explanations, reviews, discovery sessions, or teaching videos.
+
+**Use CLEAR and ASD-STE100 style by default.** CLEAR organizes the explanation. ASD-STE100 style makes the wording direct and consistent. The [CLEAR guide](clear-explanations.md#default-wording-asd-ste100-style) contains the sentence rules, examples, preservation rules, and review checks. Apply both approaches unless the user requests a different style.
 
 Start with [Explain complex ideas with CLEAR](clear-explanations.md). It includes Calibrate, Link, Envision, Abstract, and Repeat, a practical writing workflow, a reusable template for another video, and applications across all fifteen lectures and eleven labs. Use [Storytelling for technical lectures](lecture-storytelling.md) to give the lesson a concrete task, visible actions, and a causal sequence.
 

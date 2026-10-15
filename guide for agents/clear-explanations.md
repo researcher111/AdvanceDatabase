@@ -1,6 +1,10 @@
 # Explain complex ideas with CLEAR
 
-Use this file whenever you turn a video, transcript, or technical topic into a lecture, slide deck, tutorial, or explanation. Begin with what the audience knows, connect the new idea to something familiar, show the mechanism, state its essential meaning, and revisit that meaning at the end.
+Use this file when creating or revising teaching material. This includes readings, slides, presenter notes, labs, interactive explanations, reviews, and discovery sessions. Apply it when adapting a video or transcript too.
+
+**Use CLEAR and ASD-STE100 style by default for all future teaching material in this repository.** CLEAR organizes the explanation. The ASD-STE100 style rules below guide its wording. Use a different style only when the user requests it.
+
+Begin with what the audience knows. Connect the new idea to something familiar. Show the mechanism, state its essential meaning, and revisit that meaning at the end.
 
 ## Source and saved transcript
 
@@ -18,6 +22,41 @@ The primary reference is Vinh Giang’s [How to Explain Anything To Anyone](http
 
 The opening describes how unnecessary complexity can leave listeners pretending to understand. Around [10:50](https://www.youtube.com/watch?v=Sqh6rt1hN2A&t=650s), Giang connects effective teaching with the ability to pass knowledge to other people. These are reasons to design for understanding rather than for the appearance of expertise.
 
+## Default wording: ASD-STE100 style
+
+Use these rules during each CLEAR step, including the first draft and later revisions. Apply them to visible text, teaching cues, glossary entries, and interactive messages.
+
+The rules adapt [ASD-STE100 Simplified Technical English, Issue 9](https://www.asd-ste100.org/assets/files/ASD-STE100_ISSUE9.pdf) for this course. See the [official overview](https://www.asd-ste100.org/about_STE.html) for the standard's purpose. This course adaptation does not establish full compliance with the standard or its approved vocabulary.
+
+### Write direct sentences
+
+- Limit an instruction sentence to **20 words**. Give one instruction per sentence, except when actions must occur together.
+- Limit a descriptive sentence to **25 words**. Keep one main idea in each sentence.
+- Use the imperative for instructions: “Count the returned IDs.” Put a necessary condition before the instruction.
+- Prefer active voice. Name the actor when the reader needs to know who performs the action.
+- Use familiar words. Define a technical term or acronym before using it without explanation. Reuse the same term for the same concept.
+- Make pronoun references clear. Repeat the relevant noun when “it,” “this,” or “they” could refer to several items.
+- Avoid contractions and prose semicolons. Keep headings and diagram labels short.
+- Keep one topic in each paragraph. Use no more than **six sentences** per paragraph. Keep the explanation connected and natural.
+
+### Preserve meaning while simplifying
+
+Retain causes, conditions, exceptions, units, and uncertainty. A shorter sentence must support the same technical conclusion. Keep illustrative examples separate from measurements.
+
+Preserve literal content exactly. This includes code, commands, formulas, API names, filenames, URLs, source titles, and quoted fixture text. Prose word limits do not apply to these items. Preserve their spelling and case. If an identifier starts a sentence, add a subject when needed: “The file `rides.parquet` contains the rows.”
+
+Preserve source quotations and the saved transcripts. Preserve numerical fixtures, measured datasets, required formats, test thresholds, deadlines, and submission requirements. Change them only when the user requests a substantive change. Keep required and optional work distinct.
+
+Review each rewritten sentence in context. Do not rely on replacing punctuation or counting words alone. When splitting a sentence, restore any missing subject or verb. Keep the causal connection explicit.
+
+### Examples from this course
+
+| Before | CLEAR with ASD-STE100 style |
+| --- | --- |
+| Update the centers and repeat assignment. The real groups follow vector geometry. | Move each centroid to the average position of its assigned vectors. Assign each vector to its nearest centroid again. |
+| Count seven shared IDs. The shortcut missed three exact neighbors. | Seven IDs occur in both result lists. The approximate search missed IDs 4, 7, and 10 from the exact result. |
+| Run the plan, then use the counters to check each prediction. | Run the plan. Use the counters to check each prediction. |
+
 ## Reusable authoring workflow
 
 This workflow is our adaptation of CLEAR. Use the [storytelling guide](lecture-storytelling.md) when a concrete scene will help motivate the topic.
@@ -29,6 +68,8 @@ This workflow is our adaptation of CLEAR. Use the [storytelling guide](lecture-s
 5. **Return and transfer.** Revisit the same diagram and essential sentence. Ask the audience to explain a different input or defend a decision using the model. This transfer question is our teaching adaptation, not an additional step claimed by the video.
 
 Simplifying a lecture does not mean removing its evidence. Preserve the conditions that change the answer, distinguish examples from measurements, and keep the chosen metric and baseline visible.
+
+Apply the ASD-STE100 wording rules before the final review. Check sentences in context, then inspect the rendered page or slide. Confirm that labels, examples, instructions, and presenter notes still agree.
 
 ## Use the transcript in slides
 
@@ -49,7 +90,7 @@ The fictional project rehearsal supplies a reason to care. CLEAR supplies the ex
 - **Calibrate:** ask whether an exact-string lookup will find a paraphrase. Check whether students can compute the dot product of two unit vectors before discussing cosine scores.
 - **Link:** compare IVF lists to shelves of books. A centroid is like a shelf label, a list is like a shelf, and a stored vector is like a book. Choosing a promising label does not guarantee that every useful book is on that shelf. Actual membership and selection are computed from vector geometry.
 - **Envision:** show the four-vector fixture before the general IVF work estimate. Keep q, v0, v1, c0, and c1 visible while the first list is searched and the best neighbor is skipped.
-- **Abstract:** “Searching fewer candidates can miss true neighbors; measure that loss against exact search.” Introduce recall as the fraction of saved exact neighbors that return.
+- **Abstract:** “Searching fewer candidates can miss true neighbors. Measure that loss against exact search.” Introduce recall as the fraction of saved exact neighbors that return.
 - **Repeat:** return to the same recovery question and the same sequence: save exact IDs, search fewer candidates, compare neighbor IDs, and read the passage. Ask students to explain why finding every geometric neighbor still does not establish useful evidence.
 
 Keep the balanced-list estimate of **820** evaluations separate from the Lab 9 measured probe-4 result of **924** floored average comparisons and **0.9175** average recall. The first explains the work model; the second supports a classroom choice among measured settings.
@@ -110,6 +151,13 @@ Application to my topic
 - Abstract: essential claim and necessary technical conditions
 - Repeat: model to revisit and question that checks transfer
 
+ASD-STE100 wording pass
+- Technical terms and first-use definitions:
+- Instructions: one action per sentence, at most 20 words
+- Descriptions: at most 25 words per sentence
+- Paragraphs: one topic, at most six sentences
+- Conditions, evidence, and literal content to preserve:
+
 Deliverables
 - Reading or script to change:
 - Audience slides to change:
@@ -140,5 +188,9 @@ Read a story sentence aloud and ask whether a student can say what happened, why
 - Does each action name its object, and does each consequence say what actually changes?
 - Does the ending revisit the same model and test whether students can use it?
 - Are source ideas, invented scenes, toy inputs, estimates, and measured results distinguishable?
+- Do instructions and descriptions meet the 20-word and 25-word limits, with the literal-content exceptions above?
+- Are actors, technical terms, pronoun references, and conditions clear? Does each paragraph stay on one topic?
+- Did the rewrite preserve code, formulas, source wording, measurements, and assignment requirements?
+- Do the rendered text, diagrams, controls, and presenter notes still agree?
 
 Read this file explicitly in future work. It is saved repository context, so another chat or another video can use the same workflow.
