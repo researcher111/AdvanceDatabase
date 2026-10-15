@@ -13,11 +13,11 @@
   const P = window.DeckViz.palette;
   const colors = [P.orange, P.green, P.blue];
   const fills = [P.orangeLight, P.greenLight, P.blueLight];
-  const labels = ['Predict the passage', 'Split into tokens', 'Add context', 'Make one vector', 'Rank recovery passages', 'Try a paraphrase', 'Change the question'];
+  const labels = ['Predict the passage', 'Split into tokens', 'Use the other words', 'Make one vector', 'Rank recovery passages', 'Try a paraphrase', 'Change the question'];
   const captions = [
     'Maya asks about crash recovery. Which stored passage should the search put first?',
     'The tokenizer splits the sentence into pieces. Token IDs select starting vectors; positions matter too.',
-    'Context layers mix information across tokens. “Database” and “crash” help interpret “recover.”',
+    'Context means the other words in the sentence. They help us decide what “recover” means here.',
     'This example averages the token vectors, then divides the mean by its magnitude to make one unit vector.',
     'Compare the question vector with the saved passage vectors. The higher cosine score ranks first.',
     'Different words can describe the same task. This paraphrase still ranks the recovery passage first.',
@@ -42,28 +42,29 @@
     text(d, 'ew-disclaimer', 640, 260, 'Illustrative token splits and vectors · computed scores, not real model outputs', 20, P.muted);
   }
   function foot(d, value) { text(d, 'ew-foot', 640, 647, value, 22, P.muted); }
-  function tokens(d, query, context = false) {
+  function tokens(d, query) {
     const width = 110, gap = 12, start = (1280 - (query.tokens.length * width + (query.tokens.length - 1) * gap)) / 2;
     query.tokens.forEach((token, index) => {
       const x = start + index * (width + gap);
-      const highlighted = context && (index === query.focus || query.clues.includes(token));
-      d.box('ew-token-' + index, x, 328, width, 54, token, highlighted ? P.orangeLight : P.white, highlighted ? P.orange : P.line, 23);
-      if (context) {
-        d.arrow('ew-token-output-' + index, x + width / 2, 391, x + width / 2, 413, P.line, 2);
-        d.rect('ew-context-' + index, x, 422, width, 114, index === query.focus ? P.orangeLight : P.white, index === query.focus ? P.orange : P.line, 6, 2);
-        query.context[index].forEach((value, coordinate) => text(d, 'ew-context-' + index + '-' + coordinate, x + width / 2, 445 + coordinate * 34, value.toFixed(1), 23, colors[coordinate]));
-      }
+      d.box('ew-token-' + index, x, 328, width, 54, token, P.white, P.line, 23);
     });
-    if (context) {
-      const focusX = start + query.focus * (width + gap) + width / 2;
-      query.tokens.forEach((token, index) => {
-        if (!query.clues.includes(token)) return;
-        const from = start + index * (width + gap) + width / 2;
-        d.path('ew-context-link-' + index, 'M ' + from + ' 322 L ' + from + ' 298 L ' + focusX + ' 298', 'none', P.orange, 3);
-      });
-      d.arrow('ew-context-link-focus', focusX, 298, focusX, 320, P.orange, 3);
-      text(d, 'ew-context-label', 640, 576, 'One context-aware vector per token · c1, c2, c3 are not topic names', 25, P.ink);
-    }
+  }
+  function context(d, query) {
+    const examples = [
+      { key: 'health', x: 65, title: 'Recover from an illness', lines: ['She will recover after the flu.'], clue: '“flu” gives a clue', meaning: 'recover → get well' },
+      { key: 'database', x: 665, title: 'Recover a database', lines: ['How does a database recover', 'after a crash?'], clue: '“database” + “crash” give clues', meaning: 'recover → restore database state' },
+    ];
+    examples.forEach(example => {
+      const x = example.x;
+      d.rect('ew-context-' + example.key, x, 298, 550, 234, P.white, P.line, 8, 2);
+      text(d, 'ew-context-' + example.key + '-title', x + 25, 330, example.title, 24, P.green, 'start', 650);
+      example.lines.forEach((line, index) => text(d, 'ew-context-' + example.key + '-sentence-' + index, x + 25, 374 + index * 31, line, 25, P.ink, 'start'));
+      text(d, 'ew-context-' + example.key + '-clue', x + 25, 449, example.clue, 23, P.muted, 'start');
+      text(d, 'ew-context-' + example.key + '-meaning', x + 25, 493, example.meaning, 25, P.orange, 'start', 650);
+    });
+    text(d, 'ew-context-mechanism', 640, 566, 'The model uses the other tokens to update the vector for “recover”.', 25, P.ink);
+    text(d, 'ew-context-vector', 640, 606, 'Illustrative vector for “recover” here: ' + vectorString(query.context[query.focus]), 24, P.green);
+    foot(d, 'Same word, different sentence: its vector can change. The trained model stays fixed.');
   }
   function predict(d) {
     api.passages.forEach((passage, index) => {
@@ -106,7 +107,7 @@
     foot(d, 'One common recipe; pooling rules and real dimensions vary. Numbers are rounded.');
   }
   function overview(d) {
-    const entries = [[65, 220, 'Token pieces'], [350, 240, 'Context layers'], [655, 260, 'Pool + normalize'], [980, 230, 'One vector']];
+    const entries = [[65, 220, 'Token pieces'], [350, 240, 'Use other words'], [655, 260, 'Pool + normalize'], [980, 230, 'One vector']];
     entries.forEach(([x, width, label], index) => {
       d.box('ew-overview-' + index, x, 294, width, 51, label, index === 3 ? P.greenLight : P.white, index === 3 ? P.green : P.line, 22);
       if (index < entries.length - 1) d.arrow('ew-overview-arrow-' + index, x + width + 10, 319, entries[index + 1][0] - 13, 319, P.orange, 3);
@@ -143,7 +144,7 @@
       base(d, query);
       if (step === 0) predict(d);
       else if (step === 1) tokenize(d, query);
-      else if (step === 2) { tokens(d, query, true); foot(d, 'New text changes the representations. The model’s learned parameters stay fixed during search.'); }
+      else if (step === 2) context(d, query);
       else if (step === 3) pooling(d, query);
       else ranking(d, queryId);
     },
@@ -154,7 +155,7 @@
       builds: [
         'Calibrate with the familiar task: read Maya’s recovery question and both passages. Ask which passage should rank first before revealing vectors or scores. An exact string search can miss useful text with different wording. These are fictional classroom passages.',
         'Trace text pieces into token IDs, then starting vectors and position information. The visible token splits are hand-authored teaching examples; an actual tokenizer can split words into subwords and handle punctuation differently.',
-        'Link familiar reading to the mechanism: database and crash give recover its context. Trace the arrows into recover and inspect its three numbers. In a transformer, attention mixes information across positions and later layers transform it. All contextual vectors here are invented examples, not learned outputs or attention measurements. Model parameters stay fixed during search.',
+        'Read the illness sentence first: recover means get well because flu supplies a clue. Then read Maya’s question: database and crash make recover mean restoring database state. These other words are the context. Connect that familiar act of reading to the model: it uses information from the other tokens to update each token vector, so the same word can have a different vector in a different sentence. Inspect the three illustrative numbers for recover in Maya’s question; no vector is shown or measured for the illness sentence. A transformer uses attention and further layers for these updates. The numbers are hand-authored examples, not learned outputs or attention measurements. The trained model stays fixed during search.',
         'Average each coordinate across all nine contextual token vectors. The sums, means, Euclidean norm, and normalized coordinates are computed from the same data as the reading widget. Values shown are rounded. This is one common transformer recipe; other models use different pooling, including a selected final token. Three dimensions keep the arithmetic visible; real output dimensions commonly number in the hundreds or thousands.',
         'Compare the unit question vector with the two saved unit passage vectors. Scores are computed cosine similarities, not probabilities or measured retrieval quality. In a real system the passages are embedded when stored, then reused for many questions. Read the top passage to check that it answers the question.',
         'Ask for a prediction, then show the restart/log paraphrase. Its different question vector still ranks the recovery passage first in this illustrative example. This demonstrates the intended behavior, not a guarantee that every paraphrase will work in every model.',
@@ -163,7 +164,7 @@
       checks: [
         { question: 'Which passage should help with Maya’s crash-recovery question?', answer: 'Passage 7 explains replaying the durable log to restore committed changes. Predict that passage before seeing the scores, then read it to check its usefulness.' },
         { question: 'Does one word always become exactly one token?', answer: 'No. A real tokenizer may split a word into smaller pieces and treat punctuation separately. The displayed splits are illustrative.' },
-        { question: 'What changes when a token appears in a different sentence?', answer: 'Its context-aware representation can change because the surrounding tokens supply different information. The model parameters stay fixed during search. Individual coordinates are not named topics.' },
+        { question: 'Which words change what recover means in the two sentences?', answer: 'Flu makes recover mean get well. Database and crash make it mean restoring database state. Those other words are the context. The model uses information from other tokens to update the vector for recover, so the same word can have different vectors in different sentences. The trained model stays fixed during search.' },
         { question: 'What do we divide by to normalize the averaged vector?', answer: 'Divide every coordinate of the mean vector by that mean vector’s Euclidean norm. This produces magnitude one. Averaging and normalization are one common recipe; models can use other pooling methods.' },
         { question: 'Do these cosine scores evaluate a current embedding model?', answer: 'No. They are computed from hand-authored example vectors, not real model outputs. A cosine score is not a probability that a passage answers the question.' },
         { question: 'Does the paraphrase’s successful match guarantee that all paraphrases work?', answer: 'No. It demonstrates the intended behavior using illustrative numbers. Test a real model with representative questions, paraphrases, and relevance judgments.' },

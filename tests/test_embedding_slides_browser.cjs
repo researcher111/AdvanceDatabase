@@ -73,12 +73,17 @@ fs.mkdirSync(output,{recursive:true});
    assert.equal(slides[step].byKey['ew-query'],fixtures.queries[queryIds[step]].text,'every build keeps the actual question visible');
    assert(slides[step].byKey['ew-disclaimer']?.length>0,'invented model values remain explicitly labeled');
   }
-  for(const step of [1,2])fixtures.queries.recovery.tokens.forEach((token,index)=>{
-   assert.equal(slides[step].byKey[`ew-token-${index}-label`],token,`build ${step+1}: token ${index+1} matches the reading example`);
+  fixtures.queries.recovery.tokens.forEach((token,index)=>{
+   assert.equal(slides[1].byKey[`ew-token-${index}-label`],token,`build 2: token ${index+1} matches the reading example`);
   });
-  fixtures.queries.recovery.context.forEach((row,token)=>row.forEach((value,dimension)=>{
-   assert.equal(Number(slides[2].byKey[`ew-context-${token}-${dimension}`]),value,'context stage exposes every fixture coordinate');
-  }));
+  const contextBuild=slides[2].byKey,focus=fixtures.queries.recovery.focus;
+  for(const example of ['health','database'])for(const part of ['sentence-0','clue','meaning']){
+   assert(contextBuild[`ew-context-${example}-${part}`]?.trim(),`context stage shows the ${example} sentence, its clue, and the word's meaning`);
+  }
+  assert.notEqual(contextBuild['ew-context-health-meaning'],contextBuild['ew-context-database-meaning'],'the same word has different meanings in the two sentences');
+  assert.equal([contextBuild['ew-context-database-sentence-0'],contextBuild['ew-context-database-sentence-1']].join(' '),fixtures.queries.recovery.text,'database context example preserves the current question');
+  assert(contextBuild['ew-context-mechanism']?.trim(),'context stage connects the sentence comparison to the vector update');
+  assert(contextBuild['ew-context-vector'].includes(vectorText(fixtures.queries.recovery.context[focus])),'context stage displays the focused token vector from the shared reading example');
   const recovery=embedding(fixtures.queries.recovery);
   recovery.average.forEach((value,dimension)=>{
    assert(Math.abs(Number(slides[3].byKey[`ew-mean-${dimension}`])-value)<=0.0005,'pooling displays the arithmetic mean of contextual coordinates');

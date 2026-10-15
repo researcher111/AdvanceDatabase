@@ -24,7 +24,9 @@
       context: [[0.5, 0.2, 0.1], [0.6, 0.1, 0.1], [0.4, 0.2, 0.1], [1.2, 0.3, 0.2], [1.5, 0.2, 0.1], [0.5, 0.1, 0.2], [0.4, 0.1, 0.1], [1.4, 0.3, 0.1], [0.3, 0.1, 0.1]],
       focus: 4,
       clues: ['database', 'crash'],
-      connection: 'You understand “recover” by reading “database” and “crash” around it. Context layers let each token’s representation use information from the other tokens.',
+      contrast: { text: 'She will recover after the flu.', meaning: 'get well again' },
+      meaning: 'restore the database after a failure',
+      connection: '“Flu” points to getting well. In Maya’s question, “database” and “crash” point to restoring a database. Those other words are context clues for “recover.”',
       transfer: 'Now choose “A paraphrase.” Should different words still bring back the recovery passage?',
     },
     restart: {
@@ -34,7 +36,9 @@
       context: [[0.4, 0.2, 0.1], [0.6, 0.2, 0.2], [0.4, 0.1, 0.1], [1.3, 0.4, 0.3], [0.8, 0.3, 0.2], [0.5, 0.2, 0.1], [1.4, 0.3, 0.2], [0.3, 0.1, 0.1]],
       focus: 3,
       clues: ['help', 'restart'],
-      connection: '“Log” could mean several things. Here, “help” and “restart” provide clues. Context layers let a token’s representation depend on its sentence, rather than only its spelling.',
+      contrast: { text: 'Put another log on the fire.', meaning: 'a piece of wood' },
+      meaning: 'a record of database changes',
+      connection: '“Fire” points to a piece of wood. In Maya’s question, “help” and “restart” suggest a record that helps restore a database. Those other words are context clues for “log.”',
       transfer: 'The paraphrase still ranks the recovery passage first in this example. Try “Query speed” and predict which passage moves up.',
     },
     speed: {
@@ -44,7 +48,9 @@
       context: [[0.1, 0.5, 0.1], [0.2, 0.6, 0.1], [0.1, 0.4, 0.1], [0.3, 1.4, 0.2], [0.2, 1.3, 0.2], [0.1, 0.5, 0.1], [0.1, 0.4, 0.1], [0.2, 1.5, 0.1], [0.1, 0.3, 0.1]],
       focus: 3,
       clues: ['speed', 'query'],
-      connection: '“Index” appears beside “speed” and “query.” The surrounding tokens supply context. In a transformer, attention mixes information across positions, and further layers transform those representations.',
+      contrast: { text: 'Use the index at the back of the book.', meaning: 'a list of topics and page numbers' },
+      meaning: 'a database structure for finding rows',
+      connection: '“Book” points to a list of topics and page numbers. In Maya’s question, “speed” and “query” point to a database structure. Those other words are context clues for “index.”',
       transfer: 'The index passage moves to first place. The stored vectors stayed fixed; changing the question changed their ranking.',
     },
   };
@@ -100,6 +106,17 @@
       return element;
     }
     function paragraph(text, className = 'ew-explain') { return node('p', className, text); }
+    function contextCard(label, sentence, meaning, focus, current = false) {
+      const card = node('div', 'ew-context-example' + (current ? ' is-current' : ''));
+      card.append(node('strong', 'ew-context-example-label', label));
+      const example = node('p', 'ew-context-sentence');
+      // Highlight the same word in both sentences without interpreting HTML.
+      sentence.split(/(\b\w+\b)/).forEach(piece => {
+        example.append(node(piece.toLowerCase() === focus.toLowerCase() ? 'strong' : 'span', '', piece));
+      });
+      card.append(example, paragraph('Meaning here: ' + meaning, 'ew-context-meaning'));
+      return card;
+    }
     function vector(vector, label) {
       const strip = node('div', 'ew-vector');
       strip.setAttribute('aria-label', label + ' ' + vectorText(vector));
@@ -148,12 +165,15 @@
           chip.append(node('small', '', String(index + 1)), node('span', '', token));
           tokens.append(chip);
         });
-        stageElement.append(tokens, paragraph('A tokenizer maps text pieces to token IDs. The model looks up a starting vector for each token and accounts for its position. Actual tokenizers may split a word into smaller pieces.'), paragraph(query.tokens.length + ' illustrative tokens → ' + query.tokens.length + ' starting vectors. Next, the model adds context.', 'ew-operation'));
+        stageElement.append(tokens, paragraph('A tokenizer maps text pieces to token IDs. The model looks up a starting vector for each token and accounts for its position. Actual tokenizers may split a word into smaller pieces.'), paragraph(query.tokens.length + ' illustrative tokens → ' + query.tokens.length + ' starting vectors. Next, each token’s vector uses clues from the other words in the sentence.', 'ew-operation'));
       } else if (stage === 2) {
-        stageElement.append(node('h4', '', 'Let each token use the words around it'));
-        const connection = node('div', 'ew-context-link');
-        connection.append(node('span', '', query.clues.join(' + ')), node('span', 'ew-arrow', '→'), node('strong', '', '“' + query.tokens[query.focus] + '” in this sentence'));
-        stageElement.append(connection, paragraph(query.connection));
+        stageElement.append(node('h4', '', 'Context means the other words in the sentence'));
+        const examples = node('div', 'ew-context-examples');
+        const focus = query.tokens[query.focus];
+        examples.append(
+          contextCard('The same word in another sentence', query.contrast.text, query.contrast.meaning, focus),
+          contextCard('The word in Maya’s question', query.text, query.meaning, focus, true));
+        stageElement.append(examples, paragraph(query.connection), paragraph('The model uses these clues by updating each token’s vector with information from the other tokens. The same word can therefore have different vectors in different sentences.', 'ew-context-mechanism'), node('strong', 'ew-context-output', 'After using context: one updated vector per token'));
         const grid = node('div', 'ew-context-grid');
         query.tokens.forEach((token, index) => {
           const button = node('button', 'ew-context-token');
@@ -174,15 +194,15 @@
           button.addEventListener('click', () => {
             selectedToken = index;
             grid.querySelectorAll('button').forEach((item, itemIndex) => item.setAttribute('aria-pressed', String(itemIndex === index)));
-            detail.textContent = 'Illustrative vector for “' + token + '” at position ' + (index + 1) + ': ' + vectorText(query.context[index], 1) + '. The three coordinate positions do not name topics.';
+            detail.textContent = 'Illustrative vector for “' + token + '” after using this sentence: ' + vectorText(query.context[index], 1) + '. The bars show these three numbers; individual coordinates do not name topics.';
           });
           grid.append(button);
         });
         const detail = node('p', 'ew-token-detail');
         detail.id = 'ew-token-detail';
         detail.setAttribute('aria-live', 'polite');
-        detail.textContent = 'Select a token to inspect its illustrative vector. “' + query.tokens[selectedToken] + '”: ' + vectorText(query.context[selectedToken], 1) + '. The three coordinate positions do not name topics.';
-        stageElement.append(grid, detail, paragraph('The learned parameters stay fixed during search. New input changes the representations; it does not train a new model.', 'ew-operation'));
+        detail.textContent = 'Select a token to inspect its vector after using this sentence. “' + query.tokens[selectedToken] + '”: ' + vectorText(query.context[selectedToken], 1) + '. The bars show these illustrative numbers; individual coordinates do not name topics.';
+        stageElement.append(grid, detail, paragraph('A new sentence can change the token vectors. The model uses what it learned during training; it does not train again for each sentence.', 'ew-operation'));
       } else if (stage === 3) {
         stageElement.append(node('h4', '', 'Combine the token vectors into one sentence vector'));
         const calculation = node('div', 'ew-calculation');

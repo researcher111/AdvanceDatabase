@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=4">
-<link rel="stylesheet" href="embedding-walkthrough.css?v=1">
+<link rel="stylesheet" href="embedding-walkthrough.css?v=2">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
 <body>
@@ -149,12 +149,14 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   </div>
   <div class="ew-fallback ew-static" id="ew-fallback">
     <p><strong>Start with Maya’s question:</strong> “How does a database recover after a crash?” Predict which passage would help: “After a crash, replay the durable log to restore committed changes” or “An index speeds up a query by finding matching rows without scanning the whole table.”</p>
-    <p><strong>Follow the mechanism:</strong> text → token pieces → context-aware token vectors → one fixed-size sentence vector → similarity comparison with saved passage vectors. For example, “database” and “crash” give context to “recover.” The model’s learned parameters stay fixed during search.</p>
+    <p><strong>Context means the other words in the sentence.</strong> In “She will recover after the flu,” the word “flu” tells us that “recover” means getting well. In Maya’s question, “database” and “crash” point to restoring a database. The model uses information from the other tokens to update each token’s vector, so the same word can have different vectors in different sentences.</p>
+    <p><strong>Follow the mechanism:</strong> text → token pieces → token vectors updated using the other words → one fixed-size sentence vector → similarity comparison with saved passage vectors. A new sentence can change the token vectors; the trained model stays the same.</p>
     <p>A common transformer recipe pools token representations and normalizes the resulting vector. This example averages the illustrative token vectors, divides the result by its magnitude, and computes cosine similarity. Different models may use different pooling methods. Enable JavaScript to inspect the arithmetic and switch questions.</p>
   </div>
   <div class="ew-print ew-static">
     <p><strong>Follow one sentence:</strong> “How does a database recover after a crash?” → tokens such as “database,” “recover,” and “crash” → contextual token vectors → one sentence vector → cosine comparison with saved passage vectors.</p>
-    <p>Context layers use information across token positions: “database” and “crash” help interpret “recover.” This example averages the contextual token vectors and divides the result by its magnitude. The result has 3 coordinates regardless of token count. Pooling and normalization are one common recipe; models differ.</p>
+    <p><strong>Context means the other words in the sentence.</strong> “Recover after the flu” means getting well; “database” and “crash” point to restoring a database. The model updates each token’s vector using information from the other tokens. The same word can therefore have different vectors in different sentences.</p>
+    <p>This example averages the updated token vectors and divides the result by its magnitude. The result has 3 coordinates regardless of token count. Pooling and normalization are one common recipe; models differ.</p>
     <p><strong>Predict and compare:</strong> the recovery question and its restart/log paraphrase rank the recovery passage first in this illustration. The query-speed question ranks the index passage first. The saved passage vectors and model parameters stay fixed; changing the question changes its vector and the ranking. These illustrative results do not establish a real model’s retrieval quality.</p>
   </div>
   <p class="ew-essential"><strong>Keep this idea:</strong> use the same embedding model and compatible query/document settings so the question and passages have comparable vectors. Read the retrieved passage to check that it answers the question.</p>
@@ -484,7 +486,7 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=3"></script>
-<script src="embedding-walkthrough.js?v=2"></script>
+<script src="embedding-walkthrough.js?v=3"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
