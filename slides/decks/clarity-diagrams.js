@@ -44,7 +44,7 @@
     [7,8,9].forEach((n,i)=>card(d,'block-'+n,95,278+i*105,260,79,'Block '+n,'',s===2?n===8:n===7));
     for(let i=0;i<2;i++)card(d,'frame-'+i,675,306+i*150,370,105,'Frame '+i,s===0?'empty':i===0?'contains block '+(s===2?8:7):'empty',i===0&&s>0);
     if(s>0)d.arrow('load',370,s===2?423:318,655,360,P.orange,4);
-    foot(d,s===2?'Frame 0 now contains block 8; block 7 still exists in the file.':'A frame is a memory slot. A block number identifies data in a file.');
+    foot(d,s===2?'Frame 0 now contains block 8. Block 7 still exists in the file.':'A frame is a memory slot. A block number identifies data in a file.');
   });
 
   use(7,'two-writes-reverse-undo',(d,s)=>{
@@ -58,7 +58,7 @@
     if(s===1||s===2){d.arrow('restore',622,278+active*77,780,391,P.orange,4);label(d,'restore-label',930,513,'Restore the logged old value',P.orange);}
     if(s>=3)label(d,'finished',930,264,'Finished set: {tx1}',P.green,25);
     if(s===4){d.line('skip',92,262,585,292,P.muted,3);label(d,'skip-label',930,513,'Keep tx1’s committed 60',P.green);}
-    foot(d,s===5?'Flush repaired A = 60, then record durable ROLLBACK for tx2.':'Reverse undo restores 10 → 40 → 60; undoing forward would leave the wrong value.');
+    foot(d,s===5?'Flush repaired A = 60, then record durable ROLLBACK for tx2.':'Reverse undo restores 10 → 40 → 60. Undoing forward would leave the wrong value.');
   });
 
   use(8,'statement-or-transaction-snapshot',(d,s)=>{
@@ -72,7 +72,7 @@
       d.arrow('rc-read',335,434,s>=3?950:310,365,P.blue,3);
       d.arrow('rr-read',945,434,s===4?950:310,365,P.orange,3);
     }
-    foot(d,s===4?'The original Repeatable Read transaction has ended. Both new reads can see 120.':'PostgreSQL example: plain SELECTs; statement snapshot versus transaction snapshot.');
+    foot(d,s===4?'The original Repeatable Read transaction has ended. Both new reads can see 120.':'PostgreSQL example: plain SELECTs. Statement snapshot versus transaction snapshot.');
   });
 
   use(9,'price-the-work',(d,s)=>{
@@ -88,7 +88,7 @@
       if(s>=2)label(d,'index-total',930,514,'= '+idx.toLocaleString('en-US')+' page accesses',P.orange,28);
     }
     if(s>=2)d.box('choice',360,552,560,58,s===4?'Equal cost at 0.997% selectivity':s===3?'Choose scan: 1,000 < 2,003':'Choose index: 103 < 1,000',P.greenLight,P.green,27);
-    foot(d,'Toy model: one page access per RID; caching, shared pages, and CPU costs are excluded.');
+    foot(d,'Toy model: one page access per RID. Caching, shared pages, and CPU costs are excluded.');
   });
   use(9,'review-sql-and-indexes',(d,s)=>{
     label(d,'sql',640,203,'SELECT name FROM students WHERE gpa > 35',P.green,27);
@@ -274,7 +274,7 @@
     ragOpening.teaching.builds=[
       'Ask how a chunk’s list position differs from its source ID. Introduce the fictional recovery-question rehearsal. Read the toy source record before asking what the model will see.',
       'Use the open-book comparison: a selected page needs its reference beside the text. Trace position 2 to source wal. This fixed score illustrates the interface, not a measured semantic ranking.',
-      'Noor asks: “Which sentence supports the answer?” A valid citation identifies where to look; it does not prove support. The lab’s echo mode exposes this context before a model call.'
+      'Noor asks: “Which sentence supports the answer?” A valid citation identifies where to look. It does not prove support. The lab’s echo mode exposes this context before a model call.'
     ];
     ragOpening.teaching.reference='Trace a source record into selected evidence, then check the claim against the source text. The two later evaluation metrics measure retrieval, while claim support needs a separate check. Keep the mock record distinct from the course’s measured corpus.';
   }
@@ -328,7 +328,7 @@
     repeatModel(d,s,'Return to k: old@5, new@8, DELETE@9',[
       ['Log durably'],['Buffer in order'],['Flush sorted files'],['Read the newest','visible record']
     ]);
-    if(s===3)foot(d,'A current read returns absent; old bytes may remain until safe compaction');
+    if(s===3)foot(d,'A current read returns absent. Old bytes may remain until safe compaction');
   });
 
   use(12,'keep-the-source-identity',(d,s)=>{
@@ -337,7 +337,7 @@
     hits.forEach(([score,pos],i)=>card(d,'hit-'+i,95,263+i*108,330,86,'rank '+(i+1)+' · score '+score,'vector position '+pos,i===0&&s>=1));
     chunks.forEach(([source,text],i)=>{d.rect('chunk-'+i,715,263+i*108,475,86,i===2&&s>=1?P.greenLight:P.white,i===2&&s>=1?P.green:P.line,8,2);label(d,'chunk-heading-'+i,952,285+i*108,'position '+i+' · source '+source,P.ink,25);label(d,'chunk-body-'+i,952,321+i*108,text,P.muted,22);});
     if(s>=1)d.arrow('resolve',441,304,699,522,P.orange,4);
-    if(s>=2){d.box('copy',420,603,665,47,s===2?'Copy chunk 2 + score 0.9; keep stored chunk unchanged':s===3?'Ranked source IDs: [wal, blocks, wal] · citation [wal]':'First relevant rank = 1 → Hit@3 = 1, RR@3 = 1',P.greenLight,P.green,23);}
+    if(s>=2){d.box('copy',420,603,665,47,s===2?'Copy chunk 2 + score 0.9. Keep stored chunk unchanged':s===3?'Ranked source IDs: [wal, blocks, wal] · citation [wal]':'First relevant rank = 1 → Hit@3 = 1, RR@3 = 1',P.greenLight,P.green,23);}
   });
 
   use(13,'reduce-sees-the-complete-group',(d,s)=>{
@@ -352,7 +352,7 @@
     }
     if(s>=2){label(d,'owner0',850,328,'P0: wal',P.blue,25);label(d,'owner1',850,557,'P1: page',P.green,25);}
     if(s>=3){d.arrow('sum-wal',936,343,994,343,P.blue,3);d.box('wal-total',1005,311,190,64,'wal = 3',P.blueLight,P.blue,28);d.arrow('sum-page',936,557,994,557,P.green,3);d.box('page-total',1005,525,190,64,'page = 1',P.greenLight,P.green,28);}
-    foot(d,s===4?'Toy ownership: wal → P0, page → P1. Use a consistent partition function on all workers.':'Every occurrence survives mapping; the shuffle groups equal words before adding their counts.');
+    foot(d,s===4?'Toy ownership: wal → P0, page → P1. Use a consistent partition function on all workers.':'Every occurrence survives mapping. The shuffle groups equal words before adding their counts.');
   });
 
   use(14,'read-the-newest-visible-value',(d,s)=>{
@@ -390,7 +390,7 @@
       d.box('product',310,458,660,87,s===3?'Pull and test one candidate pair at a time':'10⁶ × 10⁶ = 10¹² candidate pairs',s===2?P.redLight:s===3?P.greenLight:P.orangeLight,s===2?P.red:s===3?P.green:P.orange,29);
     }
     if(s===2)label(d,'size',640,598,'At 16 bytes per pair: 16 TB of intermediate data',P.red,28);
-    foot(d,s===3?'Streaming saves intermediate storage. A better plan is still needed to reduce pair count.':'Illustrative sizes; the pair count grows multiplicatively.');
+    foot(d,s===3?'Streaming saves intermediate storage. A better plan is still needed to reduce pair count.':'Example sizes. Pair count equals the product of input sizes.');
   });
   use(4,'lecture-04-scene-09',(d,s)=>{
     const left=['ada','ben','cyd'],right=['ds','stat','econ'],li=s===4?1:0,ri=s===0?-1:s===4?0:s-1;
@@ -412,7 +412,7 @@
   repair(8,'two-phases',d=>{label(d,'count-label',310,218,'Number of locks held');label(d,'time-label',1120,615,'time');});
   repair(8,'isolation-ladder',d=>{
     item(d,'name0').text='dirty read';item(d,'name1').text='changed row';
-    label(d,'standard-legend',640,668,'✓ prevented · ○ permitted by the standard minimum; implementations can be stronger',P.muted,22);
+    label(d,'standard-legend',640,668,'✓ prevented · ○ permitted by the standard minimum. Implementations can be stronger',P.muted,22);
   });
   repair(9,'optimizer',d=>label(d,'statistics-legend',640,217,'N = row count · V = number of distinct values',P.muted,25));
   repair(9,'watch-the-access-path-flip',d=>label(d,'bar-units',640,623,'Estimated page accesses · logarithmic bar lengths',P.muted,25));
@@ -448,7 +448,7 @@
       [85,490,895].forEach((x,i)=>card(d,'deposit-'+i,x,322,300,147,titles[i],values[i],i===2));
       d.arrow('first-operation',402,395,472,395,s===0?P.red:P.green,3);
       d.arrow('second-operation',807,395,877,395,s===0?P.red:P.green,3);
-      foot(d,s===0?'Both read the old value and overwrite it with 110. No crash is needed.':'Resolve lock conflicts and retry as required; the second deposit uses the first result.');
+      foot(d,s===0?'Both read the old value and overwrite it with 110. No crash is needed.':'Resolve lock conflicts and retry as required. The second deposit uses the first result.');
     }else{
       label(d,'snapshot-schedule',640,230,'Reader sees 100 → writer commits 120 → reader selects again',P.ink,28);
       card(d,'rc-read',95,322,475,147,'Read Committed','Second read: 120',true);
@@ -462,23 +462,23 @@
   // Teacher cues for drawings whose sequence now differs from the code/table view.
   function cues(id,sceneId,states,builds){const scene=decks[id]?.scenes.find(s=>s.id===sceneId);if(!scene)return;if(states)scene.states=states;scene.teaching.builds=builds;}
   cues(1,'lecture-01-scene-03',null,[
-    'Point to the two stored blocks and empty buffer frames. The six rows are in scan order; ada, cyd, and eli satisfy GPA > 35.',
+    'Point to the two stored blocks and empty buffer frames. The six rows are in scan order. ada, cyd, and eli satisfy GPA > 35.',
     'Follow the orange storage-read arrow into frame 0. Loading the block alone has not returned a row.',
-    'Test all three rows in block 0. The green result cards contain ada and cyd; ben fails the predicate.',
+    'Test all three rows in block 0. The green result cards contain ada and cyd. ben fails the predicate.',
     'Follow the second orange arrow into frame 1. The earlier frame remains resident for later reuse.',
     'Test block 1 and add eli. Read the three separate counters: two storage reads, six row tests, and three results.'
   ]);
   cues(2,'lecture-02-scene-03',['Empty frames','Load a page','Replace the page'],[
     'Distinguish the block numbers in the persistent file from the numbered empty frames in memory.',
     'Load block 7 into frame 0. Point to the frame number and its separate resident block label.',
-    'This replacement illustration assumes frame 0 is eligible. Load block 8 into that frame; block 7 remains stored in the file.'
+    'This replacement illustration assumes frame 0 is eligible. Load block 8 into that frame. Block 7 remains stored in the file.'
   ]);
   cues(13,'reduce-sees-the-complete-group',['Input documents','Map both documents','Shuffle by word','Reduce complete groups','Check the word totals'],[
     'Read both source records and predict four word occurrences. Two copies of WAL occur in the first record.',
     'Follow the four emitted pairs. Each repeated occurrence retains its own stable card rather than disappearing into a set.',
     'Move the three wal cards to P0 and the page card to P1. A real partition can hold multiple different keys, each with its own value group.',
     'Add the values within each key group. The final totals sum to four, preserving all mapped occurrences.',
-    'The word totals must stay the same even if partition numbers or output order change. The toy owner labels are illustrative; Python hash bucket numbers can vary.'
+    'The word totals must stay the same even if partition numbers or output order change. The toy owner labels are illustrative. Python hash bucket numbers can vary.'
   ]);
   // Keep the shared worked examples, adding a prediction before their first reveal.
   const tracePredictions=[

@@ -5,9 +5,9 @@
   const number = value => Number(value).toLocaleString('en-US', {maximumFractionDigits:1});
   const config = {
     city: {title:'Taxi activity by hour', choices:[['count','Total trips'],['rate','Trips per observed day']],
-      note:'Filtered yellow trips, July 2015. Green = weekday; blue = weekend. Each hour has 23 observed weekdays and 8 weekend dates in this snapshot.'},
+      note:'Filtered yellow trips, July 2015. Green = weekday. Blue = weekend. Each hour has 23 observed weekdays and 8 weekend dates in this snapshot.'},
     weather: {title:'A suspicious July temperature field', choices:[['average','First clue: encoded average'],['range','Reveal minimum and maximum']],
-      note:'Central Park, July 2015; °C. Orange = encoded average; green = maximum; blue = minimum. Zeros are preserved for investigation, not certified as measurements.'},
+      note:'Central Park, July 2015, in °C. Orange = encoded average. Green = maximum. Blue = minimum. The chart retains zeros for investigation. Their presence does not confirm valid measurements.'},
     planets: {title:'What is in the detected planet catalog?', choices:[['count','Planets in the catalog'],['period','With period value (%)'],['radius','With radius value (%)']],
       note:'Discovery years 1990–2024, from a later catalog snapshot. Coverage means a non-null value, not necessarily a direct measurement. This is not the frequency of planets in the universe.'},
     evidence: {title:'TESS → operator → attached evidence', choices:[['operators','Follow the operator edges'],['references','Reveal attached-reference presence']],
@@ -47,7 +47,7 @@
         body+=`<rect x="280" y="${y}" width="490" height="27" rx="3" fill="#e4ece4"/><rect x="280" y="${y}" width="${w}" height="27" rx="3" fill="#30785b"><title>${escape(`${r.discoverymethod}: ${number(value(r))}${mode==='count'?' planets':'%'}; denominator ${number(r.planets)}`)}</title></rect>`;
         body+=text(785,y+19,number(value(r))+(mode==='count'?'':'%'),'font-size="14"');
       });
-      body+=text(280,height-12,'A small group can have 100% coverage; inspect its count.','font-size="13"');
+      body+=text(280,height-12,'A small group can have 100% coverage. Check its count.','font-size="13"');
     } else {
       const grouped = [...new Set(rows.map(r=>r.statement))].map(statement=>rows.filter(r=>r.statement===statement));
       height=Math.max(340,100+grouped.length*130);
@@ -64,7 +64,7 @@
           body+=text(687,y+43,hasURL?'Source URL returned':group.some(r=>r.importURL)?'Wikimedia import URL':'No source URL returned','font-size="12"');
         }
       });
-      body+=text(25,height-20,'Edges represent operator statements; reference presence does not certify truth.','font-size="14"');
+      body+=text(25,height-20,'Edges represent operator statements. A reference does not prove the claim.','font-size="14"');
     }
     return `<svg viewBox="0 0 900 ${height}" role="img" aria-labelledby="${id}-chart-title ${id}-chart-desc"><title id="${id}-chart-title">${escape(config[id].title)}</title><desc id="${id}-chart-desc">${escape(config[id].note)} Full values are available in the result table and CSV.</desc>${body}</svg>`;
   }
@@ -76,7 +76,7 @@
     panel.innerHTML=`<h3>Open the case file</h3><p class="small">Saved evidence · ${escape(snapshot.retrieved_at)} · ${snapshot.rows.length} result rows. No live request runs when you open this page.</p>
       <details><summary>Inspect the ${id==='evidence'?'SPARQL':id==='planets'?'ADQL':'SQL'} query</summary><pre><code>${escape(snapshot.query)}</code></pre></details>
       <div class="actions"><button class="btn copy" type="button">Copy query</button><a class="btn" href="${escape(liveURL)}" target="_blank" rel="noopener">${id==='planets'?'Run at NASA (JSON)':id==='evidence'?'Open Wikidata query':'Open ClickHouse editor'}</a><a href="${sqlURL}" download>Query file</a><span class="copy-status" role="status"></span></div>
-      <p class="small">${id==='city'||id==='weather'?'Paste the query into the hosted editor and run it; select the fully qualified table shown in the query. ':id==='planets'?'The NASA link runs this exact query on its hosted service and returns JSON. Change its query parameter or use the archive’s table interface to explore further. ': 'The Wikidata link opens this query in the editor; press Run there. '}Use saved evidence below for a common baseline.</p>
+      <p class="small">${id==='city'||id==='weather'?'Paste the query into the hosted editor. Run it against the fully qualified table in the query. ':id==='planets'?'The NASA link runs this exact query on its hosted service and returns JSON. Change its query parameter or use the archive’s table interface to explore further. ': 'The Wikidata link opens the query editor. Press Run there. '}Use saved evidence below for a common baseline.</p>
       <button class="btn reveal" type="button" aria-expanded="false" aria-controls="${id}-result">Reveal saved evidence</button>
       <div class="result" id="${id}-result" hidden><div class="actions"><label for="${id}-view">View</label><select id="${id}-view">${config[id].choices.map(([value,label])=>`<option value="${value}">${escape(label)}</option>`).join('')}</select></div><div class="chart"></div><p class="caption">${escape(config[id].note)}</p>
       <details><summary>Inspect every result row</summary><div class="table-scroll" tabindex="0" role="region" aria-label="${escape(config[id].title)} result table"><table><thead><tr>${snapshot.columns.map(c=>`<th scope="col">${escape(c)}</th>`).join('')}</tr></thead><tbody>${snapshot.rows.map(row=>`<tr>${row.map(v=>`<td>${v===null?'NULL':/^https?:\/\//.test(String(v))?`<a href="${escape(v)}" target="_blank" rel="noopener">${escape(v)}</a>`:escape(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>

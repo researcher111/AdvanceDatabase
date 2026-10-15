@@ -17,7 +17,7 @@
     },
     'hash-aggregation': {
       title: 'Hash aggregation',
-      body: "<p>A way to compute <code>GROUP BY</code> results using a hash table, much like a Python dictionary. To count students by major, use each major as a key and keep a running count. Reading <code>ds, stat, ds</code> produces <code>ds: 2, stat: 1</code>.</p><p>Any later row could change a group’s count, so final results usually wait until all input has been read. This example stores one counter per group; more groups require more memory.</p>",
+      body: "<p>A way to compute <code>GROUP BY</code> results using a hash table, much like a Python dictionary. To count students by major, use each major as a key and keep a running count. Reading <code>ds, stat, ds</code> produces <code>ds: 2, stat: 1</code>.</p><p>Any later row could change a group’s count, so final results usually wait until all input has been read. This example stores one counter per group. More groups require more memory.</p>",
     },
     'duck-typing': {
       title: 'Duck typing',
@@ -25,7 +25,7 @@
     },
     'cartesian-product': {
       title: 'Cartesian product',
-      body: "<p>A product pairs every row from one input with every row from the other. For example, 2 students and 3 majors produce 6 student–major pairs, before checking whether a student belongs to a major. SQL’s <code>CROSS JOIN</code> expresses this operation. <code>ProductScan</code> produces the pairs one at a time; a filter then keeps those that satisfy the join condition.</p>",
+      body: "<p>A product pairs every row from one input with every row from the other. For example, 2 students and 3 majors produce 6 student–major pairs, before checking whether a student belongs to a major. SQL’s <code>CROSS JOIN</code> expresses this operation. <code>ProductScan</code> produces one pair at a time. A filter keeps pairs that satisfy the join condition.</p>",
     },
     'predicate-pushdown': {
       title: 'Predicate pushdown',
@@ -154,7 +154,7 @@
     li = 0; ri = -1;
     leftDelivered = 1; rightDelivered = 0;
     pairs = []; done = false;
-    pathEl.textContent = 'Setup: left is at ada; right is before its first row, ds.';
+    pathEl.textContent = 'Setup: the left input selects ada. The right input is before its first row, ds.';
     render();
   }
 
@@ -166,10 +166,10 @@
     } else if (li + 1 < LEFT.length) {
       li++; ri = 0;
       leftDelivered++; rightDelivered++;
-      pathEl.textContent = 'Right exhausted: rewind it, advance the left, then read the first right row.';
+      pathEl.textContent = 'The right input is exhausted. Rewind it. Advance the left input. Read the first right row.';
     } else {
       done = true;
-      pathEl.textContent = 'rollover attempted, but left.next() was false too — product complete, return False';
+      pathEl.textContent = 'left.next() returns False. No left rows remain, so the product returns False.';
       render();
       return;
     }

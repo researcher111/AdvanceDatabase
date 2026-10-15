@@ -5,15 +5,15 @@
   const GLOSSARY = {
     'compaction': {
       title: 'Compaction',
-      body: "<p>Compaction merges sorted files to reduce overlapping data and discard obsolete versions when safe. It can produce one or more output SSTables. Versions still needed by snapshots must be retained, and deletion markers cannot be discarded if that could expose an older value. Merging reduces some read work but rewrites data and consumes CPU and storage bandwidth.</p>",
+      body: "<p>Compaction merges sorted files and removes obsolete versions when safe. It produces one or more SSTables. It must retain versions that snapshots need. It must retain deletion markers while their removal could expose older values. Merging can reduce read work, but rewrites data and consumes CPU and storage bandwidth.</p>",
     },
     'sstable': {
       title: 'SSTable (Sorted String Table)',
-      body: "<p>A Sorted String Table is an immutable file of key-value entries in sorted order. It is produced by flushing a memtable or merging older files. Index blocks help locate a key’s data block, and a Bloom filter may avoid an unnecessary lookup. Immutability simplifies concurrent reads, though file lifetimes and shared caches still need coordination.</p>",
+      body: "<p>A Sorted String Table (SSTable) is an immutable file of key-value entries in sorted order. A memtable flush or file merge creates it. Index blocks locate a key’s data block. Bloom filters can prevent unnecessary lookups. Immutable files simplify concurrent reads. File lifetimes and shared caches still require coordination.</p>",
     },
     'memtable': {
       title: 'Memtable',
-      body: "<p>An in-memory structure that holds recent writes in sorted order. In a durable LSM write path, a log protects updates until they reach an SSTable. When a memtable reaches its size limit, it is made immutable and flushed while new writes enter another memtable. A lookup checks relevant in-memory state before older files.</p>",
+      body: "<p>A memtable holds recent writes in sorted order in memory. A durable LSM write path logs updates before relying on them. The log protects those updates until they reach an SSTable. At its size limit, the memtable becomes immutable and flushes to a file. New writes enter another memtable. Lookups check relevant memory structures before older files.</p>",
     },
     'wal': {
       title: 'WAL (write-ahead log)',
@@ -33,7 +33,7 @@
     },
     'bloom': {
       title: 'Bloom filter',
-      body: "<p>A compact membership filter with possible false positives and no false negatives when correctly maintained. Insertion sets positions chosen by hash functions. A query with any zero bit is definitely absent; all ones means possibly present. Size and hash count control the false-positive rate. LSM engines use filters to skip files that cannot contain a key.</p>",
+      body: "<p>A Bloom filter tests membership with possible false positives. Correct maintenance prevents false negatives. Insertion sets positions selected by hash functions. A query with any zero bit is definitely absent. All ones mean possibly present. Filter size and hash count control the false-positive rate.</p><p>LSM engines use these filters to skip files that cannot contain a key.</p>",
     },
     'read-amp': {
       title: 'Read amplification',
@@ -41,7 +41,7 @@
     },
     'eventual': {
       title: 'Eventual consistency',
-      body: "<p>A consistency property in which replicas converge if updates stop and communication and reconciliation continue. Replicas may disagree before convergence. Applications must define how conflicting updates are resolved; simply keeping all values is not correct for every operation. The acceptable behavior depends on the application.</p>",
+      body: "<p>With eventual consistency, replicas converge if updates stop and communication and reconciliation continue. Replicas can disagree before convergence. Applications must define conflict resolution. Retaining all values is not correct for every operation. The application determines acceptable behavior.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -122,7 +122,7 @@
     highlight = { key, checks, foundAt };
     getMsg(foundAt
       ? `checked <strong>${checks.length}</strong> structure${checks.length === 1 ? '' : 's'} → found <code>${key} = ${value}</code>`
-      : `checked <strong>${checks.length}</strong> structure${checks.length === 1 ? '' : 's'} → <code>${key}</code> not present (a Bloom filter would have skipped the SSTables without reading them)`);
+      : `checked <strong>${checks.length}</strong> structure${checks.length === 1 ? '' : 's'} → <code>${key}</code> not present. A Bloom filter can exclude an SSTable when it reports definitely absent.`);
     render();
   }
 
@@ -222,8 +222,8 @@
         `Checking the SSTable confirms that the key is present.`;
     } else {
       msg.innerHTML = `query("${key}") — all three bits set → <strong>maybe present</strong>… ` +
-        `but you never inserted it. <strong>That's the false positive:</strong> one wasted ` +
-        `disk read because other keys set the same bits.`;
+        `but you never inserted it. <strong>This is a false positive.</strong> One unnecessary ` +
+        `disk read occurs because other keys set the same bits.`;
     }
     render(hs);
   }
@@ -289,7 +289,7 @@
     tablets.splice(i, 1,
       { label: `${lo} — ·`, count: hot.count - half, last: false },
       { label: `· — ${hi}`, count: half, last: hot.last });
-    msg.textContent = `split "${hot.label}" into two tablets and moved one to a fresh server — send another timestamp-key burst to check whether writes are more evenly distributed.`;
+    msg.textContent = `Split "${hot.label}" into two tablets. One moved to a new server. Send another timestamp-key burst to check the write distribution.`;
     render(new Set([i, i + 1]));
   }
 

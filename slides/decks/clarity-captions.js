@@ -65,8 +65,8 @@ window.CourseClarityCaptions = {
     ],
     "lecture-01-scene-11": [
       "Count storage accesses and assign the same modeled cost to each.",
-      "500 reads cost 12.5 ms; seven cost 0.175 ms in this model.",
-      "A larger table increases scan work; index work depends on height and matches.",
+      "In this model, 500 reads cost 12.5 ms. Seven reads cost 0.175 ms.",
+      "A larger table increases scan work. Index work depends on tree height and the number of matches.",
       "CPU work and caching also contribute to actual query time."
     ],
     "lecture-01-scene-12": [
@@ -77,7 +77,7 @@ window.CourseClarityCaptions = {
     "lecture-01-scene-13": [
       "The file manager reads a block using its filename and block number.",
       "The buffer pool keeps pages in memory. The record layer reads their fields.",
-      "Operators scan, filter, and project rows; SQL describes the requested result.",
+      "Operators scan, filter, and project rows. SQL describes the requested result.",
       "Indexes and recovery build on the lower layers’ interfaces."
     ],
     "lecture-01-scene-14": [
@@ -107,7 +107,7 @@ window.CourseClarityCaptions = {
     "lecture-02-scene-02": [
       "Compare when write() and fsync() finish in your Lab 1 measurements.",
       "write() can finish when the OS cache accepts the data.",
-      "fsync() waits for file synchronization; the storage stack determines its durability guarantee.",
+      "fsync() waits for file synchronization. Its durability guarantee depends on the storage system.",
       "Explain the timing difference by describing what each call waits for."
     ],
     "lecture-02-scene-03": [
@@ -198,7 +198,7 @@ window.CourseClarityCaptions = {
     "lecture-03-scene-01": [
       "To read a student row, the engine needs to know where each field sits in the cached bytes.",
       "A layout identifies a row and the fields inside it.",
-      "RID (0, 1) names block 0, slot 1; it does not permanently identify a student."
+      "RID (0, 1) identifies block 0, slot 1. A different student can later occupy that slot."
     ],
     "lecture-03-scene-02": [
       "Packed rows sit directly beside one another.",
@@ -215,7 +215,7 @@ window.CourseClarityCaptions = {
     "lecture-03-scene-04": [
       "The in-use flag and integer ID each occupy four bytes.",
       "The string stores a length prefix and reserves eight payload bytes.",
-      "GPA begins at offset 20; the whole slot occupies 24 bytes.",
+      "GPA begins at offset 20. The complete slot occupies 24 bytes.",
       "A 4096-byte block fits 170 such slots with 16 bytes left over."
     ],
     "lecture-03-scene-05": [
@@ -318,7 +318,7 @@ window.CourseClarityCaptions = {
     ],
     "lecture-04-scene-05": [
       "Every operator exposes the same Scan interface.",
-      "before_first() rewinds; next() advances to an available row.",
+      "before_first() resets the scan position. next() advances to an available row.",
       "get_val() reads a value and has_field() checks the exposed schema.",
       "close() releases the scan’s resources."
     ],
@@ -379,7 +379,7 @@ window.CourseClarityCaptions = {
       "Ordered aggregation can finish a group when the key changes."
     ],
     "lecture-04-scene-15": [
-      "mid is the student’s major ID; mid2 is the major row’s ID.",
+      "mid is the student’s major ID. mid2 is the ID in the major row.",
       "ProductScan exposes both fields in one candidate pair.",
       "Select keeps the pair when the two ID values match.",
       "Project returns the requested student name and department."
@@ -409,14 +409,14 @@ window.CourseClarityCaptions = {
     ],
     "lecture-05-scene-04": [
       "The lexer distinguishes reserved keywords from identifiers.",
-      "A number token carries a number; a string token carries text.",
+      "A number token contains a number. A string token contains text.",
       "Punctuation tokens identify operators and delimiters."
     ],
     "lecture-05-scene-05": [
       "The root represents the SELECT statement.",
       "The field and table nodes show which columns to read and which table holds them.",
       "The WHERE branch shows the comparison that each row must pass.",
-      "Field(gpa) reads a row value; Number(35) supplies a literal."
+      "Field(gpa) reads a row value. Number(35) supplies a literal."
     ],
     "lecture-05-scene-06": [
       "The grammar requires a SELECT list and a FROM list.",
@@ -626,7 +626,7 @@ window.CourseClarityCaptions = {
     "isolation-ladder": [
       "The standard minimum guarantees allow dirty reads at Read Uncommitted.",
       "Read Committed rules out reading uncommitted changes.",
-      "Repeatable Read protects repeated row reads; phantom behavior depends on the implementation.",
+      "Repeatable Read protects repeated row reads. Phantom behavior depends on the implementation.",
       "Serializable execution must match a valid serial outcome."
     ],
     "versions-instead-of-waiting": [
@@ -643,7 +643,7 @@ window.CourseClarityCaptions = {
       "The committed balance starts at 100 before either read.",
       "Both isolation modes first read 100.",
       "Another transaction commits a new version with balance 120.",
-      "Read Committed gets a fresh snapshot; Repeatable Read keeps its earlier snapshot.",
+      "Read Committed gets a new snapshot. Repeatable Read keeps its earlier snapshot.",
       "A new transaction can see 120 after the old reader finishes."
     ],
     "the-version-bill": [
@@ -669,7 +669,7 @@ window.CourseClarityCaptions = {
   },
   "9": {
     "same-answer-different-work": [
-      "Both plans find students above the GPA cutoff in the selected department; keep duplicates.",
+      "Both plans find students above the GPA cutoff in the selected department. Keep duplicates.",
       "Filter each input first so the join has fewer student-major pairs to test.",
       "Both return twenty rows, from 900 versus sixty candidates. Compare timing separately."
     ],
@@ -808,13 +808,13 @@ window.CourseClarityCaptions = {
       "The first call finds fare 36. It passes the filter, so the caller reads 36.",
       "The next call skips fare 24 and finds fare 30. The caller reads the second match.",
       "Now imagine passing three rows at once, using the same operators and condition.",
-      "Test all three fares in the batch. Keep 36 and 30; reject 24.",
+      "Test all three fares in the batch. Keep 36 and 30. Reject 24.",
       "Both plans give fares 36 and 30. The batch version shares call overhead across rows."
     ],
     "skip-a-row-group": [
       "For x = 10, inspect each row group’s minimum and maximum.",
       "Ranges [1, 3] and [4, 7] prove those groups cannot match.",
-      "Open [8, 12] and test its rows; the bounds alone do not prove a match."
+      "Open [8, 12]. Test its rows. The bounds alone do not prove a match."
     ],
     "skip-eleven-partitions": [
       "A monthly partition contains one month’s rides. Here, a folder holds its Parquet files.",
@@ -873,7 +873,7 @@ window.CourseClarityCaptions = {
       "A file format defines how data is stored. Save the same rides in a file named rides.parquet.",
       "Inside a Parquet row group, each field has its own column chunk.",
       "DuckDB runs the query. It can read the fare chunk and skip pickup and payment.",
-      "The result is still $30. Parquet stores the values; DuckDB calculates the average."
+      "The result is still $30. Parquet stores the values. DuckDB calculates the average."
     ],
     "more-models-with-duckdb": [
       "DuckDB prepares the rows. A PyTorch model can learn from them and return predictions to SQL."
@@ -1004,7 +1004,7 @@ window.CourseClarityCaptions = {
     "three-places-for-knowledge": [
       "Trained weights can contain knowledge, but do not expose the current source pages.",
       "Sending every page with every question uses more context space and processing time.",
-      "Like an open-book answer, retrieval selects pages; the generator must still use them correctly."
+      "Retrieval selects source passages. The generator must use those passages correctly, as in an open-book answer."
     ],
     "design-the-retrieval-record": [
       "Inspect the source’s topics before deciding where one record ends.",
@@ -1015,17 +1015,17 @@ window.CourseClarityCaptions = {
     "keep-the-source-identity": [
       "The toy hit contains position 2, not the source ID wal. Predict which record it selects.",
       "Resolve position 2 to its original WAL chunk before building a citation.",
-      "Attach score 0.9 to a copy; leave the stored record unchanged for the next question.",
+      "Attach score 0.9 to a copy. Keep the stored record unchanged for the next question.",
       "Carry the ranked chunks’ source IDs into the prompt, including repeated IDs.",
       "Count one hit per question and use the first relevant rank for its reciprocal score."
     ],
     "a-synonym-failure": [
       "The first wording retrieves the intended buffer-pool source.",
       "Maya asks the same question in different words and gets different passages.",
-      "Exact search already scored every chunk; more probes would not change those scores."
+      "Exact search already scored every chunk. More probes would not change those scores."
     ],
     "build-an-evaluation-set": [
-      "Write questions that a corpus user would actually ask; the project requires at least 25.",
+      "Write questions that a corpus user would ask. The project requires at least 25 questions.",
       "Label the sources needed to answer each question independently of the current ranking.",
       "Keep comparison questions fixed and hold partner questions out of tuning."
     ],
@@ -1038,7 +1038,7 @@ window.CourseClarityCaptions = {
     "rank-changes-the-score": [
       "Use the same three questions and top-three cutoff to measure how early the evidence returns.",
       "The marked sources are at ranks 1 and 3. Predict their reciprocal-rank scores.",
-      "Ranks 1 and 3 contribute 1 and 1/3; the miss contributes 0.",
+      "Ranks 1 and 3 contribute 1 and 1/3. The miss contributes 0.",
       "MRR@3 = (1 + 1/3 + 0) / 3 ≈ 0.44. Compare ranks as well as presence."
     ],
     "measure-chunking-instead-of-guessing": [
@@ -1048,7 +1048,7 @@ window.CourseClarityCaptions = {
     ],
     "context-has-a-budget": [
       "Retrieve candidate passages before choosing which ones to put in the prompt.",
-      "Keep a useful subset that fits the context budget; extra text can add noise and cost.",
+      "Keep useful passages within the context budget. Extra text can add irrelevant information and cost.",
       "Keep source IDs beside the chosen text so the final claims can be checked."
     ],
     "two-retrieval-paths": [
@@ -1060,7 +1060,7 @@ window.CourseClarityCaptions = {
     "filters-change-the-candidate-set": [
       "Some sources are available only to certain users.",
       "Search only the sources this user is allowed to read.",
-      "Find top-k within that allowed set; an unrestricted ranking is not an authorization check."
+      "Find the top-k results within the allowed set. An unrestricted ranking does not check authorization."
     ],
     "a-changed-source-invalidates-copies": [
       "D7’s source text, chunks, and vectors all start at version 1.",
@@ -1084,7 +1084,7 @@ window.CourseClarityCaptions = {
     "one-job-many-machines": [
       "The count is the same task at a larger scale: 10 TB / 2 GB/s = 5,000 seconds for one ideal scan.",
       "With 100 independent readers, each receives 100 GB under this capacity estimate.",
-      "An ideal read takes 50 seconds before overhead; a failed worker also needs recovery."
+      "The ideal read time is 50 seconds, excluding overhead. A failed worker also needs recovery."
     ],
     "partitioning": [
       "Treat a key like a destination address: it determines the responsible worker.",
@@ -1101,18 +1101,18 @@ window.CourseClarityCaptions = {
       "Now keep neighboring keys together in sorted intervals.",
       "Assign each interval to a worker, like consecutive ranges in an ordered index.",
       "Route kim to the owner of k–z.",
-      "The d–f range stays with one owner here; key frequencies can still create uneven work."
+      "One worker owns the d–f range here. Unequal key frequencies can give workers different amounts of work."
     ],
     "skew-creates-idle-time": [
       "With equal-cost rows and no hot key, each worker receives 1,000 of the 8,000 rows.",
-      "At 40%, the hot worker gets 3,800 rows; the others get 600 each.",
+      "At 40%, the busiest worker gets 3,800 rows. The other workers get 600 rows each.",
       "At 80%, one worker gets 6,600 rows. More workers do not divide that same-key group."
     ],
     "salt-and-combine": [
       "Every record with key A goes to the same worker.",
       "Split it into four salted keys only if the operation supports correct partial results.",
       "Count each salted group separately.",
-      "Combine 25 + 25 + 25 + 25 to recover A = 100; placement changes, the answer does not."
+      "Combine 25 + 25 + 25 + 25 to recover A = 100. Placement changes. The answer stays the same."
     ],
     "map-is-local-computation": [
       "Read the four occurrences in “the log the tree.”",
@@ -1122,7 +1122,7 @@ window.CourseClarityCaptions = {
     "shuffle-manufactures-locality": [
       "The same word can appear in records processed by different mappers.",
       "Like sorting mail by destination, send pairs with the same word to the same worker.",
-      "Group each key’s values at that owner before reduction; moving records costs work."
+      "Group each key’s values at its assigned worker before reduction. Moving records requires work."
     ],
     "reduce-sees-the-complete-group": [
       "Return to Maya’s two records. Predict how many occurrences mapping must preserve.",
@@ -1141,13 +1141,13 @@ window.CourseClarityCaptions = {
       "flatMap creates the word occurrences.",
       "map attaches a count to each word.",
       "reduceByKey creates the dependency that groups equal keys.",
-      "An action triggers work; collect returns the small result to the driver."
+      "An action starts computation. collect returns the small result to the driver."
     ],
     "stages-follow-dependencies": [
       "Operations on one partition can run together without moving data between workers.",
       "Grouping can require a shuffle across workers.",
       "The shuffle divides this word-count plan into stages.",
-      "Schedule tasks within each stage; stage count is not simply the number of API calls."
+      "Schedule tasks within each stage. The number of stages can differ from the number of API calls."
     ],
     "lineage-rebuilds-lost-partitions": [
       "Keep the transformations and available inputs needed to reconstruct a partition.",
@@ -1158,31 +1158,31 @@ window.CourseClarityCaptions = {
     "launch-before-waiting": [
       "Waiting for each call before starting the next makes the calls run one at a time.",
       "Submit the independent calls before waiting for their results.",
-      "Concurrency is now possible; resources and overhead determine actual speedup.",
+      "The tasks can now run concurrently. Resources and overhead determine actual speedup.",
       "Actors keep explicit state across calls. Treat state reuse separately from the timing result."
     ],
     "choose-the-execution-shape": [
       "Use a relational plan when the job joins tables and calculates totals for groups.",
-      "Independent Python calls suggest tasks; state that persists across calls may suggest actors.",
+      "Use tasks for independent Python calls. Consider actors when state must persist across calls.",
       "If one machine meets the workload target, a cluster can add coordination and movement costs."
     ],
     "place-move-recover": [
       "Return to the count: choose owners using the key, not the sending worker.",
       "Move matching keys together or combine valid partial results.",
       "Run each step when its inputs are ready, and run independent steps at the same time.",
-      "Plan retries using retained inputs and task information; preserve the same word totals."
+      "Plan retries with retained inputs and task information. Preserve the same word totals."
     ]
   },
   "14": {
     "organize-writes-differently": [
       "Maya opens SSTable A: k = old at sequence 5. The file is immutable.",
-      "A newer record in B has k = new at sequence 8; the old bytes still exist.",
+      "A newer record in B has k = new at sequence 8. The old bytes still exist.",
       "DELETE at sequence 9 makes a current read return absent. Keep its tombstone while old values could reappear."
     ],
     "a-multidimensional-map": [
       "Choose the row key before deciding where to store the row.",
       "The family and qualifier identify a column within that row.",
-      "A timestamp names a cell version; the application interprets its byte value."
+      "A timestamp identifies a cell version. The application interprets the cell’s bytes."
     ],
     "sparse-cells-and-versions": [
       "Store present cells without allocating every missing cell.",
@@ -1205,7 +1205,7 @@ window.CourseClarityCaptions = {
       "Follow the write for k2 before it enters memory.",
       "Record the recovery information in the log.",
       "For a durable write, sync the required log record before acknowledging success.",
-      "The memtable holds the update; the durable log can restore it after RAM is lost."
+      "The memtable holds the update. The durable log can restore it after RAM is lost."
     ],
     "the-memtable-stays-ordered": [
       "Entries arrive out of order: k8, k2, k5, k1, k7.",
@@ -1228,7 +1228,7 @@ window.CourseClarityCaptions = {
     "merge-sorted-runs": [
       "Two sealed sorted batches can overlap in keys and versions.",
       "Advance their merge cursors in key order.",
-      "This current-value view keeps k2:v2; real compaction also retains versions needed by active snapshots.",
+      "This current-value view keeps k2:v2. Real compaction also retains versions that active snapshots need.",
       "Write one sorted output. Sequential merging still consumes read and write bandwidth."
     ],
     "deletion-must-hide-older-values": [
@@ -1248,7 +1248,7 @@ window.CourseClarityCaptions = {
       "Use a negative Bloom-filter result to rule out a file.",
       "For a possible match, use the sparse index to choose a candidate block.",
       "Search that block and resolve its visible record.",
-      "Reuse a cached block when available; each layer avoids a different kind of work."
+      "Reuse a cached block when available. Each layer avoids a different kind of work."
     ],
     "the-read-write-space-budget": [
       "A B+ tree modifies searchable pages as updates arrive.",
@@ -1258,7 +1258,7 @@ window.CourseClarityCaptions = {
     ],
     "a-network-partition-forces-a-choice": [
       "Both replicas begin with v1.",
-      "Replica 1 receives a completed v2 write; communication with replica 2 is cut.",
+      "Replica 1 receives a completed v2 write. Communication with replica 2 is interrupted.",
       "An isolated replica can wait rather than serve a value missing that completed write.",
       "Returning v1 stays responsive but is not linearizable in this example.",
       "After communication resumes, use the system’s conflict rules to reconcile."
@@ -1272,14 +1272,14 @@ window.CourseClarityCaptions = {
   },
   "15": {
     "the-path-is-the-answer": [
-      "Maya’s drawing starts with people; ask which result the question needs.",
+      "Maya’s drawing starts with people. Ask which result the question needs.",
       "Directed relationships connect them. Two routes can end at the same person.",
       "A route to fay goes through cyd and eli. A path and a distinct endpoint are different results."
     ],
     "property-graph": [
       "Map intersections to nodes: each represents an entity.",
       "Map directed routes to typed edges such as Follows.",
-      "Attach properties to the entity or relationship they describe; the diagram’s since is illustrative."
+      "Attach properties to the entity or relationship they describe. The diagram’s since value is a teaching example."
     ],
     "store-adjacency-at-write-time": [
       "A relational edge table names each source and destination.",
@@ -1300,18 +1300,18 @@ window.CourseClarityCaptions = {
       "For reachability, initialize ada as visited and in the frontier.",
       "Discover previously unvisited ben and cyd at distance 1.",
       "Discover dee and eli at distance 2.",
-      "Discover fay at distance 3; already visited people do not re-enter the frontier."
+      "Discover fay at distance 3. Previously visited people do not enter the frontier again."
     ],
     "paths-are-not-unique-vertices": [
       "At one hop, both methods reach ben and cyd. Predict the next endpoints.",
-      "Four two-hop walks end at dee, ada, dee, and eli; dee is still one person.",
+      "Four two-hop walks end at dee, ada, dee, and eli. dee is still one person.",
       "For reachability, keep only the new frontier and track visited people.",
       "Through depth 3: eleven walk rows versus eight BFS edge visits and five other people.",
       "Specify the required result: walks, distinct reachable people, or a shortest path. Their work can differ."
     ],
     "the-query-draws-a-shape": [
       "Draw the requested directed relationship before writing query syntax.",
-      "The depth range bounds the path; exclusions and DISTINCT shape the final endpoints.",
+      "The depth range limits path length. Exclusions and DISTINCT determine the final endpoints.",
       "SQL recursion can express traversal too. Match cycle and duplicate rules before timing either query."
     ],
     "find-the-shortest-path": [
@@ -1323,12 +1323,12 @@ window.CourseClarityCaptions = {
     "a-supernode-is-skew-again": [
       "A small neighbor list is easy to locate and inspect.",
       "Expanding all thirty neighbors still takes work, even with stored links.",
-      "Inspecting only eight reduces work but changes coverage; this is a hypothetical query budget."
+      "Inspecting only eight reduces work but changes coverage. This query budget is hypothetical."
     ],
     "choose-a-graph-workload": [
       "A fixed shallow relationship can fit a relational join plan.",
       "Path operators can follow a variable number of edges when the query needs those routes.",
-      "Whole-graph analytics is another workload; measure equivalent results and maintenance costs."
+      "Whole-graph analytics is another workload. Compare equivalent results and maintenance costs."
     ],
     "connections-augment-similarity": [
       "Return to RAG: retrieve nearby passages as starting evidence.",
@@ -1338,13 +1338,13 @@ window.CourseClarityCaptions = {
     ],
     "does-graph-expansion-help": [
       "Keep vector-only retrieval as the baseline for the same questions.",
-      "Add relationship neighbors; predict a question helped and one harmed.",
+      "Add relationship neighbors. Predict one question that benefits and one question that becomes harder to answer.",
       "Measure support, noise, and latency. These drawn checkmarks are hypothetical, not project results."
     ],
     "five-mechanisms-recur": [
       "Ask where bytes are stored and which reads a cache can reuse.",
       "Ask which maintained structure lets a query skip work.",
-      "Ask how lost data is restored: lineage replays transformations; WAL supports transaction recovery.",
+      "Ask how the system restores lost data. Lineage replays transformations. WAL supports transaction recovery.",
       "Ask which plan turns the requested result into operations.",
       "Ask which worker holds each partition and whether one worker has most of the work."
     ],
@@ -1358,7 +1358,7 @@ window.CourseClarityCaptions = {
     "finish-with-measured-decisions": [
       "State the opening question and its required result.",
       "Show evidence from the same workload under the compared configurations.",
-      "Explain the decision that follows from those results; the plotted points are schematic.",
+      "Explain the decision that follows from those results. The plotted points illustrate the comparison.",
       "Compare configurations on the same required result, explain the measurements, and show one diagnosed failure."
     ]
   }

@@ -9,7 +9,7 @@
     },
     'window-fn': {
       title: "Window function",
-      body: "<p>A calculation that can look at other rows while keeping one result for each current row. Window functions can add a rank, running total, or moving average beside each row. In Q6, a window SUM adds monthly totals from the first month through the current month; ORDER BY sets that order.</p>",
+      body: "<p>A calculation that can look at other rows while keeping one result for each current row. Window functions can add a rank, running total, or moving average beside each row. In Q6, a window SUM adds monthly totals from the first month through the current month. ORDER BY sets that order.</p>",
     },
     'projection-pushdown': {
       title: "Projection pushdown",
@@ -21,7 +21,7 @@
     },
     'row-group': {
       title: "Row group",
-      body: "<p>A group of rows stored together in a Parquet file, with a separate chunk for each column. Column statistics can tell the reader that no row in the group matches a filter, allowing it to skip that group. You can choose the row-group size; the choice affects compression, skipping, and scan speed. Row groups are different from fixed-size database pages.</p>",
+      body: "<p>A group of rows stored together in a Parquet file, with a separate chunk for each column. Column statistics can tell the reader that no row in the group matches a filter, allowing it to skip that group. You can choose the row-group size. The choice affects compression, skipping, and scan speed. Row groups are different from fixed-size database pages.</p>",
     },
     'decimal-type': {
       title: "DECIMAL type",
@@ -659,7 +659,7 @@
       const out = evaluate(q);
       print('out', out);
     } catch (e) {
-      print('err', 'error: ' + e.message + ' (this demonstration recognizes only the preset query patterns; run other queries in DuckDB)');
+      print('err', 'error: ' + e.message + ' (This demonstration recognizes only the preset query patterns. Run other queries in DuckDB.)');
     }
   }
 

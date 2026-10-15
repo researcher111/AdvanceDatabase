@@ -13,7 +13,7 @@
     },
     'vectorized': {
       title: 'Vectorized execution',
-      body: "<p>Processing batches of values instead of one row per operator call. Batching shares call overhead across many values and supports loops over arrays of one type. These loops can improve cache locality and use SIMD instructions. DuckDB’s standard vector size is 2048 values; the final batch can be smaller.</p>",
+      body: "<p>Vectorized execution processes batches instead of one row per operator call. A batch shares call overhead across values. It also supports array loops over one type. These loops can improve cache locality and use SIMD instructions. DuckDB’s standard vector size is 2048 values. The final batch can be smaller.</p>",
     },
     'warehouse': {
       title: 'Data warehouse',
@@ -29,7 +29,7 @@
     },
     'object-storage': {
       title: 'Object storage',
-      body: "<p>A storage service that exposes named objects through an API, such as S3, GCS, or Azure Blob Storage. Clients upload, fetch, and list objects; many services also allow range reads. It is useful for durable data files and shared analytical storage. It does not offer the same in-place page-update interface as a local file.</p>",
+      body: "<p>Object storage exposes named objects through an API, as S3, GCS, and Azure Blob Storage do. Clients upload, fetch, and list objects. Many services also permit range reads. Object storage supports durable files and shared analytical data. Its interface differs from local files that permit changes to individual pages.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -75,21 +75,21 @@
 
   $('ly-row').addEventListener('click', () => {
     render('agg-row');
-    msg.innerHTML = 'Row layout, <code>avg(fare)</code>: every block holding rides must be read — ' +
-      '<strong>6 of 24 cells used, 18 wasted</strong>. Reading more unused columns increases the bytes transferred.';
+    msg.innerHTML = 'Row layout, <code>avg(fare)</code>: the query reads every block of rides. ' +
+      'It uses <strong>6 of 24 cells and skips none. It reads 18 unused cells</strong>. Reading more unused columns increases the bytes transferred.';
     stats.textContent = 'cells read: 24    used: 6    wasted: 18 (75%)';
   });
   $('ly-col').addEventListener('click', () => {
     render('agg-col');
-    msg.innerHTML = 'Column layout, same query: read the fare line, ignore the rest — ' +
+    msg.innerHTML = 'Column layout, same query: the engine reads only the fare column. ' +
       '<strong>6 of 6 cells read are used</strong>. Values of the same type can also support efficient column encodings.';
     stats.textContent = 'cells read: 6    used: 6    wasted: 0';
   });
   $('ly-point').addEventListener('click', () => {
     render('point-col');
-    msg.innerHTML = 'Column layout, <code>fetch ride #4</code>: one value from EACH of four ' +
-      'far-apart lines — <strong>four separate reads to rebuild one row</strong>. Row layout served this in one. ' +
-      'This model shows why gathering one row has a different access pattern from scanning one column.';
+    msg.innerHTML = 'Column layout, <code>fetch ride #4</code>: the engine reads one value from each column. ' +
+      'This model requires <strong>four separate reads to reconstruct one row</strong>. Row layout requires one. ' +
+      'Reconstructing a row and scanning a column use different access patterns.';
     stats.textContent = 'reads to rebuild the row: 4 (one per column) vs 1 in row layout';
   });
   $('ly-reset').addEventListener('click', () => {
@@ -146,7 +146,7 @@
           name: 'delta encoding',
           chips: ['start: 4000', 'deltas: +1 ×23'],
           bytes: 4 + 8,                    // start + one RLE'd delta pair
-          note: `a sequence is one start value plus its differences — here a single run of +1`,
+          note: `the encoding stores the start value and differences. Here, all differences form one run of +1`,
         };
       },
     },

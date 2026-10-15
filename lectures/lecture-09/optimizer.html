@@ -39,7 +39,7 @@
 </button>
 
 <main>
-<div class="callout note"><strong>Bonus material.</strong> This topic is optional and outside the October 22 midterm. Follow the <a href="../../schedule.html">revised schedule</a> for required sessions; analytics now follows B+ trees.</div>
+<div class="callout note"><strong>Bonus material.</strong> This topic is optional and outside the October 22 midterm. Follow the <a href="../../schedule.html">revised schedule</a> for required sessions. Analytics now follows B+ trees.</div>
 
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 9 · Bonus reading · optional, self-paced</div>
@@ -50,12 +50,12 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya wants the names and departments of students in a selected department who have a GPA above 3.5. One plan pairs all 300 students with all three majors before filtering. The other first keeps the 60 students above that GPA cutoff and the one selected major, then pairs them. Both return twenty rows, but they examine 900 and 60 pairs. Noor asks, <q>Which rows can we rule out before making pairs?</q></p>
+  <p class="lede">Maya wants student names and departments for one selected department. The students must have a GPA above 3.5. One plan pairs all 300 students with all three majors before filtering. The other keeps 60 qualifying students and one selected major before making pairs. Both return twenty rows, but they examine 900 and 60 pairs. Noor asks, <q>Which rows can we rule out before making pairs?</q></p>
 </div>
 
 <p class="keep-in-present">The student fixtures store GPA in tenths, so 3.5 is stored as 35. The SQL condition is therefore <code>gpa &gt; 35</code>.</p>
 
-<p class="keep-in-present">An optimizer estimates the work of equivalent plans using statistics, a cost model, and a bounded search. We will explain the small join first, estimate page accesses for scan and index alternatives, then compare estimates with observed execution. This is optional extension material.</p>
+<p class="keep-in-present">An optimizer estimates the work of equivalent plans. It uses statistics, a cost model, and a search with limited planning time. First, examine the small join example. Then estimate page accesses for scan and index plans. Finally, compare estimates with measured execution. This material is optional.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 10 &amp; 15 ·
@@ -63,10 +63,7 @@
   Postgres's <a href="https://www.postgresql.org/docs/current/using-explain.html">EXPLAIN docs</a>.
 </div>
 
-<p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
-</p>
+<p class="glossary-hint">Terms with dotted underlines, such as <span class="gloss-demo">this one</span>, have definitions. Hover over a term or tap it to show its definition below the sentence.</p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
   <div id="glossary-content" class="glossary-content"></div>
@@ -78,12 +75,12 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <div class="exercise learning-check">
   <span class="ex-label">Start with what you already know</span>
   <p>In the course fixture, one plan pairs 300 students with three majors. The other pairs 60 qualifying students with one qualifying major. How many candidates does each form? Are candidates automatically result rows?</p>
-  <details><summary>Check your explanation</summary><p>They form 900 and 60 candidates. The join still tests which pairs match, and both return twenty rows. Candidate counts explain one part of the work; they do not by themselves establish an elapsed-time ratio.</p></details>
+  <details><summary>Check your explanation</summary><p>The plans form 900 and 60 candidates. The join still tests which pairs match. Both plans return twenty rows. Candidate counts explain part of the work. They do not establish an elapsed-time ratio.</p></details>
 </div>
 
 <p>This optional extension connects the query operators to statistics, cost estimates, and plan search. It has no associated deadline or quiz.</p>
 
-<p class="keep-in-present">Lab 4’s two join plans return the same 20 rows, but one examines 900 pairs and the other only 60. The supplied Lab 5 planner always builds the first plan. A cost-based optimizer estimates the work of alternatives and selects one before executing the query.</p>
+<p class="keep-in-present">Lab 4’s join plans return the same 20 rows. One examines 900 pairs, and the other examines 60. The supplied Lab 5 planner always builds the first plan. A cost-based optimizer estimates the work of alternative plans before selecting one.</p>
 
 
 <p class="keep-in-present"><strong>An optimizer chooses a plan using cost estimates.</strong> It has limited planning time and incomplete information about the data. Comparing its estimates with actual execution helps explain both good and poor plan choices.</p>
@@ -105,7 +102,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <thead><tr><th>Component</th><th>Question it answers</th><th>Where it lives</th></tr></thead>
   <tbody>
     <tr><td><strong>Statistics</strong></td><td>how many rows will survive this predicate?</td><td>catalog tables, refreshed by <span class="gloss" data-gloss="analyze"><code>ANALYZE</code></span></td></tr>
-    <tr><td><strong>Cost model</strong></td><td>what would this plan cost, in blocks, without running it?</td><td>formulas that turn statistics into estimated block accesses; we work through these below</td></tr>
+    <tr><td><strong>Cost model</strong></td><td>what would this plan cost, in blocks, without running it?</td><td>formulas that convert statistics into estimated block accesses. The examples below explain these formulas.</td></tr>
     <tr><td><strong>Plan search</strong></td><td>which of the exponentially many equivalent shapes is cheapest?</td><td>a <span class="gloss" data-gloss="dynamic-programming">dynamic-programming</span> search over join orders, introduced by IBM’s <span class="gloss" data-gloss="system-r">System R</span> in 1979 and influential in later cost-based optimizers<sup class="src"><a href="#src-1" title="PostgreSQL Documentation: 60.1. Query Handling as a Complex Optimization Problem">1</a></sup></td></tr>
   </tbody>
 </table>
@@ -115,60 +112,53 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k"><code>EXPLAIN</code></span><span>asks the engine to print the plan it chose, with its cost and row-count estimates, instead of the query's results.</span></div>
-  <div class="lc-row"><span class="lc-k">Adding <code>ANALYZE</code></span><span>also runs the query and prints the measured row counts and times next to each estimate. Decoding <span class="gloss" data-gloss="explain-analyze"><code>EXPLAIN ANALYZE</code></span> output is the skill to leave with today.</span></div>
+  <div class="lc-row"><span class="lc-k">Adding <code>ANALYZE</code></span><span>Also executes the query. It displays measured row counts and times beside the estimates. Interpreting <span class="gloss" data-gloss="explain-analyze"><code>EXPLAIN ANALYZE</code></span> output helps locate estimation errors.</span></div>
   <div class="lc-row"><span class="lc-k">The plan below</span><span>is an illustrative PostgreSQL-style plan for the same kind of join, using <code>'cs'</code> as the target department. Hover or tap each line to inspect its annotation.</span></div>
 </div>
 
 <div class="code-annotated" data-lang="sql">
   <div class="code-step" data-step="e0" data-step-name="the query" data-explain="An illustrative PostgreSQL-style plan for students with gpa above 35 in the cs department.">EXPLAIN ANALYZE SELECT name, dept FROM students JOIN majors ON mid = mid2 WHERE gpa > 35 AND dept = 'cs';</div>
-  <div class="code-step" data-step="e1" data-step-name="the join node" data-explain="Read each operator in relation to its children. This hash join builds a hash table from one child and probes it with rows from the other. cost=a..b gives estimated startup and total costs in planner units; actual time is measured in milliseconds.">Hash Join  (cost=1.07..8.72 rows=20 width=13) (actual time=0.04..0.11 rows=20 loops=1)</div>
+  <div class="code-step" data-step="e1" data-step-name="the join node" data-explain="Read each operator in relation to its children. This hash join builds a hash table from one child and probes it with rows from the other. cost=a..b gives estimated startup and total costs in planner units. Actual time uses milliseconds.">Hash Join  (cost=1.07..8.72 rows=20 width=13) (actual time=0.04..0.11 rows=20 loops=1)</div>
   <div class="code-step" data-step="e2" data-explain="The join condition, as the executor sees it.">  Hash Cond: (students.mid = majors.mid2)</div>
   <div class="code-step" data-step="e3" data-step-name="the outer side" data-explain="The sequential scan filters students before passing rows to the join. The estimated 60 matching rows equal the measured 60 rows in this example.">  ->  Seq Scan on students  (cost=0.00..6.75 rows=60 ...) (actual ... rows=60 ...)</div>
   <div class="code-step" data-step="e4" data-explain="The pushed-down predicate, plus a count of what it removed.">        Filter: (gpa > 35)   Rows Removed by Filter: 240<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></div>
   <div class="code-step" data-step="e5" data-step-name="the inner side" data-explain="The filtered majors row is stored in a hash table keyed by mid2. Student rows can then look up a matching major by join key.">  ->  Hash  (cost=1.03..1.03 rows=1 ...)  ->  Seq Scan on majors (rows=1, filter: dept = 'cs')</div>
-  <div class="code-step" data-step="e6" data-step-name="execution times" data-explain="Planning can take longer than execution for a tiny query. Large gaps between estimated and actual row counts indicate estimation errors; possible causes include stale statistics, skewed values, or correlated predicates.">Planning Time: 0.28 ms   Execution Time: 0.15 ms<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></div>
+  <div class="code-step" data-step="e6" data-step-name="execution times" data-explain="Planning can take longer than execution for a tiny query. Large differences between estimated and actual row counts indicate estimation errors. Possible causes include stale statistics, uneven values, or correlated predicates.">Planning Time: 0.28 ms   Execution Time: 0.15 ms<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></div>
   <div class="code-explain-panel">Hover or tap a line for an explanation. Follow child operators up to their parents, and compare estimated rows with actual rows.</div>
 </div>
 
 <h3 class="new-slide" data-kicker="Reading a plan">Follow the operator tree and check row-count estimates</h3>
 
-<p class="keep-in-present">Read from the input scans toward the operators that consume their rows. At each step, compare estimated row counts with measured counts. A large discrepancy can explain why the optimizer chose an inefficient join order or algorithm, though it is not the only possible cause of a slow query.<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></p>
+<p class="keep-in-present">Read from the input scans toward the operators that consume their rows. At each step, compare estimated and measured row counts. A large difference can explain an inefficient join order or algorithm. Other causes can also make a query slow.<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></p>
 
 <!-- ============================================================ -->
 <h2 id="stats">Row-count estimates drive cost estimates</h2>
 
-<p class="keep-in-present">Choosing a query plan resembles choosing a route from a map before traveling. Statistics summarize row counts and value distributions; the cost model estimates the work of each operator; plan search compares combinations of those operators. Check the estimates against measured row counts, especially when the data violates the model’s assumptions.</p>
+<p class="keep-in-present">Choosing a query plan is like choosing a route from a map before a trip. Statistics summarize row counts and value distributions. The cost model estimates each operator’s work. Plan search compares combinations of operators. Compare estimated and measured row counts, especially when the data violates the model’s assumptions.</p>
 
-<p class="keep-in-present">Selectivity is the fraction of a table's rows that a predicate keeps: if <code>gpa &gt; 35</code> keeps 60 of 300 rows, its selectivity is 0.2. The optimizer needs this number before it runs anything, because every cost formula in the next section starts from how many rows each step will produce. It estimates that count from summaries stored for each table and column. We will trace how those summaries produce an estimate and where the assumptions can fail.</p>
+<p class="keep-in-present">Selectivity is the fraction of rows that a predicate keeps. If <code>gpa &gt; 35</code> keeps 60 of 300 rows, its selectivity is 0.2. The optimizer needs this estimate before execution. Cost formulas depend on the estimated number of rows from each step. The optimizer derives these estimates from table and column summaries. The following examples show the calculation and its assumptions.</p>
 
 <h3 class="new-slide" data-kicker="Guessing selectivity">Basic selectivity formulas and their assumptions</h3>
 
 <div class="math">
-<p>Per table: <em>N</em> rows and <em>B</em> blocks. Per column: the number of distinct values
-<em>V</em>, the min and max, and a <span class="gloss" data-gloss="histogram">histogram</span><sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner">3</a></sup>. The following introductory estimates use ideas from System R; production planners refine them with more detailed statistics<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>:</p>
+<p>Table summaries include <em>N</em> rows and <em>B</em> blocks. Column summaries include the distinct-value count <em>V</em>, minimum, maximum, and a <span class="gloss" data-gloss="histogram">histogram</span>.<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner">3</a></sup> The introductory estimates below use ideas from System R. Production planners use more detailed statistics to refine them.<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup></p>
 \[ \text{sel}(f = c) = \frac{1}{V(f)} \qquad \text{sel}(f_1 = f_2) = \frac{1}{\max\bigl(V(f_1), V(f_2)\bigr)} \qquad \text{sel}(f > c) = \frac{\max(f) - c}{\max(f) - \min(f)} \]
-<p>The last one assumes values are spread uniformly between the min and the max. Clamp the estimate to [0, 1], handle a constant-valued column separately, and treat this as a continuous approximation for integer data. Equality estimates also assume the queried value exists; join estimates assume compatible value domains. Then</p>
+<p>The range formula assumes a uniform distribution between the minimum and maximum. Clamp the estimate to [0, 1]. Handle a constant-valued column separately. For integer data, this is a continuous approximation. Equality estimates assume the queried value exists. Join estimates assume compatible value domains.</p>
 \[ \text{survivors}(\sigma) \;=\; N \cdot \text{sel} \]
-<p>and for ANDed terms the selectivities are multiplied together, which assumes they are independent<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 76.1. Row Estimation Examples">5</a></sup>.</p>
+<p>For AND conditions, multiply the selectivities. This calculation assumes independent conditions.<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 76.1. Row Estimation Examples">5</a></sup></p>
 </div>
 
 <h3 class="new-slide" data-kicker="Guessing selectivity">Two simplifying assumptions: uniformity and independence</h3>
 
-<p class="keep-in-present">These simple formulas assume uniform value frequencies or distributions and, when combining predicates, independence. Real data often violates those assumptions. A range estimate based only on min and max misses clusters of values. Multiplying the selectivities of <code>city = 'Charlottesville'</code> and <code>state = 'VA'</code> underestimates matches when every Charlottesville row in the dataset is already a Virginia row. Histograms and statistics across multiple columns can improve these estimates.<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner (Extended Statistics)">3</a></sup></p>
+<p class="keep-in-present">These formulas assume uniform value frequencies or distributions. Combining predicates also assumes independence. Real data often violates these assumptions. A range estimate from only the minimum and maximum misses clusters of values. Multiplying selectivities for <code>city = 'Charlottesville'</code> and <code>state = 'VA'</code> underestimates matches when every Charlottesville row is already in Virginia. Histograms and statistics across columns can improve the estimates.<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: 14.2. Statistics Used by the Planner (Extended Statistics)">3</a></sup></p>
 
 <h3 class="new-slide" data-kicker="Guessing selectivity">Practice estimating a filtered row count</h3>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · estimate the matching rows</span>
-  <p>students: N&nbsp;=&nbsp;300, gpa min&nbsp;20 / max&nbsp;39, V(mid)&nbsp;=&nbsp;3.
-  Using only the formulas above, estimate the survivors of
-  <code>gpa &gt; 30 AND mid = 2</code>, and then say which uniformity or independence assumption each step uses.</p>
+  <p>The students table has N&nbsp;=&nbsp;300, gpa min&nbsp;20, gpa max&nbsp;39, and V(mid)&nbsp;=&nbsp;3. Estimate the rows that satisfy <code>gpa &gt; 30 AND mid = 2</code> with the formulas above. Identify the uniformity or independence assumption at each step.</p>
   <details><summary>Show answer</summary>
-  <p><code>gpa &gt; 30</code>: \(\frac{39 - 30}{39 - 20} \approx 0.47\), about 142 rows
-  (assuming <em>uniformity</em>; gpas might really cluster near 30).
-  <code>mid = 2</code>: \(1/V = 1/3\). Chained: \(300 \times 0.47 \times 0.33 \approx\) <strong>47 rows</strong>
-  (assuming <em>independence</em>; but what if the mid-2 department grades harder?).
-  These calculations illustrate how a planner estimates <code>rows=</code>. If the measured count differs substantially, examine the data distribution and whether the predicates are correlated.</p>
+  <p>For <code>gpa &gt; 30</code>, \(\frac{39 - 30}{39 - 20} \approx 0.47\), or about 142 rows. This assumes <em>uniformity</em>, although GPAs could cluster near 30. For <code>mid = 2</code>, \(1/V = 1/3\). Combining the conditions gives \(300 \times 0.47 \times 0.33 \approx\) <strong>47 rows</strong>. This assumes <em>independence</em>, although the mid-2 department could grade harder. These calculations illustrate the planner’s <code>rows=</code> estimate.</p><p>If the measured count differs substantially, examine the value distribution. Check whether the predicates are correlated.</p>
   </details>
 </div>
 
@@ -177,15 +167,15 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p>Keep four quantities separate: input rows, matching rows, page accesses, and elapsed time. An optimizer converts estimates into comparable cost units. The following model deliberately leaves out cache hits, row clustering, and CPU work so each arithmetic step is visible.</p>
 <div data-teaching-trace="optimizer">
-  <p><strong>Worked result:</strong> With 100,000 rows, 1,000 pages, and height 3, 0.1% selectivity gives 100 matches and an index estimate of 103 page accesses. At 2%, the estimate is 2,003, above the scan’s 1,000. Equality occurs at 997 matches, or 0.997%.</p>
+  <p><strong>Worked result:</strong> The table has 100,000 rows and 1,000 pages. The index has height 3. At 0.1% selectivity, 100 rows match, giving an index estimate of 103 page accesses. At 2%, the estimate is 2,003 accesses, above the scan’s 1,000. The estimates are equal at 997 matches, or 0.997%.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
 </div>
-<p><strong>Check the measurement:</strong> <code>CountingScan.rows</code> in Lab 4 counts rows yielded by its wrapped scan. It does not count physical disk reads. Use the row count to explain an execution plan, and name the counter or measurement behind every performance claim.</p>
+<p><strong>Check the measurement:</strong> Lab 4’s <code>CountingScan.rows</code> counts rows from its wrapped scan. It does not count physical disk reads. Use the row count to explain execution work. Identify the counter or measurement that supports each performance claim.</p>
 
 <!-- ============================================================ -->
 <h2 id="cost">Estimate a plan’s block accesses before execution</h2>
 
-<p class="keep-in-present">The estimated row counts now supply inputs to the cost formulas. Compare competing plans in the same unit, such as block accesses, so a smaller estimate means less work under the same assumptions.</p>
+<p class="keep-in-present">Estimated row counts supply inputs to cost formulas. Compare plans with the same units and assumptions. A smaller block-access estimate means less work in this model.</p>
 
 <p class="keep-in-present">Table scans and index scans provide different <span class="gloss" data-gloss="access-path">access paths</span> to rows. A cost model estimates each candidate plan’s work from its operators and estimated row counts. Our teaching model counts block accesses, extending the measurements from Lab 4. Production models also account for CPU work, caching, and differences between sequential and random I/O.</p>
 
@@ -199,10 +189,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 \text{cost}(\text{HashJoin}) &= B(L) + B(R) \\
 \text{cost}(\text{MergeJoin}) &= \text{sort costs} + B(L) + B(R)
 \end{aligned} \]
-<p>These are simplified I/O estimates: hash join assumes the build side fits in memory; repeated heap visits may hit cached pages; spilling, output size, and CPU work add cost. The table scan is week 1's lesson formalized and the index select is week 6's. The nested
-loop's <em>N</em>(<em>L</em>) · <em>B</em>(<em>R</em>) accounts for rereading the right input for each left row<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup>; the hash join reads
-each side once, plus memory for the hash table. Pick the plan with the smallest total, computed
-from statistics, before running anything.</p>
+<p>These formulas give simplified I/O estimates. Hash join assumes its smaller input fits in memory. Repeated heap visits can use cached pages. Spilling, output size, and CPU work add costs. The table-scan and index formulas extend the ideas from weeks 1 and 6.</p><p>The nested-loop term <em>N</em>(<em>L</em>) · <em>B</em>(<em>R</em>) counts another right-input scan for each left row.<sup class="src"><a href="#src-4" title="Access Path Selection in a Relational Database Management System (Selinger et al., SIGMOD 1979)">4</a></sup> Hash join reads each input once and uses memory for its hash table. Calculate each plan’s total from the statistics. Select the plan with the smallest estimate before execution.</p>
 </div>
 
 <p class="keep-in-present">These formulas estimate page-access work before execution. Lab 4’s <code>CountingScan.rows</code> instead counts rows yielded by a scan. Row counts help explain work, but they are not measurements of block reads.<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></p>
@@ -217,16 +204,13 @@ from statistics, before running anything.</p>
 
 <div class="viz" id="viz-flip">
   <div class="viz-title">index scan vs sequential scan · 100,000 rows, 1,000 blocks, tree height 3</div>
-  <p class="viz-description">The slider sets the predicate's selectivity (fraction of rows
-  kept). Costs come from the formulas above: seq scan always pays B = 1,000 blocks; the
-  index pays height + one block touch per matching RID. The cheaper plan is the one the
-  optimizer picks.</p>
+  <p class="viz-description">The slider sets selectivity: the fraction of rows that the predicate keeps. A sequential scan always costs B = 1,000 block accesses. The index costs its height plus one block access per matching RID. The optimizer selects the plan with the smaller estimate.</p>
   <div class="flip-controls">
     <label>selectivity: <span id="flip-sel-val">1.00%</span></label>
     <input type="range" id="flip-sel" min="0" max="100" step="1" value="50">
   </div>
   <div id="flip-readout"></div>
-  <p class="viz-caption">For this table and cost model, the two plans cost about the same near 1% selectivity. Below that point the index avoids enough heap accesses to be cheaper; above it the sequential scan wins. Real crossover points also depend on caching, row clustering, index coverage, and I/O costs, so the threshold is not universal.</p>
+  <p class="viz-caption">The plans have approximately equal costs near 1% selectivity in this model. Below that point, the index avoids enough heap accesses to cost less. Above that point, the sequential scan costs less. Actual thresholds depend on caching, row clustering, index coverage, and I/O costs.</p>
 </div>
 
 <p class="key-fact keep-in-present"><strong>~1%</strong> selectivity is the crossover in this example’s simplified cost model</p>
@@ -236,7 +220,7 @@ from statistics, before running anything.</p>
 
 <p class="keep-in-present">So far, we have chosen how to obtain rows from one table. With several tables, we must also decide how to match their rows and which intermediate results to build first.</p>
 
-<p class="keep-in-present">The matching algorithm and the table order affect each other: an early filter or a smaller intermediate result can change which algorithm is cheapest for the next join.</p>
+<p class="keep-in-present">Join order and algorithm choice affect each other. An early filter or smaller intermediate result can change which algorithm costs least for the next join.</p>
 
 <h3 class="new-slide" data-kicker="Two choices per join">Nested loop, hash, and merge reuse familiar ideas</h3>
 
@@ -244,59 +228,54 @@ from statistics, before running anything.</p>
   <thead><tr><th>Algorithm</th><th>Idea</th><th>Shines when</th><th>Connection to earlier labs</th></tr></thead>
   <tbody>
     <tr><td><strong>Nested loop</strong></td><td>for each row of the left table, read through the right table looking for rows that match it</td><td>the right side is tiny, or has an index on the join column, so each pass over it is cheap<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>Lab 4's ProductScan</td></tr>
-    <tr><td><strong>Hash join</strong></td><td>read the smaller table once and put every row into an in-memory hash table keyed by its join column; then read the bigger table once and, for each row, look up its join value in that hash table<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>the join condition is an equality, and the smaller side fits in memory<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 36.15. Operator Optimization Information (HASHES)">7</a></sup></td><td>Lab 4's Going-Further CachingScan plus a Python dict keyed on the join column</td></tr>
-    <tr><td><strong>Merge join</strong></td><td>sort both tables on the join column, then walk the sorted streams together, comparing keys and producing each matching combination; duplicate keys may require retaining or revisiting matching groups</td><td>both inputs are already sorted on the join column, which an appropriate B+ tree scan can provide without a separate sort<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>Lab 6's chained leaves are a sorted stream</td></tr>
+    <tr><td><strong>Hash join</strong></td><td>Read the smaller table into a memory hash table keyed by its join column. Then read the larger table. For each row, look up the join value in the hash table.<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>the join condition is an equality, and the smaller side fits in memory<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 36.15. Operator Optimization Information (HASHES)">7</a></sup></td><td>Lab 4's Going-Further CachingScan plus a Python dict keyed on the join column</td></tr>
+    <tr><td><strong>Merge join</strong></td><td>Sort both inputs on the join column. Read the sorted streams together to produce matching combinations. Duplicate keys can require retaining or revisiting matching groups.</td><td>both inputs are already sorted on the join column, which an appropriate B+ tree scan can provide without a separate sort<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 50.5. Planner/Optimizer">6</a></sup></td><td>Lab 6's chained leaves are a sorted stream</td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Two choices per join">Ten tables can be joined 17 billion ways</h3>
 
-<p class="keep-in-present">Counting table permutations and binary-tree arrangements, 10 tables have about 17 billion possible join plans before algorithm choices. Dynamic programming reduces repeated work by retaining useful plans for small table subsets and using them to build larger plans. The search still grows rapidly, so planners also use restrictions and heuristics. PostgreSQL can switch to genetic search when the query has enough joins; its default threshold is 12 tables.<sup class="src"><a href="#src-8" title="Introduction to the Join Ordering Problem (Querify Labs)">8</a></sup><sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 19.7. Query Planning (geqo_threshold)">9</a></sup></p>
+<p class="keep-in-present">Ten tables have about 17 billion possible join plans when counting table permutations and binary-tree arrangements. Algorithm choices add more alternatives. Dynamic programming retains useful plans for small table subsets and uses them to construct larger plans. The search still grows rapidly, so planners also use restrictions and heuristics. PostgreSQL can switch to genetic search when a query has enough joins. Its default threshold is 12 tables.<sup class="src"><a href="#src-8" title="Introduction to the Join Ordering Problem (Querify Labs)">8</a></sup><sup class="src"><a href="#src-9" title="PostgreSQL Documentation: 19.7. Query Planning (geqo_threshold)">9</a></sup></p>
 
 <p class="key-fact keep-in-present"><strong>17 billion</strong> distinct shapes for a 10-table join: the search that System R's dynamic programming makes feasible</p>
 
 <h3 class="new-slide" data-kicker="Two choices per join">Updated statistics can change the selected plan</h3>
 
-<p class="keep-in-present">A data load or statistics refresh can change estimated row counts and make a different plan look cheaper. When performance changes, compare the old and new <code>EXPLAIN</code> output and check whether table statistics are current. Join order is one possible change; scan types and join algorithms can change too.<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></p>
+<p class="keep-in-present">A data load or statistics refresh can change row-count estimates. A different plan can then appear cheaper. When performance changes, compare the old and new <code>EXPLAIN</code> output. Check whether the statistics are current. Join order, scan types, and join algorithms can all change.<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></p>
 
 <h3 class="new-slide" data-kicker="Two choices per join">One join order produces a 9,000-row intermediate result</h3>
 
-<p>Three tables, two join predicates, three <span class="gloss" data-gloss="left-deep">left-deep</span> orders (each join takes the result so far on its left and one fresh table on its right); every order returns the same
-3,000 rows, but the amount of work in the middle differs:</p>
+<p>This example has three tables, two join predicates, and three <span class="gloss" data-gloss="left-deep">left-deep</span> orders. Each join takes the previous result on its left and one new table on its right. Each order returns 3,000 rows. The intermediate results differ.</p>
 
 <div class="viz" id="viz-order">
   <div class="viz-title">join order · students (300 rows) ⋈ majors (3) ⋈ enrollments (3,000)</div>
-  <p class="viz-description">Predicates: <code>students.mid = majors.mid2</code> and
-  <code>students.uid = enrollments.uid</code>. Click an order; the bars show each
-  intermediate result's row count (the cost proxy: rows a plan must produce and carry).
-  Note what happens to the order that joins majors and enrollments first: no predicate
-  connects them.</p>
+  <p class="viz-description">The predicates are <code>students.mid = majors.mid2</code> and <code>students.uid = enrollments.uid</code>. Select a join order. Each bar shows an intermediate row count, which represents work producing and retaining rows. Inspect the order that joins majors and enrollments first. No predicate connects these two tables.</p>
   <div class="order-buttons">
     <button type="button" class="btn primary" data-order="SM">1 · (students ⋈ majors) ⋈ enrollments</button>
     <button type="button" class="btn" data-order="SE">2 · (students ⋈ enrollments) ⋈ majors</button>
     <button type="button" class="btn" data-order="ME">3 · (majors ⋈ enrollments) ⋈ students</button>
   </div>
   <div id="order-readout"></div>
-  <p class="viz-caption">Order 3 first produces a 9,000-row cross product. The first result has 3× as many rows as order 2’s first result and 30× as many as order 1’s. All three orders finish with 3,000 rows. Compare both intermediate results in the chart: choosing the order can greatly reduce work even when the final answer is unchanged.</p>
+  <p class="viz-caption">Order 3 first produces a 9,000-row cross product. This is 3× the first result of order 2 and 30× the first result of order 1. All three orders finish with 3,000 rows. Compare both intermediate results in the chart. Changing the order can reduce work without changing the final answer.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="review">Bonus synthesis: explain each measurement</h2>
 
-<p class="keep-in-present">This table includes optional transactions and concurrency. The <a href="../../schedule.html#midterm-scope">required midterm scope</a> is Lectures 1–6 and Labs 1–6 only. Prepare by explaining the mechanisms behind the lab measurements below, then reviewing the discussion questions and lecture examples.</p>
+<p class="keep-in-present">This table includes optional transactions and concurrency. The <a href="../../schedule.html#midterm-scope">required midterm scope</a> is Lectures 1–6 and Labs 1–6 only. Explain the mechanisms behind the lab measurements. Then review the discussion questions and lecture examples.</p>
 
 <h3 class="new-slide" data-kicker="Engine synthesis">Eight topics and the measurements to explain</h3>
 
 <table>
   <thead><tr><th>Week</th><th>The one idea</th><th>The number to explain</th></tr></thead>
   <tbody>
-    <tr><td>1 · files</td><td>the file manager transfers whole blocks; count block accesses and distinguish cached writes from durable writes</td><td>your fsync ratio</td></tr>
-    <tr><td>2 · buffer pool</td><td>pin and unpin; LRU eviction; the miss rate times the disk cost dominates the average access time</td><td>0% at 49 of 50 frames</td></tr>
-    <tr><td>3 · records</td><td>fixed-size slots give direct access by slot number; deletion changes a flag; a RID remains valid until its slot is deleted or reused</td><td>59 vs 527 blocks for 10k rows</td></tr>
-    <tr><td>4 · iterators</td><td>one Scan interface; pull rows one at a time instead of building whole intermediate tables; equivalent plan trees can require different amounts of work</td><td>900 vs 60 pairs</td></tr>
-    <tr><td>5 · SQL</td><td>lex → parse → describe → plan; correct first</td><td>the same 900, now automatic</td></tr>
-    <tr><td>6 · B+ trees</td><td>an overfull node splits; a root split adds one level above every leaf; larger fan-out reduces height</td><td>100,000 examined rows versus 11 in-memory node visits and one matching heap block; measure timing separately</td></tr>
-    <tr><td>7 · WAL</td><td>sync recovery information before data; commit after the required flushes</td><td>$50 vanished and returned</td></tr>
+    <tr><td>1 · files</td><td>The file manager transfers whole blocks. Count block accesses. Distinguish cached writes from durable writes.</td><td>your fsync ratio</td></tr>
+    <tr><td>2 · buffer pool</td><td>Pin and unpin frames. Apply LRU eviction. Miss rate multiplied by disk cost dominates average access time.</td><td>0% at 49 of 50 frames</td></tr>
+    <tr><td>3 · records</td><td>Fixed-size slots allow direct access by slot number. Deletion changes a flag. A RID remains valid until deletion or reuse of its slot.</td><td>59 vs 527 blocks for 10k rows</td></tr>
+    <tr><td>4 · iterators</td><td>One Scan interface returns rows on request. Operators do not need complete intermediate tables. Equivalent plans can require different amounts of work.</td><td>900 vs 60 pairs</td></tr>
+    <tr><td>5 · SQL</td><td>lex → parse → describe → plan. First, ensure correctness.</td><td>the same 900, now automatic</td></tr>
+    <tr><td>6 · B+ trees</td><td>An overfull node splits. A root split adds one level above all leaves. Larger fan-out reduces height.</td><td>100,000 examined rows versus 11 memory node visits and one matching heap block. Measure elapsed time separately.</td></tr>
+    <tr><td>7 · WAL</td><td>Sync recovery information before data. Commit after the required flushes.</td><td>$50 vanished and returned</td></tr>
     <tr><td>8 · concurrency</td><td>compare the guarantees and costs of two-phase locking and MVCC</td><td>110 where 120 belonged</td></tr>
   </tbody>
 </table>
@@ -304,10 +283,10 @@ from statistics, before running anything.</p>
 <h3 class="new-slide" data-kicker="Engine synthesis">Prepare by explaining mechanisms and measurements</h3>
 
 <ul class="checklist">
-  <li>☐ Re-run each lab's <code>measure_*.py</code> and explain how the implementation produces each printed result. Use the review table to guide your study.</li>
-  <li>☐ Answer each lab’s discussion prompts without consulting your notes, then check your reasoning.</li>
+  <li>☐ Run each lab’s <code>measure_*.py</code> again. Explain how the implementation produces each result. Use the review table to guide your study.</li>
+  <li>☐ Answer each lab’s discussion prompts without your notes. Then check your reasoning.</li>
   <li>☐ Review the lecture and lab FAQs, especially any topics you found difficult.</li>
-  <li>☐ Focus on why the algorithms work and what the measurements show. You do not need to memorize API signatures or flag names; be able to trace the ada record layout.</li>
+  <li>☐ Explain why the algorithms work. Interpret the measurements. Trace the ada record layout. You do not need to memorize API signatures or flag names.</li>
   <li>☐ Leave time to rest before the exam.</li>
 </ul>
 
@@ -315,7 +294,7 @@ from statistics, before running anything.</p>
 <h3 id="query-contract">Review one query from tokens to rows</h3>
 <p>This is the <a href="../../labs/lab-05/sqlfrontend.html#worked-example">Lab 5 worked query</a>. Name the output of each stage before tracing the plan. Parsing a description and executing a scan do different work.</p>
 <div data-teaching-trace="sql-plan">
-  <p><strong>Worked result:</strong> the query selects name from students where gpa &gt; 35. ProjectScan wraps SelectScan over TableScan; the six toy rows yield ada, cyd, and eli.</p>
+  <p><strong>Worked result:</strong> The query selects name from students where gpa &gt; 35. ProjectScan wraps SelectScan over TableScan. The six example rows produce ada, cyd, and eli.</p>
   <p>Enable JavaScript to inspect each intermediate state.</p>
 </div>
 
@@ -323,16 +302,16 @@ from statistics, before running anything.</p>
 
 <div class="exercise learning-check">
   <span class="ex-label">Explain it to a teammate</span>
-  <p>The toy index model costs three tree-page accesses plus one heap-page access per match. With 1,000 pages in a full scan, what choice follows at 100 matches and at 2,000? Why might a real engine choose differently?</p>
-  <details><summary>Check your explanation</summary><p>The estimates are 103 and 2,003 accesses, so this model chooses the index for 100 matches and the scan for 2,000. Cache hits, shared heap pages, clustering, CPU work, and estimate errors can change the actual comparison.</p></details>
+  <p>The example index costs three tree-page accesses plus one heap-page access per match. A full scan costs 1,000 page accesses. Which plan costs less at 100 matches? Which costs less at 2,000 matches? Why could an actual engine choose differently?</p>
+  <details><summary>Check your explanation</summary><p>The index estimates are 103 and 2,003 accesses. This model therefore selects the index for 100 matches and the scan for 2,000. Cache hits, shared heap pages, clustering, CPU work, and estimation errors can change the actual comparison.</p></details>
 </div>
 
-<p class="keep-in-present">Return to the two equivalent plans. State the required result, estimate candidate work from statistics, compare costs in shared units, then measure execution. Explain a plan choice together with the assumptions that support it.</p>
+<p class="keep-in-present">Return to the two equivalent plans. State the required result. Estimate candidate work from statistics. Compare costs with the same units. Measure execution. Explain the plan choice and its assumptions.</p>
 
 <ul class="recap-list">
   <li><strong>The optimizer = statistics + cost model + search.</strong> Statistics describe the data, the cost model estimates work, and search compares alternatives. EXPLAIN ANALYZE lets you check row-count estimates against execution<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</li>
-  <li><strong>Selectivity determines estimated intermediate row counts</strong>: inaccurate distribution or independence assumptions can lead to poor cost estimates and plan choices.</li>
-  <li><strong>Act I is complete.</strong> You built a storage engine and practiced interpreting execution plans. The required sequence applies these ideas to analytics, vector search, and distributed systems starting October 8.</li>
+  <li><strong>Selectivity determines estimated intermediate row counts.</strong> Incorrect distribution or independence assumptions can produce inaccurate cost estimates and poor plan choices.</li>
+  <li><strong>The storage-engine sequence is complete.</strong> You built a storage engine and interpreted execution plans. Starting October 8, the required sequence applies these ideas to analytics, vector search, and distributed systems.</li>
 </ul>
 
 <p class="key-fact keep-in-present"><strong>~1%</strong> selectivity at the crossover in this example · <strong>17 billion</strong> ways to join 10 tables, why the search is dynamic programming</p>
@@ -343,13 +322,10 @@ from statistics, before running anything.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Will microdb get an optimizer in a later lab?</h3>
-<p class="keep-in-present">No required optimizer implementation is assigned. The core microdb sequence stops at B+ trees; transactions and optimization remain optional extensions. For an optional extension, first connect the Lab 6 index to the planner, then add catalog statistics and a cost comparison between candidate plans. These steps build a small version of a cost-based optimizer. You could include such an extension in a final-project appendix if it supports your project’s goals.</p>
+<p class="keep-in-present">There is no required optimizer implementation. The core microdb sequence stops at B+ trees. Transactions and optimization are optional extensions. For an optional extension, first connect the Lab 6 index to the planner. Then add catalog statistics. Compare the estimated costs of candidate plans.</p><p>These steps produce a small cost-based optimizer. You can include this extension in a final-project appendix if it supports your project’s goals.</p>
 
 <h3 class="keep-in-present">Why do plans change when I add LIMIT 10?</h3>
-<p class="keep-in-present">The optimizer prices <em>first rows</em> differently from
-<em>all rows</em>: a plan that streams cheap early rows (nested loop via an index) can beat
-one with a big setup cost (hash join) when only 10 are wanted. Cost models track both
-startup and total cost for exactly this reason<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup>.</p>
+<p class="keep-in-present">The optimizer estimates costs for <em>first rows</em> and <em>all rows</em> separately. With LIMIT 10, an indexed nested loop can return early rows without a large setup cost. A hash join must first build its hash table. Cost models therefore track startup cost and total cost.<sup class="src"><a href="#src-2" title="PostgreSQL Documentation: 14.1. Using EXPLAIN">2</a></sup></p>
 
 <h3 class="keep-in-present">Is the exam cumulative with the quizzes? Same style?</h3>
 <p class="keep-in-present">The October 22 midterm covers the concepts, traces, measurements, and discussion prompts from Lectures 1–6 and Labs 1–6. This optimizer reading and the transaction extensions are optional.</p>
@@ -382,11 +358,11 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
+<script src="viz.js?v=ste-20261015"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
-<script src="../../labs/_shared/teaching-traces.js?v=4"></script>
+<script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../labs/_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

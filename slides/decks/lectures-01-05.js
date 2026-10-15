@@ -709,7 +709,7 @@
         "title": "Same query, different trip",
         "minutes": 3,
         "kind": "title",
-        "notes": "Ask why the same query might run faster the second time even though it returns the same names. Give students thirty seconds to predict, then collect two explanations before revealing the cache. The displayed times count only modeled block accesses; they are not timings of a complete Python query. Follow the first run through the engine next.",
+        "notes": "Ask why the same query might run faster the second time even though it returns the same names. Give students thirty seconds to predict, then collect two explanations before revealing the cache. The displayed times count only modeled block accesses. They are not timings of a complete Python query. Follow the first run through the engine next.",
         "id": "lecture-01-scene-01",
         "demo": "viz-query-journey",
         "sources": [
@@ -720,7 +720,7 @@
         "title": "Open the machine",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Follow one statement from characters to tokens, then to a plan with Project above Select above Scan. Ask which part reads the SQL text. The front end does; the operators execute the resulting plan. Explain that the lexer identifies tokens and the parser checks their arrangement. Students will build these engine layers from the bottom upward.",
+        "notes": "Follow one statement from characters to tokens, then to a plan with Project above Select above Scan. Ask which part reads the SQL text. The front end does. The operators execute the resulting plan. Explain that the lexer identifies tokens and the parser checks their arrangement. Students will build these engine layers from the bottom upward.",
         "id": "lecture-01-scene-02",
         "demo": "viz-query-journey",
         "sources": [
@@ -731,7 +731,7 @@
         "title": "Cold blocks",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Before each block transfer, ask whether a row or a whole block moves. Pause after block 0 to have students identify which rows pass. Finish with six examined, three returned, two disk reads. The toy deliberately spreads six students across two blocks; later fixed slots pack 170 students per 4096-byte block. Distinguish results from the work needed to produce them.",
+        "notes": "Before each block transfer, ask whether a row or a whole block moves. Pause after block 0 to have students identify which rows pass. Finish with six examined, three returned, two disk reads. The toy deliberately spreads six students across two blocks. Later fixed slots pack 170 students per 4096-byte block. Distinguish results from the work needed to produce them.",
         "id": "lecture-01-scene-03",
         "demo": "viz-query-journey",
         "sources": [
@@ -753,7 +753,7 @@
         "title": "A table is a contract",
         "minutes": 4,
         "kind": "definition",
-        "notes": "Introduce schema and relation using the student table. Briefly distinguish a mathematical relation from a SQL table that can contain duplicate rows. Ask whether a column type describes only today’s rows or also limits future writes. In microdb, gpa 39 means 3.9; decimal GPAs in other diagrams show the human-readable value.",
+        "notes": "Introduce schema and relation using the student table. Briefly distinguish a mathematical relation from a SQL table that can contain duplicate rows. Ask whether a column type describes only today’s rows or also limits future writes. In microdb, gpa 39 means 3.9. Decimal GPAs in other diagrams show the human-readable value.",
         "id": "lecture-01-scene-05",
         "definition": "The named fields and types that define a table’s rows.",
         "term": "Schema",
@@ -786,7 +786,7 @@
         "title": "One answer, two paths",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask which path remains affordable as the table grows. Calculate 500/7≈71 times fewer modeled storage trips. Explain declarative SQL: the user describes the wanted result; the planner chooses an executable strategy. These seven reads are a stipulated example, not a universal index cost; many matches can make a scan preferable. Leave detailed index mechanics to Lecture 6.",
+        "notes": "Ask which path remains affordable as the table grows. Calculate 500/7≈71 times fewer modeled storage trips. Explain declarative SQL: the user describes the wanted result. The planner chooses an executable strategy. These seven reads are a stipulated example, not a universal index cost. Many matches can make a scan preferable. Leave detailed index mechanics to Lecture 6.",
         "id": "lecture-01-scene-08",
         "sources": [
           "lectures/lecture-01/anatomy.html"
@@ -796,7 +796,7 @@
         "title": "The stack",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Follow what each layer receives and produces. The front end builds a plan; operators request rows; the record layer locates fields in page bytes; the buffer pool supplies pages in memory; the file manager reads and writes blocks. Ask which layer understands the name ada and which receives only a byte offset. Production engines may divide these responsibilities differently.",
+        "notes": "Follow what each layer receives and produces. The front end builds a plan. Operators request rows. The record layer locates fields in page bytes. The buffer pool supplies pages in memory. The file manager reads and writes blocks. Ask which layer understands the name ada and which receives only a byte offset. Production engines may divide these responsibilities differently.",
         "id": "lecture-01-scene-09",
         "demo": "viz-layer-stack",
         "sources": [
@@ -807,7 +807,7 @@
         "title": "The storage trip",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Explain that equally spaced positions are factors of ten, not equal nanoseconds. Ask why a bar that is several times longer can represent millions of times more latency. Use representative numbers rather than universal hardware promises. Connect the scale to fetching nearby bytes together: an access has substantial fixed overhead, while large transfers still have bandwidth costs.",
+        "notes": "Explain that equally spaced positions are factors of ten, not equal nanoseconds. Ask why a bar that is several times longer can represent millions of times more latency. Use representative numbers rather than universal hardware promises. Explain why the system fetches nearby bytes together. An access has fixed overhead. Large transfers also have bandwidth costs.",
         "id": "lecture-01-scene-10",
         "demo": "viz-latency",
         "sources": [
@@ -818,7 +818,7 @@
         "title": "Budget the trips",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Give a minute to calculate 12.5 ms and 0.175 ms, then discuss how the ratio changes with scale. Ask whether the engine can always ignore CPU cost. Expected no: cached workloads, expensive expressions and large scans need richer models. Return to the cold/warm example and compute 50µs versus 0.2µs; label the calculation as block access only.",
+        "notes": "Give a minute to calculate 12.5 ms and 0.175 ms, then discuss how the ratio changes with scale. Ask whether the engine can always ignore CPU cost. Expected no: cached workloads, expensive expressions and large scans need richer models. Return to the cold/warm example and compute 50µs versus 0.2µs. Label the calculation as block access only.",
         "id": "lecture-01-scene-11",
         "sources": [
           "lectures/lecture-01/anatomy.html"
@@ -828,7 +828,7 @@
         "title": "The catalog loop",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Ask how the engine finds a table’s fields after a restart. Its catalog stores the schema as rows. To read those rows, the engine starts with a few built-in catalog layouts; Lecture 3 explains the implementation. Keep the earlier packed offsets 0, 4, and 11 separate from the fixed-slot offsets used here.",
+        "notes": "Ask how the engine finds a table’s fields after a restart. Its catalog stores the schema as rows. To read those rows, the engine starts with a few built-in catalog layouts. Lecture 3 explains the implementation. Keep the earlier packed offsets 0, 4, and 11 separate from the fixed-slot offsets used here.",
         "id": "lecture-01-scene-12",
         "definition": "Stored metadata describing tables, fields and other database objects.",
         "term": "Catalog",
@@ -840,7 +840,7 @@
         "title": "Build from the floor",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Connect the engine layers to Labs 1–7: files, buffers, records and catalog, scans, SQL, B+ tree, and optional recovery practice. Supplied lower layers let students continue even if an earlier implementation is unfinished. The interfaces stay the same across labs. Ask which layer comes first and which first runs typed SQL: the file manager in Lab 1 and the front end in Lab 5.",
+        "notes": "Connect the engine layers to Labs 1–7: files, buffers, records and catalog, scans, SQL, B+ tree, and optional recovery practice. Supplied lower layers let students continue even if an earlier implementation is unfinished. The interfaces stay the same across labs. Ask which layer comes first: the file manager in Lab 1. Ask which layer first runs typed SQL: the front end in Lab 5.",
         "id": "lecture-01-scene-13",
         "demo": "viz-microdb-plan",
         "sources": [
@@ -851,7 +851,7 @@
         "title": "A page is a byte grid",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Teach the difference between block number and byte offset. Show that the same four bytes have different integer meanings depending on byte order. Have students locate the least-significant byte before switching endian display. microdb uses signed little-endian 32-bit integers. Strings store encoded byte length plus bytes; do not imply every processor or network protocol has one universal byte order.",
+        "notes": "Teach the difference between block number and byte offset. Show that the same four bytes have different integer meanings depending on byte order. Have students locate the least-significant byte before switching endian display. microdb uses signed little-endian 32-bit integers. Strings store encoded byte length plus bytes. Do not imply every processor or network protocol has one universal byte order.",
         "id": "lecture-01-scene-14",
         "demo": "viz-endian",
         "sources": [
@@ -862,7 +862,7 @@
         "title": "When the write is real",
         "minutes": 3,
         "kind": "visual",
-        "notes": "A write can return while its bytes are still in a buffer. Ask what changes in Lab 1 when the program also calls fsync. A successful fsync waits for the file-sync request to complete; it can fail, and its durability guarantees depend on the storage stack. Briefly introduce the log as saved recovery information. Explain that killing a process and losing power can leave different data available.",
+        "notes": "A write can return while its bytes are still in a buffer. Ask what changes in Lab 1 when the program also calls fsync. A successful fsync waits for the file-sync request to complete. It can fail, and its durability guarantees depend on the storage stack. Briefly introduce the log as saved recovery information. Explain that killing a process and losing power can leave different data available.",
         "id": "lecture-01-scene-15",
         "sources": [
           "lectures/lecture-01/anatomy.html"
@@ -872,7 +872,7 @@
         "title": "Reconstruct the engine",
         "minutes": 3,
         "kind": "recap",
-        "notes": "Ask three students to explain how SQL becomes a plan, how a row is located in a page, and how a block reaches memory. Then return to the second run: with no disk reads, what work remains? The engine still parses, plans, scans, and filters. Before Lab 1, students should read the specification, run the unchanged test harness, and have Python and the starter files ready.",
+        "notes": "Ask one student how SQL becomes a plan. Ask another how the engine locates a row in a page. Ask a third how a block reaches memory. Then return to the second run: with no disk reads, what work remains? The engine still parses, plans, scans, and filters. Before Lab 1, students should read the specification, run the unchanged test harness, and have Python and the starter files ready.",
         "id": "lecture-01-scene-16",
         "sources": [
           "lectures/lecture-01/anatomy.html"
@@ -890,7 +890,7 @@
         "title": "Repeated reads",
         "minutes": 3,
         "kind": "title",
-        "notes": "The engine requests B7 three times. Without a buffer pool, it may read the file three times. Ask where it could keep a copy. In build 1, each request goes to storage; in build 2, later requests use the page already in memory. The query still runs against those bytes. This three-minute opening is teaching time; the scheduled ten-minute quiz is separate.",
+        "notes": "The engine requests B7 three times. Without a buffer pool, it may read the file three times. Ask where it could keep a copy. In build 1, each request goes to storage. In build 2, later requests use the page already in memory. The query still runs against those bytes. This three-minute opening is teaching time. The scheduled ten-minute quiz is separate.",
         "id": "lecture-02-scene-01",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -900,7 +900,7 @@
         "title": "Bring the measured gap",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask two students to share their Lab 1 sync/no-sync ratios and explain how they measured them. The left path stops when the bytes enter a buffer; the right waits for fsync. Use the students’ measurements rather than inventing a class result. Distinguish Python buffers, the OS cache, and durable storage: a fast buffered write does not directly measure SSD throughput. Next, ask how keeping a page in memory can avoid a file read.",
+        "notes": "Ask two students to share their Lab 1 sync/no-sync ratios and explain how they measured them. The left path stops when the bytes enter a buffer. The right waits for fsync. Use the students’ measurements rather than inventing a class result. Distinguish Python buffers, the OS cache, and durable storage: a fast buffered write does not directly measure SSD throughput. Next, ask how keeping a page in memory can avoid a file read.",
         "id": "lecture-02-scene-02",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -910,7 +910,7 @@
         "title": "Frames and pages",
         "minutes": 4,
         "kind": "definition",
-        "notes": "Name the distinction clearly: a block is an addressable storage unit; a page is its in-memory contents; a frame is a slot that holds a page. Ask whether replacing a page creates more memory. No, the frame count stays fixed. Explain that microdb searches a small frame list, whereas production lookup typically uses a mapping structure.",
+        "notes": "Name the distinction clearly: a block is an addressable storage unit. A page is its in-memory contents. A frame is a slot that holds a page. Ask whether replacing a page creates more memory. No, the frame count stays fixed. Explain that microdb searches a small frame list, whereas production lookup typically uses a mapping structure.",
         "id": "lecture-02-scene-03",
         "definition": "A fixed collection of memory frames that cache database pages.",
         "term": "Buffer pool",
@@ -933,7 +933,7 @@
         "title": "The hot set fits",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask students to predict the hit rate, then count each block’s first miss. The example produces 11 hits and 5 misses, about 69% hits. Blocks 0 and 1 are requested often enough to remain in memory. Ask pairs to explain how the request order changed from the previous scene even though the pool size stayed the same.",
+        "notes": "Ask students to predict the hit rate, then count each block’s first miss. The example produces 11 hits and 5 misses, about 69% hits. Blocks 0 and 1 are requested often enough to remain in memory. Ask pairs to compare the request order with the previous scene. The pool size stays the same.",
         "id": "lecture-02-scene-05",
         "demo": "viz-bufsim",
         "sources": [
@@ -944,7 +944,7 @@
         "title": "Hold the page",
         "minutes": 4,
         "kind": "definition",
-        "notes": "Ask what a scan would read if the pool replaced its page before the scan finished. A pin prevents that replacement. When two callers use the same page, the count stays positive until both release their pins. Use this diagram to show those overlapping holds; the earlier simulator releases each pin immediately. Pinning prevents eviction but does not stop another transaction from changing a row.",
+        "notes": "Ask what a scan would read if the pool replaced its page before the scan finished. A pin prevents that replacement. When two callers use the same page, the count stays positive until both release their pins. Use this diagram to show those overlapping holds. The earlier simulator releases each pin immediately. Pinning prevents eviction but does not stop another transaction from changing a row.",
         "id": "lecture-02-scene-06",
         "definition": "Keep a buffer frame from being replaced while callers use its page.",
         "term": "Pin",
@@ -956,7 +956,7 @@
         "title": "Recency is updated on hits",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Have students predict the victim individually, then vote before revealing. B is evicted because A’s hit updates its last-used tick. Ask what bug would evict A; expected stamping only on misses. Explain the actual lab rule: every successful pin increments the global tick, and the least recently pinned eligible frame is selected. Recency metadata is updated on both hit and miss.",
+        "notes": "Have students predict the victim individually, then vote before revealing. B is evicted because A’s hit updates its last-used tick. Ask what bug would evict A. Expected stamping only on misses. Explain the lab rule. Every successful pin increments the global tick. The manager selects the least recently pinned eligible frame. Recency metadata is updated on both hit and miss.",
         "id": "lecture-02-scene-07",
         "demo": "viz-bufsim",
         "sources": [
@@ -977,7 +977,7 @@
         "title": "Tracking residents",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Recall the immutable, hashable BlockId from Lab 1. Searching 3 or 50 frames is cheap; searching hundreds of thousands on every pin is much more work. A hash map can locate a frame in expected constant time, though its worst case is not O(1). Both implementations offer the same pin interface to callers.",
+        "notes": "Recall the immutable, hashable BlockId from Lab 1. Searching 3 or 50 frames is cheap. Searching hundreds of thousands on every pin is much more work. A hash map can locate a frame in expected constant time, though its worst case is not O(1). Both implementations offer the same pin interface to callers.",
         "id": "lecture-02-scene-09",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -987,7 +987,7 @@
         "title": "Dirty before reuse",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask whether unpin means save. Expected no; it releases a hold. A dirty page must be written before its frame is overwritten, and explicit flush can write it earlier. Demonstrate the bug by replacing a dirty frame without writing and ask where the changed value exists afterward. Clarify that persistence at commit is policy-dependent and will be covered with WAL.",
+        "notes": "Ask whether unpin means save. Expected no. It releases a hold. A dirty page must be written before its frame is overwritten, and explicit flush can write it earlier. Demonstrate the bug by replacing a dirty frame without writing and ask where the changed value exists afterward. Clarify that persistence at commit is policy-dependent and will be covered with WAL.",
         "id": "lecture-02-scene-10",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -997,7 +997,7 @@
         "title": "One cache above another",
         "minutes": 4,
         "kind": "visual",
-        "notes": "The OS cache can reuse file bytes, but the database must also track active page users, choose safe replacements, and write recovery records in the required order. Operating systems can lock memory; that alone does not implement the database protocol. If both caches keep the same pages, those copies compete for RAM and can contribute to swapping.",
+        "notes": "The OS cache can reuse file bytes. The database must also track active page users and choose safe replacements. It must write recovery records in the required order. Operating systems can lock memory. That alone does not implement the database protocol. If both caches keep the same pages, those copies compete for RAM and can contribute to swapping.",
         "id": "lecture-02-scene-11",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -1007,7 +1007,7 @@
         "title": "Protect the useful pages",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Compare exact LRU to a clock approximation and scan-resistance. The ring is a conceptual depiction of PostgreSQL’s bulk-scan strategy, not a private full copy of the shared pool. Ask whether a one-pass scan should receive the same cache protection as frequently reused pages. Connect OLTP reuse to OLAP streaming; neither workload is inherently bad.",
+        "notes": "Compare exact LRU to a clock approximation and scan-resistance. The ring is a conceptual depiction of PostgreSQL’s bulk-scan strategy, not a private full copy of the shared pool. Ask whether a one-pass scan should receive the same cache protection as frequently reused pages. Connect OLTP reuse to OLAP streaming. Neither workload is inherently bad.",
         "id": "lecture-02-scene-12",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -1028,7 +1028,7 @@
         "title": "One frame short",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Give pairs a minute to predict the repeated scan with 49 frames. Exact LRU yields 0% for this cyclic workload. At 50 frames, the first pass still misses and later passes hit. Ask why sizing as a fixed percentage of installed RAM can miss the real requirement. The working set and other memory consumers determine a useful capacity. The asterisk on 100% means later passes after the first pass has populated all 50 frames; a two-pass total would be 50%.",
+        "notes": "Give pairs a minute to predict the repeated scan with 49 frames. Exact LRU yields 0% for this cyclic workload. At 50 frames, the first pass still misses and later passes hit. Ask why sizing as a fixed percentage of installed RAM can miss the real requirement.\n\nThe working set and other memory consumers determine a useful capacity. The asterisk on 100% means later passes after the first pass has populated all 50 frames. A two-pass total would be 50%.",
         "id": "lecture-02-scene-14",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -1038,7 +1038,7 @@
         "title": "The four responsibilities",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Connect the diagram to the four Lab 2 methods. Pin counts track current users; every successful pin updates recency; dirty bytes must be saved before a frame is reused. The supplied Buffer methods perform the flushes. Ask where the buffer manager must call them before loading a replacement page.",
+        "notes": "Connect the diagram to the four Lab 2 methods. Pin counts track current users. Every successful pin updates recency. Dirty bytes must be saved before a frame is reused. The supplied Buffer methods perform the flushes. Ask where the buffer manager must call them before loading a replacement page.",
         "id": "lecture-02-scene-15",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -1048,7 +1048,7 @@
         "title": "Predict, then measure",
         "minutes": 3,
         "kind": "recap",
-        "notes": "Final oral retrieval: why can the same pool give 0% and about 69%? Why can the oldest frame be protected? Why is 90% hits still costly? Expected reuse, pins and expensive misses. Thursday students implement the buffer manager and measure hit rates as pool size changes. Put starter-file instructions in notes only; next lecture turns cached bytes into records.",
+        "notes": "Final oral retrieval: why can the same pool give 0% and about 69%? Why can the oldest frame be protected? Why is 90% hits still costly? Expected reuse, pins and expensive misses. Thursday students implement the buffer manager and measure hit rates as pool size changes. Put starter-file instructions in notes only. The next lecture explains how the engine interprets cached bytes as records.",
         "id": "lecture-02-scene-16",
         "sources": [
           "lectures/lecture-02/bufferpool.html"
@@ -1087,7 +1087,7 @@
         "title": "Reserve the shape",
         "minutes": 4,
         "kind": "definition",
-        "notes": "Describe the chosen microdb tradeoff: reserve a fixed maximum footprint per row so an address can be computed without parsing earlier records. Compare moving bytes in the previous scene to overwriting within capacity here. The word slot is overloaded in real systems; PostgreSQL uses variable-sized tuples behind a slot directory, unlike these fixed-width microdb records.",
+        "notes": "Describe the chosen microdb tradeoff: reserve a fixed maximum footprint per row so an address can be computed without parsing earlier records. Compare moving bytes in the previous scene to overwriting within capacity here. The word slot is overloaded in real systems. PostgreSQL uses variable-sized tuples behind a slot directory, unlike these fixed-width microdb records.",
         "id": "lecture-03-scene-03",
         "definition": "Reserved page space with the same byte layout for every record.",
         "term": "Fixed-size slot",
@@ -1100,7 +1100,7 @@
         "title": "Build the layout",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Have the class calculate before each reveal. The name field starts at 8 and consumes 12 bytes, so gpa starts at 20 and the slot totals 24. Compute floor 4096/24=170, with 16 left. Stress that the string prefix records encoded byte count and the reservation is 8 bytes. The 4-byte flag must be included; omitting it causes every later address to be wrong.",
+        "notes": "Have the class calculate before each reveal. The name field starts at 8 and consumes 12 bytes, so gpa starts at 20 and the slot totals 24. Compute floor 4096/24=170, with 16 left. Stress that the string prefix records encoded byte count and the reservation is 8 bytes. The 4-byte flag must be included. Omitting it causes every later address to be wrong.",
         "id": "lecture-03-scene-04",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1110,7 +1110,7 @@
         "title": "One multiply, one add",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask for the byte offset of gpa in slot 3: 3 × 24 + 20 = 92. Give pairs one minute to calculate the new schema: cid at byte 4, title at 8, credits at 24, and a 28-byte slot. A 4096-byte block holds 146 slots with 8 bytes left. Schema declares fields and types; Layout computes the offsets used by both readers and writers.",
+        "notes": "Ask for the byte offset of gpa in slot 3: 3 × 24 + 20 = 92. Give pairs one minute to calculate the new schema. cid starts at byte 4, title at 8, and credits at 24. The slot occupies 28 bytes. A 4096-byte block holds 146 slots with 8 bytes left. Schema declares fields and types. Layout computes the offsets used by both readers and writers.",
         "id": "lecture-03-scene-05",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1120,7 +1120,7 @@
         "title": "Capacity means bytes",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask whether 8 visible characters always fit in 8 bytes. Expected no. The existing rename widget only uses ASCII examples; this extra visual establishes the actual starter contract. Oversized writes must be rejected before mutation so neither the prior value nor the adjacent field is corrupted. Contrast the lab’s storage-byte reservation with SQL VARCHAR length semantics in production engines.",
+        "notes": "Ask whether 8 visible characters always fit in 8 bytes. Expected no. The existing rename widget only uses ASCII examples. This extra visual establishes the actual starter contract. Oversized writes must be rejected before mutation so neither the prior value nor the adjacent field is corrupted. Contrast the lab’s storage-byte reservation with SQL VARCHAR length semantics in production engines.",
         "id": "lecture-03-scene-06",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1130,7 +1130,7 @@
         "title": "Delete without shifting",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask which bytes deletion must change in microdb. Only the 4-byte in-use flag is set to 0; this is not literally a one-bit storage write. Existing data remains until overwritten. On insertion the caller must populate every field because a reused slot contains old bytes. Make clear that PostgreSQL MVCC deletion and vacuum have more responsibilities than this teaching flag.",
+        "notes": "Ask which bytes deletion must change in microdb. Only the 4-byte in-use flag is set to 0. This is not literally a one-bit storage write. Existing data remains until overwritten. On insertion the caller must populate every field because a reused slot contains old bytes. Make clear that PostgreSQL MVCC deletion and vacuum have more responsibilities than this teaching flag.",
         "id": "lecture-03-scene-07",
         "demo": "viz-recpage",
         "sources": [
@@ -1141,7 +1141,7 @@
         "title": "The cost of empty air",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask students to compare reserved capacity with actual bytes used. This diagram is the schema (id, name, gpa), with a 4-byte flag, two 4-byte integers and a 4-byte string length prefix. At capacity 8, each slot is 24 bytes and 170 fit in 4096 bytes. At capacity 200, each slot is 216 bytes and only 18 fit; 10,000 rows require 556 blocks. The green region includes fixed metadata plus a three-byte actual name; the orange region is reserved but unused. The source prose’s 19/527 example uses a different schema and must not be attached to this diagram.",
+        "notes": "Ask students to compare reserved capacity with actual bytes used. This diagram is the schema (id, name, gpa), with a 4-byte flag, two 4-byte integers and a 4-byte string length prefix. At capacity 8, each slot is 24 bytes and 170 fit in 4096 bytes. At capacity 200, each slot is 216 bytes and only 18 fit. 10,000 rows require 556 blocks.\n\nThe green region includes fixed metadata plus a three-byte actual name. The orange region is reserved but unused. The source prose’s 19/527 example uses a different schema and must not be attached to this diagram.",
         "id": "lecture-03-scene-08",
         "demo": "viz-slotcalc",
         "sources": [
@@ -1152,7 +1152,7 @@
         "title": "Missing is not zero",
         "minutes": 4,
         "kind": "definition",
-        "notes": "microdb does not currently support NULL. Other engines can use metadata, such as a null bitmap, to distinguish a missing value from zero or an empty string. Ask how counting an unknown GPA as zero changes an average. Actual storage costs depend on the header, bitmap allocation, and alignment; this diagram shows the distinction, not an exact space cost.",
+        "notes": "microdb does not currently support NULL. Other engines can use metadata, such as a null bitmap, to distinguish a missing value from zero or an empty string. Ask how counting an unknown GPA as zero changes an average. Actual storage costs depend on the header, bitmap allocation, and alignment. This diagram shows the distinction, not an exact space cost.",
         "id": "lecture-03-scene-09",
         "definition": "A marker for a missing or unknown value, distinct from zero and empty text.",
         "term": "NULL",
@@ -1164,7 +1164,7 @@
         "title": "When a value outgrows a page",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Compare storing a value in the row, compressing it there, and moving it to separate storage. Ask why reserving 2 MB for every student’s essay would waste space. PostgreSQL TOAST can compress or move large values depending on the settings and data; the illustrated 3× compression is hypothetical. PostgreSQL rows remain variable-sized.",
+        "notes": "Compare storing a value in the row, compressing it there, and moving it to separate storage. Ask why reserving 2 MB for every student’s essay would waste space. PostgreSQL TOAST can compress or move large values depending on the settings and data. The illustrated 3× compression is hypothetical. PostgreSQL rows remain variable-sized.",
         "id": "lecture-03-scene-10",
         "demo": "viz-toast",
         "sources": [
@@ -1175,7 +1175,7 @@
         "title": "Only fetch what is needed",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Before each query, ask which pages it needs. Selecting name can leave the separately stored essay unread. Selecting essay follows the row’s pointer and fetches the essay chunks. Expressions and storage settings can change actual reads, but this example shows the benefit of keeping common small fields together and fetching large values only when needed.",
+        "notes": "Before each query, ask which pages it needs. Selecting name can leave the separately stored essay unread. Selecting essay follows the row’s pointer and fetches the essay chunks. Expressions and storage settings can change actual reads. This example keeps common small fields together. The query fetches large values only when needed.",
         "id": "lecture-03-scene-11",
         "demo": "viz-toast",
         "sources": [
@@ -1186,7 +1186,7 @@
         "title": "One pinned record page",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Make the abstraction concrete: RecordPage combines a layout with one pinned block. It finds used/free slots, reads/writes fields, and flips flags. Every modifying operation must call set_modified so eviction knows the page changed. Ask what happens if the byte edit succeeds but the dirty flag is omitted; the change can disappear when the frame is reused.",
+        "notes": "Make the abstraction concrete: RecordPage combines a layout with one pinned block. It finds used/free slots, reads/writes fields, and flips flags. Every modifying operation must call set_modified so eviction knows the page changed. Ask what happens if the byte edit succeeds but the dirty flag is omitted. The change can disappear when the frame is reused.",
         "id": "lecture-03-scene-12",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1196,7 +1196,7 @@
         "title": "Across block boundaries",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Trace TableScan.next: search the current block for a used slot, move to the next block when necessary, and return False only when the file has no more rows. This scan holds one record page at a time. Show how it skips empty blocks. Insertion searches for free slots before appending; a new block’s zero flags mark its slots as empty.",
+        "notes": "Trace TableScan.next. Search the current block for a used slot. Move to the next block when necessary. Return False only when no rows remain in the file. This scan holds one record page at a time. Show how it skips empty blocks. Insertion searches for free slots before appending. A new block’s zero flags mark its slots as empty.",
         "id": "lecture-03-scene-13",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1228,7 +1228,7 @@
         "title": "Rebuild the row",
         "minutes": 3,
         "kind": "recap",
-        "notes": "Ask which component computes field offsets, holds a page pin, skips empty slots, and remembers schemas after restart: Layout, RecordPage, TableScan, and the catalog. Give students a new schema to calculate before Thursday. The unchanged Lab 3 starters should pass 0 of 12 tests. Next Tuesday, scans will supply rows to query operators.",
+        "notes": "Ask which component performs each task. Layout computes field offsets. RecordPage holds a page pin. TableScan skips empty slots. The catalog preserves schemas after restart. Give students a new schema to calculate before Thursday. The unchanged Lab 3 starters should pass 0 of 12 tests. Next Tuesday, scans will supply rows to query operators.",
         "id": "lecture-03-scene-16",
         "sources": [
           "lectures/lecture-03/records.html"
@@ -1246,7 +1246,7 @@
         "title": "One row at a time",
         "minutes": 3,
         "kind": "title",
-        "notes": "Place the operator tower on screen without moving anything. Ask what makes it start working. Reveal a caller request down to Scan and one answer moving upward. Students already built the bottom scan, so today’s new idea is a shared interface that composes it with filters, projections and products. Explain that the animation is a row-at-a-time teaching engine; batch and blocking operators will later qualify the model. The scheduled quiz is outside this sixty-minute lesson.",
+        "notes": "Place the operator tower on screen without moving anything. Ask what makes it start working. Reveal a caller request down to Scan and one answer moving upward. Students already built the bottom scan, so today’s new idea is a shared interface that composes it with filters, projections and products.\n\nExplain that the animation is a row-at-a-time teaching engine. Batch and blocking operators will later qualify the model. The scheduled quiz is outside this sixty-minute lesson.",
         "id": "lecture-04-scene-01",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1256,7 +1256,7 @@
         "title": "An intermediate mountain",
         "minutes": 4,
         "kind": "visual",
-        "notes": "First show a complete scan result stored in memory and ask where the next operator will put its output. Add a Cartesian product, then grow each input to one million rows: the product has one trillion candidate pairs. This is a count, not a timing or a model of every pandas merge. Finally, pass one pair at a time. Streaming saves intermediate storage; avoiding unnecessary pairs requires a better plan or join algorithm.",
+        "notes": "First show a complete scan result stored in memory and ask where the next operator will put its output. Add a Cartesian product, then grow each input to one million rows: the product has one trillion candidate pairs. This is a count, not a timing or a model of every pandas merge. Finally, pass one pair at a time. Streaming saves intermediate storage. Avoiding unnecessary pairs requires a better plan or join algorithm.",
         "id": "lecture-04-scene-02",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1266,7 +1266,7 @@
         "title": "Demand moves first",
         "minutes": 4,
         "kind": "definition",
-        "notes": "Leave all operators still and ask why no row appears. Advance through Project asking Select, Select asking Scan, and the matching row returning upward. Explain that one caller request can trigger several child requests. An iterator is an object that produces its next row on demand; the database’s boolean next method also positions an internal cursor. Contrast this protocol with materializing a list, then move to counting the hidden work below a single request.",
+        "notes": "Leave all operators still and ask why no row appears. Advance through Project asking Select, Select asking Scan, and the matching row returning upward. Explain that one caller request can trigger several child requests. An iterator is an object that produces its next row on demand. The database’s boolean next method also positions an internal cursor. Contrast this protocol with materializing a list, then move to counting the hidden work below a single request.",
         "id": "lecture-04-scene-03",
         "definition": "An object that produces its next row when its caller requests one.",
         "term": "Iterator operator",
@@ -1279,7 +1279,7 @@
         "title": "Count the pulls",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Predict each pull before revealing it. The first answer, ada, examines one row. The next answer, cyd, examines ben and cyd. The third, eli, examines dee and eli. Asking again examines fay and returns False. Total work is six rows examined and three rows delivered. A common error is assuming each top-level next call means exactly one disk read or one underlying row. The buffer and scan layers determine physical I/O separately.",
+        "notes": "Predict each pull before revealing it. The first answer, ada, examines one row. The next answer, cyd, examines ben and cyd. The third, eli, examines dee and eli.\n\nAsking again examines fay and returns False. Total work is six rows examined and three rows delivered. A common error is assuming each top-level next call means exactly one disk read or one underlying row. The buffer and scan layers determine physical I/O separately.",
         "id": "lecture-04-scene-04",
         "demo": "viz-pull",
         "sources": [
@@ -1290,7 +1290,7 @@
         "title": "The five moves",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Introduce the five methods by following their icons: before_first rewinds, next advances, get_val reads the current field, has_field reports the output schema, and close releases resources. Ask whether Select needs a TableScan specifically. No: a ListScan test double with the same interface also works. The diagram’s connecting lines mean calls into the shared contract, not ownership of copied rows. Ask what happens if a wrapper forgets close, then return to that question after the join.",
+        "notes": "Introduce the five methods with their icons. before_first resets the scan position. next advances the scan. get_val reads the current field. has_field reports field availability. close releases resources. Ask whether Select needs a TableScan specifically. No: a ListScan test double with the same interface also works. The diagram’s connecting lines mean calls into the shared contract, not ownership of copied rows. Ask what happens if a wrapper forgets close, then return to that question after the join.",
         "id": "lecture-04-scene-05",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1300,7 +1300,7 @@
         "title": "Select is a gate",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Follow a value through the gate. Thirty-nine passes gpa > 35, thirty-one fails, and thirty-seven passes. Select.next repeatedly advances its child until the predicate holds or the child ends. Ask whether it copies accepted rows into a result table. It does not; field reads delegate to the child’s current row. The common mistake is returning False after the first rejected row rather than continuing. Next contrast filtering rows with hiding fields.",
+        "notes": "Follow a value through the gate. Thirty-nine passes gpa > 35, thirty-one fails, and thirty-seven passes. Select.next repeatedly advances its child until the predicate holds or the child ends. Ask whether it copies accepted rows into a result table.\n\nIt does not. Field reads delegate to the child’s current row. The common mistake is returning False after the first rejected row rather than continuing. Next contrast filtering rows with hiding fields.",
         "id": "lecture-04-scene-06",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1310,7 +1310,7 @@
         "title": "Project is a window",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Begin with the complete underlying row. Reveal the mask around name while the id and gpa fields stay stored below it. Ask what get_val(name) should return and what has_field(gpa) should report. Expected ada and False. Then attempt get_val(gpa) through the projected object; it must raise ValueError. Projection in this lab checks allowed access rather than copying a fresh row. This also explains why moving a projection below a predicate can hide a field the predicate needs.",
+        "notes": "Begin with the complete underlying row. Reveal the mask around name while the id and gpa fields stay stored below it. Ask what get_val(name) should return and what has_field(gpa) should report. Expected ada and False.\n\nThen attempt get_val(gpa) through the projected object. It must raise ValueError. Projection in this lab checks allowed access rather than copying a fresh row. This also explains why moving a projection below a predicate can hide a field the predicate needs.",
         "id": "lecture-04-scene-07",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1320,7 +1320,7 @@
         "title": "A predicate is a decision chain",
         "minutes": 4,
         "kind": "visual",
-        "notes": "This toy product row combines student ben (gpa 31, mid 2) with the ds major (mid2 1). Define the names before checking a term: mid is the major ID stored in a student row, while mid2 is the ID of the major row. Both are major IDs; neither is the student ID. The actual field names are mid and mid2, not mid1. The suffix 2 distinguishes the two fields in ProductScan; it does not require a value of 2. First check gpa > 35: 31 fails, so skip the second AND term. In the last build, switch to the join predicate. F(\"mid2\") requests the majors field from this same combined row; it reads 1. Comparing the student’s 2 with the major’s 1 rejects this pair and skips the GPA term. Ask which major would match ben: stat, whose mid2 is 2. A plain literal 35 needs no lookup. Predicate ordering can save work, subject to evaluation cost and permitted semantics.",
+        "notes": "This toy product row combines student ben (gpa 31, mid 2) with the ds major (mid2 1). Define the names before checking a term. mid is the major ID stored in a student row. mid2 is the ID of the major row. Both are major IDs. Neither is the student ID.\n\nThe actual field names are mid and mid2, not mid1. The suffix 2 distinguishes the two fields in ProductScan. It does not require a value of 2. First check gpa > 35: 31 fails, so skip the second AND term.\n\nIn the last build, switch to the join predicate. F(\"mid2\") requests the majors field from this same combined row. It reads 1. Comparing the student’s 2 with the major’s 1 rejects this pair and skips the GPA term.\n\nAsk which major would match ben: stat, whose mid2 is 2. A plain literal 35 needs no lookup. Predicate ordering can save work, subject to evaluation cost and permitted semantics.",
         "id": "lecture-04-scene-08",
         "demo": "viz-pred",
         "sources": [
@@ -1331,7 +1331,7 @@
         "title": "The odometer",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Point to the initial cursors: left is already on ada and right is before ds. Build the first three pairs, then pause before the rollover and ask which cursor moves. Right rewinds, left advances to ben, and right advances to ds. The left input must actually have a current row. The short lecture code is only the nonempty rollover sketch; a complete ProductScan must handle empty input and remember exhaustion. Next count every visit, not only matching results.",
+        "notes": "Point to the initial cursors: left is already on ada and right is before ds. Build the first three pairs, then pause before the rollover and ask which cursor moves. Right rewinds, left advances to ben, and right advances to ds. The left input must actually have a current row.\n\nThe short lecture code is only the nonempty rollover sketch. A complete ProductScan must handle empty input and remember exhaustion. Next count every visit, not only matching results.",
         "id": "lecture-04-scene-09",
         "demo": "viz-odo",
         "sources": [
@@ -1363,7 +1363,7 @@
         "title": "Release both branches",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Two TableScans hold two active page pins. Send close to the product root and follow its two outgoing cleanup calls. Each wrapper must forward close to its child, and Product must close both children. Ask how many pins remain if only the left branch closes. Expected one. The animation ends with zero pinned frames. Operator state is small in this pipeline, but total memory also includes the buffers held by active scans; it is not literally one copied row per operator.",
+        "notes": "Two TableScans hold two active page pins. Send close to the product root and follow its two outgoing cleanup calls. Each wrapper must forward close to its child, and Product must close both children. Ask how many pins remain if only the left branch closes.\n\nExpected one. The animation ends with zero pinned frames. Operator state is small in this pipeline, but total memory also includes the buffers held by active scans. It is not literally one copied row per operator.",
         "id": "lecture-04-scene-12",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1373,7 +1373,7 @@
         "title": "Move the gate downward",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Use the exact measurement workload: 300 students, three majors, 60 students passing gpa, and one major passing dept. The late-filter plan forms 900 pairs; the early local filters leave a 60-by-1 product. Both plans return the same 20 joined rows. Ask which condition cannot be pushed to one table: mid = mid2 needs both. The small grids are scaled illustrations; the counts are the workload’s exact logical pair counts. This rewrite reduces pair work fifteenfold.",
+        "notes": "Use the exact measurement workload: 300 students, three majors, 60 students passing gpa, and one major passing dept. The late-filter plan forms 900 pairs. The early local filters leave a 60-by-1 product. Both plans return the same 20 joined rows.\n\nAsk which condition cannot be pushed to one table: mid = mid2 needs both. The small grids are scaled illustrations. The counts are the workload’s exact logical pair counts. This rewrite reduces pair work fifteenfold.",
         "id": "lecture-04-scene-13",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1393,7 +1393,7 @@
         "title": "Build one tower",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Start with the two toy input rows. mid means major ID: students.mid stores the ID of the student’s chosen major, a reference to a row in majors. majors.mid2 identifies that major row. They are both major IDs, not student IDs. The code calls the fields mid and mid2; there is no mid1 field. The suffix 2 gives the major-table field a distinct name, so ProductScan.get_val can choose the correct input; it does not mean the second major or the number 2. Here ada has mid 1 and ds has mid2 1. Product puts those two fields in one combined row; Select checks 1 = 1 and keeps the pair; Project returns (ada, ds). Ask what happens if the right row is stat with mid2 2: 1 differs from 2, so reject that pair. Build the plan from the bottom, then ask where a GPA filter could move. It refers only to students; the ID comparison requires both inputs. Projection must preserve fields needed above it. Keep the runnable implementation in the source reading.",
+        "notes": "Start with the two toy input rows. mid means major ID: students.mid stores the ID of the student’s chosen major, a reference to a row in majors. majors.mid2 identifies that major row. They are both major IDs, not student IDs. The code calls the fields mid and mid2. There is no mid1 field.\n\nThe suffix 2 gives the major-table field a distinct name, so ProductScan.get_val can choose the correct input. It does not mean the second major or the number 2. Here ada has mid 1 and ds has mid2 1. Product puts those two fields in one combined row.\n\nSelect checks 1 = 1 and keeps the pair. Project returns (ada, ds). Ask what happens if the right row is stat with mid2 2: 1 differs from 2, so reject that pair. Build the plan from the bottom, then ask where a GPA filter could move.\n\nIt refers only to students. The ID comparison requires both inputs. Projection must preserve fields needed above it. Keep the runnable implementation in the source reading.",
         "id": "lecture-04-scene-15",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1403,7 +1403,7 @@
         "title": "Explain the work",
         "minutes": 3,
         "kind": "recap",
-        "notes": "Ask three students to explain the arrows and counts without introducing new material. What begins work? Caller demand. Why is the product costly? It enumerates pairs. What can pushdown change? Input sizes and candidate work, while preserving the supported query’s answer. What does close release? The descendants’ resources and pins. Thursday’s measurement compares the two plan shapes. The next lecture will turn SQL text into a correct tree automatically; the required planner is deliberately simple.",
+        "notes": "Ask three students to explain the arrows and counts without introducing new material. What begins work? Caller demand. Why is the product costly?\n\nIt enumerates pairs. What can pushdown change? Input sizes and candidate work, while preserving the supported query’s answer. What does close release?\n\nThe descendants’ resources and pins. Thursday’s measurement compares the two plan shapes. The next lecture will turn SQL text into a correct tree automatically. The required planner is deliberately simple.",
         "id": "lecture-04-scene-16",
         "sources": [
           "lectures/lecture-04/iterators.html"
@@ -1649,7 +1649,7 @@
               "answer": "No. mid2 is just a distinct column name. The data-science row stores 1 there, so this pair fails the comparison."
             }
           ],
-          "context": "These are illustrative rows using the lab’s major IDs: 1 is ds and 2 is stat. ben is a readable example name, not a row name in the generated 300-student fixture. ProductScan exposes fields from its two current inputs; it need not copy them into a new stored row. F means field reference. By contrast, 35 in gpa > 35 is a fixed number, and a plain string \"mid2\" would be fixed text."
+          "context": "These are illustrative rows using the lab’s major IDs: 1 is ds and 2 is stat. ben is a readable example name, not a row name in the generated 300-student fixture. ProductScan exposes fields from its two current inputs. It need not copy them into a new stored row. F means field reference. By contrast, 35 in gpa > 35 is a fixed number, and a plain string \"mid2\" would be fixed text."
         }
       },
       {
@@ -1771,7 +1771,7 @@
               "answer": "Binding treats the whole string as one value. OR 1=1 never becomes a SQL condition, and neither example sid matches that string."
             }
           ],
-          "context": "This is a runnable Python sqlite3 example with an INTEGER sid column and two illustrative rows (42, ada) and (43, ben). The reading includes the complete setup. The provided microSQL terminal does not support placeholders or this two-argument execute call; parameter binding is an optional extension. Other database APIs use different placeholder conventions and may reject an incompatible value rather than return zero rows. Parameters represent values, not table names, column names, or arbitrary SQL fragments. Keep the lesson about separating input from SQL syntax, not query performance or plan reuse."
+          "context": "This is a runnable Python sqlite3 example with an INTEGER sid column and two illustrative rows (42, ada) and (43, ben). The reading includes the complete setup. The provided microSQL terminal does not support placeholders or this two-argument execute call. Parameter binding is an optional extension.\n\nOther database APIs use different placeholder conventions and may reject an incompatible value rather than return zero rows. Parameters represent values, not table names, column names, or arbitrary SQL fragments. Keep the lesson about separating input from SQL syntax, not query performance or plan reuse."
         }
       },
       {
@@ -1785,7 +1785,7 @@
         "teaching": {
           "idea": "The runner requests rows at the root, and each scan asks its input for the work it needs.",
           "builds": [
-            "Return to the single-table query SELECT name FROM students WHERE gpa > 35. Its completed plan has one TableScan wrapped by SelectScan and ProjectScan. The runner first calls before_first() to initialize scan positions; the tree is now ready to produce rows.",
+            "Return to the single-table query SELECT name FROM students WHERE gpa > 35. Its completed plan has one TableScan wrapped by SelectScan and ProjectScan. The runner first calls before_first() to initialize scan positions. The tree is now ready to produce rows.",
             "The runner calls next() on ProjectScan. That call reaches SelectScan, which asks TableScan for candidate rows. Point down the tree with the blue arrow.",
             "Use the toy row name = ada, gpa = 39. TableScan reads it, and SelectScan accepts it because 39 > 35. The successful next() result travels back toward the root.",
             "The runner calls get_val(\"name\") and obtains ada. ProjectScan exposes the requested field. The runner repeats next() until there are no more qualifying rows, then closes the plan."

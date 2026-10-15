@@ -13,15 +13,15 @@
     },
     'nprobe': {
       title: 'nprobe / ef_search',
-      body: "<p>The lab’s probe setting controls how many IVF lists are searched. FAISS calls this nprobe; pgvector uses ivfflat.probes. HNSW’s ef_search instead controls a graph-search candidate list. Both settings adjust search effort, but they control different operations and should be tuned by measurement.</p>",
+      body: "<p>The lab’s probe setting controls how many IVF lists the search examines. FAISS calls this nprobe. pgvector uses ivfflat.probes. HNSW’s ef_search controls a graph-search candidate list. Both settings adjust search effort through different operations. Use measurements to choose each setting.</p>",
     },
     'recall-at-k': {
       title: 'recall@k',
-      body: "<p>Count how many exact top-k IDs appear in the approximate result, then divide by k. If it finds 9 of the exact top 10, recall@10 is 0.9 for that query. Average these scores across the evaluation questions. A mean of 0.95 does not mean every query misses the same number of neighbors.</p>",
+      body: "<p>Count the exact top-k IDs that appear in the approximate result. Divide that count by k. Finding 9 of the exact top 10 gives recall@10 = 0.9 for that query. Average these scores across the evaluation questions. A mean of 0.95 does not mean every query misses the same number of neighbors.</p>",
     },
     'embedding-drift': {
       title: 'Embedding drift',
-      body: "<p>If a model update changes its embedding space, old document vectors may be incompatible with new query vectors. Record the model version, rebuild corpus embeddings and their index, and switch query embedding to the matching version. Evaluate the new model rather than assuming the old search settings still work.</p>",
+      body: "<p>A model update can change the embedding space. Old document vectors may then be incompatible with new query vectors. Record the model version. Rebuild the corpus embeddings and their index. Use the matching version to embed queries. Evaluate the new model and its search settings.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);

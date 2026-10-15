@@ -70,10 +70,10 @@
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
   <p>A query returns sixty names instead of three hundred after adding a GPA filter. Can that result count alone tell you how many source rows TableScan visited? Has parsing already performed the scan?</p>
-  <details><summary>Check your explanation</summary><p>No. The supplied scan-based plan visits all three hundred rows, then filters them. Parsing creates a description of the request; execution later asks scans for rows. Use the measured counters to identify the work.</p></details>
+  <details><summary>Check your explanation</summary><p>No. The supplied scan-based plan visits all three hundred rows, then filters them. Parsing creates a description of the request. Execution later asks scans for rows. Use the measured counters to identify the work.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>. Predict what the next operation will change. Run the operation. Compare the result with your prediction. Explain any difference before making another change.</p>
 
 <h2 id="try-it">Run SQL in the browser</h2>
 
@@ -111,7 +111,7 @@
     <a class="chat-dl-btn" href="starter/queries.sql" download>queries.sql (you complete)</a>
     <a class="chat-dl-btn" href="starter/lab5_report.md" download>report template</a>
   </div>
-  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files, then open this lab’s starter folder:</p>
+  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files. Then open this lab’s starter folder:</p>
 <pre class="clone-cmd"><span class="cl-line">git pull</span>
 <span class="cl-line">cd labs/lab-05/starter</span></pre>
   <p class="viz-caption">Try <code>SELECT name students</code>. The missing <code>FROM</code> keyword produces a parse error, illustrating the checks performed by <code>expect()</code>.</p>
@@ -123,9 +123,9 @@
 <pre class="terminal"><code>python3 test_sql.py
 # Expected immediately: 12/12 tests passed
 python3 microdb.py --demo</code></pre>
-<p>The tests verify the supplied engine; they are not the assignment. The second command opens an <strong>interactive SQL terminal</strong>, also called a REPL (Read–Eval–Print Loop). It stays open so you can type queries and see their results. Demo mode starts with the same 300 students and three majors used in the measurements. You can try your six assignment queries here before measuring them.</p>
+<p>The tests verify the supplied engine. They are not the assignment. The second command opens an <strong>interactive SQL terminal</strong>, also called a REPL (Read–Eval–Print Loop). It stays open so you can type queries and see their results. Demo mode starts with the same 300 students and three majors used in the measurements. You can try your six assignment queries here before measuring them.</p>
 <h3 id="terminal">Type SQL at the microdb prompt</h3>
-<p>When you see <code>microdb&gt;</code>, type the SQL statement and press Enter. Do not type the prompt itself. Enter one complete statement per line; a final semicolon is optional.</p>
+<p>When you see <code>microdb&gt;</code>, type the SQL statement and press Enter. Do not type the prompt itself. Enter one complete statement per line. A final semicolon is optional.</p>
 <pre class="terminal"><code>microdb&gt; SELECT * FROM majors;
 mid2  dept
 ----  ----
@@ -164,7 +164,7 @@ SELECT label FROM readings WHERE value &gt; 20;</code></pre>
 <p>A final semicolon is optional. microSQL supports SELECT, CREATE TABLE, INSERT, comma-separated FROM tables, and AND-connected <code>=</code>, <code>&lt;</code>, or <code>&gt;</code> comparisons. It has no aliases, qualified field names, OR, aggregation, ORDER BY, or LIMIT.</p>
 <p>Use this terminal to check syntax and results. For the assignment's work counts and repeated timings, run <code>measure_sql.py</code> from your ordinary shell after exiting the SQL prompt. Each measurement run creates its own fresh temporary database.</p>
 <h3 id="function-tests">Optional checks while reading</h3>
-<p><code>python3 test_sql.py --list</code> lists the four main methods; <code>--unit Parser._parse_term</code> checks one and <code>--unit</code> checks all four. Each should already pass.</p>
+<p><code>python3 test_sql.py --list</code> lists the four main methods. <code>--unit Parser._parse_term</code> checks one and <code>--unit</code> checks all four. Each should already pass.</p>
 
 <!-- ============================================================ -->
 <h2 id="big-idea">Part 2 · Walk through the implementation <span class="part-time">25 min</span></h2>
@@ -173,10 +173,10 @@ SELECT label FROM readings WHERE value &gt; 20;</code></pre>
 <p class="keep-in-present">Open <a href="starter/sql_frontend.py"><code>sql_frontend.py</code></a> alongside this page. Everything below is supplied. Follow the token cursor, the data returned by each method, and the scan objects built from that data. No parser or planner code is required for this lab.</p>
 
 <h3 id="worked-example">Follow your query from text to a scan plan</h3>
-<p>Type a SELECT query, then trace each stage. Watch the characters become tokens, the parser collect a <code>QueryData</code> object, and the planner wrap scans around the tables. The highlighted Python lines correspond to the step shown on the right.</p>
+<p>Type a SELECT query. Trace each stage. Watch the characters become tokens, the parser collect a <code>QueryData</code> object, and the planner wrap scans around the tables. The highlighted Python lines correspond to the step shown on the right.</p>
 <div class="viz qw" id="viz-query-walkthrough">
   <div class="qw-heading"><div class="viz-title">Inside the SQL front end</div><button type="button" class="btn" id="qw-fullscreen" aria-pressed="false" title="Open the walkthrough in fullscreen">Full screen</button></div>
-  <p class="viz-description">Use <code>students(sid, name, gpa, mid)</code> and <code>majors(mid2, dept)</code>. This walkthrough builds SELECT plans; use the terminal above to execute SQL.</p>
+  <p class="viz-description">Use <code>students(sid, name, gpa, mid)</code> and <code>majors(mid2, dept)</code>. This walkthrough builds SELECT plans. Use the terminal above to execute SQL.</p>
   <p id="qw-view-status" class="qw-validation" role="status" hidden></p>
   <form id="qw-form">
     <label for="qw-query">Your SQL query</label>
@@ -194,7 +194,7 @@ SELECT label FROM readings WHERE value &gt; 20;</code></pre>
       <div class="qw-panel-heading"><h4 id="qw-method"></h4><a href="starter/sql_frontend.py" target="_blank" rel="noopener">Full source</a></div>
       <p class="qw-hint" id="qw-stack"></p>
       <ol id="qw-code" class="qw-code" aria-label="Python code with current lines highlighted"></ol>
-      <p class="qw-hint">Line numbers refer to <code>sql_frontend.py</code>. Docstrings are omitted. State shows the effect of the highlighted line; each lexer-helper call is one step.</p>
+      <p class="qw-hint">Line numbers refer to <code>sql_frontend.py</code>. Docstrings are omitted. State shows the effect of the highlighted line. Each lexer-helper call is one step.</p>
       <details class="qw-helper"><summary id="qw-helper-title">Token-recognition pattern</summary><pre id="qw-helper-code"></pre></details>
     </section>
     <section class="qw-visual-panel" aria-label="Query state">
@@ -215,7 +215,7 @@ tablelist := table { , table }
 predicate := term { AND term }
 term      := field ( = | &lt; | &gt; ) value
 value     := number | 'string' | field</code></pre>
-<p>BNF means <strong>Backus–Naur form</strong>; Extended Backus–Naur form (EBNF) adds the optional <code>[ ]</code> and repeated <code>{ }</code> groups used here. <code>|</code> separates alternatives in the grammar. The <code>*</code> is a literal SQL token asking for all columns. A comma loop is “read one item, then repeat comma + item.”</p>
+<p>BNF means <strong>Backus–Naur form</strong>. Extended Backus–Naur form (EBNF) adds the optional <code>[ ]</code> and repeated <code>{ }</code> groups used here. <code>|</code> separates alternatives in the grammar. The <code>*</code> is a literal SQL token asking for all columns. A comma loop is “read one item, then repeat comma + item.”</p>
 <table><thead><tr><th>Helper</th><th>Result</th><th>Cursor</th></tr></thead><tbody>
 <tr><td><code>peek()</code></td><td>current (kind, value) pair</td><td>stays</td></tr>
 <tr><td><code>match(kind, value)</code></td><td>True or False</td><td>stays</td></tr>
@@ -225,7 +225,7 @@ value     := number | 'string' | field</code></pre>
 <p>First use the <a href="../../lectures/lecture-05/parsing.html#viz-insert">interactive INSERT walkthrough</a>. Predict whether each action moves the cursor. Then inspect <code>Parser.parse()</code>: it chooses the statement method from the first keyword and checks that no unsupported trailing tokens remain. EOF (end of file) is the helper's end-of-input marker. Lexer implementation details remain optional reading.</p>
 
 <h3 id="parse-query">1 · SELECT becomes a QueryData object</h3>
-<p>Trace <code>SELECT name FROM students WHERE gpa &gt; 35</code>. Required keywords use <code>expect</code>; alternatives and repetitions first use <code>match</code>. The field and table lists are ordinary Python lists. An absent WHERE leaves <code>predicate = None</code>.</p>
+<p>Trace <code>SELECT name FROM students WHERE gpa &gt; 35</code>. Required keywords use <code>expect</code>. Alternatives and repetitions first use <code>match</code>. The field and table lists are ordinary Python lists. An absent WHERE leaves <code>predicate = None</code>.</p>
 <pre data-source-method="Parser.parse_query"><code class="language-python">def parse_query(self) -&gt; QueryData:
     self.lex.expect(&quot;KEYWORD&quot;, &quot;select&quot;)
     if self.lex.match(&quot;PUNCT&quot;, &quot;*&quot;):
@@ -246,10 +246,10 @@ value     := number | 'string' | field</code></pre>
         self.lex.next()
         predicate = self._parse_predicate()
     return QueryData(fields, tables, predicate)</code></pre>
-<p>The comma tests leave the comma unread; the following <code>next()</code> consumes it before the next name is read. The WHERE test works the same way. <code>QueryData</code> stores the request; it neither opens a table nor produces rows.</p>
-<div class="exercise"><span class="ex-label">Pause and predict</span><p>For <code>SELECT * FROM majors</code>, which branch runs, what are the two lists, and is a predicate built?</p><details><summary>Check your trace</summary><p>The star branch stores <code>fields=["*"]</code>; the table list is <code>["majors"]</code>; no WHERE means <code>predicate=None</code>.</p></details></div>
+<p>The comma tests leave the comma unread. The following <code>next()</code> consumes it before the next name is read. The WHERE test works the same way. <code>QueryData</code> stores the request. It neither opens a table nor produces rows.</p>
+<div class="exercise"><span class="ex-label">Pause and predict</span><p>For <code>SELECT * FROM majors</code>, which branch runs, what are the two lists, and is a predicate built?</p><details><summary>Check your trace</summary><p>The star branch stores <code>fields=["*"]</code>. The table list is <code>["majors"]</code>. No WHERE means <code>predicate=None</code>.</p></details></div>
 
-<h3 id="parse-predicate">2 · AND repeats terms; each term distinguishes values from fields</h3>
+<h3 id="parse-predicate">2 · AND repeats terms. Each term distinguishes values from fields</h3>
 <p><code>_parse_predicate</code> reads one condition, then collects any others joined by AND. <code>Predicate(*terms)</code> stores those conditions so execution can later check whether a row satisfies all of them.</p>
 <pre data-source-method="Parser._parse_predicate"><code class="language-python">def _parse_predicate(self) -&gt; Predicate:
     terms = [self._parse_term()]
@@ -271,7 +271,7 @@ value     := number | 'string' | field</code></pre>
 <pre><code>("gpa", "&gt;", 35)           # numeric literal
 ("dept", "=", "ds")        # string literal from 'ds'
 ("mid", "=", F("mid2"))    # value of the other field in this pair</code></pre>
-<p><code>_parse_literal</code> is the number/string helper you just traced in INSERT. A term such as <code>mid = mid2</code> needs a combined row from both tables; <code>gpa &gt; 35</code> needs only the student row. That difference will determine where a filter may safely run.</p>
+<p><code>_parse_literal</code> is the number/string helper you just traced in INSERT. A term such as <code>mid = mid2</code> needs a combined row from both tables. <code>gpa &gt; 35</code> needs only the student row. That difference will determine where a filter may safely run.</p>
 
 <h3 id="plan-query">3 · The planner builds operators from the description</h3>
 <p>The supplied simple planner retrieves each existing table layout from the catalog. It opens table scans, combines them from left to right, adds selection if needed, and finally projects the requested fields. It checks that fields mentioned by SELECT and WHERE exist before applying the wrappers. The exception handler closes any scans already opened if construction fails.</p>
@@ -306,7 +306,7 @@ value     := number | 'string' | field</code></pre>
 ProjectScan[name]
 └── SelectScan[gpa &gt; 35]
     └── TableScan(students)</code></pre>
-<p>Selection must see <code>gpa</code> before projection hides it. <code>SELECT * FROM students</code> needs just the table scan. Two FROM tables create a product; its left input advances once for each complete traversal of its right input. The planner preserves the FROM order and puts the whole WHERE above the product. It does not automatically push filters down.</p>
+<p>Selection must see <code>gpa</code> before projection hides it. <code>SELECT * FROM students</code> needs just the table scan. Two FROM tables create a product. Its left input advances once for each complete traversal of its right input. The planner preserves the FROM order and puts the whole WHERE above the product. It does not automatically push filters down.</p>
 
 <h3>4 · Execution pulls rows and always closes the plan</h3>
 <pre data-source-method="Database._run_query"><code class="language-python">def _run_query(self, data: QueryData) -&gt; list[dict]:
@@ -323,19 +323,19 @@ ProjectScan[name]
         return rows
     finally:
         plan.close()</code></pre>
-<p><code>before_first()</code> initializes the scans; repeated <code>next()</code> calls on the root pull qualifying rows through the tree. <code>get_val()</code> reads each requested output field. The list stores the result in memory. <code>finally</code> releases the plan's buffer pins even if a query fails. Creating the plan alone does not enumerate the result.</p>
+<p><code>before_first()</code> initializes the scans. Repeated <code>next()</code> calls on the root pull qualifying rows through the tree. <code>get_val()</code> reads each requested output field. The list stores the result in memory. <code>finally</code> releases the plan's buffer pins even if a query fails. Creating the plan alone does not enumerate the result.</p>
 
 <!-- ============================================================ -->
 <h2 id="build">Part 3 · Write queries and predict <span class="part-time">20 min</span></h2>
 
 <p class="keep-in-present">Write down your predictions before running the measurements. For each query, count the table rows visited, pairs formed, conditions checked, and field values returned. Keep the original predictions so you can explain any surprises.</p>
 <p>Complete <a href="starter/queries.sql" download><code>queries.sql</code></a> from these English requests. Save your predictions in the <a href="starter/lab5_report.md" download>report template</a> <strong>before</strong> running the measurement script.</p>
-<p>The measurement fixture has 300 students and three majors. Student <code>i</code>, for <code>i=0…299</code>, has <code>sid=i</code>, <code>name='s'+str(i)</code>, <code>gpa=20+i%20</code>, and <code>mid=1+i%3</code>. The major rows are <code>(1,'ds'), (2,'stat'), (3,'econ')</code>. GPA 35 represents 3.5. Use the distinct join fields <code>students.mid</code> and <code>majors.mid2</code>; microSQL queries spell them as <code>mid</code> and <code>mid2</code>.</p>
+<p>The measurement fixture has 300 students and three majors. Student <code>i</code>, for <code>i=0…299</code>, has <code>sid=i</code>, <code>name='s'+str(i)</code>, <code>gpa=20+i%20</code>, and <code>mid=1+i%3</code>. The major rows are <code>(1,'ds'), (2,'stat'), (3,'econ')</code>. GPA 35 represents 3.5. Use the distinct join fields <code>students.mid</code> and <code>majors.mid2</code>. MicroSQL queries spell them as <code>mid</code> and <code>mid2</code>.</p>
 <table><thead><tr><th>Query</th><th>Write a SELECT that…</th></tr></thead><tbody>
 <tr><td>S1</td><td>returns every student's name</td></tr>
 <tr><td>S2</td><td>returns names where gpa &gt; 35</td></tr>
 <tr><td>S3</td><td>returns all student columns for exactly the same rows as S2</td></tr>
-<tr><td>J1</td><td>returns name and dept for students with gpa &gt; 35 in 'ds'; join mid to mid2, with students first in FROM</td></tr>
+<tr><td>J1</td><td>returns name and dept for students with gpa &gt; 35 in 'ds'. Join mid to mid2, with students first in FROM</td></tr>
 <tr><td>J2</td><td>returns J1's fields and rows, with majors first in FROM</td></tr>
 <tr><td>J3</td><td>uses J1's table order and department, but requires gpa &gt; 38</td></tr>
 </tbody></table>
@@ -363,11 +363,12 @@ python3 measure_sql.py --queries queries.sql --students 600 --repeat 7 --json &g
 <tr><td>Rows / output cells</td><td>Result rows, and rows × requested fields. Fewer cells means fewer output values decoded and stored.</td></tr>
 <tr><td>Execution median</td><td>Median elapsed milliseconds for uninstrumented executions after an untimed warm-up. Includes rewind, iteration, field decoding, result materialization, and close. Excludes fixture creation, parsing, planning, and printing.</td></tr>
 </tbody></table>
-<p>Each process uses 4096-byte blocks and eight buffer frames. Both plans use the same generated data and repeated-run protocol. Caches are not cleared between runs, so these are not cold-storage timings. Small differences can be noise; the JSON output preserves all samples. A logical-work ratio is not a promised runtime ratio.</p>
+<p>Each process uses 4096-byte blocks and eight buffer frames. Both plans use the same generated data and repeated-run protocol. Caches are not cleared between runs, so these are not cold-storage timings. Small differences can be noise. The JSON output preserves all samples. A logical-work ratio is not a promised runtime ratio.</p>
 
 <h3>Why the supplied early-filter alternative is valid</h3>
 <p>Read <code>early_filter_plan</code> in the measurement script. It finds which table owns each field used by a term. A term referring to one table goes just above that table's scan. A term referring to both tables stays above the product. It preserves FROM order, then adds projection. This is a supplied comparison plan, not a cost-based optimizer.</p>
-<p>For this inner join with AND predicates, a student that fails <code>gpa &gt; 35</code> cannot appear in any final answer, whichever major it is paired with. A major that fails <code>dept = 'ds'</code> cannot appear either. Removing those rows before pairing them therefore preserves the answer. The equality <code>mid = mid2</code> needs both rows and stays above the product. Field ownership establishes that the rewrite is valid; row counts help predict how much work it saves.</p>
+<p>This inner join combines its predicates with AND. A student that fails <code>gpa &gt; 35</code> cannot appear in the answer with any major. A major that fails <code>dept = 'ds'</code> cannot appear either. Removing those rows before pairing them preserves the answer. The equality <code>mid = mid2</code> needs both rows and stays above the product.</p>
+<p>Field ownership establishes whether the rewrite is valid. Row counts help predict how much work it saves.</p>
 <pre><code>Simple                            Early filter
 Project[name, dept]                Project[name, dept]
 └─ Select[all three terms]         └─ Select[mid = mid2]
@@ -378,8 +379,9 @@ Project[name, dept]                Project[name, dept]
 <details class="exercise"><summary>Worked check for J1: reveal after making your prediction</summary>
 <pre><code>SELECT name, dept FROM students, majors
 WHERE mid = mid2 AND gpa &gt; 35 AND dept = 'ds';</code></pre>
-<p>With 300 students, 60 pass <code>gpa &gt; 35</code>, one major passes <code>dept = 'ds'</code>, and 20 students satisfy the full join. The simple plan produces <code>300 × 3 = 900</code> candidate pairs; the early-filter plan produces <code>60 × 1 = 60</code>. Both return 20 rows and 40 output cells.</p>
-<p>The early plan still visits all 300 student rows. Its right-hand filter is restarted for each of 60 qualifying students, so it visits <code>60 × 3 = 180</code> major rows. It does not materialize and reuse the one matching major. With predicates written in J1's illustrated order, the simple plan evaluates <code>900 + 300 + 60 = 1260</code> comparisons; the early plan evaluates <code>300 + 180 + 60 = 540</code>. Reordering AND terms can change comparison counts without changing the pairs or result.</p>
+<p>With 300 students, 60 pass <code>gpa &gt; 35</code>, one major passes <code>dept = 'ds'</code>, and 20 students satisfy the full join. The simple plan produces <code>300 × 3 = 900</code> candidate pairs. The early-filter plan produces <code>60 × 1 = 60</code>. Both return 20 rows and 40 output cells.</p>
+<p>The early plan still visits all 300 student rows. It restarts the right-hand filter for each of 60 qualifying students. Thus, it visits <code>60 × 3 = 180</code> major rows. It does not store and reuse the one matching major.</p>
+<p>J1’s illustrated predicate order gives <code>900 + 300 + 60 = 1260</code> comparisons for the simple plan. The early plan gives <code>300 + 180 + 60 = 540</code> comparisons. Reordering AND terms can change comparison counts without changing the pairs or result.</p>
 </details>
 
 <h3>Explain each comparison from the operators</h3>
@@ -399,7 +401,7 @@ WHERE mid = mid2 AND gpa &gt; 35 AND dept = 'ds';</code></pre>
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
   <p>Moving valid filters before the product reduces pairs, while reversing two AND terms can change comparisons without changing pairs. How can both changes preserve the same result?</p>
-  <details><summary>Check your explanation</summary><p>A filter that needs only one table can remove its nonmatching rows before pairing starts. Reordering AND conditions changes which comparison fails first, but a row must still pass every condition. One change reduces the pairs formed; the other can reduce the checks on each pair. Compare the same query under both plans, including duplicate rows.</p></details>
+  <details><summary>Check your explanation</summary><p>A filter that needs only one table can remove its nonmatching rows before pairing starts. Reordering AND conditions changes which comparison fails first, but a row must still pass every condition. One change reduces the pairs formed. The other can reduce the checks on each pair. Compare the same query under both plans, including duplicate rows.</p></details>
 </div>
 
 <p>This question is for practice and class discussion. You do not need to submit an answer.</p>
@@ -415,24 +417,24 @@ WHERE mid = mid2 AND gpa &gt; 35 AND dept = 'ds';</code></pre>
 
 <h3 id="gradescope">Generate evidence, upload, and read the feedback</h3>
 <ol>
-<li>Complete <code>queries.sql</code> and record your predictions in the report <strong>before</strong> measuring. Keep the supplied Python files unchanged.</li>
+<li>Complete <code>queries.sql</code>. Record your predictions in the report <strong>before</strong> measuring. Keep the supplied Python files unchanged.</li>
 <li>From your starter folder, run both commands below. They must finish without errors. Upload the JSON files they create without editing or rounding their contents.</li>
 </ol>
 <pre><code>python3 measure_sql.py --queries queries.sql --students 300 --repeat 7 --json &gt; results-300.json
 python3 measure_sql.py --queries queries.sql --students 600 --repeat 7 --json &gt; results-600.json</code></pre>
 <ol start="3">
 <li>Open Lab 5 on Gradescope and upload the four files listed above <strong>as individual files, not inside a folder or ZIP</strong>. Do not submit the Python engine or a database directory. The two JSON files must be separate attachments even if you also discuss their contents in your report.</li>
-<li>Wait for the autograder and open its feedback. Checks identify the query (for example, J2), dataset size, and plan that needs attention. If you change any SQL, regenerate <strong>both</strong> JSON files and update your report; then resubmit all four files before the deadline.</li>
+<li>Wait for the autograder. Open its feedback. Checks identify the query (for example, J2), dataset size, and plan that needs attention. If you change any SQL, regenerate <strong>both</strong> JSON files and update your report. Then resubmit all four files before the deadline.</li>
 </ol>
 
 <h3>What is graded?</h3>
 <table><thead><tr><th>Component</th><th>Points</th><th>How it is checked</th></tr></thead><tbody>
-<tr><td>Six SQL queries</td><td>36</td><td>Each query earns 2 points for the requested fields and FROM order, and 4 for correct results on additional data. Checks include GPA boundaries, different major IDs, and duplicate values; row order does not matter.</td></tr>
-<tr><td>Plans and work counts</td><td>24</td><td>1 point for each query × dataset size × plan: the plan, table visits, candidate pairs, comparisons, returned rows, and output cells must match the supplied engine for your submitted SQL.</td></tr>
-<tr><td>Measurement protocol</td><td>10</td><td>2 points per JSON file for the fixture/report format, plus 0.25 per query × size × plan for at least seven finite, nonnegative timing samples and their correct median.</td></tr>
-<tr><td>Written reasoning (staff review)</td><td>30</td><td>Implementation walkthrough: 8; original predictions with reasons: 6; six operator-based comparisons: 12; timing limitations and reflection on a prediction: 4.</td></tr>
+<tr><td>Six SQL queries</td><td>36</td><td>Each query earns 2 points for the requested fields and FROM order, and 4 for correct results on additional data. Checks include GPA boundaries, different major IDs, and duplicate values. Row order does not matter.</td></tr>
+<tr><td>Plans and work counts</td><td>24</td><td>1 point for each query × dataset size × plan. The plan, table visits, candidate pairs, comparisons, returned rows, and output cells must match the supplied engine for your submitted SQL.</td></tr>
+<tr><td>Measurement protocol</td><td>10</td><td>2 points per JSON file for the fixture/report format. Each query × size × plan earns another 0.25 points for correct timing data. This requires at least seven finite, nonnegative timing samples and their correct median.</td></tr>
+<tr><td>Written reasoning (staff review)</td><td>30</td><td>Implementation walkthrough: 8. Original predictions with reasons: 6. Six operator-based comparisons: 12. Timing limitations and reflection on a prediction: 4.</td></tr>
 </tbody></table>
-<p><strong>The autograder reports a score out of 70; staff add the 30-point report grade.</strong> A report-received check confirms only that a file is present. Passing the automatic checks does not establish that the report is complete.</p>
+<p><strong>The autograder reports a score out of 70. Staff add the 30-point report grade.</strong> A report-received check confirms only that a file is present. Passing the automatic checks does not establish that the report is complete.</p>
 <p>SQL keywords, whitespace, and equivalent expressions may differ from the worked examples. S3 may use <code>*</code> or explicitly list all four student fields. AND terms may be reordered, but their order can change comparison counts: the grader checks the counts for <em>your</em> query. Measurement credit is separate from query correctness, so accurate evidence for an incorrect query can still earn measurement points.</p>
 <p><strong>There is no runtime target or required speedup.</strong> Your computer need not match another computer's milliseconds, and an early-filter plan need not win every timing sample. Explain the logical work, then use repeated timings as evidence with appropriate limits.</p>
 <ul><li>Explain the supplied parser/planner using the four walkthrough questions.</li><li>Write all six SQL queries and retain your predictions.</li><li>Include results for 300 and 600 students, both plans, with commands and repeat counts.</li><li>Explain the six comparisons from the scan operations and discuss timing limitations.</li></ul>
@@ -443,15 +445,15 @@ python3 measure_sql.py --queries queries.sql --students 600 --repeat 7 --json &g
 
 <h2 id="faq">FAQ</h2>
 <h3>Why do both plans have the same shape for a single-table query?</h3>
-<p>The filter is already directly above that table. There is no product below it to eliminate. Different execution samples can still give slightly different timings; use that variation as a reminder to avoid conclusions from one small measurement.</p>
+<p>The filter is already directly above that table. There is no product below it to eliminate. Different execution samples can still give slightly different timings. Use that variation as a reminder to avoid conclusions from one small measurement.</p>
 <h3>Does the smaller output prove the query is faster?</h3>
 <p>No. The engine may visit the same source rows and evaluate extra predicates to return fewer rows. Account for scanning, comparisons, pairing, and output work separately, then inspect repeated timings.</p>
 <h3>Why does reversing FROM sometimes help?</h3>
-<p>ProductScan restarts its right input for every left row. Reversing the inputs changes that repeated work, even when the number of possible pairs stays the same. Without ORDER BY, rows may come back in a different order. Compare which rows appear and how many times each appears; the measurement runner checks both.</p>
+<p>ProductScan restarts its right input for every left row. Reversing the inputs changes that repeated work, even when the number of possible pairs stays the same. Without ORDER BY, rows may come back in a different order. Compare which rows appear and how many times each appears. The measurement runner checks both.</p>
 <h3>Can I use my own tables in the measurement runner?</h3>
 <p>The runner creates only the documented students and majors fixture in a temporary directory. Use <code>microdb.py</code> for your own persistent tables. For the required comparisons, keep the fixture fixed and change only the specified query or student count.</p>
 <h3>Why did my SQL file stop with a ParseError?</h3>
-<p>Check the expected and found tokens, then compare the statement with the supported grammar. Use single quotes for strings, commas between fields/tables, and one statement per semicolon. Unsupported trailing syntax is rejected. Field names must be distinct across tables for the early-filter comparison; aliases and qualified names are not supported.</p>
+<p>Check the expected and found tokens, then compare the statement with the supported grammar. Use single quotes for strings, commas between fields/tables, and one statement per semicolon. Unsupported trailing syntax is rejected. Field names must be distinct across tables for the early-filter comparison. Aliases and qualified names are not supported.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -462,7 +464,7 @@ python3 measure_sql.py --queries queries.sql --students 600 --repeat 7 --json &g
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
+<script src="viz.js?v=ste-20261015"></script>
 <script src="query-trace-source.js?v=1"></script>
 <script src="query-trace.js?v=1"></script>
 <script src="query-walkthrough.js?v=2"></script>

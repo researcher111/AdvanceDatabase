@@ -52,14 +52,14 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya lays out three toy taxi rides: fares $36, $24, and $30. Noor asks for the average, then changes the request to every field of Ride 2. Maya groups the same values two ways: <q>Which arrangement keeps the values for this question together?</q></p>
+  <p class="lede">Maya lists three example taxi fares: $36, $24, and $30. Noor asks for the average fare. Then she asks for every field of Ride 2. Maya arranges the same values in two ways: <q>Which arrangement keeps the values for this question together?</q></p>
 </div>
 <p>With <strong>row storage</strong>, each ride's fields are stored together. Reading fares can also bring in pickup locations and payment types. With <strong>column storage</strong>, fares are stored together, so the query can read just that column.</p>
 
 <div class="exercise learning-check">
   <span class="ex-label">Start with what you already know</span>
   <p>For average fare, do pickup location and payment type contribute? For all details of Ride 2, which values are needed? Should changing the question change the stored facts?</p>
-  <details><summary>Check your explanation</summary><p>The average needs the three fares; the complete-ride lookup needs that ride’s fields. Both layouts retain the same facts and can answer both queries. They group values differently, and real reads operate on pages or chunks.</p></details>
+  <details><summary>Check your explanation</summary><p>The average needs the three fares. The complete-ride lookup needs every field of that ride. Both layouts retain the same facts and answer both queries. The layouts group values differently. Actual reads operate on pages or chunks.</p></details>
 </div>
 
 <h2 id="storage-layout">Same rides, two storage layouts</h2>
@@ -132,15 +132,15 @@
 
 <h3 id="parquet-format" class="new-slide" data-kicker="Storing the table">What is Parquet?</h3>
 <p class="keep-in-present"><strong>Parquet is a file format for storing table data by column.</strong> A file format defines how values are stored in a file. Our three rides could be saved in <code>rides.parquet</code>. Inside each <strong>row group</strong>, Parquet keeps pickup values, payment values, and fare values in separate column chunks. Metadata describes the field types and where those chunks start.<sup class="src"><a href="#src-6" title="Apache Parquet File Format">6</a></sup></p>
-<p><strong>Parquet stores the data; DuckDB runs the query.</strong> To calculate the average fare, DuckDB can read the fare chunk and skip pickup and payment. The answer is still $30. A larger file can contain many row groups. <a href="../../slides/lecture-10.html#s=6&amp;b=1">Look inside the example file →</a></p>
+<p><strong>Parquet stores the data. DuckDB runs the query.</strong> To calculate average fare, DuckDB can read the fare chunk and skip pickup and payment. The answer remains $30. A larger file can contain many row groups. <a href="../../slides/lecture-10.html#s=6&amp;b=1">Look inside the example file →</a></p>
 
 <h3 id="row-slots" class="new-slide" data-kicker="Finding one ride">How do slots change?</h3>
-<p class="keep-in-present">In <a href="../../labs/lab-03/recordpages.html#big-idea">microdb's row pages</a>, each slot holds a complete record. If Ride 2 is in block 7, slot 1, the RID <code>(7, 1)</code> locates its pickup, payment, and fare together.</p>
-<p class="keep-in-present">In a simple column layout, each column keeps the same row order. To rebuild Ride 2, read <strong>position 1</strong> from each column: <strong>LGA</strong> from pickup, <strong>card</strong> from payment, and <strong>$24</strong> from fare. We count positions from zero.</p>
+<p class="keep-in-present">In <a href="../../labs/lab-03/recordpages.html#big-idea">microdb’s row pages</a>, each slot contains a complete record. Suppose Ride 2 occupies block 7, slot 1. The RID <code>(7, 1)</code> locates its pickup, payment, and fare together.</p>
+<p class="keep-in-present">In this simple column layout, every column uses the same row order. Reconstruct Ride 2 from <strong>position 1</strong> in each column. The values are <strong>LGA</strong>, <strong>card</strong>, and <strong>$24</strong>. Positions start at zero.</p>
 <p><a href="../../slides/lecture-10.html#s=2&amp;b=1"><strong>Step through the slot comparison →</strong></a></p>
-<p>For Parquet, a batch of rows is a <strong>row group</strong>. Each column has its own <strong>chunk</strong> within that group, and each chunk contains encoded pages. A position identifies a row within the group; locating its value may require decoding. It is not necessarily a fixed byte offset.<sup class="src"><a href="#src-23" title="Apache Parquet Concepts">23</a></sup></p>
+<p>Parquet organizes a batch of rows as a <strong>row group</strong>. Each column has a separate <strong>chunk</strong> in that group. Each chunk contains encoded pages. A position identifies a row within the group. Locating its value can require decoding, rather than a fixed byte offset.<sup class="src"><a href="#src-23" title="Apache Parquet Concepts">23</a></sup></p>
 
-<p>That is today's starting point: <strong>read less data, then process it efficiently.</strong> We will use DuckDB and Parquet to explore this idea, connect it to cloud databases, and finish by training a small model with SQL.</p>
+<p>The starting principle is: <strong>read less data, then process it efficiently.</strong> DuckDB and Parquet illustrate this principle. The lecture connects it to cloud databases and model training with SQL.</p>
 
 <div class="cite">
   Companion reading: Abadi et&nbsp;al., <a href="https://www.nowpublishers.com/article/Details/DBS-024"><em>The Design and Implementation of Modern Column-Oriented Database Systems</em></a><sup class="src"><a href="#src-1" title="The Design and Implementation of Modern Column-Oriented Database Systems (Foundations and Trends in Databases)">1</a></sup> ·
@@ -158,7 +158,7 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
 
 <!-- ============================================================ -->
 <h2 id="discovery">Start with a question about the city</h2>
-<p>Do rides from JFK cost more than rides from LaGuardia? Make a prediction, then <a href="discovery.html"><strong>open the database discovery workbench →</strong></a> to test it with the bundled 60,000-trip taxi sample. Compare fare first, then fare per mile. Does the answer change?</p>
+<p>Do rides from JFK cost more than rides from LaGuardia? Make a prediction. <a href="discovery.html"><strong>Open the database discovery workbench →</strong></a> to test it with the 60,000-trip sample. Compare fares. Then compare fare per mile. Does the conclusion change?</p>
 <p>The workbench guides you through setup, queries, and charts. For each investigation, record <strong>one finding, one limitation, and one next question.</strong> These exercises are ungraded.</p>
 
 <h2 id="plan">Today's plan</h2>
@@ -174,7 +174,7 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
 <!-- ============================================================ -->
 <h2 id="flip">One ride or many rides?</h2>
 
-<p><strong>A workload is the mix of queries a database runs.</strong> Showing all of Ride 2 needs its pickup, payment, and fare. Calculating the average fare needs just the fare from every ride. Row storage keeps the first set together; column storage keeps the second set together. Both layouts can answer both questions.</p>
+<p><strong>A workload is the mix of queries a database runs.</strong> A complete Ride 2 lookup needs its pickup, payment, and fare. Average fare needs the fare from every ride. Row storage groups the values for the first query. Column storage groups the values for the second query. Both layouts can answer both queries.</p>
 
 <table>
   <thead><tr><th></th><th>Transactions · OLTP</th><th>Analytics · OLAP</th></tr></thead>
@@ -183,7 +183,7 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
     <tr><td>Data needed</td><td>A few rows.</td><td>Many rows, but only a few columns.</td></tr>
     <tr><td>Typical layout</td><td><strong>Row storage:</strong> one ride's fields stay together.</td><td><strong>Column storage:</strong> one column's values stay together.</td></tr>
     <tr><td>Typical writes</td><td>Frequent small inserts and updates.</td><td>Batch loads, such as a day's rides.</td></tr>
-    <tr><td>Examples</td><td>Postgres, MySQL; microdb models row storage.</td><td>DuckDB, Snowflake, BigQuery.</td></tr>
+    <tr><td>Examples</td><td>Postgres and MySQL. Microdb models row storage.</td><td>DuckDB, Snowflake, BigQuery.</td></tr>
   </tbody>
 </table>
 
@@ -191,7 +191,7 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
 
 <h3 class="new-slide" data-kicker="Rows and columns">Many systems use both layouts</h3>
 
-<p class="keep-in-present">A taxi service might record each ride in a row-based database, then copy the rides into a column-based database for reports. Each layout serves a different job.</p>
+<p class="keep-in-present">A taxi service can record rides in a row-based database. It can copy the rides into a column-based database for reports. Each layout serves a different task.</p>
 
 <!-- ============================================================ -->
 <h2 id="try-it">See what the query reads</h2>
@@ -200,9 +200,7 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
 
 <div class="viz" id="viz-layout">
   <div class="viz-title">SELECT avg(fare) FROM rides</div>
-  <p class="viz-description">Each cell represents one stored value:
-  <span class="hexlegend hit">green</span> values are read and used,
-  <span class="hexlegend miss">orange</span> values are read but unused; gray values are skipped.</p>
+  <p class="viz-description">Each cell represents one stored value. The query reads and uses <span class="hexlegend hit">green</span> values. It reads but does not use <span class="hexlegend miss">orange</span> values. It skips gray values.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="ly-row">Average fare: rows</button>
     <button type="button" class="btn primary" id="ly-col">Average fare: columns</button>
@@ -212,13 +210,13 @@ Hover over or tap a dotted-underlined term like <span class="gloss-demo">this on
   <div class="qj-msg" id="ly-msg">Same data, two arrangements. Run the aggregate against each.</div>
   <div class="ly-grid" id="ly-grid"></div>
   <div class="bs-stats" id="ly-stats"></div>
-  <p class="viz-caption">For one complete ride, row storage keeps the fields together. Column storage gathers them from separate columns. This is a simplified model; real disk reads also depend on page size, caching, and indexes.</p>
+  <p class="viz-caption">Row storage keeps a complete ride’s fields together. Column storage gathers those fields from separate columns. This is a simplified model. Actual disk reads also depend on page size, caching, and indexes.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="columnar">Why columns help</h2>
 
-<p class="keep-in-present">Imagine copying the fare from each ride into a separate list while keeping the rides in the same order. The fare positions still line up with the pickup and payment positions, so we can reconstruct a ride when needed. Keeping one field together makes it easier to read just that field and to encode repeated patterns. Compression, chunk metadata, and the execution engine determine the actual work.</p>
+<p class="keep-in-present">Imagine copying each fare into a separate list without changing ride order. Fare positions still match the pickup and payment positions. These positions let us reconstruct a ride. Grouping one field’s values helps the engine read only that field and encode repeated patterns. Compression, chunk metadata, and execution determine the actual work.</p>
 
 <p class="keep-in-present">Reading only the fare column saves work immediately. Storing similar values together also helps the engine do three things:</p>
 
@@ -255,28 +253,28 @@ Nearby numbers → store the first value and the changes
     <button type="button" class="btn" id="enc-id">ride_id (sequential)</button>
   </div>
   <div id="enc-stage"></div>
-  <p class="viz-caption">Encodings can be combined. Parquet can dictionary-encode labels, then compress runs of their codes.<sup class="src"><a href="#src-2" title="Parquet Encodings">2</a></sup> The byte counts here illustrate the idea; actual file sizes vary.</p>
+  <p class="viz-caption">An engine can combine encodings. Parquet can dictionary-encode labels and then compress runs of their codes.<sup class="src"><a href="#src-2" title="Parquet Encodings">2</a></sup> The displayed byte counts are examples. Actual file sizes vary.</p>
 </div>
 
 <h3 id="batch-execution" class="new-slide" data-kicker="Column optimizations">2. Process a batch at a time</h3>
 
-<p>Recall the scans from <a href="../../lectures/lecture-04/iterators.html">Lecture 4</a>: <code>TableScan</code> finds a row, <code>SelectScan</code> checks the condition, and <code>ProjectScan</code> exposes the requested fields. The caller repeats <code>plan.next()</code>, then reads the current result with <code>plan.get_val(...)</code>.</p>
-<p>For <code>SELECT fare FROM rides WHERE fare &gt; 25</code>, use the toy fares 36, 24, and 30 in that scan order. The first successful call selects 36. The next call skips 24 and selects 30. A batch version could pass <code>[36, 24, 30]</code> to the filter at once, then pass the two matching fares onward together. <strong>Same condition, same answer; more rows per handoff.</strong> <a href="../../slides/lecture-10.html#s=10&amp;b=1">Step through the comparison →</a></p>
+<p>Recall the <a href="../../lectures/lecture-04/iterators.html">Lecture 4</a> scans. <code>TableScan</code> finds a row. <code>SelectScan</code> checks its condition. <code>ProjectScan</code> exposes the requested fields. The caller repeats <code>plan.next()</code>. After each successful call, it reads fields with <code>plan.get_val(...)</code>.</p>
+<p>Consider <code>SELECT fare FROM rides WHERE fare &gt; 25</code> with fares 36, 24, and 30 in that order. The first successful call selects 36. The next call skips 24 and selects 30. A batch can send <code>[36, 24, 30]</code> to the filter at once and return both matching fares together. <strong>The condition and answer stay the same. Each transfer between operators contains more rows.</strong> <a href="../../slides/lecture-10.html#s=10&amp;b=1">Step through the comparison →</a></p>
 
 <table>
   <thead><tr><th></th><th>microdb (<span class="gloss" data-gloss="volcano">Volcano</span>)</th><th>DuckDB (vectorized)</th></tr></thead>
   <tbody>
-    <tr><td>Unit of work</td><td>One current row per successful <code>next()</code>; <code>get_val()</code> reads its fields.</td><td>A batch of values; the standard vector size is 2,048.<sup class="src"><a href="#src-4" title="DuckDB Internals: Vectors">4</a></sup></td></tr>
-    <tr><td>Example: filter fares</td><td>Advance until one row matches, then read its fare.</td><td>Test the fares in a batch, then pass matching positions onward.</td></tr>
+    <tr><td>Unit of work</td><td>Each successful <code>next()</code> selects one current row. <code>get_val()</code> reads its fields.</td><td>A batch of values. The standard vector size is 2,048.<sup class="src"><a href="#src-4" title="DuckDB Internals: Vectors">4</a></sup></td></tr>
+    <tr><td>Example: filter fares</td><td>Advance until a row matches. Then read its fare.</td><td>Test a batch of fares. Pass the matching positions to the next operator.</td></tr>
     <tr><td>Call overhead</td><td>Paid for each row.</td><td>Shared across the batch.</td></tr>
   </tbody>
 </table>
 
-<p>Batching reduces repeated calls between operators; each fare still needs its condition checked. Microdb already reads disk pages into buffers, so one row per successful scan call does not mean one disk read per row. An execution batch groups values for processing in memory. Loops over arrays can also use the CPU efficiently.<sup class="src"><a href="#src-1" title="The Design and Implementation of Modern Column-Oriented Database Systems">1</a></sup></p>
+<p>Batching reduces calls between operators. The filter must still check each fare. Microdb already reads disk pages into buffers. A scan call that returns one row does not imply one disk read. An execution batch groups values for processing in memory. Array loops can also use the CPU efficiently.<sup class="src"><a href="#src-1" title="The Design and Implementation of Modern Column-Oriented Database Systems">1</a></sup></p>
 
 <h3 class="new-slide" data-kicker="Column optimizations">3. Skip data that cannot match</h3>
 
-<p>Suppose a chunk's fares range from $5 to $20. A query for <code>fare &gt; 100</code> can skip it. The minimum and maximum are enough to rule it out; the engine need not check every fare.</p>
+<p>Suppose a chunk’s fares range from $5 to $20. A query for <code>fare &gt; 100</code> can skip that chunk. Its minimum and maximum prove that no fare can match. The engine does not need to check individual fares.</p>
 
 <h3 id="partitions" class="new-slide" data-kicker="Skipping files">Are partitions folders?</h3>
 <p><strong>A partition groups rows by a rule.</strong> For one year of rides, we can group all January rides together, all February rides together, and so on. In this example, each month's group lives in a folder of Parquet files:</p>
@@ -285,7 +283,7 @@ Nearby numbers → store the first value and the changes
   month=02/data.parquet   ← February rides
   ...
   month=12/data.parquet   ← December rides</code></pre>
-<p>For December's average fare, the engine can use the folder labels to skip the other eleven months. Then it can read only fare chunks inside December's files. This folder convention is called <strong>Hive partitioning</strong>. One partition can contain several files; the example shows one per month. A folder is one way to store a partition; other database systems manage partitions internally.<sup class="src"><a href="#src-24" title="DuckDB Hive Partitioning">24</a></sup></p>
+<p>For December’s average fare, folder labels let the engine skip eleven months. It can then read only fare chunks in December’s files. This folder convention is <strong>Hive partitioning</strong>. A partition can contain several files, although this example has one file per month. Folders are one way to store partitions. Other database systems manage partitions internally.<sup class="src"><a href="#src-24" title="DuckDB Hive Partitioning">24</a></sup></p>
 
 <h3 id="byte-ratio" class="new-slide" data-kicker="Column optimizations">How much data can we skip?</h3>
 
@@ -294,8 +292,8 @@ Nearby numbers → store the first value and the changes
 <div class="exercise">
   <span class="ex-label">Check yourself · keep fewer columns and fewer months</span>
   <p>Our question is <strong>“What is the average fare for December?”</strong> Imagine a toy year with 60,000 rides, split evenly into 12 months. Each month has 5,000 rides. Each ride has 12 stored fields, including fare, and each value uses 8 bytes. The folder name supplies the month.</p>
-  <p>Draw a grid with 12 columns and 12 months. Each square represents <strong>one month's values for one column</strong>: 5,000 values × 8 bytes = <strong>40 KB</strong>. These are equal pieces of value data, not disk pages.</p>
-  <p>Start with all 144 squares. Keep only the fare column, then only December. <strong>What fraction of the full table's value data remains?</strong> <a href="../../slides/lecture-10.html#s=13&amp;b=1">Step through the grid →</a></p>
+  <p>Draw a grid with 12 columns and 12 months. Each square represents <strong>one month’s values for one column</strong>. It contains 5,000 values × 8 bytes = <strong>40 KB</strong>. These are equal groups of value data, not disk pages.</p>
+  <p>Start with all 144 squares. Keep only the fare column. Then keep only December. <strong>What fraction of the full table’s value data remains?</strong> <a href="../../slides/lecture-10.html#s=13&amp;b=1">Step through the grid →</a></p>
   <details><summary>Show answer</summary>
   <ol>
     <li><strong>All table values:</strong> 60,000 × 12 × 8 = 5,760,000 bytes, or <strong>5.76 MB</strong>. This is our full-table baseline.</li>
@@ -303,23 +301,23 @@ Nearby numbers → store the first value and the changes
     <li><strong>Keep only December fares:</strong> 5,000 × 1 × 8 = 40,000 bytes, or <strong>40 KB</strong>. One square remains. Divide by 12 again.</li>
   </ol>
   <p><strong>One of 144 equal squares remains: 1/144 of the full value data.</strong> The two savings multiply because one removes columns and the other removes months. Using the same units, 5,760 KB ÷ 40 KB = 144.</p>
-  <p>This model uses decimal units (1 KB = 1,000 bytes) and excludes metadata, encoding, and compression. It compares value bytes, not query speed or measured disk reads. Real months need not be equal: if December held half the rides, keeping that month would divide by 2, leaving 1/24 of the full value data.</p>
+  <p>This model uses decimal units: 1 KB = 1,000 bytes. It excludes metadata, encoding, and compression. It compares value bytes, not query speed or measured disk reads. Actual months can have different row counts. If December held half the rides, selecting December would divide by 2. The remaining data would be 1/24 of all value data.</p>
   </details>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="worked-example">From trips to running totals</h2>
 
-<p class="keep-in-present">We have seen how storage layout helps a query read fewer bytes. Now follow what the query does with those values: group trips into monthly totals, then add a running total to each monthly row. At each stage, the meaning of one result row matters.</p>
+<p class="keep-in-present">Storage layout can help a query read fewer bytes. Now follow the operations on those values. First, group trips into monthly totals. Then add a running total to each monthly row. Check what one result row represents at each stage.</p>
 
 <p>A <strong>window function</strong> lets each row use other rows in its calculation while keeping a result for each row. <a href="../../labs/lab-08/duckdb.html#window-explainer">Move through a four-ride visual to see which rows contribute →</a></p>
 <p>Here, start with one row per trip. <code>GROUP BY month</code> produces one row per month. A running total then shows how much revenue we have collected by the end of each month. Its <strong>frame</strong> includes the rows from the first month through the current month: January alone, then January plus February.</p>
-<p>At each step, ask: <strong>what does one row represent now?</strong> This is the table's <em>grain</em>. The <code>WITH</code> clause names the monthly result so the next step can use it; that named result is a common table expression (CTE).</p>
+<p>At each step, ask: <strong>what does one row represent now?</strong> This is the table’s <em>grain</em>. The <code>WITH</code> clause names the monthly result for the next step. This named result is a common table expression (CTE).</p>
 <div data-teaching-trace="analytics">
   <p><strong>Worked result:</strong> Four toy trips become monthly revenues 20 and 30. The window preserves two monthly rows and adds running totals 20 and 50.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
 </div>
-<p><a href="../../labs/lab-08/duckdb.html#worked-example">Lab 8’s optional SQL practice</a> uses this pattern for cumulative revenue. These four trips are a small teaching example; the full dataset gives different totals.</p>
+<p><a href="../../labs/lab-08/duckdb.html#worked-example">Lab 8’s optional SQL practice</a> uses this pattern for cumulative revenue. These four trips are a teaching example. The full dataset produces different totals.</p>
 
 <!-- ============================================================ -->
 <h2 id="duckdb">DuckDB runs the query. Parquet stores the data.</h2>
@@ -338,14 +336,14 @@ Nearby numbers → store the first value and the changes
 <h3 class="new-slide" data-kicker="DuckDB and Parquet">Use SQL and pandas together</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">DuckDB and pandas</span><span>Query a pandas dataframe with SQL, then return the result as another dataframe.<sup class="src"><a href="#src-8" title="DuckDB Guide: Import from Pandas">8</a></sup> Use whichever tool makes the next step clearer.</span></div>
+  <div class="lc-row"><span class="lc-k">DuckDB and pandas</span><span>Query a pandas dataframe with SQL. Return the result as another dataframe.<sup class="src"><a href="#src-8" title="DuckDB Guide: Import from Pandas">8</a></sup> Use whichever tool makes the next step clearer.</span></div>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="warehouse">The same ideas in the cloud</h2>
 
 <p class="keep-in-present">DuckDB can run on your laptop. Cloud systems can spread queries across many machines. They use the same basic ideas: read selected columns, compress values, and skip data.</p>
-<p><strong>Storage keeps the data; compute runs the queries.</strong> Separating them lets a system change its query capacity without moving all the data.</p>
+<p><strong>Storage keeps the data. Compute runs the queries.</strong> Separating them lets a system change query capacity without moving all the data.</p>
 
 <h3 class="new-slide" data-kicker="The cloud stack">Compare warehouses, data lakes, and lakehouses</h3>
 
@@ -375,9 +373,9 @@ December, average fare → read fares in December's partition</code></pre>
 <!-- ============================================================ -->
 <h2 id="in-database-ml">Train a model with SQL</h2>
 
-<p class="keep-in-present">The engine can summarize fares. Now use training rides to estimate a relationship, save that model, and apply it to separate test rides. Keep data preparation, learning, and prediction visible as different operations.</p>
+<p class="keep-in-present">The engine can summarize fares. Training uses rides to estimate a relationship and save a model. Prediction applies that model to separate test rides. Data preparation, training, and prediction are different operations.</p>
 
-<p class="keep-in-present">Can trip distance help predict fare? We will use SQL to fit a line, save its slope and intercept in a table, and predict a new fare. DuckDB does the calculations. This is <strong>in-database machine learning</strong>.</p>
+<p class="keep-in-present">Can trip distance help predict fare? SQL will fit a line and save its slope and intercept in a table. Another query will predict a fare. DuckDB performs the calculations. This is <strong>in-database machine learning</strong>.</p>
 <p><a href="../../slides/lecture-10.html#s=17&amp;b=1">Step through these queries in the slides →</a> The slides use the same six rides and saved model as the examples below.</p>
 
 <table>
@@ -385,14 +383,14 @@ December, average fare → read fares in December's partition</code></pre>
   <tbody>
     <tr><td>Prepare</td><td>Choose distance as the input and fare as the known outcome.</td><td>Training rows and separate test rows.</td></tr>
     <tr><td>Train</td><td>Fit a line to the training rows.</td><td>One model row: intercept and slope.</td></tr>
-    <tr><td>Evaluate</td><td>Predict fares for the test rows and compare with their actual fares.</td><td>Prediction errors.</td></tr>
+    <tr><td>Evaluate</td><td>Predict fares for the test rows. Compare the predictions with actual fares.</td><td>Prediction errors.</td></tr>
     <tr><td>Predict (inference)</td><td>Apply the saved line to a new distance.</td><td>A predicted fare.</td></tr>
   </tbody>
 </table>
 
-<p>Use six <strong>made-up rides</strong> so we can check the math: four for training and two for testing. Distance is in miles; fare is in dollars. These rows illustrate the workflow, not real taxi-fare accuracy.</p>
+<p>The example uses six <strong>made-up rides</strong>: four for training and two for testing. Distance uses miles. Fare uses dollars. These rows illustrate the procedure and do not establish accuracy on actual taxi fares.</p>
 
-<p><strong>Run it:</strong> download <a href="in_database_ml.py" download><code>in_database_ml.py</code></a>, install DuckDB with <code>python3 -m pip install duckdb</code>, then run <code>python3 in_database_ml.py</code>. Add <code>--explain</code> to see the query plans. No cloud account or data download is needed.</p>
+<p><strong>Run the example:</strong> Download <a href="in_database_ml.py" download><code>in_database_ml.py</code></a>. Install DuckDB with <code>python3 -m pip install duckdb</code>. Run <code>python3 in_database_ml.py</code>. Add <code>--explain</code> to display the query plans. The example requires no cloud account or data download.</p>
 
 <h3 class="new-slide" data-kicker="In-database ML · prepare">1. Keep training and test rows separate</h3>
 
@@ -415,11 +413,11 @@ SELECT ride_id, distance, fare, split
 FROM ml_rides
 WHERE distance &gt; 0 AND fare &gt;= 0;</code></pre>
 
-<p>The filter keeps positive distances and nonnegative fares; it also excludes nulls. Only distance is used to predict fare. <code>ride_id</code> identifies the row, and <code>split</code> controls when we use it.</p>
+<p>The filter keeps positive distances and nonnegative fares. It excludes nulls. Only distance predicts fare. <code>ride_id</code> identifies the row. <code>split</code> identifies training and test rows.</p>
 
 <details>
   <summary>For real data: avoid leaking test information</summary>
-  <p>For a forecasting task, train on earlier data and test on later data. If preprocessing learns a mean, scale, or category mapping, learn it from training rows only. Keep test data out of every fitting step.</p>
+  <p>For forecasting, train on earlier data. Test on later data. Fit preprocessing means, scales, or category mappings with training rows only. Exclude test data from every fitting step.</p>
 </details>
 
 <h3 id="train-sql" class="new-slide" data-kicker="In-database ML · train">2. Fit the line with an aggregate query</h3>
@@ -438,12 +436,12 @@ SELECT * FROM fare_model;
 <p class="keep-in-present">The regression functions take <code>(fare, distance)</code>: outcome first, input second. They find the line that minimizes squared errors on the training rows.<sup class="src"><a href="#src-17" title="DuckDB Aggregate Functions: regression aggregates">17</a></sup> The result is <strong>predicted fare = 3 + 2 × distance</strong>. SQL learned 3 and 2 from the four training rides and saved them in <code>fare_model</code>.</p>
 
 <p><strong>Why does <code>regr_intercept(fare, distance)</code> need both columns?</strong> It must learn how fare changes with distance to locate the fitted line's crossing at distance zero. Each training row supplies a pair: a known fare and its distance. The aggregate uses all four pairs and returns one number, the intercept. <code>regr_slope(fare, distance)</code> uses those same pairs and returns the slope of the same line.</p>
-<p>For this fit, <strong>intercept = average fare − slope × average distance</strong>. The training rides have average fare $8 and average distance 2.5 miles. With a learned slope of $2 per mile, the intercept is <strong>$8 − ($2 per mile × 2.5 miles) = $3</strong>. None of our training rides traveled zero miles; the model estimates that crossing. It does not establish the taxi's actual base fare.</p>
+<p>For this fit, <strong>intercept = average fare − slope × average distance</strong>. Training averages are $8 and 2.5 miles. The learned slope is $2 per mile. Thus, the intercept is <strong>$8 − ($2 per mile × 2.5 miles) = $3</strong>. No training ride traveled zero miles, so the model estimates that crossing. The estimate does not establish the taxi’s actual base fare.</p>
 
 <pre class="equation"><code>Training:  scan feature columns → filter split = 'train' → aggregate → model row
 Scoring:   scan new distances   → combine with model row → project predictions</code></pre>
 
-<p>These are familiar query operations: scan, filter, aggregate, and join. This simple model can be trained with one aggregate query; more complex models may need many passes through the data.</p>
+<p>These queries use familiar operations: scan, filter, aggregate, and join. One aggregate query trains this simple model. More complex models can require many passes through the data.</p>
 
 <h3 id="evaluate-sql" class="new-slide" data-kicker="In-database ML · evaluate">3. Check the line on the test rides</h3>
 
@@ -468,8 +466,8 @@ FROM held_out_predictions;
 -- test_rows | mae | rmse
 --         2 | 1.0 |  1.0</code></pre>
 
-<p>For the 2.5-mile ride reserved for checking the model, the prediction is $8 and the recorded fare is $9: a $1 error. For the 4.5-mile ride, the prediction is $12 and the recorded fare is $11: another $1 error. <strong>MAE</strong> (mean absolute error) is therefore $1. <strong>RMSE</strong> (root mean squared error) is also $1 here.</p>
-<p><strong>Why use separate test rows?</strong> We want to check predictions on data the model did not learn from. Two made-up rows show how this works; a real evaluation needs representative test data and a baseline for comparison.</p>
+<p>For the reserved 2.5-mile ride, the model predicts $8 and the recorded fare is $9. The absolute error is $1. For the 4.5-mile ride, the prediction is $12 and the recorded fare is $11. Its absolute error is also $1. Therefore, <strong>MAE</strong> (mean absolute error) is $1. Here, <strong>RMSE</strong> (root mean squared error) is also $1.</p>
+<p><strong>Why use separate test rows?</strong> Evaluation checks predictions on data that did not train the model. Two made-up rows demonstrate this procedure. An actual evaluation needs representative test data and a comparison baseline.</p>
 
 <h3 class="new-slide" data-kicker="In-database ML · infer">4. Predict the fare for a new ride</h3>
 
@@ -484,14 +482,14 @@ CROSS JOIN fare_model AS m;
 
 <h3 id="managed-ml" class="new-slide" data-kicker="In-database ML · managed systems">The same steps in a cloud warehouse</h3>
 
-<p class="keep-in-present"><strong>BigQuery ML is Google’s cloud service for training and using machine-learning models through SQL.</strong> BigQuery is Google’s database for large-scale analytics; ML means machine learning. Google manages the computing infrastructure and stores the trained model.<sup class="src"><a href="#src-25" title="Google: Introduction to ML in BigQuery">25</a></sup></p>
+<p class="keep-in-present"><strong>BigQuery ML is Google’s cloud service for training and using machine-learning models through SQL.</strong> BigQuery is Google’s database for large-scale analytics. ML means machine learning. Google manages the computing infrastructure and stores the trained model.<sup class="src"><a href="#src-25" title="Google: Introduction to ML in BigQuery">25</a></sup></p>
 
 <p class="keep-in-present">BigQuery ML gives these steps names: <code>CREATE MODEL</code> trains, <code>ML.EVALUATE</code> checks errors, and <code>ML.PREDICT</code> makes predictions.<sup class="src"><a href="#src-18" title="BigQuery CREATE MODEL for generalized linear models">18</a></sup><sup class="src"><a href="#src-19" title="BigQuery ML.EVALUATE">19</a></sup><sup class="src"><a href="#src-20" title="BigQuery ML.PREDICT">20</a></sup></p>
 
 <details>
   <summary>Optional BigQuery SQL: the same stages with a managed model</summary>
   <p>This optional example uses a paid cloud service. It is not required for the lab.<sup class="src"><a href="#src-22" title="BigQuery ML pricing">22</a></sup></p>
-  <p>To run it, use a Google Cloud project with billing and the BigQuery API enabled, plus permission to run jobs and create/read models.<sup class="src"><a href="#src-21" title="BigQuery ML linear regression tutorial: setup and permissions">21</a></sup> Create a dataset named <code>demo</code> and load the six rides into <code>demo.ml_rides</code> using types <code>INT64, FLOAT64, FLOAT64, STRING</code>. Replace <code>YOUR_PROJECT</code> below with your project ID.</p>
+  <p>Use a Google Cloud project with billing and the BigQuery API enabled. You need permission to run jobs and create and read models.<sup class="src"><a href="#src-21" title="BigQuery ML linear regression tutorial: setup and permissions">21</a></sup> Create a dataset named <code>demo</code>. Load the six rides into <code>demo.ml_rides</code> with types <code>INT64, FLOAT64, FLOAT64, STRING</code>. Replace <code>YOUR_PROJECT</code> with your project ID.</p>
   <pre><code class="language-sql">-- BigQuery GoogleSQL; these statements do not run in DuckDB.
 CREATE MODEL `YOUR_PROJECT.demo.fare_model`
 OPTIONS (
@@ -518,7 +516,7 @@ FROM ML.PREDICT(
     MODEL `YOUR_PROJECT.demo.fare_model`,
     (SELECT 7 AS ride_id, 3.5 AS distance)
 );</code></pre>
-  <p><code>NO_SPLIT</code> uses all rows passed to training; the query already selects only <code>split = 'train'</code>. The evaluation query separately selects the test rows. The other options request the same kind of least-squares fit as our DuckDB example. <code>ride_id</code> labels the prediction output; it is not a feature.</p>
+  <p><code>NO_SPLIT</code> uses every row from the training query. That query selects only <code>split = 'train'</code>. The evaluation query selects test rows separately. The other options request the same type of least-squares fit as the DuckDB example. <code>ride_id</code> labels prediction output. It is not a feature.</p>
 </details>
 
 <p><strong>Why keep the work in the database?</strong> We can train where the rows already live and use the predictions in another query. We avoid exporting the training table. The available models and compute costs depend on the engine.</p>
@@ -534,35 +532,35 @@ FROM ML.PREDICT(
 <!-- ============================================================ -->
 <h2 id="thursday">Tuesday's lab: train, predict, and investigate</h2>
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Prepare</span><span>Load the taxi sample and keep January–October training rides separate from November–December test rides.</span></div>
-  <div class="lc-row"><span class="lc-k">Train</span><span>Fit a straight line in DuckDB and train a small neural network with PyTorch.</span></div>
-  <div class="lc-row"><span class="lc-k">Predict</span><span>Call the trained network from SQL and compare both models on the same test rides.</span></div>
-  <div class="lc-row"><span class="lc-k">Discover</span><span>Write a query to find which groups have larger errors, then explain the chart and one limitation.</span></div>
+  <div class="lc-row"><span class="lc-k">Prepare</span><span>Load the taxi sample. Keep January–October training rides separate from November–December test rides.</span></div>
+  <div class="lc-row"><span class="lc-k">Train</span><span>Fit a straight line in DuckDB. Train a small neural network with PyTorch.</span></div>
+  <div class="lc-row"><span class="lc-k">Predict</span><span>Call the trained network from SQL. Compare both models on the same test rides.</span></div>
+  <div class="lc-row"><span class="lc-k">Discover</span><span>Query the groups with larger errors. Explain the chart and one limitation.</span></div>
 </div>
 <ul class="checklist">
-  <li>☐ Follow the <a href="../../labs/lab-08/duckdb.html#setup">Lab 8 setup</a>: clone or update the repository, activate the Python environment, and install <code>requirements-pytorch.txt</code>.</li>
+  <li>☐ Follow the <a href="../../labs/lab-08/duckdb.html#setup">Lab 8 setup</a>. Clone or update the repository. Activate the Python environment. Install <code>requirements-pytorch.txt</code>.</li>
   <li>☐ From the complete <code>starter</code> folder, run <code>python gen_data.py</code>.</li>
   <li>☐ Bring a prediction: will a neural network beat a straight line for every distance group?</li>
   <li>☐ See the <a href="../../labs/lab-08/duckdb.html#assignment">core deliverables</a>. The eight worked SQL examples and storage measurements are optional reference material.</li>
 </ul>
-<p>The core lab runs locally on a CPU without a cloud account. Explain your measured model errors; you do not need to match the reference run’s numbers.</p>
+<p>The core lab runs locally on a CPU without a cloud account. Explain your measured model errors. Your numbers do not need to match the reference run.</p>
 
 <!-- ============================================================ -->
 <h2 id="recap">Return to the opening question</h2>
 
 <div class="exercise learning-check">
   <span class="ex-label">Explain it to a teammate</span>
-  <p>The same stored rides must support a full-ride lookup and an average fare query. Explain which values each query needs and which layout keeps those values together. Then name the extra check needed before claiming a more complex fare model is better.</p>
-  <details><summary>Check your explanation</summary><p>A row keeps one ride’s fields together; a column keeps one field across rides together. Both must give the same answer. For models, compare the same error metric on the same held-out rides, with training kept separate. More complexity alone proves neither lower error nor less work.</p></details>
+  <p>The stored rides must support a complete-ride lookup and an average-fare query. Identify the values each query needs. Explain which layout groups those values together. State the evaluation needed to show that a more complex fare model is better.</p>
+  <details><summary>Check your explanation</summary><p>A row groups one ride’s fields. A column groups one field across rides. Both must produce the same answer. Compare models with the same error metric and the same reserved test rides. Keep training data separate. Greater complexity alone does not prove lower error or less work.</p></details>
 </div>
 
-<p class="keep-in-present">Return to the three fares. Choose the values the query needs, preserve which ride each value belongs to, and measure the work. For a learned prediction, also show which rows trained the model and which rows tested it.</p>
+<p class="keep-in-present">Return to the three fares. Select the values the query needs. Retain the association between each value and its ride. Measure the work. For predictions, identify the training rows and the test rows.</p>
 
 <ul class="recap-list">
   <li><strong>Match the layout to the query.</strong> Rows keep one record together. Columns keep one field's values together.</li>
-  <li><strong>Do less work.</strong> Read fewer columns, compress values, process batches, and skip data that cannot match.</li>
+  <li><strong>Reduce work.</strong> Select fewer columns. Compress values. Process batches. Skip data that cannot match.</li>
   <li><strong>Separate the roles.</strong> DuckDB runs queries. Parquet stores column data. Lakehouse metadata tracks table versions.</li>
-  <li><strong>SQL can train and use a model.</strong> Keep training and test rows separate, then predict with the saved model.</li>
+  <li><strong>SQL can train and use a model.</strong> Keep training and test rows separate. Use the saved model for prediction.</li>
 </ul>
 
 <p class="key-fact keep-in-present"><strong>Predict what the engine will read. Then measure.</strong></p>
@@ -576,7 +574,7 @@ FROM ML.PREDICT(
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Should I stop using pandas?</h3>
-<p class="keep-in-present">Use both when it helps. For example, summarize rides with SQL, then plot the result with Python. <code>duckdb.sql("...").df()</code> returns a pandas dataframe.<sup class="src"><a href="#src-14" title="DuckDB Guide: Export to Pandas">14</a></sup></p>
+<p class="keep-in-present">Use SQL and pandas together when useful. For example, summarize rides with SQL. Then plot the result with Python. <code>duckdb.sql("...").df()</code> returns a pandas dataframe.<sup class="src"><a href="#src-14" title="DuckDB Guide: Export to Pandas">14</a></sup></p>
 
 <h3 class="keep-in-present">Why can Parquet be faster than CSV?</h3>
 <p class="keep-in-present">CSV stores rows as text. The reader must scan the text to find the fields it needs. Parquet stores columns separately, so the engine can skip unused columns and some chunks. Reading less can be faster, but the speedup depends on the query and data.<sup class="src"><a href="#src-3" title="Querying Parquet with Precision Using DuckDB">3</a></sup></p>
@@ -585,7 +583,7 @@ FROM ML.PREDICT(
 <p class="keep-in-present">They serve different needs. DuckDB runs inside an application and focuses on analytics. Postgres runs as a server that many clients can read and update. Choose based on the work and how the application is deployed.<sup class="src"><a href="#src-15" title="DuckDB Concurrency">15</a></sup></p>
 
 <h3 class="keep-in-present">Where does our model training happen?</h3>
-<p class="keep-in-present">In this lecture’s regression example, training happens inside DuckDB. Python sends the SQL and prints the results. If we exported the rows and fitted a model in a Python library, that training would happen outside the database.</p>
+<p class="keep-in-present">DuckDB trains the regression model in this lecture. Python sends SQL and prints results. Exporting rows to a Python library for fitting would move training outside the database.</p>
 
 <h3 class="keep-in-present">What does “time travel” mean for a lakehouse table?</h3>
 <p class="keep-in-present">It means querying an earlier version of the table. Metadata identifies the files for that version. It works only while those files and their metadata are still retained.<sup class="src"><a href="#src-16" title="Delta Lake Utility Operations: Vacuum">16</a></sup></p>
@@ -630,11 +628,11 @@ FROM ML.PREDICT(
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=4"></script>
+<script src="viz.js?v=ste-20261015"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
-<script src="../../labs/_shared/teaching-traces.js?v=4"></script>
+<script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../labs/_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

@@ -6,7 +6,7 @@ Environment (Python version and operating system):
 Submit four individual files to the Lab 5 programming assignment on Gradescope:
 `queries.sql`, `results-300.json`, `results-600.json`, and this completed report
 as `lab5_report.md` or `lab5_report.pdf`. Do not upload a folder or ZIP.
-Automatic checks are worth 70 points; staff review this report for 30 more.
+Automatic checks are worth 70 points. Staff review this report for 30 more.
 A report-received check does not grade its contents. There is no runtime target.
 
 Staff rubric: implementation walkthrough (8), original predictions with reasons
@@ -52,8 +52,8 @@ python3 measure_sql.py --queries queries.sql --students 600 --repeat 7 --json > 
 
 If you edit any SQL, regenerate both JSON files before resubmitting. Keep your
 original predictions and explain corrections rather than rewriting predictions.
-Summarize results for both plan modes below; expand the table to include all
-six queries × two sizes × two plans (24 rows).
+Summarize the results for both plan modes below. Expand the table to include
+all six queries × two sizes × two plans (24 rows).
 
 | Query | Students | Plan | Student row visits | Major row visits | Candidate pairs | Comparisons | Rows | Output cells | Median ms |
 |---|---:|---|---:|---:|---:|---:|---:|---:|---:|
@@ -62,14 +62,14 @@ six queries × two sizes × two plans (24 rows).
 ## 5. Explain differences from first principles
 
 1. Did fewer returned rows imply fewer table row visits? Explain from TableScan
-   and SelectScan's next() methods; distinguish visits from disk reads.
+   and SelectScan's next() methods. Distinguish visits from disk reads.
 2. Did selecting fewer columns avoid scanning rows? Which work did it reduce?
 3. Derive the simple and early-filter pair counts for J1. Explain why the early
    plan still revisits majors even though only one major passes its filter.
 4. J1 and J2 return the same rows. Which side is restarted? Explain any changes
    in base-row visits even when the candidate-pair count stays the same.
 5. Explain J3's counts using the number of students that pass its filter.
-6. Which counts doubled with 600 students? Why needn't the measured time double?
+6. Which counts doubled with 600 students? Why does the measured time not necessarily double?
 7. Compare the pair-count ratio with the timing ratio for J1. Use comparisons,
    source scans, and output work to explain why those ratios can differ.
 8. State what was timed, what was excluded, and how repeats/caching/noise limit

@@ -9,15 +9,15 @@
     },
     'routing-key': {
       title: 'Routing key',
-      body: "<p>A key used to choose a child. In our tree, separator 36 sends values below 36 left and values equal to or above 36 right. It gives directions; it does not store row addresses. The actual entry for 36 is in a leaf.</p>",
+      body: "<p>A key used to choose a child. In our tree, separator 36 sends values below 36 left and values equal to or above 36 right. It selects a child path. It does not store row addresses. The actual entry for 36 is in a leaf.</p>",
     },
     'invariant': {
       title: 'Invariant',
-      body: "<p>A property that must hold after every completed operation. For this B+ tree, keys are sorted, leaves have equal depth, non-root nodes meet minimum occupancy, and all (key, RID) entries remain in leaves. The lab tests these properties after insertions and splits.</p>",
+      body: "<p>A property that must hold after every completed operation. This B+ tree keeps keys sorted and leaves at equal depth. Non-root nodes meet minimum occupancy. All (key, RID) entries remain in leaves. The lab tests these properties after insertions and splits.</p>",
     },
     'rid-recall': {
       title: 'RID (record identifier)',
-      body: "<p>A row address written as (block number, slot number). For example, (0, 4) means block 0, slot 4. The index returns this address; the table scan uses it to fetch the row. If that row is deleted or its slot reused, the index entry must be updated.</p>",
+      body: "<p>A row address written as (block number, slot number). For example, (0, 4) means block 0, slot 4. The index returns this address. The table scan uses the address to fetch the row. If that row is deleted or its slot reused, the index entry must be updated.</p>",
     },
     'fanout': {
       title: 'Fan-out',
@@ -25,7 +25,7 @@
     },
     'selectivity': {
       title: 'Selectivity',
-      body: "<p>The fraction of rows that a predicate keeps. A unique-ID lookup keeps one row and is highly selective; a condition matching almost every row is not selective. An index is often useful when few rows match. For many matches, a sequential scan may be cheaper. The optimizer estimates selectivity when comparing plans.</p>",
+      body: "<p>The fraction of rows that a predicate keeps. A unique-ID lookup keeps one row and is highly selective. A condition matching almost every row is not selective. An index is often useful when few rows match. For many matches, a sequential scan may be cheaper. The optimizer estimates selectivity when comparing plans.</p>",
     },
     'covering-index': {
       title: 'Covering index',
@@ -33,7 +33,7 @@
     },
     'write-amplification': {
       title: 'Write amplification',
-      body: "<p>Additional physical writes needed to perform a logical change. Inserting into a table with five indexes updates six structures, but that does not imply exactly six disk writes: buffering, page splits, and logging affect the total. Index maintenance trades additional write work and storage for faster reads.</p>",
+      body: "<p>Additional physical writes needed to perform a logical change. An insertion into a table with five indexes updates six structures. This does not imply exactly six disk writes. Buffering, page splits, and logging affect the total. Index maintenance trades additional write work and storage for faster reads.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -83,7 +83,7 @@
     const path = descend(key);
     const leaf = path[path.length - 1];
     if (leaf.keys.includes(key)) {
-      msg.innerHTML = `${key} is already present. The lab adds another RID for a duplicate key; this key-only demonstration leaves the tree unchanged.`;
+      msg.innerHTML = `${key} is already present. The lab adds another RID for a duplicate key. This demonstration displays only keys, so the tree remains unchanged.`;
       return;
     }
     let i = 0;
@@ -117,7 +117,7 @@
         nr.children = [node, sib];
         root = nr; height += 1;
         msg.innerHTML = `Insert ${key}: node over capacity → <strong>split</strong>, and no parent existed — ` +
-          `a new root [${hoisted}] appears. <strong>Height is now ${height}</strong>; every leaf is one level farther from the root.`;
+          `a new root [${hoisted}] appears. <strong>Height is now ${height}</strong>. Every leaf is one level farther from the root.`;
       } else {
         const j = childIndex(parent, hoisted);
         parent.keys.splice(j, 0, hoisted);
@@ -126,7 +126,7 @@
           `${hoisted} ${node.leaf ? 'copied' : 'moved'} up into the parent.`;
       }
     }
-    if (!didSplit) msg.innerHTML = `Insert ${key}: the key fits in the leaf. It is inserted in sorted order; no split is needed.`;
+    if (!didSplit) msg.innerHTML = `Insert ${key}: the key fits in the leaf. The insertion preserves key order. No split is needed.`;
     render(didSplit ? key : null);
   }
 
@@ -136,7 +136,7 @@
     const found = leaf.keys.includes(key);
     render(null, path, found ? key : null);
     msg.innerHTML = `search(${key}): touched <strong>${path.length} node${path.length > 1 ? 's' : ''}</strong> ` +
-      `(the height) — ${found ? `found it` : `absent; a scan would have touched all ${count}`}.`;
+      `(the height) — ${found ? `found it` : `absent. A scan would inspect all ${count} keys`}.`;
   }
 
   function levels() {
@@ -187,7 +187,7 @@
       });
       if (n === root) drawing.push(`<text class="bt-node-label" x="${p.x}" y="${p.y - 17}">${n.leaf ? 'root = leaf' : 'root: routing keys'}</text>`);
     });
-    canvas.innerHTML = `<svg class="bt-live-tree" viewBox="0 0 ${width} ${svgHeight}" style="min-width:${width}px" role="img" aria-label="B+ tree with ${count} distinct keys and ${height} levels. Internal branches lead to children; green arrows link leaves in key order.">` + drawing.join('') + '</svg>' +
+    canvas.innerHTML = `<svg class="bt-live-tree" viewBox="0 0 ${width} ${svgHeight}" style="min-width:${width}px" role="img" aria-label="B+ tree with ${count} distinct keys and ${height} levels. Internal branches lead to children. Green arrows link leaves in key order.">` + drawing.join('') + '</svg>' +
       (height > 1 ? '<div class="bt-chain">Gray branches: child pointers · green arrows: next leaf · all leaves have equal depth</div>' : '');
     stats.textContent = `keys: ${count}    height: ${height}    splits so far: ${splits}`;
   }

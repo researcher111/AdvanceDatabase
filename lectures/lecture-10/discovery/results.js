@@ -20,7 +20,7 @@ window.TAXI_DISCOVERY = {
           "sample_fare_tip"
         ]
       },
-      "interpret": "Every month has 5,000 rows because the course sample was constructed that way. Neither these counts nor these monthly sums estimate citywide demand or revenue without the original monthly sampling fractions. Switch the chart to median_fare: this asks about the sampled trip distribution instead of how many city trips occurred.",
+      "interpret": "The sample has 5,000 rows per month by construction. These counts and monthly sums cannot estimate citywide demand or revenue without the original monthly sampling fractions. Select median_fare to examine the sampled fare distribution. This metric does not measure citywide trip counts.",
       "follow": "Change median(fare) to avg(fare). Which months change most? Explain what a few expensive trips can do to the mean.",
       "result": {
         "columns": [
@@ -120,8 +120,8 @@ window.TAXI_DISCOVERY = {
           "rides"
         ]
       },
-      "interpret": "Cash tips are not recorded in the TLC tip field. The zero values describe a measurement limitation, not evidence that cash passengers are less generous. A card-only comparison answers a narrower question; it still does not identify a causal effect of payment method.",
-      "follow": "Filter to payment = 'card', group by hour, and include count(*). Which hours have enough observations to compare? Keep the word recorded in your conclusion.",
+      "interpret": "The TLC tip field does not record cash tips. Its zeros show a measurement limitation. They do not show that cash passengers are less generous. A card-only comparison answers a narrower question. It still does not establish a causal effect of payment method.",
+      "follow": "Filter to payment = 'card'. Group by hour. Include count(*). Identify hours with enough observations for comparison. Retain the word recorded in your conclusion.",
       "result": {
         "columns": [
           "payment",
@@ -161,7 +161,7 @@ window.TAXI_DISCOVERY = {
           "rides"
         ]
       },
-      "interpret": "The unit is a sampled trip picked up at the named airport. A larger fare can accompany a longer route; fare per mile asks a different question. The median of trip-level ratios is not the ratio of two medians. Fare excludes several surcharges and tolls, so it is not the full passenger bill or driver profit.",
+      "interpret": "One row represents a sampled trip from the named airport. A larger fare can accompany a longer route. Fare per mile measures a different quantity. The median of trip ratios differs from the ratio of two medians. Fare excludes several surcharges and tolls. It is not the complete passenger bill or driver profit.",
       "follow": "Add AND dropoff_borough = 'Manhattan'. Does the comparison persist for a more similar destination group? Compare the sample sizes before interpreting the change.",
       "result": {
         "columns": [
@@ -207,8 +207,8 @@ window.TAXI_DISCOVERY = {
           "rides"
         ]
       },
-      "interpret": "Each row of the heatmap is one pickup zone. Percentages divide by that zone’s sampled trips, so a large zone does not dominate solely because it has more rows. Hover or focus a cell, then inspect the table for its sample size. Pickup times pool the sampled 2024 months; this is not a count of trips in one particular day.",
-      "follow": "Add AND month IN (6, 7, 8) inside the CTE. Compare the summer profile with winter. A changed profile suggests a new hypothesis; it does not explain its cause.",
+      "interpret": "Each heatmap row represents one pickup zone. Percentages divide by that zone’s sampled trips. A larger zone therefore does not dominate solely from its row count. Hover over a cell or give it keyboard focus. Inspect its sample size in the table. Pickup times combine sampled 2024 months, rather than trips from one day.",
+      "follow": "Add AND month IN (6, 7, 8) inside the CTE. Compare the summer profile with winter. A different profile suggests a new hypothesis. It does not establish the cause.",
       "result": {
         "columns": [
           "zone",
@@ -666,7 +666,7 @@ window.TAXI_DISCOVERY = {
           "rides"
         ]
       },
-      "interpret": "The two cohorts have different trip mixes. Narrowing the distance and removing airport pickups makes one aspect of the comparison more similar, but it does not control every difference. Groups below 50 rides are omitted explicitly; missing bars do not mean zero fare. A changed ranking is evidence that composition matters, not proof that a borough causes a fare.",
+      "interpret": "The cohorts contain different types of trips. Restricting distance and excluding airport pickups makes some characteristics more similar. It does not control every difference. The query excludes groups below 50 rides. A missing bar therefore does not mean zero fare. A different ranking shows that trip composition matters, but does not prove that a borough causes a fare.",
       "follow": "Try 1–3 miles, then 5–10 miles. Include duration or time of day as another grouping variable. Report the rule you chose before looking at the new rankings.",
       "result": {
         "columns": [
@@ -727,8 +727,8 @@ window.TAXI_DISCOVERY = {
           "rides"
         ]
       },
-      "interpret": "Two joins give the pickup and dropoff their names. Grouping makes route counts, and the window ranks destinations within each origin. The denominator includes all five named destination boroughs before the top-two filter, so the two displayed shares need not add to 100%. Low-count origins deserve extra caution.",
-      "follow": "Remove destination_rank <= 2 and inspect every destination. Then count trips excluded by the borough filters. How would including unknown or outside-city destinations change the denominator?",
+      "interpret": "Two joins supply pickup and dropoff names. Grouping produces route counts. The window ranks destinations within each origin. The denominator includes all five named destination boroughs before the top-two filter. Thus, the two displayed percentages need not sum to 100%. Interpret low-count origins cautiously.",
+      "follow": "Remove destination_rank <= 2. Inspect all destinations. Count trips excluded by borough filters. How would unknown or outside-city destinations change the denominator?",
       "result": {
         "columns": [
           "route",
@@ -803,7 +803,7 @@ window.TAXI_DISCOVERY = {
           "sample_fare_tip"
         ]
       },
-      "interpret": "The extra lookup row is a deliberate experiment, not a flaw in the shipped zones table. The join repeats every matching Times Square ride: joined rows and the sum grow, while distinct ride IDs do not. A credible discovery starts by checking the unit of observation and join cardinality.",
+      "interpret": "The extra lookup row is deliberate. The supplied zones table has no such duplicate. The join repeats every matching Times Square ride. Joined-row counts and sums increase, but distinct ride IDs do not. Check row meaning and join cardinality before interpreting results.",
       "follow": "Compare count(*) and count(DISTINCT ride_id) after both joins in the trips view. Explain why fixing the dimension key is preferable to adding DISTINCT to a revenue query.",
       "result": {
         "columns": [

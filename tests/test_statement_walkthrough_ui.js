@@ -275,7 +275,7 @@ function checkFrame() {
     assert.equal(node.classList.contains('is-accessed'), Boolean(active && Number.isInteger(f.focus.byteOffset) && offset >= f.focus.byteOffset && offset < f.focus.byteOffset + f.focus.length));
   });
   if (active && Number.isInteger(f.focus.byteOffset)) {
-    assert(text('sw-address').includes('file offset ' + (block * 128 + f.focus.byteOffset)));
+    assert(text('sw-address').includes('File offset ' + (block * 128 + f.focus.byteOffset)));
   }
 }
 
@@ -350,7 +350,7 @@ assert.equal(get('sw-fields').children[0].children[4].textContent, '1');
 assert.equal(get('sw-fields').children[1].children[3].textContent, '7');
 assert.equal(get('sw-fields').children[2].children[3].textContent, '"temp"');
 assert.equal(get('sw-bytes').children.filter(node => node.classList.contains('is-different')).length, 1);
-assert(text('sw-address').includes('file offset 184'));
+assert(text('sw-address').includes('File offset 184'));
 checkFrame();
 byFocusKey('students.tbl-file-0').dispatch('click');
 assert.equal(text('sw-block-title'), 'students.tbl · block 0');

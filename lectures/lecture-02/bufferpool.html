@@ -18,9 +18,9 @@
   <ul>
 
     <li><a href="#plan">The question we will trace</a></li>
-    <li><a href="#problem">Disk provides persistence; RAM provides faster access</a></li>
+    <li><a href="#problem">Disk stores persistent data. RAM provides faster access.</a></li>
     <li><a href="#try-it">Compare a sequential scan with repeated access to a hot set</a></li>
-    <li><a href="#pool">Frames hold blocks; pin and unpin track their users</a></li>
+    <li><a href="#pool">Frames hold blocks. Pins track active users.</a></li>
     <li><a href="#policies">LRU: evict the unpinned frame used longest ago</a></li>
     <li><a href="#dirty">Dirty pages reach disk on eviction or an explicit flush</a></li>
     <li><a href="#math">A small fraction of misses can dominate average access time</a></li>
@@ -72,8 +72,8 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 
 <div class="exercise learning-check">
   <span class="ex-label">Start with what you already know</span>
-  <p>In a toy two-frame pool, A is pinned and clean; B is unpinned and dirty. A request for uncached C arrives. Which frame may be reused, and what must happen first?</p>
-  <details><summary>Check your explanation</summary><p>Only B is eligible. Write B’s modified bytes back before reusing its frame to read C. A’s age cannot override its active pin. If both frames are pinned, the lab reports that no frame is available.</p></details>
+  <p>In a toy two-frame pool, A is pinned and clean. B is unpinned and dirty. A request for uncached C arrives. Which frame can the pool reuse? What must happen first?</p>
+  <details><summary>Check your explanation</summary><p>Only B is eligible. Write B’s modified bytes to disk. Then reuse B’s frame to read C. A’s age cannot override its active pin. If both frames are pinned, the lab reports that no frame is available.</p></details>
 </div>
 
 <p class="keep-in-present">We begin with Quiz 1 (files, blocks, and pages, 10 min), then use your Lab 1 measurements to motivate the buffer pool.</p>
@@ -84,7 +84,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 <p class="keep-in-present">Today's claim: <strong>a high buffer-pool hit rate can remove a major source of query latency.</strong></p>
 
 <!-- ============================================================ -->
-<h2 id="problem">Disk provides persistence; RAM provides faster access</h2>
+<h2 id="problem">Disk stores persistent data. RAM provides faster access.</h2>
 
 <p>A buffer pool uses a limited amount of RAM to cache data stored on disk:</p>
 
@@ -110,7 +110,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
     <tr><td>What it is</td><td><em>Online Transaction Processing</em>: the many small reads and writes that run the business, one login, one order, one balance update at a time</td><td><em>Online Analytical Processing</em>: a few large read-only questions asked of the whole history, a total, a trend, a report</td></tr>
     <tr><td>Typical query</td><td><code>SELECT * FROM students WHERE id = 42</code></td><td><code>SELECT major, AVG(gpa) FROM students GROUP BY major</code></td></tr>
     <tr><td>Typical access</td><td>the same hot rows, over and over</td><td>often a scan of many blocks</td></tr>
-    <tr><td>Re-use</td><td>often frequent reuse of a smaller working set</td><td>limited within a single scan; repeated queries may reuse data</td></tr>
+    <tr><td>Re-use</td><td>often frequent reuse of a smaller working set</td><td>limited within one scan. Repeated queries may reuse data.</td></tr>
     <tr><td>What a cache can do</td><td>avoid many repeated disk reads</td><td>little benefit for a one-pass scan larger than the cache</td></tr>
     <tr><td>In today's lecture</td><td>the "<span class="gloss" data-gloss="working-set">hot set</span>" workload</td><td>the "scan" workload</td></tr>
   </tbody>
@@ -125,10 +125,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 
 <div class="viz" id="viz-bufsim">
   <div class="viz-title">Buffer pool simulator · 3 frames, 8 disk blocks, LRU</div>
-  <p class="viz-description">Click any disk block to access it (pin + unpin). A
-  <span class="hexlegend hit">green flash</span> is a hit, no disk. A
-  <span class="hexlegend miss">warm flash</span> is a miss: the least-recently-used unpinned
-  frame is evicted to make room. The tick under each frame is its <code>last_used</code>.</p>
+  <p class="viz-description">Click a disk block to pin and unpin it. A <span class="hexlegend hit">green flash</span> indicates a hit without a disk read. A <span class="hexlegend miss">warm flash</span> indicates a miss. The pool replaces the least recently used unpinned frame when it needs space. The tick below each frame is its <code>last_used</code> value.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="bs-scan">▶ Scan 0–7, twice</button>
     <button type="button" class="btn primary" id="bs-hot">▶ Hot set</button>
@@ -139,8 +136,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
   <div class="bs-frames" id="bs-frames"></div>
   <div class="bs-disk" id="bs-disk"></div>
   <div class="bs-stats" id="bs-stats"></div>
-  <p class="viz-caption">Try this before the next section: run the scan preset and explain the
-  hit rate to your neighbor. Then run the hot set.</p>
+  <p class="viz-caption">Run the scan preset. Explain its hit rate to your neighbor. Then run the hot-set preset.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="One pool, two machines">Caching helps when blocks are reused before eviction</h3>
@@ -155,20 +151,21 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
   </tbody>
 </table>
 
-<p class="key-fact keep-in-present"><strong>0% vs ~70%</strong> the same three-frame pool: a scan that doesn't fit against a hot set that does</p>
+<p class="key-fact keep-in-present"><strong>0% vs ~70%</strong> the same three-frame pool: a scan larger than the pool compared with a hot set that fits</p>
 
 <p class="keep-in-present">Caching a block saves a later disk read only if another request for that block arrives before it is evicted.</p>
 
 <!-- ============================================================ -->
-<h2 id="pool">Frames hold blocks; pin and unpin track their users</h2>
+<h2 id="pool">Frames hold blocks. Pins track active users.</h2>
 
-<p class="keep-in-present">Picture books on a limited set of work desks. A block is the book; a frame is a desk; a pin records someone still using that book. Replacing a book is safe only after its users finish. Unlike a physical desk, a reused frame keeps the same memory address while its bytes change, which is why an old reference needs protection.</p>
+<p class="keep-in-present">Picture books on a limited set of work desks. A block is a book. A frame is a desk. A pin records an active user of the book. Replace a book only after all its users finish. </p>
+<p class="keep-in-present">The analogy has a limit: a frame keeps its memory address when its bytes change. A pin protects a caller from reading replacement data through an old reference.</p>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The pool</span><span>N fixed <strong>frames</strong>, allocated once at startup; Postgres calls the setting<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup> <code>shared_buffers</code>. Each frame holds exactly one block's page.</span></div>
-  <div class="lc-row"><span class="lc-k">The lookup</span><span>"is block <em>b</em> already here?": microdb scans its handful of frames; real engines keep a <span class="gloss" data-gloss="hash-table">hash table</span> from BlockId → frame so the answer costs \(O(1)\).</span></div>
-  <div class="lc-row"><span class="lc-k">The bookkeeping</span><span>per frame: which block · a <strong><span class="gloss" data-gloss="pin-count">pin count</span></strong> · a <strong><span class="gloss" data-gloss="dirty">dirty</span></strong> flag · a <strong>last-used tick</strong>. A small set of metadata; Python object overhead is larger than these logical fields.</span></div>
-  <div class="lc-row"><span class="lc-k">The interface</span><span><code>pin(block)</code> obtains a frame and records an active user; <code>unpin(buffer)</code> releases that use. Higher record layers access pages while holding a pin.</span></div>
+  <div class="lc-row"><span class="lc-k">The pool</span><span>The pool allocates N fixed <strong>frames</strong> at startup. PostgreSQL calls its size setting<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup> <code>shared_buffers</code>. Each frame holds exactly one block's page.</span></div>
+  <div class="lc-row"><span class="lc-k">The lookup</span><span>To locate block <em>b</em>, microdb scans its small frame list. Production engines can use a <span class="gloss" data-gloss="hash-table">hash table</span> from BlockId → frame for \(O(1)\) lookup.</span></div>
+  <div class="lc-row"><span class="lc-k">The bookkeeping</span><span>per frame: which block · a <strong><span class="gloss" data-gloss="pin-count">pin count</span></strong> · a <strong><span class="gloss" data-gloss="dirty">dirty</span></strong> flag · a <strong>last-used tick</strong>. These fields form a small set of metadata. Python object overhead is larger than the logical fields.</span></div>
+  <div class="lc-row"><span class="lc-k">The interface</span><span><code>pin(block)</code> obtains a frame and records an active user. <code>unpin(buffer)</code> releases that use. Higher record layers access pages while holding a pin.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="The pool">A hash table makes "is it here?" cost O(1)</h3>
@@ -178,8 +175,8 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 <table>
   <thead><tr><th>Approach</th><th>Cost per pin</th><th>Who uses it</th></tr></thead>
   <tbody>
-    <tr><td>Scan every frame</td><td>\(O(\text{frames})\)</td><td>microdb scans its small frame list; scanning hundreds of thousands of frames on every request would be costly</td></tr>
-    <tr><td><span class="gloss" data-gloss="hash-table">Hash table</span>: BlockId → frame</td><td>\(O(1)\)</td><td>a common production approach; PostgreSQL calls it the buffer mapping table<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup></td></tr>
+    <tr><td>Scan every frame</td><td>\(O(\text{frames})\)</td><td>microdb scans its small frame list. A scan of hundreds of thousands of frames per request would be costly.</td></tr>
+    <tr><td><span class="gloss" data-gloss="hash-table">Hash table</span>: BlockId → frame</td><td>\(O(1)\)</td><td>a common production approach. PostgreSQL calls it the buffer mapping table<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup></td></tr>
   </tbody>
 </table>
 
@@ -190,9 +187,9 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 <p>A caller needs the page to remain in its frame while it reads or changes the page. Pinning records that active use and prevents the frame from being chosen for eviction.</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Caller's side: 'I am using this page, do not evict it.' Returns a Buffer whose page is guaranteed resident until the matching unpin. The 0 is Lab 1's block number: it names the file's first 4096-byte block, and says nothing about where inside it.">buf = bm.pin(BlockId("students.tbl", 0))   # "hold this in memory"; 0 = block number</div>
+  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="The call returns a Buffer and pins its page until the matching unpin. The 0 is the block number from Lab 1. It identifies the file's first 4096-byte block. It does not specify a byte position within that block.">buf = bm.pin(BlockId("students.tbl", 0))   # "hold this in memory"; 0 = block number</div>
   <div class="code-step" data-step="use" data-step-name="use" data-explain="Read or write the page while it is pinned. The zero here is a byte offset within the page, not a block number. After a write, call set_modified() so the buffer manager knows the page is dirty.">value = buf.contents().get_int(0)          # a different 0: byte offset in the page</div>
-  <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="Caller's side: 'done.' The pin count drops; at zero the frame becomes an eviction candidate again. Forgetting this leaks frames until the pool aborts.">bm.unpin(buf)                              # "you may evict it now"</div>
+  <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="The call releases one pin. A frame with zero pins becomes eligible for eviction. Missing unpin calls can leave every frame unavailable and cause an abort.">bm.unpin(buf)                              # "you may evict it now"</div>
 </div>
 
 <div class="layer-card">
@@ -204,7 +201,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Pinning</span><span>The database needs a complete protocol for protecting pages in use and ordering writes. OS memory locking alone does not provide that protocol.<sup class="src"><a href="#src-6" title="Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)">6</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Write ordering</span><span>Recovery (week 7) requires the log to reach disk <em>before</em> the data page it describes. The OS flushes whenever it likes; the database must control the order<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">Write ordering</span><span>Recovery (week 7) requires the log to reach disk <em>before</em> the data page it describes. OS flushing does not establish this database requirement. The database must control write order<sup class="src"><a href="#src-7" title="PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)">7</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">Smarter eviction</span><span>The database can recognize access patterns, such as a large sequential scan, and adjust its replacement policy. The OS has less information about the query’s purpose.<sup class="src"><a href="#src-8" title="Operating System Support for Database Management (Stonebraker, Communications of the ACM, July 1981)">8</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">The <span class="gloss" data-gloss="mmap">mmap</span> trap</span><span>Memory mapping delegates page movement to the OS. The cited CIDR paper explains the resulting challenges for eviction, write ordering, and unexpected page-fault delays.<sup class="src"><a href="#src-6" title="Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)">6</a></sup></span></div>
 </div>
@@ -218,9 +215,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 
 <p>When a requested block is absent and every frame is occupied, the pool must select an unpinned frame to reuse. Lab 2 uses least recently used (LRU) replacement.</p>
 
-<p class="keep-in-present">microdb's rule, exactly as Thursday's tests check it: the pool keeps
-one ever-growing counter, stamps a frame every time it is pinned, and evicts the unpinned frame
-with the oldest stamp.</p>
+<p class="keep-in-present">microdb keeps one increasing counter. Every successful pin records the current counter value on the frame. The pool evicts the unpinned frame with the oldest recorded value. Thursday’s tests check this rule.</p>
 
 <pre class="equation"><code>state
   tick = 0                     one global counter; goes up forever, never resets
@@ -255,16 +250,13 @@ on a miss, when no frame is free
   </tbody>
 </table>
 
-<p class="keep-in-present">The superscript is <code>last_used</code>. If your code evicts A
-instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
+<p class="keep-in-present">The superscript is <code>last_used</code>. Evicting A instead of B indicates that the code failed to update A’s tick on its cache hit. Hits must refresh recency.</p>
 
 <h3 class="new-slide" data-kicker="Eviction">Pins outrank recency, always</h3>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · continue the trace</span>
-  <p>Pick up where the table stops (frames: A⁴, D⁵, C³) and run two more accesses:
-  <code>E</code>, then <code>B</code>. Who gets evicted each time, and would either answer
-  change if a client still held a pin on A?</p>
+  <p>Start with frames A⁴, D⁵, C³. Access <code>E</code>. Then access <code>B</code>. Which block does each request evict? Would either answer change if a client still held a pin on A?</p>
   <details><summary>Show answer</summary>
   <p>E misses and replaces C³, leaving A⁴, D⁵, E⁶. B then misses and replaces A⁴, leaving B⁷, D⁵, E⁶. If A remains pinned, E still replaces C, but B must replace D instead. A pinned frame is excluded from the candidate set regardless of its timestamp.</p>
   </details>
@@ -278,7 +270,7 @@ instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
     <tr><td><strong>FIFO</strong></td><td>evict the oldest <em>load</em></td><td>low bookkeeping cost</td><td>ignores repeated use: a frequently accessed page can still be the oldest loaded page</td></tr>
     <tr><td><strong>Random</strong></td><td>evict anyone unpinned</td><td>low bookkeeping cost</td><td>simple, but does not favor recently reused blocks</td></tr>
     <tr><td><strong>LRU</strong></td><td>evict the unpinned frame used longest ago</td><td>a timestamp per access</td><td>a large sequential scan can replace the cached working set, as in the scan workload above<sup class="src"><a href="#src-9" title="Architecture of a Database System (Hellerstein, Stonebraker, Hamilton, 2007), section 5.3">9</a></sup></td></tr>
-    <tr><td><strong>Clock</strong></td><td>approximate recency with a reference bit and a rotating pointer<sup class="src"><a href="#src-10" title="CMU 15-445/645 Fall 2025 Lecture #04 notes: Memory and Disk Management">10</a></sup></td><td>low per-access cost</td><td>fails the same way under a scan: each page's bit is cleared before the scan comes back for it, so one big scan still flushes the working set. And because the bit only records "touched since the hand last passed," not when, it ranks recency more coarsely than true LRU</td></tr>
+    <tr><td><strong>Clock</strong></td><td>approximate recency with a reference bit and a rotating pointer<sup class="src"><a href="#src-10" title="CMU 15-445/645 Fall 2025 Lecture #04 notes: Memory and Disk Management">10</a></sup></td><td>low per-access cost</td><td>A large scan can also replace the working set. The clock clears each page’s bit before the scan returns to that page. The bit records access since the last pointer visit, without a timestamp. It therefore ranks recency less precisely than exact LRU.</td></tr>
   </tbody>
 </table>
 
@@ -288,8 +280,8 @@ instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Postgres</span><span>PostgreSQL uses clock-sweep replacement with usage counters. Large sequential scans can reuse a small ring of shared-buffer slots to limit disruption to the rest of the cache.<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/buffer/README">5</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">MySQL/InnoDB</span><span>midpoint LRU: new pages enter the <em>middle</em> of the list, not the head; a page must be touched again to reach the protected young region<sup class="src"><a href="#src-11" title="MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool">11</a></sup>.</span></div>
-  <div class="lc-row"><span class="lc-k">DuckDB</span><span>analytics engines take a different route. DuckDB still caches storage pages while memory lasts, but a big scan streams through in fixed-size chunks instead of flooding that cache. The cache shares one memory budget with running queries, so a join building a big hash table competes with the cached pages for space. When the budget runs out, the buffer manager may evict cached storage pages or spill temporary query data to disk<sup class="src"><a href="#src-14" title="DuckDB blog: Memory Management in DuckDB (2024)">14</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">MySQL/InnoDB</span><span>Midpoint LRU inserts new pages in the <em>middle</em> of the list. A later access can move a page into the protected young region<sup class="src"><a href="#src-11" title="MySQL 8.4 Reference Manual: 17.5.1 Buffer Pool">11</a></sup>.</span></div>
+  <div class="lc-row"><span class="lc-k">DuckDB</span><span>DuckDB caches storage pages within its memory budget. Large scans process fixed-size chunks. The cache shares its memory budget with running queries. A join’s hash table therefore competes with cached pages for memory. When memory is insufficient, the buffer manager can evict cached storage pages or spill temporary query data to disk<sup class="src"><a href="#src-14" title="DuckDB blog: Memory Management in DuckDB (2024)">14</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The shared idea</span><span>Limit how much one-pass data displaces blocks that other requests are likely to reuse.</span></div>
 </div>
 
@@ -302,7 +294,7 @@ instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
   <thead><tr><th>Moment</th><th>Who triggers it</th><th>Why</th></tr></thead>
   <tbody>
     <tr><td><strong>Eviction</strong></td><td>the pool, inside <code>pin()</code></td><td>on a cache miss, the pool may reuse an occupied frame. If the old page is dirty, it writes that page first. Otherwise overwriting the frame would discard the change.</td></tr>
-    <tr><td><strong><code>flush_all()</code></strong></td><td>shutdown / <span class="gloss" data-gloss="checkpoint">checkpoint</span></td><td>writes all dirty pages currently in the pool. Shutdown and checkpoint procedures use page flushing as part of preserving changes and limiting recovery work; their durability and log-ordering requirements are covered in Lab 7.</td></tr>
+    <tr><td><strong><code>flush_all()</code></strong></td><td>shutdown / <span class="gloss" data-gloss="checkpoint">checkpoint</span></td><td>writes all dirty pages currently in the pool. Shutdown and checkpoint procedures flush pages to preserve changes and limit recovery work. Lab 7 explains the required durability and log order.</td></tr>
     <tr><td><strong>Never on unpin</strong></td><td>&nbsp;</td><td>unpin means the caller has finished using the page. It does not request a write. Deferring the write lets several updates to the same cached page share a later flush.</td></tr>
     <tr><td>At COMMIT: policy-dependent</td><td>FORCE or NO-FORCE</td><td>Lab 7 uses FORCE: data pages are durable before COMMIT is logged. With NO-FORCE, commit can force the log and defer data-page writes, so recovery also needs redo information.</td></tr>
   </tbody>
@@ -311,7 +303,7 @@ instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
 <!-- ============================================================ -->
 <h2 id="math">A small fraction of misses can dominate average access time</h2>
 
-<p class="keep-in-present">The pin and dirty-page rules protect data; the hit rate tells us how often a request avoids disk. Imagine ten requests with one expensive miss: that single disk read can dominate the nine memory accesses. Use the hit-rate formula to quantify the same effect.</p>
+<p class="keep-in-present">Pin and dirty-page rules protect data. Hit rate measures how often a request avoids a disk read. Imagine ten requests with one expensive miss: that single disk read can dominate the nine memory accesses. Use the hit-rate formula to quantify the same effect.</p>
 
 <div class="math">
 \[ T_{\text{avg}} \;=\; h \cdot t_{\text{mem}} \;+\; (1 - h) \cdot t_{\text{disk}} \qquad (h = \text{hit rate}) \]
@@ -346,23 +338,21 @@ instead of B, you stamped the tick only on misses; hits refresh recency too.</p>
 <h3 class="new-slide" data-kicker="The miss term">Size the pool to the working set, not a percentage</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Postgres</span><span>A common initial setting for <code>shared_buffers</code> is about 25% of RAM. The OS cache and other processes also need memory; measure your workload before tuning further.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Postgres</span><span>A common initial setting for <code>shared_buffers</code> is about 25% of RAM. The OS cache and other processes also need memory. Measure your workload before changing this setting.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Why not 100%?</span><span>The OS cache, queries, and other processes also consume memory. Excessive allocation can cause swapping, which adds disk I/O and can produce <span class="gloss" data-gloss="thrashing">thrashing</span>.</span></div>
   <div class="lc-row"><span class="lc-k">The real target</span><span>Consider which pages the workload reuses and whether the pool can retain them between requests. The access pattern and replacement policy matter as well as capacity.</span></div>
-  <div class="lc-row"><span class="lc-k">Your Thursday number</span><span>Lab 2's measurement is exactly this chart for your own code: hit rate as the pool shrinks, on two workloads with opposite working sets.</span></div>
+  <div class="lc-row"><span class="lc-k">Your Thursday number</span><span>Lab 2 measures hit rate as your pool shrinks. It compares a sequential scan with repeated access to a small hot set.</span></div>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="thursday">Thursday you build it: four methods, ten tests</h2>
 
-<p>Lab 2 is four methods; the rest of the machinery (the <code>Buffer</code> frame class,
-flush, write-back) ships complete, along with a reference Lab 1 file manager so everyone's
-bottom layer matches. Hover each line:</p>
+<p>Lab 2 requires four methods. The starter provides the <code>Buffer</code> frame class, flush operations, and write-back code. It also includes a reference Lab 1 file manager. Hover over a line to inspect its role:</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="find" data-step-name="_find_existing" data-explain="The lookup half of pin: scan the pool for a frame already holding this block. Returns the Buffer or None. Two lines.">def _find_existing(block) -> Buffer | None     # is it already here?</div>
-  <div class="code-step" data-step="victim" data-step-name="_choose_victim" data-explain="The policy: among UNPINNED frames, the one with the smallest last_used. None if every frame is pinned. min() with a key does it.">def _choose_victim() -> Buffer | None          # LRU among the unpinned</div>
-  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="First look for the requested block. On a miss, choose an unpinned frame or raise BufferAbortError, then call assign_to_block to load the block. Update the hit or miss count, increment the pin count, and record the current timestamp.">def pin(block) -> Buffer                       # hit, or evict-and-load</div>
+  <div class="code-step" data-step="find" data-step-name="_find_existing" data-explain="Scan the pool for a frame that contains the requested block. Return that Buffer, or None if the block is absent.">def _find_existing(block) -> Buffer | None     # is it already here?</div>
+  <div class="code-step" data-step="victim" data-step-name="_choose_victim" data-explain="Select the unpinned frame with the smallest last_used value. Return None if every frame is pinned. min() accepts a key function for this selection.">def _choose_victim() -> Buffer | None          # LRU among the unpinned</div>
+  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Look for the requested block. On a miss, select an unpinned frame. Raise BufferAbortError if none is available. Call assign_to_block to load the block. Update the hit or miss count. Increment the pin count. Record the current timestamp.">def pin(block) -> Buffer                       # hit, or evict-and-load</div>
   <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="Release one pin. Raise ValueError if the frame already has a zero pin count, because there is no active pin to release.">def unpin(buf)                                 # release; evictable at 0</div>
   <div class="code-explain-panel">Hover a line for what it does and how to build it.</div>
 </div>
@@ -372,8 +362,8 @@ bottom layer matches. Hover each line:</p>
 <table>
   <thead><tr><th>Group</th><th>Invariant it guards</th><th>The bug it catches</th></tr></thead>
   <tbody>
-    <tr><td><strong>PIN</strong> (4 tests)</td><td>pin counts nest (two pins need two unpins); re-pinning a resident block reuses its frame; unpinning at pin count 0 raises <code>ValueError</code></td><td>reloading a block that is already in a frame; a pin count that silently drifts away from the true number of users</td></tr>
-    <tr><td><strong>LRU</strong> (4 tests)</td><td>the victim is the unpinned frame pinned longest ago; every pin refreshes recency, hits included</td><td>stamping <code>last_used</code> only on misses, the most common mistake in this lab</td></tr>
+    <tr><td><strong>PIN</strong> (4 tests)</td><td>Two pins require two unpins. Re-pinning a resident block reuses its frame. Unpinning at pin count 0 raises <code>ValueError</code>.</td><td>reloading a resident block, or a pin count that differs from the number of active users</td></tr>
+    <tr><td><strong>LRU</strong> (4 tests)</td><td>The victim is the unpinned frame whose last pin is oldest. Every successful pin refreshes recency, including cache hits.</td><td>stamping <code>last_used</code> only on misses, the most common mistake in this lab</td></tr>
     <tr><td><strong>DIRTY</strong> (2 tests)</td><td>a modified page is flushed to disk before its frame is reused</td><td>bypassing <code>assign_to_block</code> and skipping the flush</td></tr>
   </tbody>
 </table>
@@ -383,10 +373,10 @@ bottom layer matches. Hover each line:</p>
 <h3 class="new-slide" data-kicker="Thursday's lab">Four things to do before class</h3>
 
 <ul class="checklist">
-  <li>☐ Submit Lab 1. Lab 2 includes a reference <code>file_manager.py</code>; use it or an implementation that satisfies the same interface and behavior.</li>
+  <li>☐ Submit Lab 1. Lab 2 includes a reference <code>file_manager.py</code>. Use it or an implementation with the same interface and behavior.</li>
   <li>☐ Download the four starter files from the Lab 2 page: <code>buffer_manager.py</code>, <code>file_manager.py</code>, <code>test_buffermanager.py</code>, <code>measure_hits.py</code>.</li>
   <li>☐ Harness runs: <code>python3 test_buffermanager.py</code> prints <strong>0/10 passed</strong>, the correct starting state.</li>
-  <li>☐ Write down a prediction: with a 49-frame pool and a 50-block file, what hit rate does a sequential scan get? You'll check it in Part 3.</li>
+  <li>☐ Predict the sequential-scan hit rate for a 49-frame pool and a 50-block file. Record your prediction. Part 3 checks it.</li>
 </ul>
 
 <!-- ============================================================ -->
@@ -398,26 +388,25 @@ bottom layer matches. Hover each line:</p>
   <details><summary>Check your explanation</summary><p>No. LRU chooses among unpinned frames. Hit rate can change with access order and reuse distance while the pin and dirty-write rules stay the same. Capacity, correctness, and performance answer different questions.</p></details>
 </div>
 
-<p class="keep-in-present">Return to B7: find the resident block, pin its frame, use the page, and unpin it. On a miss, select an eligible victim, preserve dirty data, and load the requested block.</p>
+<p class="keep-in-present">Return to B7. Locate its resident block. Pin its frame before using the page. Unpin the frame when finished. On a miss, select an eligible victim. Write any dirty data before loading the requested block.</p>
 
 <p>Three points to remember:</p>
 
 <ul class="recap-list">
-  <li><strong>The buffer pool manages a fixed set of frames.</strong> Pin counts protect pages in use; dirty flags track changes that still need to be written.</li>
+  <li><strong>The buffer pool manages a fixed set of frames.</strong> Pin counts protect pages in use. Dirty flags identify changes that still need a disk write.</li>
   <li><strong>LRU favors recently accessed blocks.</strong> It can work well for repeated access to a small set, but a sequential scan larger than the pool can miss on every request.</li>
   <li><strong>Misses can dominate average access time.</strong> With today’s latency assumptions, a 90% hit rate still gives an average about 26× slower than a memory access.</li>
 </ul>
 
-<p class="key-fact keep-in-present"><strong>0% vs ~70%</strong> one pool, a scan that doesn't fit vs a hot set that does · <strong>26×</strong> slower than RAM at 90% hits</p>
+<p class="key-fact keep-in-present"><strong>0% vs ~70%</strong> one pool, a scan larger than the pool versus a hot set that fits · <strong>26×</strong> slower than RAM at 90% hits</p>
 
-<p class="keep-in-present"><strong>Thursday:</strong> build the buffer manager, measure your
-own hit rates. <strong>Next Tuesday:</strong> records &amp; the catalog: bytes finally become rows.
+<p class="keep-in-present"><strong>Thursday:</strong> build the buffer manager. Measure your own hit rates. <strong>Next Tuesday:</strong> records &amp; the catalog: bytes finally become rows.
 Quiz 2 opens class: the buffer pool.</p>
 
 <p class="keep-in-present"><strong>Before Thursday:</strong></p>
 <ul>
   <li><strong>Read</strong> Sciore ch. 4 (SimpleDB's buffer manager) and Hellerstein et&nbsp;al., §5.3.</li>
-  <li><strong>Run</strong> <code>python3 test_buffermanager.py</code> against the Lab 2 starter files; it should print <strong>0/10 passed</strong>.</li>
+  <li><strong>Run</strong> <code>python3 test_buffermanager.py</code> against the Lab 2 starter files. Check that it prints <strong>0/10 passed</strong>.</li>
   <li><strong>Bring</strong> Lab 1 submitted and a written prediction: the hit rate a sequential scan earns from a 49-frame pool on a 50-block file.</li>
 </ul>
 
@@ -447,10 +436,10 @@ document that supports the claim it is attached to.</p>
 <ol class="sources">
   <li id="src-1"><a href="https://link.springer.com/book/10.1007/978-3-030-33836-7">Database Design and Implementation, Second Edition (Sciore, Springer 2020), table of contents</a></li>
   <li id="src-2"><a href="https://db.cs.cmu.edu/mmap-cidr2022/">Are You Sure You Want to Use MMAP in Your Database Management System? (CIDR 2022 project page)</a> <span class="src-note">The paper (Crotty, Leis, Pavlo, CIDR 2022) exists, but its full title ends in Database Management System rather than DBMS.</span></li>
-  <li id="src-3"><a href="https://gist.github.com/jboner/2841832">Latency Numbers Every Programmer Should Know (Jeff Dean / Peter Norvig numbers)</a> <span class="src-note">The classic latency table gives DRAM 100 ns, SSD random read 150 us and disk seek 10 ms, so the low end of the range (25 us, 250x) is optimistic; a 2021 SSD survey puts a random SSD read at about 100 us.</span></li>
+  <li id="src-3"><a href="https://gist.github.com/jboner/2841832">Latency Numbers Every Programmer Should Know (Jeff Dean / Peter Norvig numbers)</a> <span class="src-note">The classic table gives DRAM 100 ns, SSD random read 150 us, and disk seek 10 ms. Thus, the lecture’s lower bound (25 us, 250x) is optimistic. A 2021 SSD survey reports about 100 us for a random read.</span></li>
   <li id="src-4"><a href="https://www.postgresql.org/docs/current/runtime-config-resource.html">PostgreSQL Documentation: Resource Consumption (shared_buffers)</a></li>
   <li id="src-5"><a href="https://github.com/postgres/postgres/blob/master/src/backend/storage/buffer/README">PostgreSQL source: src/backend/storage/buffer/README</a></li>
-  <li id="src-6"><a href="https://db.cs.cmu.edu/papers/2022/cidr2022-p13-crotty.pdf">Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)</a> <span class="src-note">POSIX mlock can pin mapped pages, but the CIDR 2022 paper explains the OS limits how much a process can lock and mlock does not stop the OS from flushing dirty pages, so there is no usable equivalent of a buffer-pool pin.</span></li>
+  <li id="src-6"><a href="https://db.cs.cmu.edu/papers/2022/cidr2022-p13-crotty.pdf">Are You Sure You Want to Use MMAP in Your Database Management System? (Crotty, Leis, Pavlo, CIDR 2022)</a> <span class="src-note">POSIX mlock can pin mapped pages. The CIDR 2022 paper explains that the OS limits how much memory a process can lock. mlock also cannot prevent dirty-page flushing. It does not provide the complete guarantees of a database buffer-pool pin.</span></li>
   <li id="src-7"><a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL Documentation: 28.3 Write-Ahead Logging (WAL)</a></li>
   <li id="src-8"><a href="https://www.cs.cmu.edu/~natassa/courses/15-721/papers/p412-stonebraker.pdf">Operating System Support for Database Management (Stonebraker, Communications of the ACM, July 1981)</a></li>
   <li id="src-9"><a href="https://dsf.berkeley.edu/papers/fntdb07-architecture.pdf">Architecture of a Database System (Hellerstein, Stonebraker, Hamilton, 2007), section 5.3</a></li>
@@ -466,7 +455,7 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=7"></script>
+<script src="viz.js?v=ste-20261015"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>

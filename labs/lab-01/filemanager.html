@@ -46,7 +46,8 @@
   <div class="byline">Follows Lecture 1 (Anatomy of a Database) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 3 at class start</div>
 </header>
 
-<p class="lede">In this lab, you’ll build the part of microdb that saves data to files and reads it back. Start by turning a value, such as a student’s name, into bytes. Write those bytes to a block in the file, then close and reopen the file to check that you can read the value back. Also check the bytes themselves: later labs need your code to use the same format and put each block in the right place.</p>
+<p class="lede">In this lab, you will build the part of microdb that saves data to files and reads it back.</p>
+<p class="lede">First, convert a value, such as a student’s name, into bytes. Write those bytes to a block in the file. Close the file. Reopen it to check that you can read the value. Also check the stored bytes. Later labs require the same format and correct block positions.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 3 (SimpleDB's file manager) ·
@@ -73,14 +74,14 @@
 
 <h2 id="try-it">Inspecting a record’s bytes</h2>
 
-<p class="keep-in-present">What four bytes would you use to store the integer 1? Make a prediction, then click <code>set_int(0, 1)</code>. Next, try a string containing <code>é</code> and compare its stored length with its number of characters.</p>
+<p class="keep-in-present">What four bytes would you use to store the integer 1? Predict the bytes. Click <code>set_int(0, 1)</code>. Try a string containing <code>é</code>. Compare its stored length with its number of characters.</p>
 
-<p>The widget shows a 64-byte <span class="gloss" data-gloss="page-mem">page</span> so each byte is visible. The default block size in your code is 4096 bytes. Use the presets to store the lecture’s example row (<code>id=1</code>, <code>name="ada"</code>, <code>gpa=39</code>, representing a GPA of 3.9), then try your own values and read them back.</p>
+<p>The widget shows a 64-byte <span class="gloss" data-gloss="page-mem">page</span> so each byte is visible. The default block size in your code is 4096 bytes. The lecture’s example row contains <code>id=1</code>, <code>name="ada"</code>, and <code>gpa=39</code>, representing a GPA of 3.9. Use the presets to store this row. Then try your own values. Read the values back to check them.</p>
 
 <div class="viz" id="viz-page">
   <div class="viz-title">A page, byte by byte</div>
   <p class="viz-description">Ints are 4 bytes little-endian
-  (<span class="hexlegend int">tinted warm</span>); strings are a 4-byte length prefix
+  (<span class="hexlegend int">tinted warm</span>). Strings are a 4-byte length prefix
   (<span class="hexlegend len">tinted green</span>) followed by UTF-8 bytes
   (<span class="hexlegend int">warm</span>). Gray bytes are untouched zeros.</p>
   <div class="pg-controls">
@@ -112,7 +113,7 @@
 <pre class="clone-cmd"><span class="cl-line">git clone https://github.com/researcher111/AdvanceDatabase.git</span>
 <span class="cl-line">cd AdvanceDatabase/labs/lab-01/starter</span></pre>
   <p class="viz-caption">Notice <code>set_int(0, 1)</code> writes <code>01 00 00 00</code>, the
-  <em>least</em> significant byte first. That's little-endian, and it's in the spec your tests enforce.</p>
+  <em>least</em> significant byte first. That is little-endian, and it is in the spec your tests enforce.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -124,11 +125,10 @@
 
 <div class="math">
 \[ \text{bytes of block } k \;=\; [\,k \cdot B,\; (k+1) \cdot B\,) \qquad B = \text{block\_size} \]
-<p>With <em>B</em> = 4096: block 0 is bytes 0 to 4095 and block 1 is bytes 4096 to 8191, so to
-read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
+<p>With <em>B</em> = 4096, block 0 contains bytes 0 to 4095. Block 1 contains bytes 4096 to 8191. To read block 1, call <code>seek(4096)</code>. Then read 4096 bytes.</p>
 </div>
 
-<p>The operating system usually keeps newly written data in its <span class="gloss" data-gloss="os-cache">page cache</span> in RAM before sending it to storage. Calling <code><span class="gloss" data-gloss="fsync">fsync</span></code> asks the operating system to finish saving the file’s pending writes to storage. Part 3 measures how much time that adds. In Lab 7, you’ll use this distinction to understand when a database can safely report that a transaction has committed.</p>
+<p>The operating system usually keeps newly written data in its <span class="gloss" data-gloss="os-cache">page cache</span> in RAM before sending it to storage. Calling <code><span class="gloss" data-gloss="fsync">fsync</span></code> asks the operating system to finish saving the file’s pending writes to storage. Part 3 measures how much time that adds. In Lab 7, you will use this distinction to understand when a database can safely report that a transaction has committed.</p>
 
 <!-- ============================================================ -->
 <h2 id="file-vs-page">Memory and persistent storage</h2>
@@ -181,7 +181,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
         <img src="img/server-drive-sleds.jpg" alt="A rack of Wikipedia's servers: rows of hot-swappable drive sleds fill the front of each machine" loading="lazy">
         <span class="rd-pill" style="left: 8%; top: 12%;">▼ each sled is one disk</span>
       </div>
-      <figcaption>Drive bays at the front of Wikimedia servers provide persistent storage. Database table files can be stored on drives like these. The photograph illustrates storage hardware; its access times are not measured by the diagram above.</figcaption>
+      <figcaption>Drive bays at the front of Wikimedia servers provide persistent storage. Database table files can be stored on drives like these. The photograph illustrates storage hardware. Its access times are not measured by the diagram above.</figcaption>
     </figure>
   </div>
   <p class="viz-caption rd-credit">Photos: <a href="https://commons.wikimedia.org/wiki/File:Dllu_skylake_computer.jpg">Dllu</a>
@@ -191,7 +191,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 
 <div class="callout insight">
   <span class="label">Memory capacity in language models</span>
-  <p class="keep-in-present">The same memory-capacity problem appears in machine learning. Storing seven billion parameters at 16 bits per parameter requires about 14 GB for the weights alone; a running model needs additional memory. Four-bit weights take about 3.5 GB before other storage overheads. Keeping frequently used weights in fast memory can reduce data-transfer delays. Database buffer pools address a similar problem for frequently accessed pages.</p>
+  <p class="keep-in-present">The same memory-capacity problem appears in machine learning. Storing seven billion parameters at 16 bits per parameter requires about 14 GB for the weights alone. A running model needs additional memory. Four-bit weights take about 3.5 GB before other storage overheads. Keeping frequently used weights in fast memory can reduce data-transfer delays. Database buffer pools address a similar problem for frequently accessed pages.</p>
 </div>
 
 <p>Microdb uses these terms to distinguish stored data, its in-memory copy, and its identifier:</p>
@@ -201,7 +201,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
   <tbody>
     <tr><td><strong>block</strong></td><td>on disk</td><td>slice number <code>k</code> of a file: bytes <code>k×4096</code> to <code>k×4096+4095</code>. Survives restarts.</td></tr>
     <tr><td><strong>page</strong></td><td>in memory</td><td>one block-sized <code>bytearray</code> your code reads and edits. Gone when the process exits.</td></tr>
-    <tr><td><strong><code>BlockId</code></strong></td><td>in your code</td><td>a name: a filename plus a block number. Holds no bytes; it just says <em>which</em> block you mean.</td></tr>
+    <tr><td><strong><code>BlockId</code></strong></td><td>in your code</td><td>a name: a filename plus a block number. Holds no bytes. It just says <em>which</em> block you mean.</td></tr>
   </tbody>
 </table>
 
@@ -209,7 +209,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 
 <div class="viz" id="viz-filepage">
   <div class="viz-title">Reading, modifying, and writing a page</div>
-  <p class="viz-description">The left side shows stored file blocks; the right side shows the page in your process’s memory. <code>FileManager</code> transfers bytes between them. Green marks data just read, and orange marks data just written.</p>
+  <p class="viz-description">The left side shows stored file blocks. The right side shows the page in your process’s memory. <code>FileManager</code> transfers bytes between them. Green marks data just read, and orange marks data just written.</p>
   <div class="fp-controls">
     <button type="button" class="btn primary" id="fp-next">Next step ▶</button>
     <button type="button" class="btn" id="fp-back">◀ Back</button>
@@ -228,17 +228,17 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
     <span class="fp-label">page.set_string(4, "<input type="text" id="fp-name" value="zoe" maxlength="5">")</span>
     <button type="button" class="btn" id="fp-edit">edit the page</button>
   </div>
-  <p class="viz-caption">A <code>BlockId</code> is an address: a filename and a block number. The bytes live in the file or in a <code>Page</code>. In Lab 2, you’ll compare <code>BlockId</code> values to find a block that is already in memory. You can also use them as dictionary keys to speed up that search.</p>
+  <p class="viz-caption">A <code>BlockId</code> is an address: a filename and a block number. The bytes live in the file or in a <code>Page</code>. In Lab 2, you will compare <code>BlockId</code> values to find a block that is already in memory. You can also use them as dictionary keys to speed up that search.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="the-api">The three classes and how they store data</h2>
 
-<p>The file manager has three classes: <code>BlockId</code>, <code>Page</code>, and <code>FileManager</code>. Read their responsibilities below, then use the byte-layout table while implementing the methods. The tests check that exact layout.</p>
+<p>The file manager has three classes: <code>BlockId</code>, <code>Page</code>, and <code>FileManager</code>. Read their responsibilities below. Use the byte-layout table while implementing the methods. The tests check that exact layout.</p>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="blockid" data-step-name="BlockId" data-explain="A BlockId names a file and a block within it. Keep these values unchanged so it can safely serve as a dictionary key. Lab 2 compares BlockIds to find a block already held in a memory frame.">class BlockId:                                # ('students.tbl', 1), a name, not data</div>
-  <div class="code-step" data-step="blockid" data-explain="Provided complete in the starter; read it, don't write it.">    filename: str; blknum: int                # provided for you</div>
+  <div class="code-step" data-step="blockid" data-explain="Provided complete in the starter. Read it, do not write it.">    filename: str; blknum: int                # provided for you</div>
   <div class="code-step" data-step="page" data-step-name="Page" data-explain="A Page holds one block's worth of bytes in a bytearray. Its methods read and change values in that memory. FileManager handles the connection to a stored file.">class Page:                                   # a block-sized bytearray + typed get/set</div>
   <div class="code-step" data-step="page-int" data-step-name="ints" data-explain="Use struct.unpack_from('&lt;i', buf, off)[0] to read an integer and struct.pack_into('&lt;i', buf, off, val) to write one. The required format is a signed four-byte little-endian integer.">    def get_int(off) -> int                   # read 4 bytes as an int</div>
   <div class="code-step" data-step="page-int" data-explain="Use struct.unpack_from('&lt;i', buf, off)[0] to read an integer and struct.pack_into('&lt;i', buf, off, val) to write one. The required format is a signed four-byte little-endian integer.">    def set_int(off, val)                     # write an int as 4 bytes</div>
@@ -285,8 +285,8 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 
 <div class="viz" id="viz-pack">
   <div class="viz-title">struct.pack_into · write 4 bytes into a buffer you already own</div>
-  <p class="viz-description">A 16-byte page, all zeros. Choose an offset and a value, then pack.
-  The <span class="hexlegend miss">warm bytes</span> are the ones the call just wrote; everything
+  <p class="viz-description">A 16-byte page, all zeros. Choose an offset and a value. Then pack the value.
+  The <span class="hexlegend miss">warm bytes</span> are the ones the call just wrote. Everything
   else is untouched.</p>
   <div class="qj-controls">
     <label class="pk-label">format
@@ -303,7 +303,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
   <pre class="pk-call" id="pk-call"></pre>
   <div class="pk-grid" id="pk-grid"></div>
   <div class="pk-note" id="pk-note"></div>
-  <p class="viz-caption">Write an integer at offset 4, then another at offset 6. The second write overlaps two bytes of the first value. The buffer does not track field boundaries, so your layout calculations must prevent unintended overlap.</p>
+  <p class="viz-caption">Write an integer at offset 4. Write another integer at offset 6. The second write overlaps two bytes of the first value. The buffer does not track field boundaries, so your layout calculations must prevent unintended overlap.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -316,7 +316,7 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 <p>Download the three starter files using the buttons below the page widget. Put them in <code>microdb-lab1/</code> and implement the methods in the order below. Run the tests after each step to check the behavior you have added.</p>
 
 <ol>
-  <li><strong>Read <code>file_manager.py</code> top to bottom first</strong> (5 min). The module docstring describes the required behavior; <code>BlockId</code> and the file-handle helpers are already written.
+  <li><strong>Read <code>file_manager.py</code> top to bottom first</strong> (5 min). The module docstring describes the required behavior. <code>BlockId</code> and the file-handle helpers are already written.
   Your work is the ten <code>TODO</code>-marked methods.</li>
   <li><code>Page.set_int / get_int</code>: use <code>struct.pack_into("&lt;i", …)</code> and <code>struct.unpack_from</code> for signed four-byte integers. Test each method with <code>--unit Page.set_int</code> or <code>--unit Page.get_int</code>.</li>
   <li><code>set_bytes / get_bytes</code>: store the payload length at <code>off</code> and its bytes starting at <code>off + 4</code>. Read that length to determine the payload slice.</li>
@@ -341,8 +341,8 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 <table>
   <thead><tr><th>Piece</th><th>Short for</th><th>What it does to the file</th></tr></thead>
   <tbody>
-    <tr><td><code>r</code></td><td>read</td><td>Open for reading only, positioned at byte 0. <code>FileNotFoundError</code> if it isn't there. This is the default when you omit the letter.</td></tr>
-    <tr><td><code>w</code></td><td>write</td><td>Open for writing only, and <strong>truncate an existing file to zero bytes</strong>. Creates the file if it's missing.</td></tr>
+    <tr><td><code>r</code></td><td>read</td><td>Open for reading only, positioned at byte 0. <code>FileNotFoundError</code> if it is not there. This is the default when you omit the letter.</td></tr>
+    <tr><td><code>w</code></td><td>write</td><td>Open for writing only, and <strong>truncate an existing file to zero bytes</strong>. Creates the file if it is missing.</td></tr>
     <tr><td><code>a</code></td><td>append</td><td>Open for writing only, keeping the contents. Creates if missing. Every write lands at the end of the file no matter where you <code>seek</code>.</td></tr>
     <tr><td><code>x</code></td><td>exclusive create</td><td>Create and open for writing, but raise <code>FileExistsError</code> rather than touch an existing file.</td></tr>
     <tr><td><code>+</code></td><td>read and write</td><td>Enables both reading and writing. It does not change truncation behavior: <code>w+</code> still truncates an existing file.</td></tr>
@@ -353,14 +353,14 @@ read block 1 you <code>seek(4096)</code> and read 4096 bytes.</p>
 <p>The table below shows how common file modes behave. The starter uses <code>"r+b"</code> for existing data files so it can read and write without truncating them.</p>
 
 <table>
-  <thead><tr><th>Mode</th><th>Read</th><th>Write</th><th>If the file exists</th><th>If it doesn't</th><th>Fit for microdb</th></tr></thead>
+  <thead><tr><th>Mode</th><th>Read</th><th>Write</th><th>If the file exists</th><th>If it does not</th><th>Fit for microdb</th></tr></thead>
   <tbody>
-    <tr><td><code>"rb"</code></td><td>yes</td><td>no</td><td>opens at byte 0</td><td><code>FileNotFoundError</code></td><td>no; <code>append</code> must write</td></tr>
-    <tr><td><code>"w+b"</code></td><td>yes</td><td>yes</td><td><strong>truncated to 0 bytes</strong></td><td>created</td><td><strong>no</strong>; truncates the existing file</td></tr>
+    <tr><td><code>"rb"</code></td><td>yes</td><td>no</td><td>opens at byte 0</td><td><code>FileNotFoundError</code></td><td>no. <code>append</code> must write</td></tr>
+    <tr><td><code>"w+b"</code></td><td>yes</td><td>yes</td><td><strong>truncated to 0 bytes</strong></td><td>created</td><td><strong>no</strong>. Truncates the existing file</td></tr>
     <tr><td><code>"wb"</code></td><td>no</td><td>yes</td><td><strong>truncated to 0 bytes</strong></td><td>created</td><td>only to create a missing file</td></tr>
-    <tr><td><code>"r+b"</code></td><td>yes</td><td>yes</td><td>opens at byte 0, contents kept</td><td><code>FileNotFoundError</code></td><td><strong>yes; what <code>_file()</code> uses</strong></td></tr>
-    <tr><td><code>"a+b"</code></td><td>yes</td><td>yes</td><td>kept, positioned at the end</td><td>created</td><td>no; writes ignore your seek</td></tr>
-    <tr><td><code>"xb"</code></td><td>no</td><td>yes</td><td><code>FileExistsError</code></td><td>created</td><td>no; for lock files, not data</td></tr>
+    <tr><td><code>"r+b"</code></td><td>yes</td><td>yes</td><td>opens at byte 0, contents kept</td><td><code>FileNotFoundError</code></td><td><strong>yes. What <code>_file()</code> uses</strong></td></tr>
+    <tr><td><code>"a+b"</code></td><td>yes</td><td>yes</td><td>kept, positioned at the end</td><td>created</td><td>no. Writes ignore your seek</td></tr>
+    <tr><td><code>"xb"</code></td><td>no</td><td>yes</td><td><code>FileExistsError</code></td><td>created</td><td>no. For lock files, not data</td></tr>
   </tbody>
 </table>
 
@@ -379,13 +379,13 @@ f.tell()                    report the cursor's absolute byte position.</code></
 
 <p>The second argument to <code>seek</code>, called <code>whence</code>, says what
 <code>offset</code> is measured from. Python accepts the integer or the named constant from the
-<code>os</code> module; they are the same value.</p>
+<code>os</code> module. They are the same value.</p>
 
 <table>
   <thead><tr><th><code>whence</code></th><th>Name</th><th>Offset is measured from</th><th>In this lab</th></tr></thead>
   <tbody>
     <tr><td><code>0</code></td><td><code>os.SEEK_SET</code> (the default)</td><td>the start of the file</td><td><code>f.seek(blknum * block_size)</code> jumps to a block</td></tr>
-    <tr><td><code>1</code></td><td><code>os.SEEK_CUR</code></td><td>the current cursor position</td><td>not needed; every call seeks from the start</td></tr>
+    <tr><td><code>1</code></td><td><code>os.SEEK_CUR</code></td><td>the current cursor position</td><td>not needed. Every call seeks from the start</td></tr>
     <tr><td><code>2</code></td><td><code>os.SEEK_END</code></td><td>the end of the file</td><td><code>f.seek(0, 2)</code> means "go to the very end"</td></tr>
   </tbody>
 </table>
@@ -446,11 +446,8 @@ f.tell()                    report the cursor's absolute byte position.</code></
 
 <h3>Run the full tests</h3>
 
-<p>The tests come in two groups. The <strong>PAGE</strong> tests never touch disk. Each one
-writes a value into a page and reads it back: ints (including negatives, which is why the spec
-says <em>signed</em>), strings with multibyte UTF-8 characters, and the <em>adjacent-values</em>
-test, which stores the full ada row and then checks that no field's write spilled into its
-neighbor.</p>
+<p>The tests have two groups. The <strong>PAGE</strong> tests use memory only. Each test writes a value into a page and reads it back. Integer tests include negative values, which require the <em>signed</em> format. String tests include multibyte UTF-8 characters.</p>
+<p>The <em>adjacent-values</em> test stores the full ada row. It checks that writing one field does not overwrite a neighboring field.</p>
 
 <p>The FILE tests check block allocation, file length, read/write round trips, and writes to adjacent blocks. Reading past the end must raise <code>ValueError</code>. The final test closes one <code>FileManager</code> and opens another to check that the stored data remains available. This is a close-and-reopen test, not a simulation of power loss.</p>
 
@@ -479,7 +476,7 @@ neighbor.</p>
 
 <p>With <code>sync=True</code>, each <code>write</code> call ends by calling <code>fsync</code> and waiting for it to finish. Compare the number of blocks written per second with <code>sync=False</code> to measure the cost of that wait.</p>
 
-<p>Run it and note all three numbers; you will want them in class:</p>
+<p>Run the script. Record all three numbers for class discussion:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_io.py</span>
 buffered writes (sync=False):      465,849 blocks/sec
@@ -497,7 +494,7 @@ ratio (buffered / durable):           15.1x</code></pre>
   <p class="viz-caption"><code>sync=False</code> allows a write to return while data may still be buffered by the operating system. <code>sync=True</code> requests synchronization to storage before returning. The macOS FAQ below explains an additional device-cache limitation.</p>
 </div>
 
-<p class="keep-in-present">Bring your measured ratio to Lab 7. You’ll see why the cost of <code>fsync</code> matters when a database commits a transaction. Many databases save the log at commit and write data pages separately. Lab 7 uses a simpler policy, which you’ll compare with that approach.</p>
+<p class="keep-in-present">Bring your measured ratio to Lab 7. You will see why the cost of <code>fsync</code> matters when a database commits a transaction. Many databases save the log at commit and write data pages separately. Lab 7 uses a simpler policy, which you will compare with that approach.</p>
 
 <h3 class="new-slide" data-kicker="Part 3 · Measure">Where storage costs affect data workflows</h3>
 
@@ -524,7 +521,7 @@ ratio (buffered / durable):           15.1x</code></pre>
   <details><summary>Check your explanation</summary><p>No. The reader and writer make matching mistakes, so reading back the value hides the problem. Inspect the bytes: this lab requires <code>01 00 00 00</code> for the integer 1, but big-endian code stores <code>00 00 00 01</code>. You also need separate checks that the bytes reach the right file block and that you can read them after closing and reopening the file.</p></details>
 </div>
 
-<p>This explanation check is practice and discussion; it adds no submission or grading requirement.</p>
+<p>This explanation check is practice and discussion. It adds no submission or grading requirement.</p>
 
 <h2 id="assignment">Assignment</h2>
 
@@ -535,7 +532,7 @@ course home) <strong>by Thursday Sep 3 at class start</strong>.</p>
 <ul>
   <li>☐ <code>file_manager.py</code>: all nine local tests pass (<code>9/9</code>).</li>
 </ul>
-<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests. Measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>Use the measurement and reflection questions to explain your results. They are not graded, but bring your measurements and answers to class for discussion.</p>
@@ -553,7 +550,7 @@ course home) <strong>by Thursday Sep 3 at class start</strong>.</p>
   <tbody>
     <tr><td><code>file_manager.py</code></td><td>BlockId, file-handle helpers, docstring spec</td><td>6 Page methods + 4 FileManager methods</td></tr>
     <tr><td><code>test_filemanager.py</code></td><td>complete, do not edit</td><td>&nbsp;</td></tr>
-    <tr><td><code>measure_io.py</code></td><td>complete, do not edit</td><td>run it, record results</td></tr>
+    <tr><td><code>measure_io.py</code></td><td>complete, do not edit</td><td>Run it. Record the results</td></tr>
   </tbody>
 </table>
 
@@ -576,14 +573,13 @@ course home) <strong>by Thursday Sep 3 at class start</strong>.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3>My two runs of measure_io.py differ by 30%. Is something broken?</h3>
-<p class="keep-in-present">No, you're timing a real OS with other work to do. Run it three times, report the middle
-result, and remember the measurements are ungraded; bring the median and your interpretation to class.</p>
+<p class="keep-in-present">No, you are timing a real OS with other work to do. Run it three times. Report the middle result. These measurements are ungraded. Bring the median and your interpretation to class.</p>
 
-<h3>I'm on macOS and my fsync ratio seems suspiciously small.</h3>
-<p class="keep-in-present">On macOS, <code>fsync</code> and <code>F_FULLFSYNC</code> provide different guarantees about flushing a drive’s own cache. The stronger request can take longer. This lab measures <code>fsync</code>; note your operating system when comparing results with classmates.</p>
+<h3>I am on macOS and my fsync ratio seems suspiciously small.</h3>
+<p class="keep-in-present">On macOS, <code>fsync</code> and <code>F_FULLFSYNC</code> provide different guarantees about flushing a drive’s own cache. The stronger request can take longer. This lab measures <code>fsync</code>. Note your operating system when comparing results with classmates.</p>
 
 <h3>Windows: anything different?</h3>
-<p class="keep-in-present">Python provides <code>os.fsync</code> on Windows as well. Use a local working folder for the lab; background synchronization software can interfere with file access.</p>
+<p class="keep-in-present">Python provides <code>os.fsync</code> on Windows as well. Use a local working folder for the lab. Background synchronization software can interfere with file access.</p>
 
 <h3>Why little-endian? Postgres stores big-endian on the wire!</h3>
 <p class="keep-in-present">Either byte order can work if every reader and writer uses the same one. This lab specifies little-endian integers, and the tests check that representation. Later record-management code depends on those bytes being stored consistently.</p>
@@ -600,7 +596,7 @@ result, and remember the measurements are ungraded; bring the median and your in
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=10"></script>
+<script src="viz.js?v=ste-20261015"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>

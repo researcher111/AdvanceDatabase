@@ -44,7 +44,7 @@
   <div class="byline">Follows Lecture 2 (Memory &amp; the Buffer Pool) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 10 at class start</div>
 </header>
 
-<p class="lede">Your file manager can read a block from a file. The buffer manager first checks whether that block is already in memory. If it needs room for another block, it must choose a frame that no caller is using and save any changes before replacing its contents. Implement those rules, then measure how often different workloads reuse cached blocks.</p>
+<p class="lede">Your file manager can read a block from a file. The buffer manager first checks whether that block is already in memory. If it needs room for another block, it must choose a frame that no caller is using and save any changes before replacing its contents. Implement those rules. Measure how often different workloads reuse cached blocks.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 4 ·
@@ -65,20 +65,22 @@
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
   <p>Two callers pin the same cached block, then one unpins it. Is its frame eligible for eviction? Does the second pin need another file read?</p>
-  <details><summary>Check your explanation</summary><p>One caller still has a pin, so the frame cannot be evicted. The second pin found the block in memory and counted as a hit; it needed no file read. After the last caller unpins it, the frame can be reused, but any modified bytes must be written back first.</p></details>
+  <details><summary>Check your explanation</summary><p>One caller still has a pin, so the frame cannot be evicted. The second pin found the block in memory and counted as a hit. It needed no file read. After the last caller unpins it, the frame can be reused, but any modified bytes must be written back first.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>. Predict what the next operation will change. Run the operation. Compare the result with your prediction. Explain any difference before making another change.</p>
 
 <h2 id="try-it">Explore a three-frame buffer pool</h2>
 
-<p class="keep-in-present">Predict the memory value, disk value, pin count, and dirty flag after a modification. Evict the frame only after releasing its pins, then explain why the disk value changes.</p>
+<p class="keep-in-present">Predict the memory value, disk value, pin count, and dirty flag after a modification. Release the frame’s pins before evicting it. Explain why eviction changes the disk value.</p>
 
-<p>The widget models a buffer pool with three frames and six disk blocks. Select a block, pin it, modify it, and unpin it. Then load other blocks to see when the modified page is written back. Try pinning when all frames are in use, modifying an unpinned block, and unpinning a block that is not pinned.</p>
+<p>The widget models a buffer pool with three frames and six disk blocks. Select a block. Pin the block. Modify its value. Unpin the block. Then load other blocks to see when the modified page is written back.</p>
+<p>Try pinning when all frames are in use, modifying an unpinned block, and unpinning a block that is not pinned.</p>
 
 <div class="viz" id="viz-pool">
   <div class="viz-title">Try the buffer pool · 3 frames, LRU, <span class="gloss" data-gloss="write-back">write-back</span></div>
-  <p class="viz-description">Each disk block stores one number. Pinning loads or finds that block in memory and prevents its frame from being evicted. Modify adds one to its value in memory and marks the frame dirty. Unpinning reduces the pin count; the frame becomes eligible for eviction when the count reaches zero. Evicting a dirty frame first writes its changes to disk. The disk display shows the stored values.</p>
+  <p class="viz-description">Each disk block stores one number. Pinning loads or finds that block in memory and prevents its frame from being evicted. Modify adds one to its value in memory and marks the frame dirty. Unpinning reduces the pin count. The frame becomes eligible for eviction when the count reaches zero.</p>
+<p class="viz-description">Evicting a dirty frame first writes its changes to disk. The disk display shows the stored values.</p>
   <div class="qj-controls">
     <span class="pp-sel-label">selected block:</span><span class="pp-sel" id="pp-sel">B0</span>
     <button type="button" class="btn primary" id="pp-pin">pin</button>
@@ -98,7 +100,7 @@
     <a class="chat-dl-btn" href="starter/test_buffermanager.py" download>test_buffermanager.py</a>
     <a class="chat-dl-btn" href="starter/measure_hits.py" download>measure_hits.py</a>
   </div>
-  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files, then open this lab’s starter folder:</p>
+  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files. Then open this lab’s starter folder:</p>
 <pre class="clone-cmd"><span class="cl-line">git pull</span>
 <span class="cl-line">cd labs/lab-02/starter</span></pre>
 </div>
@@ -120,7 +122,7 @@
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="find" data-step-name="_find_existing" data-explain="Search self.pool for a frame whose block equals the requested BlockId. Return that Buffer, or None if the block is not cached.">def _find_existing(block) -> Buffer | None      # already resident?</div>
   <div class="code-step" data-step="victim" data-step-name="_choose_victim" data-explain="Among frames with pins == 0, select the frame with the smallest last_used value. Return None if every frame is pinned.">def _choose_victim() -> Buffer | None           # LRU among unpinned</div>
-  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Increment self._tick. If the block is cached, count a hit. Otherwise choose an unpinned victim, or raise BufferAbortError if none exists; count the miss and call assign_to_block to flush and load it. On either successful path, increment pins and set last_used to the new tick.">def pin(block) -> Buffer                        # hit, or evict + load</div>
+  <div class="code-step" data-step="pin" data-step-name="pin" data-explain="Increment self._tick. If the block is cached, count a hit. Otherwise choose an unpinned victim, or raise BufferAbortError if none exists. Count the miss and call assign_to_block to flush and load it. On either successful path, increment pins and set last_used to the new tick.">def pin(block) -> Buffer                        # hit, or evict + load</div>
   <div class="code-step" data-step="unpin" data-step-name="unpin" data-explain="If pins is already zero, raise ValueError. Otherwise decrement it by one. Each successful pin must have one matching unpin.">def unpin(buf)                                  # release one pin</div>
   <div class="code-explain-panel">Hover or tap a line to read what the method must do.</div>
 </div>
@@ -134,7 +136,7 @@
     <tr><td><strong>Victim = oldest unpinned</strong></td><td>smallest <code>last_used</code> among frames with <code>pins == 0</code></td><td><code>full pool evicts least recently used</code></td></tr>
     <tr><td><strong>Never evict pinned frames</strong></td><td>a frame with <code>pins &gt; 0</code> is never a victim, no matter how old</td><td><code>pinned frames are never evicted</code></td></tr>
     <tr><td><strong>Abort when all frames are pinned</strong></td><td>raise <code>BufferAbortError</code> immediately if every frame is pinned</td><td><code>all-pinned pool raises</code></td></tr>
-    <tr><td><strong>Flush dirty frames before reuse</strong></td><td>the victim is flushed before reuse; <code>assign_to_block</code> does this if you call it</td><td><code>dirty page written back</code></td></tr>
+    <tr><td><strong>Flush dirty frames before reuse</strong></td><td>the victim is flushed before reuse. <code>assign_to_block</code> does this if you call it</td><td><code>dirty page written back</code></td></tr>
   </tbody>
 </table>
 
@@ -145,11 +147,11 @@
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
-<p>Work in <code>labs/lab-02/starter/</code> after pulling the latest files, or download the four starter files into <code>microdb-lab2/</code>. Note that
-<code>file_manager.py</code> is the <strong>reference Lab 1 implementation</strong>; use it for a consistent baseline, or use your own implementation if it satisfies the same interface. The function-level tests supply the dependencies needed to test each method separately. The full tests check all four methods together. Build in this order:</p>
+<p>Pull the latest files to work in <code>labs/lab-02/starter/</code>. Alternatively, download the four starter files into <code>microdb-lab2/</code>. The supplied <code>file_manager.py</code> is the <strong>reference Lab 1 implementation</strong>. Use it for a consistent baseline. You can use your own implementation if it satisfies the same interface.</p>
+<p>The function-level tests supply dependencies to test each method separately. The full tests check all four methods together. Build in this order:</p>
 
 <ol>
-  <li>Read <code>buffer_manager.py</code> (5 min). The <code>Buffer</code> class is complete. Its <code>assign_to_block</code> method flushes a dirty page before loading another block. Your four methods manage frames and pin counts; they use the provided methods to move bytes.</li>
+  <li>Read <code>buffer_manager.py</code> (5 min). The <code>Buffer</code> class is complete. Its <code>assign_to_block</code> method flushes a dirty page before loading another block. Your four methods manage frames and pin counts. They use the provided methods to move bytes.</li>
   <li><strong><code>_find_existing</code></strong>: search the pool for a frame whose block matches the requested block.</li>
   <li><strong><code>_choose_victim</code></strong>: among unpinned frames, choose the one with the smallest
   <code>last_used</code>. Return <code>None</code> if all frames are pinned.</li>
@@ -160,9 +162,9 @@
 
 <div class="callout note">
   <span class="label">Common implementation mistakes</span>
-  <p>Stamp <code>last_used</code> on <em>hits</em>, not just misses; the LRU-order test is
+  <p>Stamp <code>last_used</code> on <em>hits</em>, not just misses. The LRU-order test is
   built to catch exactly that omission. Increment <code>self._tick</code> <em>before</em> using
-  it, or two pins can share a tick. And don't reset <code>pins</code> in <code>pin()</code>:
+  it, or two pins can share a tick. And do not reset <code>pins</code> in <code>pin()</code>:
   the same block pinned twice must reach <code>pins == 2</code> on the <em>same</em> frame,
   not load twice.</p>
 </div>
@@ -226,7 +228,7 @@ seeded):</p>
         50 |         50.0% |           97.5%
         55 |         50.0% |           97.5%</code></pre>
 
-<p class="key-fact keep-in-present"><strong>0.0%</strong> scan hit rate with 49 of the file's 50 blocks cached; one more frame and it jumps to 50%</p>
+<p class="key-fact keep-in-present"><strong>0.0%</strong> scan hit rate with 49 of the file's 50 blocks cached. One more frame and it jumps to 50%</p>
 
 <p class="keep-in-present"><strong>Now change something.</strong> <code>hotset_workload</code> in
 <code>measure_hits.py</code> builds its <span class="gloss" data-gloss="working-set">hot set</span> with <code>hot = list(range(5))</code>. Change it to
@@ -244,14 +246,14 @@ the same size from the reference table, and whether the scan column changed at a
   <thead><tr><th>Where you meet it</th><th>In buffer-pool terms</th></tr></thead>
   <tbody>
     <tr><td><code>pd.read_parquet</code> on a file larger than RAM</td><td>A pandas read materializes its result in memory and can fail if that result is too large. A query engine can often process a larger input incrementally, depending on the query.</td></tr>
-    <tr><td>Spark <code>.cache()</code> / <code>.persist()</code></td><td>requests caching; evicted partitions may be recomputed or read from disk, depending on storage level</td></tr>
+    <tr><td>Spark <code>.cache()</code> / <code>.persist()</code></td><td>requests caching. Evicted partitions may be recomputed or read from disk, depending on storage level</td></tr>
     <tr><td>Second run of a notebook cell that reads a large file</td><td>The operating system may still hold file data from the first read in its <span class="gloss" data-gloss="os-page-cache">page cache</span>, making a repeated read faster.</td></tr>
     <tr><td>Feature store serving online predictions</td><td>Frequently accessed users or features can form a hot set that benefits from caching. The benefit depends on how requests are distributed.</td></tr>
     <tr><td>Nightly backfill scanning the whole table through the same pool</td><td>A large scan can evict frequently accessed pages. PostgreSQL can use a limited buffer ring for large sequential scans to reduce their effect on the rest of its buffer pool.</td></tr>
   </tbody>
 </table>
 
-<p>A dataframe must fit its materialized result in memory; a query engine can often stream a larger input through a bounded pool. Spark’s <code>cache()</code> and <code>persist()</code> request reuse, but do not pin partitions against eviction. Lost partitions can be recomputed, and some storage levels spill them to disk. In every case, reuse and memory pressure determine the benefit.</p>
+<p>A dataframe must fit its materialized result in memory. A query engine can often stream a larger input through a bounded pool. Spark’s <code>cache()</code> and <code>persist()</code> request reuse, but do not pin partitions against eviction. Lost partitions can be recomputed, and some storage levels spill them to disk. In every case, reuse and memory pressure determine the benefit.</p>
 
 <!-- ============================================================ -->
 <h2 id="explain-it">Explain what your result means</h2>
@@ -267,20 +269,18 @@ the same size from the reference table, and whether the scan column changed at a
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present"><strong>Submit <code>buffer_manager.py</code> to Gradescope, per the course submission
-instructions, by Thursday Sep 10 at class start.</strong> One file; the harness score you see locally is the grade.</p>
+instructions, by Thursday Sep 10 at class start.</strong> Submit one file. Your local harness score determines the grade.</p>
 
 <h3>Deliverables</h3>
 <ul>
   <li>☐ <code>buffer_manager.py</code>: all ten local tests pass (<code>10/10</code>).</li>
 </ul>
-<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests. Measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>Use the measurement and reflection questions to explain your results. They are not graded, but bring your measurements and answers to class for discussion.</p>
 <ul>
-  <li>The full hit-rate table, plus your answers to the three
-  questions <code>measure_hits.py</code> prints (why the scan gets 0%, why the hot-set workload
-  still gets hits with a small pool, and which workload your own ML pipelines resemble).</li>
+  <li>Bring the full hit-rate table. Answer the three questions from <code>measure_hits.py</code>. Why does the scan get 0%? Why does the hot-set workload still get hits with a small pool? Which workload resembles your own ML pipelines?</li>
   <li>Reflection (3–5 sentences total): (1)&nbsp;Why must <code>last_used</code> be stamped on
   hits, not just misses? (2)&nbsp;Why does <code>unpin</code> raise on a double-release instead
   of ignoring it?</li>
@@ -293,7 +293,7 @@ instructions, by Thursday Sep 10 at class start.</strong> One file; the harness 
     <tr><td><code>buffer_manager.py</code></td><td>Buffer class (flush, assign_to_block), BufferAbortError, hit_rate, flush_all</td><td><code>_find_existing</code>, <code>_choose_victim</code>, <code>pin</code>, <code>unpin</code></td></tr>
     <tr><td><code>file_manager.py</code></td><td>complete reference (Lab 1), do not edit</td><td>&nbsp;</td></tr>
     <tr><td><code>test_buffermanager.py</code></td><td>complete, do not edit</td><td>&nbsp;</td></tr>
-    <tr><td><code>measure_hits.py</code></td><td>complete, do not edit</td><td>run it, record results</td></tr>
+    <tr><td><code>measure_hits.py</code></td><td>complete, do not edit</td><td>Run it. Record the results</td></tr>
   </tbody>
 </table>
 
@@ -308,20 +308,19 @@ instructions, by Thursday Sep 10 at class start.</strong> One file; the harness 
 <!-- ============================================================ -->
 <h2 id="going-further">Going further <span class="part-time">optional</span></h2>
 
-<p class="keep-in-present">If you finish early, try one of these extensions. Add a <code>sequential=True</code> option to <code>pin()</code> that makes an unpinned scan page a preferred eviction candidate. Measure whether this reduces interference with hot-set requests; PostgreSQL uses a related buffer-ring strategy. Alternatively, implement clock eviction and compare its behavior with LRU; the LRU-specific victim-order tests need not pass. A third option is to replace the linear search in <code>_find_existing</code> with a <span class="gloss" data-gloss="page-table">dictionary</span> from <code>BlockId</code> to <code>Buffer</code>, updating it on every eviction.</p>
+<p class="keep-in-present">If you finish early, try one of these extensions. Add a <code>sequential=True</code> option to <code>pin()</code> that makes an unpinned scan page a preferred eviction candidate. Measure whether this reduces interference with hot-set requests. PostgreSQL uses a related buffer-ring strategy.</p>
+<p class="keep-in-present">Alternatively, implement clock eviction and compare its behavior with LRU. The LRU-specific victim-order tests need not pass. A third option is to replace the linear search in <code>_find_existing</code> with a <span class="gloss" data-gloss="page-table">dictionary</span> from <code>BlockId</code> to <code>Buffer</code>, updating it on every eviction.</p>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
 
-<h3>My scan hit rates don't match the table exactly.</h3>
-<p class="keep-in-present">They should: both workloads are seeded, and the file layer is the shipped reference. A
-mismatch almost always means <code>last_used</code> isn't stamped per the spec (tick on every
-pin) or eviction is choosing a different victim than smallest-<code>last_used</code>.</p>
+<h3>My scan hit rates do not match the table exactly.</h3>
+<p class="keep-in-present">The rates should match because both workloads are seeded and use the supplied reference file layer. Check whether each pin gives <code>last_used</code> a fresh tick. Check whether eviction chooses the unpinned frame with the smallest <code>last_used</code>. These mistakes cause most mismatches.</p>
 
 <h3>Why does pin() abort instead of waiting for a frame?</h3>
 <p class="keep-in-present">Microdb runs one thread. If every frame is pinned, waiting inside <code>pin()</code> would prevent the same thread from reaching the code that unpins a frame. Raising <code>BufferAbortError</code> reports the problem immediately. A concurrent engine can instead wait for another thread to release a frame, often with a timeout.</p>
 
-<h3>Is my pool's memory really fixed? Python doesn't work that way…</h3>
+<h3>Is my pool's memory really fixed? Python does not work that way…</h3>
 <p class="keep-in-present">The page storage is fixed: each frame allocates its bytearray once and reuses it for different blocks. Other Python objects may still be allocated while the program runs. Production engines also manage a bounded pool of page memory, although whether that pool can resize depends on the engine.</p>
 
 <h3>Does the OS page cache mess up my measurement?</h3>
@@ -336,6 +335,6 @@ pin) or eviction is choosing a different victim than smallest-<code>last_used</c
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
+<script src="viz.js?v=ste-20261015"></script>
 </body>
 </html>

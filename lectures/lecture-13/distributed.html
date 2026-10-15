@@ -48,11 +48,11 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">At the whiteboard, Maya gives one worker <code>“WAL, wal!”</code> and another <code>“Page wal.”</code>. The first reports two occurrences of <code>wal</code>; the second reports one. Noor circles both outputs: <q>Which worker combines these counts into the final total?</q></p>
-  <p>Maya draws arrows from the two workers to one group. Each worker has only a partial count. They must send all contributions for the same word to a reducer, preserve every occurrence, and rerun failed tasks without losing contributions.</p>
+  <p class="lede">Maya gives one worker <code>“WAL, wal!”</code> and another <code>“Page wal.”</code>. The first reports two occurrences of <code>wal</code>. The second reports one. Noor circles both outputs: <q>Which worker combines these counts into the final total?</q></p>
+  <p>Maya draws arrows from both workers to one group. Each worker has a partial count. The workers must send all contributions for the same word to a reducer. The system must retain every occurrence. It must also rerun failed tasks without losing contributions.</p>
 </div>
 
-<p class="keep-in-present">We will use this small word count to separate local computation from coordination. Partitioning assigns responsibility; a shuffle groups matching keys; execution engines schedule and recover tasks. Lab 11 first makes those rules visible in one Python process. Its optional Spark and Ray exercises then show local parallel execution.</p>
+<p class="keep-in-present">This word count separates local computation from coordination. Partitioning assigns records to workers. A shuffle groups equal keys. Execution engines schedule and recover tasks. Lab 11 demonstrates these rules in one Python process. Optional Spark and Ray exercises demonstrate local parallel execution.</p>
 
 <div class="cite">
   Companion reading: Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce: Simplified Data Processing on Large Clusters</em></a> (OSDI 2004, 13 readable pages)<sup class="src"><a href="#src-1" title="MapReduce: Simplified Data Processing on Large Clusters (Google Research publication page)">1</a></sup> ·
@@ -60,10 +60,7 @@
   Ray's <a href="https://docs.ray.io/en/latest/ray-core/walkthrough.html">core walkthrough</a> (tasks in ten minutes).
 </div>
 
-<p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
-</p>
+<p class="glossary-hint">Terms with dotted underlines, such as <span class="gloss-demo">this one</span>, have definitions. Hover over a term or tap it to show its definition below the sentence.</p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
   <div id="glossary-content" class="glossary-content"></div>
@@ -88,7 +85,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="wall">Why distribute a job?</h2>
 
-<p class="keep-in-present">The two-record count fits on one laptop. Distribution becomes a practical question when a measured workload needs more capacity. The following 10 TB scan is a capacity estimate under stated assumptions, not a requirement for your course project or a promised speedup.</p>
+<p class="keep-in-present">The two-record count fits on one laptop. Consider distribution when measurements show a need for more capacity. The 10 TB scan below estimates capacity under stated assumptions. It does not specify a course-project requirement or guarantee a speedup.</p>
 
 <h3 class="new-slide" data-kicker="Why distribute">Partitioning distributes storage, memory, and recovery work</h3>
 
@@ -96,29 +93,29 @@ hover or tap for a plain-language explainer that opens right below the sentence 
   <thead><tr><th>Resource</th><th>One machine</th><th>10 TB job needs</th><th>The distributed answer</th></tr></thead>
   <tbody>
     <tr><td>Disk read</td><td>~2 GB/s sequential</td><td>~85 min just to read once<sup class="src"><a href="#src-2" title="What is PCIe Gen 4 for SSDs, and how does it compare to Gen 3 and Gen 5? (Samsung Business Insights)">2</a></sup></td><td>100 machines read their own 100 GB in ~1 min</td></tr>
-    <tr><td>Memory</td><td>hundreds of GB</td><td>the <span class="gloss" data-gloss="working-set">working set</span> may exceed available RAM, requiring an external-memory algorithm or disk spill</td><td>partition the working set so each machine processes a smaller share; <span class="gloss" data-gloss="skew">skew</span> and operator behavior determine whether that share fits</td></tr>
+    <tr><td>Memory</td><td>hundreds of GB</td><td>the <span class="gloss" data-gloss="working-set">working set</span> may exceed available RAM, requiring an external-memory algorithm or disk spill</td><td>Partition the working set so each machine processes a smaller share. <span class="gloss" data-gloss="skew">Skew</span> and operator behavior determine whether each share fits.</td></tr>
     <tr><td>Failure</td><td>without a recovery mechanism, a crash can force the whole job to restart</td><td>more machines and longer jobs increase the chance of a failure<sup class="src"><a href="#src-3" title="Designs, Lessons and Advice from Building Large Distributed Systems (Jeff Dean, LADIS 2009 keynote)">3</a></sup></td><td>the framework retries failed tasks and reconstructs lost intermediate results instead of restarting all completed work</td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Why distribute">Separate the computation from scheduling and recovery</h3>
 
-<p class="keep-in-present">MapReduce separates the functions that compute results from the framework that schedules and recovers tasks. You write <code>map</code> and <code>reduce</code>; the framework assigns work, transfers intermediate records, and retries tasks when workers fail.</p>
+<p class="keep-in-present">MapReduce separates result calculations from scheduling and recovery. You write <code>map</code> and <code>reduce</code>. The framework assigns work, transfers intermediate records, and retries failed tasks.</p>
 
 <!-- ============================================================ -->
 <h2 id="partition">Assign records with hash or range partitioning</h2>
 
-<p class="keep-in-present">Think of sorting mail into destination trays. The address determines the tray; the sending office does not. A partition rule similarly chooses an owner from the key. This analogy explains routing, while actual hash or range rules determine placement and do not guarantee equal workloads.</p>
+<p class="keep-in-present">Consider sorting mail into destination trays. The address determines the tray, regardless of the sending office. Similarly, a partition rule selects an owner from the key. The actual hash or range rule determines placement. Neither rule guarantees equal work for each owner.</p>
 
-<h3 class="new-slide" data-kicker="Hash or range">Hash distributes distinct keys; range keeps neighboring keys together</h3>
+<h3 class="new-slide" data-kicker="Hash or range">Hash distributes distinct keys. Range groups neighboring keys.</h3>
 
 <table>
   <thead><tr><th></th><th>Hash partitioning</th><th>Range partitioning</th></tr></thead>
   <tbody>
     <tr><td>Rule</td><td><code>owner = hash(key) % n</code></td><td>owner holds a key interval (a–f, g–m, …)</td></tr>
-    <tr><td>Strength</td><td>a good hash distributes distinct keys across partitions; the routing rule is simple to compute<sup class="src"><a href="#src-4" title="Hashed Sharding (MongoDB Manual)">4</a></sup></td><td>range queries touch few partitions; sorted neighbors stay together</td></tr>
-    <tr><td>Weakness</td><td>range queries touch <em>every</em> partition</td><td>needs split points chosen well; hot ranges overload one machine<sup class="src"><a href="#src-5" title="Design a schema (Google Cloud Bigtable documentation)">5</a></sup></td></tr>
-    <tr><td>You've used it as</td><td>Lab 11's shuffle, which sends each key to the machine its hash names; a hash join's build side, where rows with equal keys land in the same bucket by the same rule</td><td>Lab 8's Hive-style folders (<code>month=12/</code>), where each folder holds one interval of the key; a B+ tree, where each leaf holds one sorted interval of keys</td></tr>
+    <tr><td>Strength</td><td>A good hash distributes distinct keys across partitions. The routing rule is simple to calculate.<sup class="src"><a href="#src-4" title="Hashed Sharding (MongoDB Manual)">4</a></sup></td><td>Range queries contact few partitions. Sorted neighbors remain together.</td></tr>
+    <tr><td>Weakness</td><td>range queries touch <em>every</em> partition</td><td>Split-point selection affects balance. A frequently accessed range can overload one machine.<sup class="src"><a href="#src-5" title="Design a schema (Google Cloud Bigtable documentation)">5</a></sup></td></tr>
+    <tr><td>Related examples</td><td>Lab 11’s shuffle uses a hash to select a partition. A hash join also uses hashing to group equal keys in one bucket.</td><td>Lab 8’s Hive-style folders, such as <code>month=12/</code>, group rows by key interval. B+ tree leaves also hold sorted key intervals.</td></tr>
   </tbody>
 </table>
 
@@ -126,7 +123,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <div class="viz" id="viz-part">
   <div class="viz-title">the same 12 keys, both rules, side by side</div>
-  <p class="viz-description">Load the keys and run each query against both layouts. Count the partitions contacted. This illustrates query routing; a complete design also needs to consider skew, partition sizes, and update traffic.</p>
+  <p class="viz-description">Load the keys. Run each query on both layouts. Count the partitions contacted. This demonstrates query routing. A complete design also considers skew, partition sizes, and update traffic.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="pt-load">load 12 keys</button>
     <button type="button" class="btn" id="pt-point">point query: kim = ?</button>
@@ -143,13 +140,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Load balance</span><span>Hashing can balance distinct keys without balancing records. If one key occurs in 40% of the records, all those records reach the same partition. That worker may finish much later than the others.</span></div>
-  <div class="lc-row"><span class="lc-k">The fix</span><span>For suitable aggregations, add a suffix to the frequent key so its records spread across several partitions. Aggregate those groups, then remove the suffix and combine their partial results. This technique is called salting; it adds another aggregation step.<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Diagnosis</span><span>A task that runs long after its peers is a <span class="gloss" data-gloss="straggler">straggler</span>. Check its input size, spill, and execution time in Spark’s UI to distinguish skew from other causes such as a slow worker.<sup class="src"><a href="#src-7" title="Skew and spill (Databricks on AWS documentation)">7</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">The fix</span><span>For suitable aggregations, add a suffix to the frequent key so its records spread across several partitions. Aggregate the groups. Remove the suffix. Combine their partial results. This technique, salting, requires another aggregation step.<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Diagnosis</span><span>A task that runs long after its peers is a <span class="gloss" data-gloss="straggler">straggler</span>. Check input size, spill, and execution time in Spark’s UI. Use these measurements to distinguish skew from a slow worker or other causes.<sup class="src"><a href="#src-7" title="Skew and spill (Databricks on AWS documentation)">7</a></sup></span></div>
 </div>
 
 <div class="viz" id="viz-skew">
   <div class="viz-title">skew · one frequent key across eight partitions</div>
-  <p class="viz-description">The widget hashes 8,000 rows across 8 workers. Increase the share belonging to one key. Those rows all have the same hash and reach the same worker; the job finishes only when that worker finishes.</p>
+  <p class="viz-description">The widget hashes 8,000 rows across 8 workers. Increase the fraction of rows with one key. Those rows share a hash and reach one worker. The job must wait for that worker to finish.</p>
   <div class="skew-controls">
     <label>hot key's share of all rows: <span id="skew-val">0%</span></label>
     <input type="range" id="skew-slider" min="0" max="80" step="5" value="0">
@@ -162,13 +159,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <div class="callout note">
   <span class="label">Case study · high-traffic accounts at Instagram</span>
-  <p class="keep-in-present">A small number of popular accounts can generate far more traffic than typical accounts. Instagram’s scaling presentation describes replacing repeated like-count queries with a stored counter and caching. This example illustrates why a system must account for frequent keys, rather than assuming equal load across accounts. For a partitioned job, inspect the key-frequency distribution before assuming that a uniform hash will produce uniform work.<sup class="src"><a href="#src-8" title="Scaling Instagram Infrastructure (Lisa Guo, QCon San Francisco 2016 slides)">8</a></sup><sup class="src"><a href="#src-9" title="Zipf's law and the Internet (Adamic and Huberman, Glottometrics 3, 2002)">9</a></sup></p>
+  <p class="keep-in-present">A few popular accounts can generate much more traffic than other accounts. Instagram’s scaling presentation describes replacing repeated like-count queries with a stored counter and caching. Such systems must account for frequent keys. Before assuming a uniform hash gives uniform work, inspect key frequencies.<sup class="src"><a href="#src-8" title="Scaling Instagram Infrastructure (Lisa Guo, QCon San Francisco 2016 slides)">8</a></sup><sup class="src"><a href="#src-9" title="Zipf's law and the Internet (Adamic and Huberman, Glottometrics 3, 2002)">9</a></sup></p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace two records through the shuffle</h2>
 
-<p class="keep-in-present">Keep both copies of <code>wal</code> in the first record. Before advancing, predict the number of emitted pairs and the values that must reach the same group. Changing partition numbers must not change the final word counts.</p>
+<p class="keep-in-present">Keep both occurrences of <code>wal</code> in the first record. Predict the number of emitted pairs before advancing. Identify the values that must reach the same group. Changing partition numbers must not change final word counts.</p>
 <div data-teaching-trace="shuffle">
   <p><strong>Worked result:</strong> <code>WAL, wal!</code> and <code>Page wal.</code> emit four pairs. Grouping yields <code>wal: [1,1,1]</code> and <code>page: [1]</code>. Reduction returns counts 3 and 1, regardless of which bucket number owns each word.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
@@ -195,13 +192,11 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
 <!-- ============================================================ -->
 <h2 id="try-it">Follow records through map, shuffle, and reduce</h2>
 
-<p>This example counts words in four short documents using two reducer partitions. Step through the computation and hover over a pair to inspect how its key selects a destination.</p>
+<p>This example counts words in four short documents with two reducer partitions. Advance through the computation. Hover over a pair to inspect how its key selects a destination.</p>
 
 <div class="viz" id="viz-mr">
   <div class="viz-title">map → shuffle → reduce · word count, 4 documents, 2 partitions</div>
-  <p class="viz-description">Every pair is colored by the partition its key hashes to;
-  the color is decided at <em>map time</em> by arithmetic every machine can do alone
-  (hover a pair: sum of letter codes, mod 2). Step and watch same-colored pairs converge.</p>
+  <p class="viz-description">Each pair’s color identifies its destination partition. The example calculates that partition at <em>map time</em>: sum the letter codes, then take the remainder modulo 2. Every machine can perform this calculation independently. Advance through the steps to see pairs of the same color enter one partition.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="mr-step">Step ▸</button>
     <button type="button" class="btn" id="mr-back">◂ Back</button>
@@ -215,7 +210,7 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
 <!-- ============================================================ -->
 <h2 id="spark">Spark records a plan before executing it</h2>
 
-<p class="keep-in-present">Noor asks how the framework knows which work can run next. In Spark, Maya describes operations on partitioned collections, and Spark records which operations depend on which inputs. Read the small word-count chain before the printed plan; the shuffle tells you where records must move.</p>
+<p class="keep-in-present">Noor asks which operations can run next. Maya describes operations on partitioned collections. Spark records each operation’s input dependencies. Read the word-count code before the printed plan. Identify the shuffle where records move between partitions.</p>
 
 <h3 class="new-slide" data-kicker="Spark">Word count in Spark is three chained calls and one shuffle</h3>
 
@@ -228,13 +223,13 @@ counts.collect()                                      # NOW it runs</code></pre>
 
 <h3 class="new-slide" data-kicker="Spark">Shuffle dependencies create stage boundaries</h3>
 
-<p class="keep-in-present">A narrow dependency lets an output partition read from a limited set of parent partitions. Operations such as <code>map</code> and <code>filter</code> can be pipelined without a shuffle. A shuffle dependency redistributes records, often to group matching keys for aggregation or joins. Shuffles separate execution <span class="gloss" data-gloss="stage">stages</span>. Inspect the DAG: the stage count is not simply the number of transformation calls.<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup></p>
+<p class="keep-in-present">A narrow dependency connects an output partition to a limited set of parent partitions. Spark can pipeline <code>map</code> and <code>filter</code> without a shuffle. A shuffle redistributes records, often to group equal keys for joins or aggregation. Shuffles separate execution <span class="gloss" data-gloss="stage">stages</span>. Inspect the DAG. The stage count is not the number of transformation calls.<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup></p>
 
 <table>
   <thead><tr><th></th><th>Narrow</th><th>Wide</th></tr></thead>
   <tbody>
     <tr><td>Examples</td><td><code>flatMap</code>, <code>map</code>, <code>filter</code></td><td><code>reduceByKey</code>, <code>join</code>, <code>groupBy</code></td></tr>
-    <tr><td>Where it runs</td><td>processes partition data without redistributing it; adjacent operations can be pipelined</td><td>redistributes records when the required grouping is not already available</td></tr>
+    <tr><td>Where it runs</td><td>Processes partition data without redistribution. Adjacent operations can form a pipeline.</td><td>redistributes records when the required grouping is not already available</td></tr>
     <tr><td>What it costs</td><td>computation still costs time, but chaining avoids an intermediate shuffle</td><td>serialization, data transfer, and often disk I/O at a stage boundary</td></tr>
   </tbody>
 </table>
@@ -250,16 +245,16 @@ counts.collect()                                      # NOW it runs</code></pre>
     |  PythonRDD[1] at reduceByKey at spark_wordcount.py:37 []
     |  ParallelCollectionRDD[0] at readRDDFromFile at PythonRDD.scala:326 []</code></pre>
 
-<p class="keep-in-present">Read the dependency plan from the input upward. <code>ShuffledRDD</code> identifies the redistribution step; the stage boundary occurs at that shuffle dependency.</p>
+<p class="keep-in-present">Read the dependency plan from the input upward. <code>ShuffledRDD</code> identifies redistribution. That shuffle dependency forms a stage boundary.</p>
 
 <h3 class="new-slide" data-kicker="Spark">Lineage lets Spark recompute lost partitions</h3>
 
-<p class="keep-in-present">Spark records how each RDD was derived from its inputs. This <span class="gloss" data-gloss="lineage">lineage</span> lets it recompute a lost partition when the required inputs remain available and the transformations can be replayed to reproduce the data. Checkpointing or replication may also be used; lineage is the recovery mechanism that does not require copying every intermediate result.<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup></p>
+<p class="keep-in-present">Spark records how each RDD depends on its inputs. This <span class="gloss" data-gloss="lineage">lineage</span> lets Spark recompute a lost partition. The required inputs must remain available, and the transformations must reproduce the data. Systems can also use checkpoints or replication. Lineage does not require a copy of every intermediate result.<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup></p>
 
 <!-- ============================================================ -->
 <h2 id="ray">Ray runs Python tasks and stateful actors</h2>
 
-<p class="keep-in-present">The word count needs groups of equal keys. The next workload needs many independent nearest-neighbor calls. Give each call a task, submit the tasks before waiting, and compare the results with the serial baseline.</p>
+<p class="keep-in-present">Word count groups equal keys. The next workload performs many independent nearest-neighbor calls. Assign a task to each call. Submit all tasks before waiting. Compare the results with the serial baseline.</p>
 
 <h3 class="new-slide" data-kicker="Ray">Use @ray.remote to define a task</h3>
 
@@ -272,7 +267,7 @@ graph = ray.get(futures)                            # wait; order preserved<sup 
 
 <h3 class="new-slide" data-kicker="Ray">Submit tasks before waiting for results</h3>
 
-<p class="key-fact keep-in-present"><strong>3.5×</strong> faster from one decorator on a 10-core laptop: 2.27 s serial became 0.66 s parallel, identical results</p>
+<p class="key-fact keep-in-present"><strong>3.5×</strong> measured speedup on a 10-core laptop: 2.27 s serial and 0.66 s parallel. Both runs returned identical results.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span><span class="t-mute">             # Part C, measured on a 10-core laptop</span>
 200 documents, 10 nearest neighbors each, brute force over 4,000 vectors
@@ -285,41 +280,33 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
    Novel Table Search [Technical Report]
    Toward Multi-Database Query Reasoning for Text2Cypher</code></pre>
 
-<p class="keep-in-present">This example measures Lab 11’s Part C workload. Calling <code>ray.get()</code> immediately after each task submission makes the loop wait before submitting the next task. Submit the tasks first, then collect their results so they can overlap. The lab’s launch-order check catches the sequential submission-and-wait pattern.<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup></p>
+<p class="keep-in-present">This measurement uses the Lab 11 Part C workload. Calling <code>ray.get()</code> immediately after submission waits before the next task starts. Submit tasks first. Then collect their results. This order permits tasks to overlap. The lab’s launch-order check detects a submission loop that waits after each task.<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup></p>
 
 <h3 class="new-slide" data-kicker="Ray">Actors hold state on a worker: @ray.remote on a class</h3>
 
-<p class="keep-in-present">For state that must live <em>on</em> a worker (a loaded
-model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors</span>:
-<code>@ray.remote</code> on a class instead of a function<sup class="src"><a href="#src-15" title="Actors (Ray Core documentation)">15</a></sup>.</p>
+<p class="keep-in-present">An <span class="gloss" data-gloss="actor">actor</span> keeps state <em>on</em> a worker, such as a loaded model or counter. Define an actor with <code>@ray.remote</code> on a class instead of a function.<sup class="src"><a href="#src-15" title="Actors (Ray Core documentation)">15</a></sup></p>
 
 <h3 class="new-slide" data-kicker="Ray">Choose an engine for the workload and performance target</h3>
 
 <table>
   <thead><tr><th>Your job looks like…</th><th>Reach for</th><th>Because</th></tr></thead>
   <tbody>
-    <tr><td>SQL-style dataflow over huge records (filter, join, aggregate)</td><td>Spark for distributed data processing; evaluate DuckDB for a single-machine workload</td><td>Spark SQL combines query planning with distributed execution and shuffle management</td></tr>
-    <tr><td>the same Python function, many times, maybe stateful</td><td>Ray</td><td>tasks distribute function calls; actors keep state between calls. Your code must still account for data transfer, dependencies, and task size</td></tr>
-    <tr><td>fits on one machine</td><td>one machine</td><td>a single-machine solution avoids network shuffles and cluster management. Measure whether it meets the memory, latency, and throughput requirements before distributing it</td></tr>
+    <tr><td>SQL-style dataflow over huge records (filter, join, aggregate)</td><td>Use Spark for distributed data processing. Evaluate DuckDB for a single-machine workload.</td><td>Spark SQL combines query planning with distributed execution and shuffle management</td></tr>
+    <tr><td>the same Python function, many times, maybe stateful</td><td>Ray</td><td>Tasks distribute function calls. Actors retain state between calls. Your code must account for data transfer, dependencies, and task size.</td></tr>
+    <tr><td>fits on one machine</td><td>one machine</td><td>One machine avoids network shuffles and cluster management. Measure whether it meets memory, latency, and throughput requirements before distributing the work.</td></tr>
   </tbody>
 </table>
 
 <!-- ============================================================ -->
 <h2 id="thursday">November 10: implement MapReduce and try Spark and Ray</h2>
 
-<p>In Lab 11, implement a small MapReduce word count for the graded Part A. The optional Parts B and C run word count in Spark and parallel nearest-neighbor tasks in Ray:</p>
+<p>Implement a small MapReduce word count for Lab 11’s graded Part A. Optional Parts B and C use Spark for word count and Ray for parallel nearest-neighbor tasks.</p>
 
 <ul class="checklist">
-  <li>☐ <strong>Part A (graded, offline):</strong> micro-mapreduce. You write map,
-  hash partitioning, the shuffle, and reduce; the harness checks the grouping guarantee
-  and that the answer is independent of partition count.</li>
-  <li>☐ <strong>Part B (optional, pyspark):</strong> the same word count in three chained calls;
-  print the DAG (the directed acyclic graph of steps Spark plans to run, the plan shown above) and point at the shuffle in it.</li>
-  <li>☐ <strong>Part C (optional, ray):</strong> parallelize nearest-neighbor searches over precomputed embeddings; measure the speedup
-  and the launch-then-wait discipline.</li>
-  <li>☐ For the optional exercises, install ahead of class: <code>pip install pyspark ray</code>; pyspark needs Java
-  (<code>java -version</code> must work). Parts B/C run locally; the autograder grades
-  Part A.</li>
+  <li>☐ <strong>Part A (graded, offline):</strong> Implement map, hash partitioning, shuffle, and reduce in micro-mapreduce. The harness checks grouping and identical answers across partition counts.</li>
+  <li>☐ <strong>Part B (optional, pyspark):</strong> Run word count with three chained calls. Print the DAG: Spark’s directed acyclic graph of planned operations. Identify its shuffle.</li>
+  <li>☐ <strong>Part C (optional, ray):</strong> Parallelize nearest-neighbor searches over precomputed embeddings. Submit tasks before waiting. Measure the speedup.</li>
+  <li>☐ For optional exercises, run <code>pip install pyspark ray</code> before class. Check <code>java -version</code>. PySpark requires Java. Parts B/C run locally. The autograder grades Part A.</li>
 </ul>
 
 <!-- ============================================================ -->
@@ -331,37 +318,37 @@ model, a growing counter), Ray has <span class="gloss" data-gloss="actor">actors
   <details><summary>Check your explanation</summary><p>The totals for every word should stay the same. Bucket numbers, placement, scheduling, and output order may change. More partitions can add overhead or leave a frequent key concentrated on one worker. Compare the results before interpreting the timing.</p></details>
 </div>
 
-<p class="keep-in-present">Return to the two documents. Choose a partition for each key, send values with the same key to one group, compute each word’s total, and rerun tasks whose results were lost. Spark and Ray schedule tasks and track dependencies so this work can run across workers.</p>
+<p class="keep-in-present">Return to the two documents. Select a partition for each key. Group all values with the same key. Calculate each word’s total. Rerun tasks with lost results. Spark and Ray schedule tasks and track dependencies across workers.</p>
 
 <ul class="recap-list">
-  <li>Partitioning assigns records to workers. Hash partitioning groups equal keys; range partitioning keeps neighboring keys together. Both require attention to skew.</li>
+  <li>Partitioning assigns records to workers. Hash partitioning groups equal keys. Range partitioning groups neighboring keys. Both require checks for skew.</li>
   <li>MapReduce separates task logic from execution. The shuffle groups intermediate values so each reduce call receives the values for its key.</li>
   <li>Spark builds lazy plans over partitioned data, uses shuffles between stages, and records lineage for recovery. Ray provides tasks and actors for Python computations.</li>
 </ul>
 
-<p class="key-fact keep-in-present"><strong>~85 min</strong> just to read 10 TB once on one machine; 100 machines do it in about 1 min</p>
-<p class="key-fact keep-in-present"><strong>3.5×</strong> from one Ray decorator on a 10-core laptop, identical results</p>
+<p class="key-fact keep-in-present"><strong>~85 min</strong> to read 10 TB once on one machine. The estimate for 100 machines is about 1 min.</p>
+<p class="key-fact keep-in-present"><strong>3.5×</strong> measured Ray speedup on a 10-core laptop, with identical results.</p>
 
 <p class="keep-in-present"><strong>Tuesday November 10:</strong> Lab 11. <strong>Thursday November 12:</strong> Bigtable, LSM trees, and storage for write-heavy workloads. Quiz 10 opens class: MapReduce, Spark &amp; Ray.<sup class="src"><a href="#src-16" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006 paper PDF)">16</a></sup></p>
 
 <p class="keep-in-present"><strong>Before the November 10 lab:</strong></p>
 <ul>
-  <li><strong>Read</strong> Dean &amp; Ghemawat, <em>MapReduce: Simplified Data Processing on Large Clusters</em> (OSDI 2004, 13 pages); Lab 11's Part A is that paper's shuffle, built by hand.</li>
-  <li><strong>Run</strong> <code>pip install pyspark ray</code> if you plan to try the optional exercises, then confirm <code>java -version</code> works; pyspark will not start without Java.</li>
-  <li><strong>Bring</strong> your laptop for Part A. Have both installs working if you plan to try optional Parts B and C locally in class; the autograder grades Part A.</li>
+  <li><strong>Read</strong> Dean &amp; Ghemawat, <em>MapReduce: Simplified Data Processing on Large Clusters</em> (OSDI 2004, 13 pages). Lab 11 Part A implements the shuffle from that design.</li>
+  <li><strong>Run</strong> <code>pip install pyspark ray</code> for the optional exercises. Confirm that <code>java -version</code> works. PySpark requires Java.</li>
+  <li><strong>Bring</strong> your laptop for Part A. Check both installations before optional Parts B and C. The autograder grades Part A.</li>
 </ul>
 
 <!-- ============================================================ -->
 <h2 id="faq">FAQ</h2>
 
-<h3 class="keep-in-present">Is MapReduce dead? I've heard "nobody writes MapReduce anymore."</h3>
-<p class="keep-in-present">MapReduce remains useful as a way to understand partitioned aggregation, even when a system exposes SQL or another API. Spark and DuckDB’s parallel grouped aggregation use related partition-and-combine ideas. When a distributed job is slow, inspect stage timings, data movement, skew, and resource use rather than assuming the framework is the cause.<sup class="src"><a href="#src-17" title="Parallel Grouped Aggregation in DuckDB (DuckDB blog)">17</a></sup></p>
+<h3 class="keep-in-present">Do current systems still use MapReduce ideas?</h3>
+<p class="keep-in-present">MapReduce explains partitioned aggregation even when a system exposes SQL or another API. Spark and DuckDB use related partition-and-combine methods for parallel grouped aggregation. For a slow distributed job, inspect stage times, data movement, skew, and resource use. Identify the cause before attributing the delay to the framework.<sup class="src"><a href="#src-17" title="Parallel Grouped Aggregation in DuckDB (DuckDB blog)">17</a></sup></p>
 
 <h3 class="keep-in-present">Why did we learn DuckDB if Spark exists?</h3>
-<p class="keep-in-present">DuckDB can process large datasets on one machine, including workloads that spill to disk. That can be simpler than operating a cluster. Spark becomes useful when distributed resources are needed to meet the job’s requirements. Benchmark the workload; dataset size alone does not determine the choice.<sup class="src"><a href="#src-18" title="Memory Management in DuckDB (DuckDB blog)">18</a></sup></p>
+<p class="keep-in-present">DuckDB processes large datasets on one machine, including jobs that spill to disk. This can be simpler than managing a cluster. Spark helps when a job requires distributed resources. Benchmark the workload. Dataset size alone does not determine the choice.<sup class="src"><a href="#src-18" title="Memory Management in DuckDB (DuckDB blog)">18</a></sup></p>
 
 <h3 class="keep-in-present">Where does the shuffle physically put the data?</h3>
-<p class="keep-in-present">In the MapReduce design, mappers write local files partitioned by reducer destination. Reducers fetch their assigned data over the network. Serialization, transfers, and disk I/O can make this step expensive. Some systems use object storage for shuffle data, separating it from worker lifetimes; the exact storage path depends on the engine and configuration.<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup><sup class="src"><a href="#src-19" title="Cloud Shuffle Storage Plugin for Apache Spark (AWS Glue Developer Guide)">19</a></sup></p>
+<p class="keep-in-present">In the MapReduce design, mappers write local files partitioned by reducer destination. Reducers fetch their assigned data over the network. Serialization, transfers, and disk I/O can make this step expensive. Some systems store shuffle data in object storage, independently of worker lifetimes. The storage path depends on the engine and configuration.<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup><sup class="src"><a href="#src-19" title="Cloud Shuffle Storage Plugin for Apache Spark (AWS Glue Developer Guide)">19</a></sup></p>
 
 <h3 class="keep-in-present">Could our RAG project need Spark or Ray?</h3>
 <p class="keep-in-present">The course project should not need distributed retrieval for its required corpus size. Ingestion may benefit from parallel work if embedding many chunks takes too long. A Ray task can wrap an embedding call, but batch size, model loading, and any API rate limits affect whether this helps. Measure and describe the choice in your report.</p>
@@ -401,8 +388,8 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=4"></script>
-<script src="../../labs/_shared/teaching-traces.js?v=4"></script>
+<script src="viz.js?v=ste-20261015"></script>
+<script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../labs/_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

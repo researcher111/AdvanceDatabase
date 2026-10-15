@@ -9,11 +9,11 @@
     },
     'rdd': {
       title: 'RDD (Resilient Distributed Dataset)',
-      body: "<p>A resilient distributed dataset is a logical collection divided into partitions. Transformations such as map and filter define new RDDs from existing ones. Spark records their dependencies and evaluates the required work when an action requests results. The recorded lineage can be used to recompute lost partitions.</p>",
+      body: "<p>A resilient distributed dataset (RDD) is a logical collection divided into partitions. Transformations such as map and filter define new RDDs from existing ones. Spark records dependencies. An action requests results and starts the required computation. Spark can use the recorded lineage to recompute lost partitions.</p>",
     },
     'shuffle': {
       title: 'Shuffle',
-      body: "<p>A redistribution of records between partitions, often to place equal keys together for a join or aggregation. In MapReduce, mapper output is grouped by reducer destination and transferred to the reducers. Serialization, network traffic, and storage access can make this expensive. Other operations can also transfer data; shuffle is the redistribution step emphasized in this lecture.</p>",
+      body: "<p>A shuffle redistributes records across partitions, often to group equal keys for a join or aggregation. MapReduce groups mapper output by reducer destination and transfers it to reducers. Serialization, network traffic, and storage access can make this expensive. Other operations can also transfer data.</p>",
     },
     'skew': {
       title: 'Skew',
@@ -33,7 +33,7 @@
     },
     'actor': {
       title: 'Actor',
-      body: "<p>A Ray actor is an instance of a remote class that retains state between method calls. It can, for example, load a model once and reuse it for many requests. A normal synchronous actor processes calls serially; Ray also supports actor concurrency options. Choose tasks for independent calls and actors when persistent worker state is useful.</p>",
+      body: "<p>A Ray actor is an instance of a remote class that retains state between method calls. For example, it can load a model once for many requests. An ordinary synchronous actor processes calls serially. Ray also supports actor concurrency options. Use tasks for independent calls. Use actors when workers need persistent state.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -223,7 +223,7 @@
         mode === 'range' ? (ruleName === 'hash'
           ? 'partitions contacted: 4 of 4 — any partition may contain matching keys'
           : `partitions touched: ${active.size} of 4 — adjacent keys share range partitions`) :
-        'keys spread by ' + (ruleName === 'hash' ? 'hash — equal keys stay together; key order is not preserved' : 'first letter — ordered, uneven');
+        'keys spread by ' + (ruleName === 'hash' ? 'hash. Equal keys stay together. Key order is not preserved' : 'first letter — ordered, uneven');
     }
   }
   document.getElementById('pt-load').addEventListener('click', () => { loaded = true; mode = 'none'; render(); });

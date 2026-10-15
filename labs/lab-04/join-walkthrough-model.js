@@ -99,7 +99,7 @@
       scan.slot = -1;
       scan.row = null;
       scan.pinned = true;
-      emit('pin', side, 'Pin ' + side + '.tbl block ' + block + '; current_slot = -1 (before slot 0).');
+      emit('pin', side, 'Pin ' + side + '.tbl block ' + block + '. current_slot = -1 (before slot 0).');
     }
 
     function beforeFirst(side) {
@@ -135,12 +135,12 @@
         scan.row = found < 0 ? null : slots[found].row;
         if (found >= 0) {
           emit('table-row', side, side + '.next() → True: cursor is at block ' + scan.block + ', slot ' + found +
-            '. Fields remain in the pinned page; get_val() will read them on demand.', 'up');
+            '. Fields remain in the pinned page. get_val() reads them on request.', 'up');
           leave();
           return true;
         }
         if (scan.block === table.blocks.length - 1) {
-          emit('table-end', side, 'No later USED slot or block: ' + side + '.next() → False. current_slot = -1; the final block stays pinned.', 'up');
+          emit('table-end', side, 'No later USED slot or block: ' + side + '.next() → False. current_slot = -1. The final block stays pinned.', 'up');
           leave();
           return false;
         }
@@ -158,7 +158,7 @@
         beforeFirst('majors');
         leftReady = tableNext('students');
         if (!leftReady) {
-          emit('exhausted', 'product', 'The left side ended too. ProductScan.next() → False; no current pair remains.', 'up');
+          emit('exhausted', 'product', 'The left side ended too. ProductScan.next() → False. No current pair remains.', 'up');
           leave();
           return false;
         }
@@ -211,13 +211,13 @@
     beforeFirst('students');
     leftReady = tableNext('students');
     beforeFirst('majors');
-    emit('rewind', 'product', '_left_ready = True. Students is on ada; majors is before its first row. The first next() will advance majors.', 'up');
+    emit('rewind', 'product', '_left_ready = True. Students is on ada. Majors is before its first row. The first next() will advance majors.', 'up');
     leave(); leave(); leave(); leave();
 
     while (true) {
       state.counts.rootCalls += 1;
       enter('caller', 'plan.next()', 'Caller pull ' + state.counts.rootCalls + ': request one result from the root.');
-      enter('project', 'ProjectScan.next()', 'Projection forwards next(); it does not inspect field values.');
+      enter('project', 'ProjectScan.next()', 'Projection forwards next(). It does not inspect field values.');
       enter('select', 'SelectScan.next()', 'Selection keeps pulling candidates until both predicate terms pass.');
       var accepted = false;
       while (productNext()) {
@@ -226,7 +226,7 @@
         var mid2 = read('mid2', false);
         state.predicate.join = mid === mid2;
         emit('join-check', 'select', 'Join term: mid = mid2 → ' + mid + ' = ' + mid2 + ' is ' +
-          (state.predicate.join ? 'True. Evaluate the GPA term next.' : 'False. AND short-circuits; do not read gpa.'), 'local');
+          (state.predicate.join ? 'True. Evaluate the GPA term next.' : 'False. AND stops here. Do not read gpa.'), 'local');
         if (state.predicate.join) {
           var gpa = read('gpa', false);
           state.predicate.gpa = gpa > 35;
@@ -254,7 +254,7 @@
       var dept = read('dept', true);
       state.output.push([name, dept]);
       state.counts.outputs += 1;
-      emit('output', 'caller', 'The caller appends (' + name + ', ' + dept + '). Project exposes only these two fields; the scans still hold the matching pair.', 'up');
+      emit('output', 'caller', 'The caller appends (' + name + ', ' + dept + '). Project exposes only these two fields. The scans still hold the matching pair.', 'up');
     }
 
     enter('caller', 'plan.close()', 'The finally block closes the root after the loop ends.');
@@ -266,7 +266,7 @@
       var scan = cursor(side);
       scan.pinned = false;
       scan.row = null;
-      emit('close', side, 'Unpin ' + side + '.tbl block ' + scan.block + '; TableScan.rp = None. Closing releases a pin; it does not mean the buffer is evicted.', 'up');
+      emit('close', side, 'Unpin ' + side + '.tbl block ' + scan.block + '. TableScan.rp = None. Closing releases a pin. The buffer can stay in memory.', 'up');
       leave();
     });
     leave(); leave(); leave(); leave();

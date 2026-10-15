@@ -122,19 +122,19 @@
     var probe;
     var previous;
     var atLast;
-    emit(1, 'Enter ' + scenario.method + '(). Block ' + state.block + ' is pinned; current_slot is ' + state.currentSlot + '.');
+    emit(1, 'Enter ' + scenario.method + '(). Block ' + state.block + ' is pinned. current_slot is ' + state.currentSlot + '.');
 
     if (scenario.method === 'next') {
       probe = search(state.currentSlot, 1);
       state.currentSlot = probe.found;
       emit(2, describeSearch(probe, false), { probe: probe });
       while (true) {
-        emit(3, 'current_slot < 0 is ' + (state.currentSlot < 0 ? 'True: search another block.' : 'False: a row was found; leave the loop.'));
+        emit(3, 'current_slot < 0 is ' + (state.currentSlot < 0 ? 'True: search another block.' : 'False: a row was found. Leave the loop.'));
         if (state.currentSlot >= 0) break;
         atLast = state.block === state.blocks.length - 1;
         emit(4, '_at_last_block() is ' + (atLast ? 'True: there is no next block.' : 'False: another block exists.'));
         if (atLast) {
-          emit(5, 'Return False. No later row exists; current_slot remains -1 and the last block stays pinned.', { done: true, result: false });
+          emit(5, 'Return False. No later row exists. current_slot remains -1, and the last block stays pinned.', { done: true, result: false });
           return freeze(trace);
         }
         previous = move(state.block + 1);
@@ -149,7 +149,7 @@
       state.slot = probe.found;
       emit(2, describeSearch(probe, true), { probe: probe });
       while (true) {
-        emit(3, 'slot < 0 is ' + (state.slot < 0 ? 'True: search another block.' : 'False: a slot was reserved; leave the loop.'));
+        emit(3, 'slot < 0 is ' + (state.slot < 0 ? 'True: search another block.' : 'False: a slot was reserved. Leave the loop.'));
         if (state.slot >= 0) break;
         atLast = state.block === state.blocks.length - 1;
         emit(4, '_at_last_block() is ' + (atLast ? 'True: append a block.' : 'False: use the next existing block.'));
@@ -168,7 +168,7 @@
         emit(8, describeSearch(probe, true) + ' Starting after -1 includes slot 0.', { probe: probe });
       }
       state.currentSlot = state.slot;
-      emit(9, 'Copy slot into current_slot: the scan now points to block ' + state.block + ', slot ' + state.currentSlot + '. insert() finishes and returns None; the caller can now write the fields.', { done: true, result: 'None' });
+      emit(9, 'Copy slot into current_slot: the scan now points to block ' + state.block + ', slot ' + state.currentSlot + '. insert() finishes and returns None. The caller can now write the fields.', { done: true, result: 'None' });
     }
     return freeze(trace);
   }

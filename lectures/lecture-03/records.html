@@ -49,10 +49,10 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya saves the byte position where cyd begins, then renames ben to benjamin in a packed page. The later bytes shift. Noor taps the saved address: <q>Does this still point to cyd?</q> They try again with reserved slots so a longer name can stay inside its own row.</p>
+  <p class="lede">Maya saves the byte position where cyd begins. She then renames ben to benjamin in a packed page. The later bytes shift. Noor taps the saved address: <q>Does this still point to cyd?</q> They try again with reserved slots so a longer name can stay inside its own row.</p>
 </div>
 
-<p class="keep-in-present">The record layer locates a row’s fields within a block. A <code>Layout</code> computes field offsets, a <code>RecordPage</code> interprets one pinned block, and a <code>TableScan</code> walks occupied slots. The catalog saves the rules needed to interpret those rows after restart.</p>
+<p class="keep-in-present">The record layer locates a row’s fields within a block. A <code>Layout</code> computes field offsets. A <code>RecordPage</code> interprets one pinned block. A <code>TableScan</code> visits occupied slots. The catalog saves the rules needed to interpret those rows after restart.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6 (record management) &amp; ch. 7 (metadata)<sup class="src"><a href="#src-2" title="Database Design and Implementation: Second Edition (Google Books listing)">2</a></sup> ·
@@ -75,7 +75,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 <div class="exercise learning-check">
   <span class="ex-label">Start with what you already know</span>
   <p>In the 128-byte toy block, each student slot occupies 24 bytes and GPA begins at offset 20. Where does slot 3’s GPA begin? Would deleting slot 1 move it?</p>
-  <details><summary>Check your explanation</summary><p>Its address is 3 × 24 + 20 = 92. Deletion changes slot 1’s status flag; fixed-size slots keep slot 3 at the same position. The layout is required to interpret the bytes there.</p></details>
+  <details><summary>Check your explanation</summary><p>Its address is 3 × 24 + 20 = 92. Deletion changes slot 1’s status flag. Fixed-size slots keep slot 3 at the same position. The layout is required to interpret the bytes there.</p></details>
 </div>
 
 <p class="keep-in-present">We begin with Quiz 2 (the buffer pool, 10 min), then add the record layer that interprets cached bytes as rows and fields.</p>
@@ -92,19 +92,16 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 
 <div class="viz" id="viz-packed">
   <div class="viz-title">Lab 1's packing · four rows, end to end, no slots</div>
-  <p class="viz-description">Letters are name bytes; every other byte is shown in hex. Ints
-  are 4 bytes with the least significant byte first
-  (<a href="../lecture-01/anatomy.html#byte-order">little-endian, with Lecture 1's hex
-  table</a>), so id 1 is <code>01 00 00 00</code>, and a gpa byte like <code>27</code> reads
-  as 2×16&nbsp;+&nbsp;7&nbsp;=&nbsp;39.
-  The <span class="pk-legend-mark">outlined</span> byte is an address you saved earlier:
+  <p class="viz-description">Letters represent name bytes. All other bytes use hexadecimal notation. Integers occupy four bytes, with the least significant byte first. See <a href="../lecture-01/anatomy.html#byte-order">little-endian order and Lecture 1's hexadecimal table</a>. Thus, id 1 is <code>01 00 00 00</code>. The GPA byte <code>27</code> represents 2×16&nbsp;+&nbsp;7&nbsp;=&nbsp;39.
+  </p>
+  <p class="viz-description">The <span class="pk-legend-mark">outlined</span> byte is an address you saved earlier:
   cyd starts at byte 30.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="pk-rename">rename ben → "benjamin"</button>
     <button type="button" class="btn" id="pk-read">read the saved address (byte 30)</button>
     <button type="button" class="btn" id="pk-reset">Reset</button>
   </div>
-  <div class="qj-msg" id="pk-msg">Four rows, 60 bytes, no gaps. Read the saved address first to prove it works, then rename ben.</div>
+  <div class="qj-msg" id="pk-msg">Four rows, 60 bytes, no gaps. Read the saved address to check its initial value. Then rename ben.</div>
   <div class="pk-strip" id="pk-strip"></div>
   <div class="pk-info" id="pk-info">hover a byte to decode it · the first gpa byte carries the hex refresher</div>
   <p class="viz-caption">Highlighted bytes have changed or moved. After the rename, saved positions for later data are no longer correct. With no row directory, locating <code>cyd</code> again requires parsing the preceding rows. The fixed-size layout introduced below avoids shifting neighboring rows.</p>
@@ -116,8 +113,8 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
   <thead><tr><th>Operation</th><th>Packed (Lab 1 style)</th><th>What breaks</th></tr></thead>
   <tbody>
     <tr><td>Update <code>ben → benjamin</code></td><td>shift cyd, dee… 5 bytes right</td><td>later data must move to make room, invalidating saved byte positions</td></tr>
-    <tr><td>Delete ada</td><td>either shift everything left, or leave a 15-byte hole no one tracks</td><td>shifting invalidates saved positions; leaving a hole requires a way to record and reuse the free space</td></tr>
-    <tr><td>Find row #4</td><td>walk from byte 0, parsing every record on the way</td><td>the cost of reaching a row grows with its row number: there is no way to know where row 4 starts without reading rows 1 to 3 first</td></tr>
+    <tr><td>Delete ada</td><td>either shift everything left, or leave a 15-byte hole no one tracks</td><td>Shifting invalidates saved positions. Retaining a hole requires a way to record and reuse free space.</td></tr>
+    <tr><td>Find row #4</td><td>walk from byte 0, parsing every record on the way</td><td>Finding row 4 requires reading rows 1 to 3 first. The work increases with the row number.</td></tr>
   </tbody>
 </table>
 
@@ -129,7 +126,7 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
   <thead><tr><th>Operation</th><th>Slotted answer</th><th>Cost</th></tr></thead>
   <tbody>
     <tr><td>Find slot <em>k</em></td><td>seek to <code>k × slot_size</code></td><td>\(O(1)\), no parsing</td></tr>
-    <tr><td>Update a field</td><td>overwrite in place; capacity was pre-reserved</td><td>\(O(1)\), nothing moves</td></tr>
+    <tr><td>Update a field</td><td>overwrite within the reserved capacity</td><td>\(O(1)\), nothing moves</td></tr>
     <tr><td>Delete a row</td><td>set the slot’s <span class="gloss" data-gloss="tombstone">deletion marker</span></td><td>\(O(1)\), nothing moves</td></tr>
   </tbody>
 </table>
@@ -147,13 +144,12 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
 <!-- ============================================================ -->
 <h2 id="try-it">Fixed-size slots keep neighboring rows in place</h2>
 
-<p>This 128-byte demonstration block holds five 24-byte student slots. Each slot contains <code>[flag][id][name][gpa]</code>. Insert, delete, and rename rows to see which bytes change and which remain at the same positions.</p>
+<p>This 128-byte demonstration block holds five 24-byte student slots. Each slot contains <code>[flag][id][name][gpa]</code>. Insert a row. Delete a row. Rename a row. After each operation, compare the changed bytes with the bytes that retain their positions.</p>
 
 <div class="viz" id="viz-recpage">
   <div class="viz-title">A record page, slot by slot · students(id int, name varchar(8), gpa int)</div>
   <p class="viz-description">Each row is one slot: the <span class="hexlegend len">flag</span>
-  (green, 4 bytes) then <span class="hexlegend int">fields</span> at computed offsets. Click a
-  slot to select it; hover any segment to see its byte arithmetic.</p>
+  (green, 4 bytes) then <span class="hexlegend int">fields</span> at computed offsets. Click a slot to select it. Hover over a segment to see its byte arithmetic.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="rp-insert">insert next student</button>
     <button type="button" class="btn" id="rp-delete">delete selected</button>
@@ -163,7 +159,7 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
   </div>
   <div class="qj-msg" id="rp-msg">A fresh block is all zeros: five EMPTY slots in this widget. Insert the first student.</div>
   <div class="rp-slots" id="rp-slots"></div>
-  <p class="viz-caption">Delete ada, then insert a row to reuse her slot. Rename ben to benjamin: its eight ASCII characters occupy eight UTF-8 bytes, so it fits. Bartholomew exceeds that capacity and is rejected. Other slots keep their positions throughout.</p>
+  <p class="viz-caption">Delete ada. Then insert a row to reuse her slot. Rename ben to benjamin: its eight ASCII characters occupy eight UTF-8 bytes, so it fits. Bartholomew exceeds that capacity and is rejected. Other slots keep their positions throughout.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="Nothing moves">Calculate an address from the slot number and field offset</h3>
@@ -181,7 +177,7 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
 <!-- ============================================================ -->
 <h2 id="layout">Compute field offsets from the schema</h2>
 
-<p class="keep-in-present">Think of a tray with equally sized compartments. A slot reserves one compartment, and field offsets locate items inside it. Map compartment number to slot number and the tray to a block. The actual capacity is measured in bytes, including string length prefixes; a character count alone is insufficient.</p>
+<p class="keep-in-present">Think of a tray with equally sized compartments. A slot reserves one compartment, and field offsets locate items inside it. Map compartment number to slot number and the tray to a block. Actual capacity is measured in bytes, including string length prefixes. A character count alone is insufficient.</p>
 
 <pre><code class="language-sql">CREATE TABLE students (
     id    INT,
@@ -191,7 +187,7 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
 
 <p>In microdb, an <code>INT</code> always occupies four bytes. A <code>VARCHAR</code> field also needs a declared byte capacity so the layout can reserve a fixed amount of space. The declaration above reserves eight bytes for each name’s contents.</p>
 
-<p>To read GPA in slot 3, the engine computes <code>3 × slot_size + offset(gpa)</code>. That works because every slot uses the same field offsets. The name field reserves twelve bytes: four for its length and eight for its contents. GPA therefore begins at offset 20 whether the name is ada or benjamin. This reservation is a microdb design choice; production SQL engines can use variable-length layouts.</p>
+<p>To read GPA in slot 3, the engine computes <code>3 × slot_size + offset(gpa)</code>. That works because every slot uses the same field offsets. The name field reserves twelve bytes: four for its length and eight for its contents. GPA therefore begins at offset 20 whether the name is ada or benjamin. This reservation is a microdb design choice. Production SQL engines can use variable-length layouts.</p>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · drop the 8</span>
@@ -202,13 +198,13 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
   </details>
 </div>
 
-<h3 class="new-slide" data-kicker="Fixed offsets">Schema records field types; Layout calculates positions</h3>
+<h3 class="new-slide" data-kicker="Fixed offsets">Schema records field types. Layout calculates positions.</h3>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="schema" data-step-name="Schema" data-explain="Pure description: field names, types, varchar capacities. No bytes, no offsets; schemas are what users declare.">schema = Schema().add_int_field("id").add_string_field("name", 8).add_int_field("gpa")</div>
-  <div class="code-step" data-step="layout" data-step-name="Layout" data-explain="Walk the schema in field order, starting after the four-byte flag. Record each field offset and add its width to the running position. The final position is the slot size.">layout = Layout(schema)              # computes offsets + slot_size</div>
+  <div class="code-step" data-step="schema" data-step-name="Schema" data-explain="A schema describes field names, types, and varchar capacities. Users declare schemas. A schema does not contain field bytes or offsets.">schema = Schema().add_int_field("id").add_string_field("name", 8).add_int_field("gpa")</div>
+  <div class="code-step" data-step="layout" data-step-name="Layout" data-explain="Walk the schema in field order, starting after the four-byte flag. Record each field offset. Add the field width to the current position. The final position is the slot size.">layout = Layout(schema)              # computes offsets + slot_size</div>
   <div class="code-step" data-step="use" data-step-name="the payoff" data-explain="RecordPage and the catalog use Layout for field offsets and slot size. Centralizing those calculations keeps the record methods consistent.">layout.offset("gpa")   # 20          layout.slot_size   # 24</div>
-  <div class="code-explain-panel">Hover or tap a line. Schema describes the fields; Layout computes their byte positions.</div>
+  <div class="code-explain-panel">Hover or tap a line. Schema describes the fields. Layout computes their byte positions.</div>
 </div>
 
 <h3 class="new-slide" data-kicker="Fixed offsets">A flag and three fields occupy 24 bytes per student</h3>
@@ -216,20 +212,19 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
 <table>
   <thead><tr><th>Bytes</th><th>Holds</th><th>Why there</th></tr></thead>
   <tbody>
-    <tr><td><code>0–3</code></td><td>in-use flag (0 empty / 1 used)</td><td>every slot needs a marker saying whether it holds a live row, so that deleting a row can be a single write to this flag (see the flag lifecycle below)</td></tr>
+    <tr><td><code>0–3</code></td><td>in-use flag (0 empty / 1 used)</td><td>The flag identifies whether the slot contains a live row. Deletion requires one write to this flag. See the flag states below.</td></tr>
     <tr><td><code>4–7</code></td><td><code>id</code> (int)</td><td>the first field in the schema goes right after the flag, so its offset is 4</td></tr>
-    <tr><td><code>8–19</code></td><td><code>name</code> (4-byte len + 8 capacity)</td><td>4 bytes record the actual length, then 8 bytes are reserved for the <em>longest</em> allowed name; the field takes 12 bytes no matter how short the name is</td></tr>
+    <tr><td><code>8–19</code></td><td><code>name</code> (4-byte len + 8 capacity)</td><td>Four bytes record the actual length. Eight bytes reserve capacity for the <em>longest</em> permitted name. The field always occupies 12 bytes.</td></tr>
     <tr><td><code>20–23</code></td><td><code>gpa</code> (int)</td><td>name starts at 8 and takes 12 bytes, so the next field starts at 8 + 12 = 20</td></tr>
   </tbody>
 </table>
 
-<p class="key-fact keep-in-present">A 4096-byte block holds 170 complete 24-byte slots, leaving 16 unused bytes. In Lab 3, compute this capacity for three schemas and check it against the stored files.</p>
+<p class="key-fact keep-in-present">A 4096-byte block holds 170 complete 24-byte slots, leaving 16 unused bytes. In Lab 3, compute this capacity for three schemas. Check each result against the stored files.</p>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · a fresh schema</span>
-  <p>Run the same arithmetic on <code>courses(cid int, title varchar(12), credits int)</code>:
-  the offset of each field, the slot size, and rows per 4&nbsp;KB block. (Same rules: 4-byte
-  flag first, ints are 4 bytes, a varchar reserves 4&nbsp;+&nbsp;capacity.)</p>
+  <p>Use <code>courses(cid int, title varchar(12), credits int)</code> for another calculation. Calculate each field offset. Calculate the slot size. Calculate the rows per 4&nbsp;KB block.</p>
+  <p>The flag occupies the first four bytes. Integers occupy four bytes. Each varchar reserves 4&nbsp;+&nbsp;capacity bytes.</p>
   <details><summary>Show answer</summary>
   <p>Offsets: <code>cid</code> at 4, <code>title</code> at 8, and <code>credits</code> at <code>8 + (4 + 12) = 24</code>. The slot size is <code>4 + 4 + 16 + 4 = 28</code> bytes. A 4096-byte block holds ⌊4096 / 28⌋ = 146 slots, with 8 bytes left over. A result of 170 means you omitted the four-byte flag.</p>
   </details>
@@ -262,8 +257,8 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
 <h3 class="new-slide" data-kicker="Fixed offsets">A null bitmap records which fields have no value</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">microdb</span><span>has no NULL at all: every field always holds a value (0 for an int, "" for a string). That is acceptable for a teaching engine, but real data has missing values, and "missing" is not the same as 0 or "".</span></div>
-  <div class="lc-row"><span class="lc-k">Real engines</span><span>Many engines use a null bitmap to record which fields have no value. PostgreSQL stores one bit per column when the bitmap is present, plus layout and alignment overhead; a null field has no ordinary stored value.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">microdb</span><span>microdb has no NULL. Every field holds a value, initially 0 for an integer or "" for a string. Real datasets can contain missing values. A missing value differs from 0 or "".</span></div>
+  <div class="lc-row"><span class="lc-k">Real engines</span><span>Many engines use a null bitmap to record which fields have no value. When a null bitmap is present, PostgreSQL stores one bit per column, plus layout and alignment overhead. A null field has no ordinary stored value.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">The DS connection</span><span><code>NULL</code> represents a missing or unknown value. It differs from an integer zero or an empty string, which are present values with their own meanings.<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 9.2. Comparison Functions and Operators">5</a></sup></span></div>
 </div>
 
@@ -275,24 +270,19 @@ UPDATE students SET name = 'benjamin' WHERE id = 2;   -- 8 chars: fits, overwrit
 <p>Reserving the maximum size in every row becomes impractical for large values such as a two-megabyte essay. PostgreSQL can compress such values and store them separately, leaving a small reference in the main row.</p>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The problem</span><span>a 2&nbsp;MB essay can't reserve worst-case capacity in every slot; reservation only works when maxima are modest.</span></div>
+  <div class="lc-row"><span class="lc-k">The problem</span><span>Reserving space for a 2&nbsp;MB essay in every slot would waste substantial space. Fixed reservations suit modest maximum sizes.</span></div>
   <div class="lc-row"><span class="lc-k">Postgres's answer</span><span>TOAST can compress values or store them in a side table. An external value leaves an 18-byte reference in the main tuple. PostgreSQL’s tuples still have variable lengths.<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">The pattern</span><span>reserve fixed space when the maximum is modest, and store a small pointer to data kept elsewhere when it is not; the same trick appears again in column stores (week 10) and vector storage (week 11).</span></div>
+  <div class="lc-row"><span class="lc-k">The pattern</span><span>Reserve fixed space when the maximum value is small. For larger values, store a small reference to external data. Column stores (week 10) and vector storage (week 11) also use this approach.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="TOAST">Follow an essay from inline to external storage</h3>
 
-<p>Give the students table an <code>essay TEXT</code> column and grow ada's essay. Postgres
-leaves a value alone until the row passes about 2&nbsp;KB, then compresses it in place, and
-only when the row is still too wide moves the value into the table's <code>pg_toast</code>
-side table, split into chunks of about 2,000 bytes, four to a page, found again through a
-unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>.</p>
+<p>Add an <code>essay TEXT</code> column to the students table. Increase the size of ada's essay. </p>
+<p>PostgreSQL leaves the value unchanged until the row exceeds about 2&nbsp;KB. It then tries compression within the row. If the row remains too large, it moves the value to the table's <code>pg_toast</code> side table. The value occupies chunks of about 2,000 bytes, with four chunks per page. A unique index on (chunk_id, chunk_seq) locates these chunks<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>.</p>
 
 <div class="viz" id="viz-toast">
   <div class="viz-title">TOAST · students(id, name, gpa, essay TEXT) · one heap slot and its side table</div>
-  <p class="viz-description">Pick an essay size and watch the storage decision run: inline if
-  the row fits, compressed if that is enough, out to the side table if not. Then run the two
-  queries and count the blocks each one reads.</p>
+  <p class="viz-description">Select an essay size. Observe the storage decision: inline, compressed inline, or external. External storage is needed when compression cannot make the row fit. Run each query. Count the blocks that each query reads.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="to-s0">150 B note</button>
     <button type="button" class="btn" id="to-s1">3 KB one-pager</button>
@@ -309,11 +299,8 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
     <button type="button" class="btn" id="to-qessay">SELECT essay FROM students</button>
   </div>
   <div class="qj-msg" id="to-msg">Start small: the 150 B note stores like any other field. Then grow it.</div>
-  <p class="viz-caption">The 2&nbsp;KB threshold, the ~2,000-byte chunks (four to a page), and
-  the 18-byte pointer are Postgres's real figures<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>;
-  the 3× compression ratio here is a representative figure for English prose, not a measured
-  one. Green marks what a query reads, warm marks the side table. The essay comes back only
-  when a query actually selects it: <code>SELECT name</code> never touches the side table.</p>
+  <p class="viz-caption">PostgreSQL uses the 2&nbsp;KB threshold, ~2,000-byte chunks (four per page), and an 18-byte pointer<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>. The example assumes a 3× compression ratio for English prose. This ratio is illustrative, not measured.</p>
+  <p class="viz-caption">Green marks the data that a query reads. The warm color marks the side table. A query retrieves the essay only when needed. <code>SELECT name</code> does not read the side table.</p>
 </div>
 
 <p class="keep-in-present">An externally stored PostgreSQL value is represented by an 18-byte reference in the main row. This keeps the main row smaller while allowing a value of up to about 1&nbsp;GB. PostgreSQL’s variable-length tuple layout differs from microdb’s fixed-size slots<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: 66.2. TOAST">6</a></sup>.</p>
@@ -324,16 +311,16 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 <p><code>RecordPage</code> combines a pinned block from the buffer pool with the table’s <code>Layout</code>. It reads and writes field values by calculating their byte addresses within that block. Its methods also find empty or occupied slots and change their status flags.</p>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">What it is</span><span>a wrapper around ONE pinned block plus the table's Layout, turning offset arithmetic into row operations: "the gpa of slot 3 is at byte 3 × 24 + 20 = 92" becomes <code>rp.get_int(3, "gpa")</code>.</span></div>
+  <div class="lc-row"><span class="lc-k">What it is</span><span>RecordPage combines one pinned block with the table's Layout. It translates <code>rp.get_int(3, "gpa")</code> into a read at byte 3 × 24 + 20 = 92.</span></div>
   <div class="lc-row"><span class="lc-k">Job</span><span>All record operations within ONE block: read/write a field of slot k, find free slots, flip flags.</span></div>
-  <div class="lc-row"><span class="lc-k">Runs on</span><span>your Lab 2 pool: it <strong>pins its block on construction and unpins on close()</strong>. This is the pin/unpin contract from week 2, now used by real code: while a RecordPage is working on a block, the pool cannot evict it.</span></div>
+  <div class="lc-row"><span class="lc-k">Runs on</span><span>your Lab 2 pool: it <strong>pins its block on construction and unpins on close()</strong>. This follows the week 2 pin/unpin contract. The pool cannot evict a block while RecordPage holds its pin.</span></div>
   <div class="lc-row"><span class="lc-k">Key methods</span><span><code>get/set_int</code>, <code>get/set_string</code> (arithmetic + Lab 1 page calls), <code>insert_after</code> / <code>next_after</code> (find EMPTY / find USED), <code>delete</code> (flip to EMPTY).</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="One pinned block">Mark changed pages dirty so the buffer manager writes them</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">One rule</span><span>every write ends with <code>set_modified()</code>, which marks the buffer dirty. Skip it and the pool believes the frame is unchanged, evicts it without writing it to disk, and the write is lost.</span></div>
+  <div class="lc-row"><span class="lc-k">One rule</span><span>End every write with <code>set_modified()</code> to mark the buffer dirty. Without this call, the pool treats the page as unchanged. Eviction can then discard the update without writing it to disk.</span></div>
 </div>
 
 <h3 class="new-slide" data-kicker="One pinned block">One flag per slot tracks EMPTY and USED</h3>
@@ -341,10 +328,10 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 <table>
   <thead><tr><th>State</th><th>Flag</th><th>Field bytes hold</th><th>Operation</th></tr></thead>
   <tbody>
-    <tr><td>Fresh block</td><td>0 (EMPTY)</td><td>all zeros: <code>append</code> hands you a zeroed block, and 0 is the EMPTY flag, so a fresh block is already a valid page of empty slots with no setup</td><td>nobody; the zero-fill does it</td></tr>
-    <tr><td>After <code>insert_after</code></td><td>1 (USED)</td><td>whatever bytes were in the slot before; the caller must write every field next</td><td><code>insert_after</code> writes 1 to the flag, then the caller sets the fields</td></tr>
-    <tr><td>After <code>delete</code></td><td>0 (EMPTY)</td><td><strong>the old data, untouched</strong>; only the flag changed</td><td><code>delete</code> writes 0 to the flag and touches nothing else</td></tr>
-    <tr><td>After re-insert</td><td>1 (USED)</td><td>the previous row's bytes, until the caller overwrites them; this is why insert marks the slot first and the caller writes the fields second</td><td><code>insert_after</code> finds the EMPTY slot and reuses it</td></tr>
+    <tr><td>Fresh block</td><td>0 (EMPTY)</td><td><code>append</code> returns a zeroed block. Zero is the EMPTY flag. The block therefore contains valid empty slots without further setup.</td><td>the initial zero-fill</td></tr>
+    <tr><td>After <code>insert_after</code></td><td>1 (USED)</td><td>previous slot contents. The caller must then write every field.</td><td><code>insert_after</code> writes 1 to the flag, then the caller sets the fields</td></tr>
+    <tr><td>After <code>delete</code></td><td>0 (EMPTY)</td><td><strong>the old data, unchanged</strong>. Only the flag changes.</td><td><code>delete</code> writes 0 to the flag and touches nothing else</td></tr>
+    <tr><td>After re-insert</td><td>1 (USED)</td><td>the previous row's bytes until the caller replaces them. Insertion marks the slot first. The caller then writes every field.</td><td><code>insert_after</code> finds the EMPTY slot and reuses it</td></tr>
   </tbody>
 </table>
 
@@ -355,14 +342,14 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 <!-- ============================================================ -->
 <h2 id="tablescan">Scan a table one block at a time</h2>
 
-<p><code>RecordPage</code> finds occupied slots within one block. <code>TableScan</code> extends that search across the file: when a block has no more occupied slots, it releases that block, opens the next one, and continues. The scan ends only after it exhausts the last block.</p>
+<p><code>RecordPage</code> finds occupied slots within one block. <code>TableScan</code> extends the search across the file. After the last occupied slot in a block, it releases that block. It opens the next block and continues searching. The scan ends only after it exhausts the last block.</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="ask" data-step-name="ask this block" data-explain="next_after scans flags forward within the pinned block; the common case costs a few flag reads and no I/O at all.">slot = rp.next_after(current_slot)         # next USED slot here?</div>
-  <div class="code-step" data-step="cross" data-step-name="cross the boundary" data-explain="-1 means this block is exhausted. If it was the last block, the scan is over. Otherwise: unpin this block, pin the next (that's what _move_to_block does), and ask again from the top.">while slot == -1:                          # exhausted this block</div>
+  <div class="code-step" data-step="ask" data-step-name="ask this block" data-explain="next_after scans flags forward within the pinned block. This normally requires a few flag reads without additional I/O.">slot = rp.next_after(current_slot)         # next USED slot here?</div>
+  <div class="code-step" data-step="cross" data-step-name="cross the boundary" data-explain="-1 means that no occupied slots remain in this block. If this is the last block, end the scan. Otherwise, unpin this block. Pin the next block through _move_to_block. Search that block from its beginning.">while slot == -1:                          # exhausted this block</div>
   <div class="code-step" data-step="cross" data-explain="Return False after reaching the last block. Further calls must remain exhausted until before_first() rewinds the scan.">    if at_last_block: return False</div>
-  <div class="code-step" data-step="cross" data-explain="The unpin-then-pin handoff. One block pinned at a time: a terabyte table scans through one frame.">    move_to_block(next); slot = rp.next_after(-1)</div>
-  <div class="code-step" data-step="done" data-step-name="positioned" data-explain="The slot now contains a live row. Save that position and return True so the caller can read its fields.">current_slot = slot; return True</div>
+  <div class="code-step" data-step="cross" data-explain="Unpin the old block before pinning the next block. The scan holds one pin at a time, regardless of table size.">    move_to_block(next); slot = rp.next_after(-1)</div>
+  <div class="code-step" data-step="done" data-step-name="positioned" data-explain="The slot now contains a live row. Save that position. Return True so the caller can read its fields.">current_slot = slot; return True</div>
   <div class="code-explain-panel">Hover a line to follow the scan’s transition from one block to the next.</div>
 </div>
 
@@ -431,7 +418,7 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
   <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
   <tbody>
     <tr><td><code>record_manager.py</code></td><td>Schema, pin and flag helpers, and TableScan helpers for changing blocks</td><td>Layout's offset walk · RecordPage field get/set + insert_after/next_after/delete · TableScan next() + insert()</td></tr>
-    <tr><td><code>catalog.py</code></td><td>complete; uses your RecordPage and TableScan</td><td>&nbsp;</td></tr>
+    <tr><td><code>catalog.py</code></td><td>complete. Uses your RecordPage and TableScan.</td><td>&nbsp;</td></tr>
     <tr><td><code>file_manager.py</code> / <code>buffer_manager.py</code></td><td>reference Labs 1–2</td><td>&nbsp;</td></tr>
   </tbody>
 </table>
@@ -439,16 +426,16 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 <h3 class="new-slide" data-kicker="On Thursday you build it">Implement layout calculations, slot operations, and scan loops</h3>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="lay" data-step-name="Layout walk" data-explain="Walk schema.fields() once. Start at byte 4 after the flag, advance four bytes for each integer, and advance 4+n for varchar(n). The first harness test checks the resulting offsets.">Layout.__init__          # offsets: id→4, name→8, gpa→20 · slot_size 24</div>
-  <div class="code-step" data-step="rp" data-step-name="RecordPage ops" data-explain="Calculate slot*slot_size + offset(fld). Read or write through the Page methods, reject oversized strings, and mark each write dirty. insert_after and next_after scan status flags; delete sets the flag to EMPTY.">RecordPage               # field get/set · insert_after / next_after / delete</div>
-  <div class="code-step" data-step="ts" data-step-name="TableScan loops" data-explain="next(): the annotated loop from today, verbatim. insert(): reuse a tombstone or append a zeroed block. The block-hopping and pin discipline are provided helpers; you write the two loops.">TableScan.next / insert  # cross blocks · grow the file · one pin at a time</div>
-  <div class="code-explain-panel">Hover a line for the plan of attack.</div>
+  <div class="code-step" data-step="lay" data-step-name="Layout walk" data-explain="Walk schema.fields() once. Start at byte 4, after the flag. Advance four bytes for each integer. Advance 4+n bytes for varchar(n). The first harness test checks the resulting offsets.">Layout.__init__          # offsets: id→4, name→8, gpa→20 · slot_size 24</div>
+  <div class="code-step" data-step="rp" data-step-name="RecordPage ops" data-explain="Calculate slot*slot_size + offset(fld). Read or write through the Page methods. Reject oversized strings. Mark each write dirty. insert_after and next_after scan status flags. delete sets the flag to EMPTY.">RecordPage               # field get/set · insert_after / next_after / delete</div>
+  <div class="code-step" data-step="ts" data-step-name="TableScan loops" data-explain="Implement next() with the annotated loop above. Implement insert() to reuse an empty slot or append a zeroed block. Provided helpers handle block changes and pins. You write the two loops.">TableScan.next / insert  # cross blocks · grow the file · one pin at a time</div>
+  <div class="code-explain-panel">Hover over a line to see its implementation steps.</div>
 </div>
 
 <h3 class="new-slide" data-kicker="On Thursday you build it">Before class checklist</h3>
 
 <ul class="checklist">
-  <li>☐ Lab 2 submitted: Lab 3 ships reference Labs 1 <em>and</em> 2; the cumulative chain is now three layers tall.</li>
+  <li>☐ Submit Lab 2. Lab 3 includes reference implementations of Labs 1 <em>and</em> 2. The combined starter contains three layers.</li>
   <li>☐ Download all six starter files from the Lab 3 page (two of them are the reference lower layers).</li>
   <li>☐ Harness runs: <code>python3 test_records.py</code> prints <strong>0/12 passed</strong>, correct starting state.</li>
   <li>☐ Calculate the field offsets and slot size for <code>course(dept varchar(4), num int, credits int)</code> on paper. Use the result to check your <code>Layout</code> implementation.</li>
@@ -460,22 +447,21 @@ unique index on (chunk_id, chunk_seq)<sup class="src"><a href="#src-6" title="Po
 <div class="exercise learning-check">
   <span class="ex-label">Explain it to a teammate</span>
   <p>A row is deleted at RID (0, 1), and another row reuses that slot. Has the address changed? Does it still identify the original student?</p>
-  <details><summary>Check your explanation</summary><p>The physical address is unchanged, but its occupant can change. A RID names a block and slot while a row lives there; a student ID provides a different identity. Keep index entries consistent when rows are deleted or moved.</p></details>
+  <details><summary>Check your explanation</summary><p>The physical address is unchanged, but its occupant can change. A RID identifies the block and slot that hold a row. A student ID identifies the student. Keep index entries consistent when rows are deleted or moved.</p></details>
 </div>
 
-<p class="keep-in-present">Return to the saved address. Fixed slots locate a row; the layout locates its fields; the scan skips empty slots; the catalog preserves the interpretation rules. Stable byte positions do not make a RID a permanent identity.</p>
+<p class="keep-in-present">Return to the saved address. Fixed slots locate a row. The layout locates its fields. The scan skips empty slots. The catalog stores the rules for interpreting those bytes. Stable byte positions do not make a RID a permanent identity.</p>
 
 <p>Four points to remember:</p>
 
 <ul class="recap-list">
   <li><strong>Fixed-size slots make addresses predictable.</strong> The cost is unused reserved space, and values that exceed their field capacity must be rejected.</li>
-  <li><strong>Deletion changes a slot’s flag; live-row addresses stay stable.</strong> A deleted slot can be reused for another row, so indexes must be updated when rows are deleted or replaced.</li>
+  <li><strong>Deletion changes a slot’s flag. Live-row addresses stay fixed.</strong> A deleted slot can be reused for another row, so indexes must be updated when rows are deleted or replaced.</li>
   <li><strong>Large values can be stored separately.</strong> PostgreSQL can compress a large value or move it to TOAST storage, leaving a reference in the main row.</li>
   <li><strong>The catalog stores schemas as data.</strong> Its own layouts are defined in code so the engine can open it without first looking up those layouts.</li>
 </ul>
 
-<p class="key-fact keep-in-present"><strong>170</strong> students per 4&nbsp;KB block at 24 bytes a slot ·
-<strong>59 vs 527</strong> blocks for the same 10,000 rows, decided by the varchar capacity alone</p>
+<p class="key-fact keep-in-present"><strong>170</strong> students per 4&nbsp;KB block at 24 bytes per slot. <strong>59 vs 527</strong> blocks for the same 10,000 rows, depending on varchar capacity.</p>
 
 <p class="keep-in-present"><strong>Thursday:</strong> build the record layer (three-layer
 cumulative starter). <strong>Next Tuesday:</strong> the iterator model: Select, Project, and
@@ -492,18 +478,16 @@ Join stack on your TableScan. Quiz 3 opens class: records &amp; the catalog.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3>Why 4 whole bytes for a flag that stores 0 or 1?</h3>
-<p class="keep-in-present">Simplicity: microdb's Page reads and writes whole 4-byte ints, so the flag is stored as an int. Real engines pack
-flags, null bitmaps, and bookkeeping into a per-page header plus a compact <span class="gloss" data-gloss="slot-directory">slot directory</span><sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>;
-the same idea with less waste. (Postgres spends ~23 bytes per <em>row</em> on headers, so our 4 bytes is modest by comparison<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.)</p>
+<p class="keep-in-present">microdb uses an integer flag because Page already reads and writes four-byte integers. Production engines combine flags, null bitmaps, and metadata in page headers and a compact <span class="gloss" data-gloss="slot-directory">slot directory</span><sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>. This reduces space for some metadata. PostgreSQL also uses about 23 header bytes per <em>row</em>, compared with microdb’s four-byte flag<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.</p>
 
-<h3>Isn't reserving max capacity for every varchar wasteful?</h3>
-<p class="keep-in-present">Yes. Reserving the full capacity makes microdb’s field offsets constant and allows in-place updates within that capacity. PostgreSQL stores variable-length tuples and uses a slot directory to locate them; TOAST handles large values. These designs make different tradeoffs among space use, addressing, and update work<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.</p>
+<h3>Does reserving maximum capacity for every varchar waste space?</h3>
+<p class="keep-in-present">Yes. Reserving the full capacity makes microdb’s field offsets constant and allows in-place updates within that capacity. PostgreSQL stores variable-length tuples and uses a slot directory to locate them. TOAST handles large values. These designs make different tradeoffs among space use, addressing, and update work<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 66.6. Database Page Layout">4</a></sup>.</p>
 
 <h3>What if a table needs more rows than one file can hold?</h3>
 <p class="keep-in-present">microdb uses one file per table and does not need to split files at the lab’s scale. PostgreSQL splits a large table into segment files, normally 1&nbsp;GB each. Its storage layer translates logical block numbers into the appropriate segment and position<sup class="src"><a href="#src-13" title="PostgreSQL Documentation: 66.1. Database File Layout">13</a></sup>.</p>
 
 <h3>Does the catalog slow everything down? Every query needs layouts!</h3>
-<p class="keep-in-present">Catalog lookups have a cost. Production engines cache metadata; PostgreSQL’s relcache is one example. microdb scans the catalog for each <code>get_layout</code> call to keep the implementation simple. If the catalog blocks remain in the buffer pool, those scans avoid additional disk reads<sup class="src"><a href="#src-14" title="Postgres: caches and invalidation (Amit Langote, PostgreSQL committer)">14</a></sup>.</p>
+<p class="keep-in-present">Catalog lookups have a cost. Production engines cache metadata. PostgreSQL’s relcache is one example. microdb scans the catalog for each <code>get_layout</code> call to keep the implementation simple. If the catalog blocks remain in the buffer pool, those scans avoid additional disk reads<sup class="src"><a href="#src-14" title="Postgres: caches and invalidation (Amit Langote, PostgreSQL committer)">14</a></sup>.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -522,9 +506,9 @@ document that supports the claim it is attached to.</p>
   <li id="src-6"><a href="https://www.postgresql.org/docs/current/storage-toast.html">PostgreSQL Documentation: 66.2. TOAST</a></li>
   <li id="src-7"><a href="http://cidrdb.org/cidr2017/papers/p128-wagner-cidr17.pdf">Database Forensic Analysis with DBCarver (Wagner et al., CIDR 2017)</a></li>
   <li id="src-8"><a href="https://www.postgresql.org/docs/current/routine-vacuuming.html">PostgreSQL Documentation: 24.1. Routine Vacuuming</a></li>
-  <li id="src-9"><a href="https://www.postgresql.org/docs/current/datatype-oid.html">PostgreSQL Documentation: 8.19. Object Identifier Types (tid)</a> <span class="src-note">PostgreSQL's ctid is exactly a (block number, tuple index) pair, but because of MVCC an UPDATE writes a new row version with a new ctid, so in Postgres updates do move the address; the stability claim holds for microdb's in-place layout, not for Postgres.</span></li>
+  <li id="src-9"><a href="https://www.postgresql.org/docs/current/datatype-oid.html">PostgreSQL Documentation: 8.19. Object Identifier Types (tid)</a> <span class="src-note">PostgreSQL's ctid is a (block number, tuple index) pair. Under MVCC, UPDATE creates a row version with a new ctid. An update can therefore change the address. The stable-address claim applies to microdb's in-place layout.</span></li>
   <li id="src-10"><a href="https://www.postgresql.org/docs/current/indexam.html">PostgreSQL Documentation: 64.1. Basic API Structure for Indexes</a></li>
-  <li id="src-11"><a href="https://www.postgresql.org/docs/current/catalog-pg-attribute.html">PostgreSQL Documentation: 52.7. pg_attribute</a> <span class="src-note">pg_attribute has exactly one row per column of every table; pg_class has one row per relation, which includes indexes, sequences, views, materialized views, composite types and TOAST tables, not only tables; psql's -E / --echo-hidden option echoes the actual catalog queries \d generates.</span></li>
+  <li id="src-11"><a href="https://www.postgresql.org/docs/current/catalog-pg-attribute.html">PostgreSQL Documentation: 52.7. pg_attribute</a> <span class="src-note">pg_attribute has one row per table column. pg_class has one row per relation. Relations include tables, indexes, sequences, views, materialized views, composite types, and TOAST tables. psql's -E / --echo-hidden option displays the catalog queries generated by \d.</span></li>
   <li id="src-12"><a href="https://www.postgresql.org/docs/current/catalog-pg-class.html">PostgreSQL Documentation: 52.11. pg_class</a></li>
   <li id="src-13"><a href="https://www.postgresql.org/docs/current/storage-file-layout.html">PostgreSQL Documentation: 66.1. Database File Layout</a></li>
   <li id="src-14"><a href="https://amitlan.com/2019/06/14/caches-inval.html">Postgres: caches and invalidation (Amit Langote, PostgreSQL committer)</a></li>
@@ -536,7 +520,7 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=6"></script>
+<script src="viz.js?v=ste-20261015"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>

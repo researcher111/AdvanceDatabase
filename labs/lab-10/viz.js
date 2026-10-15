@@ -9,7 +9,7 @@
     },
     'eval-set': {
       title: 'Eval set',
-      body: "<p>Questions paired with labels identifying relevant documents or passages. The lab supplies 12 questions in corpus.py. Run each configuration against the same labels to compare hit@k and MRR. Generated answers need separate evaluation; retrieval metrics alone do not measure answer correctness.</p>",
+      body: "<p>Questions paired with labels identifying relevant documents or passages. The lab supplies 12 questions in corpus.py. Run each configuration against the same labels to compare hit@k and MRR. Generated answers need separate evaluation. Retrieval metrics alone do not measure answer correctness.</p>",
     },
     'hashing-trick': {
       title: 'The hashing trick',
@@ -21,7 +21,7 @@
     },
     'mrr': {
       title: 'MRR (mean reciprocal rank)',
-      body: "<p>Find the first relevant result for each question and score it as 1 divided by its rank: 1 for rank 1, 0.5 for rank 2, and so on. Give the question zero if no relevant result appears within the cutoff. MRR averages these scores, so finding the right source earlier earns more credit.</p>",
+      body: "<p>Find the first relevant result for each question. Divide 1 by its rank: rank 1 gives 1, and rank 2 gives 0.5. Give the question zero if no relevant result appears within the cutoff. MRR is the mean of these scores. Finding the relevant source earlier gives a higher score.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -175,10 +175,10 @@ const RAG_DATA = window.CourseRagMeasurements.preview;
     val.textContent = row.dim;
     out.innerHTML = bar('hit@3', row.hit3, 'recall') + bar('MRR@3', row.mrr, 'work') +
       '<div class="dl-row"><span></span><span style="font-family:var(--sans);font-size:12px;color:var(--ink-mute)">' +
-      (row.dim <= 128 ? 'many distinct terms share ' + row.dim + ' dimensions; inspect the resulting rankings'
-       : row.dim <= 512 ? 'some relevant sources rank below first; MRR@3 records that difference'
+      (row.dim <= 128 ? 'many distinct terms share ' + row.dim + ' dimensions. Inspect the resulting rankings'
+       : row.dim <= 512 ? 'Some relevant sources rank below first. MRR@3 records that difference'
        : row.dim === 1024 ? 'ten of twelve questions have a relevant source in the top three'
-       : '2048 and 4096 tie here; inspect the remaining miss before choosing another change') +
+       : '2048 and 4096 tie here. Inspect the remaining miss before choosing another change') +
       '</span><span></span></div>';
   }
   slider.addEventListener('input', render);

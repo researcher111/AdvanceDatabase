@@ -25,7 +25,7 @@
     },
     'idempotent': {
       title: 'Idempotent',
-      body: "<p>An operation is idempotent when repeating it has the same effect as applying it once. Setting a balance to its logged old value is idempotent; subtracting $40 is not. Recovery must remain safe if interrupted and run again, including when a second crash occurs partway through repair.</p>",
+      body: "<p>An operation is idempotent when repeating it has the same effect as applying it once. Setting a balance to its logged old value is idempotent. Repeatedly subtracting $40 is not. Recovery must remain safe if interrupted and run again, including when a second crash occurs partway through repair.</p>",
     },
     'redo': {
       title: 'Redo',
@@ -60,15 +60,15 @@
       fx: st => {} },
     { msg: 'tx1 begins. START is appended and synced by the lab logger.',
       fx: st => st.log.push({ t: 'START tx1', c: 'synced' }) },
-    { msg: 'tx1 sets A := 60. FIRST the old value (100) is logged and synced; THEN the page changes — in the buffer pool only. Disk still says 100.',
+    { msg: 'tx1 sets A := 60. The logger first records and syncs the old value, 100. The page then changes in the buffer pool. Disk still contains 100.',
       fx: st => { st.log.push({ t: 'SET A old=100', c: 'synced' }); st.note = 'buffer: A=60'; } },
-    { msg: 'tx1 sets B := 90. The old value, 50, is logged and synced before the buffered page changes; the data page has not yet been flushed.',
+    { msg: 'tx1 sets B := 90. The logger records and syncs the old value, 50, before the buffered page changes. The data page has not been flushed.',
       fx: st => { st.log.push({ t: 'SET B old=50', c: 'synced' }); st.note = 'buffer: A=60 B=90'; } },
     { msg: 'tx1 commits: FORCE flushes the data pages, leaving disk balances of 60 and 90. The COMMIT record is then appended and synced before success is reported.',
       fx: st => { st.a = 60; st.b = 90; st.note = '';
                   st.log.forEach(e => e.c = 'synced');
                   st.log.push({ t: 'COMMIT tx1  «fsync»', c: 'synced' }); } },
-    { msg: 'tx2 begins a $50 transfer: A := 10. Old value 60 logged and synced; new value in the buffer.',
+    { msg: 'tx2 begins a $50 transfer: A := 10. The logger records and syncs old value 60. The buffer holds the new value.',
       fx: st => { st.log.push({ t: 'START tx2', c: 'synced' });
                   st.log.push({ t: 'SET A old=60', c: 'synced' });
                   st.note = 'buffer: A=10'; } },
@@ -77,7 +77,7 @@
                   st.log.forEach(e => { if (e.t.includes('old=60') || e.t.includes('tx2')) e.c = 'synced'; }); } },
     { msg: 'KILL -9. The process is gone. No rollback ran. Disk: A=$10, B=$90 — the stored total is $50 short.',
       fx: st => { st.dead = true; st.note = ''; } },
-    { msg: 'Restart → recover() reads the log BACKWARDS: no COMMIT for tx2 → its SET record (old=60) is an undo instruction. A := 60 restored and flushed; then a ROLLBACK record is synced.',
+    { msg: 'On restart, recover() scans the log backward. No COMMIT exists for tx2. Its SET record contains old=60. Recovery restores and flushes A := 60. It then syncs a ROLLBACK record.',
       fx: st => { st.a = 60; st.undone = true; st.dead = false;
                   st.log.push({ t: 'ROLLBACK tx2  «fsync»', c: 'synced' }); } },
     { msg: 'Recovered: A=$60, B=$90. The committed transfer is preserved and the incomplete transfer is undone. The total is $150 again.',
@@ -139,7 +139,7 @@
   const CELLS = {
     fn: {
       title: 'FORCE + NO-STEAL',
-      onDisk: 'Committed changes are always on disk (force); uncommitted ones never are (no-steal).',
+      onDisk: 'Committed changes are on disk (FORCE). Uncommitted changes cannot reach disk (NO-STEAL).',
       undo: false, redo: false,
       verdict: 'This model requires neither undo nor redo for transaction changes.',
       price: 'Commits wait for data-page I/O, and uncommitted dirty pages remain in memory. These restrictions simplify recovery but can limit throughput and transaction size.',
@@ -147,7 +147,7 @@
     },
     fs: {
       title: 'FORCE + STEAL',
-      onDisk: 'Committed changes are on disk (force) — but so, possibly, are changes of transactions that never finished (steal).',
+      onDisk: 'Committed changes are on disk (FORCE). Disk can also contain changes from unfinished transactions (STEAL).',
       undo: true, redo: false,
       verdict: 'UNDO only: restore old values for unfinished transactions.',
       price: 'Commits still wait for data flushes, but the pool evicts freely. This keeps the lab’s recovery to a backward undo pass.',
@@ -155,7 +155,7 @@
     },
     nn: {
       title: 'NO-FORCE + NO-STEAL',
-      onDisk: 'Nothing uncommitted ever reaches disk (no-steal) — but committed work may exist only in the log (no-force).',
+      onDisk: 'Uncommitted changes cannot reach disk (NO-STEAL). The log can contain committed changes that are absent from data pages (NO-FORCE).',
       undo: false, redo: true,
       verdict: 'REDO only: replay logged new values for committed transactions.',
       price: 'Commit can finish after the log is durable, but uncommitted dirty pages must remain in memory.',
@@ -163,11 +163,11 @@
     },
     ns: {
       title: 'NO-FORCE + STEAL',
-      onDisk: 'Anything is possible: uncommitted changes may be on disk, committed ones may be missing.',
+      onDisk: 'Disk can contain uncommitted changes. Committed changes can be absent from data pages.',
       undo: true, redo: true,
       verdict: 'Both are needed in this model: redo missing changes, then undo unfinished transactions.',
       price: 'Data pages can flush before or after commit, provided the write-ahead rule holds. ARIES uses redo and undo for this policy. Other engines can use version visibility to handle unfinished work instead of a physical undo pass.',
-      who: 'common production policy; recovery designs differ',
+      who: 'common production policy. Recovery designs differ.',
     },
   };
 

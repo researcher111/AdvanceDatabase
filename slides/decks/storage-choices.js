@@ -14,30 +14,30 @@
   const frames = [
     ['Same keys, four structures', -1, 'Each picture stores the same six keys.', 'Name the four structures before asking about speed. Read the same six keys in each. The pictures show organization, not four different datasets.'],
     ['Heap: check the first three rows', 0, 'No key order: check rows one by one.', 'Request key 7. Read the heap in physical order: 9, then 1, then 11. None matches. The blue outlines mark checked rows.'],
-    ['Heap: reach the matching row', 0, 'The fifth checked row contains 7.', 'Continue through 3 and then 7. This lookup has examined five rows. We assume unique keys for this toy comparison; a general scan returning all matches may need to continue.'],
+    ['Heap: reach the matching row', 0, 'The fifth checked row contains 7.', 'Continue through 3 and then 7. This lookup has examined five rows. We assume unique keys for this toy comparison. A general scan returning all matches may need to continue.'],
     ['Sorted array: compare with 5', 1, '7 is greater than 5: keep the right half.', 'Reset the lookup to the sorted array. Binary search first compares against 5 at the lower middle position. Discard 1, 3, and 5 from the candidate interval.'],
     ['Sorted array: compare with 9', 1, '7 is less than 9: keep the left candidate.', 'The remaining interval is 7, 9, 11. Compare with its middle value, 9. Only 7 remains in the candidate interval.'],
-    ['Sorted array: find 7', 1, 'Three comparisons locate 7.', 'Compare with 7 and finish. The array is drawn in rows only to fit the slide; read its positions left to right, then top to bottom.'],
+    ['Sorted array: find 7', 1, 'Three comparisons locate 7.', 'Compare with 7 and finish. The array is drawn in rows only to fit the slide. Read its positions left to right, then top to bottom.'],
     ['Hash index: choose bucket 1', 2, '7 mod 3 = 1: inspect bucket 1.', 'Introduce the deliberately simple hash rule key mod 3. It routes 7 to bucket 1, which also contains 1. Routing chooses a bucket, not a guaranteed match.'],
-    ['Hash index: check the bucket', 2, 'Check 1, then find 7 in the same bucket.', 'Compare the entries in bucket 1. The first key is 1; the next is 7. Keep collisions visible so students do not mistake a hash result for the row itself.'],
-    ['B+ tree: compare at the root', 3, '7 equals the separator: take the right child.', 'The root separator is 7. Keys below 7 go left; keys at least 7 go right. Equality goes right because the matching entry lives in that leaf.'],
-    ['B+ tree: find the leaf entry', 3, 'The leaf contains 7 and its row address.', 'Follow the highlighted branch and find 7 in the right leaf. A secondary index returns its RID list; heap-row fetching is omitted from this organization comparison.'],
+    ['Hash index: check the bucket', 2, 'Check 1, then find 7 in the same bucket.', 'Compare the entries in bucket 1. The first key is 1. The next is 7. Keep collisions visible so students do not mistake a hash result for the row itself.'],
+    ['B+ tree: compare at the root', 3, '7 equals the separator: take the right child.', 'The root separator is 7. Keys below 7 go left. Keys at least 7 go right. Equality goes right because the matching entry lives in that leaf.'],
+    ['B+ tree: find the leaf entry', 3, 'The leaf contains 7 and its row address.', 'Follow the highlighted branch and find 7 in the right leaf. A secondary index returns its RID list. Heap-row fetching is omitted from this organization comparison.'],
     ['Insert 6: predict the changes', -1, 'Where can the new key go?', 'Change the request from finding 7 to inserting 6. Begin with the original six keys in all four structures. Ask which structure must move entries to make room.'],
-    ['Heap: use a free slot', 0, 'Place 6 in free space; keep physical order.', 'Put 6 into the illustrated free heap slot. Finding free space has its own policy; the point here is that inserting does not require sorting the existing rows.'],
+    ['Heap: use a free slot', 0, 'Place 6 in free space. Keep physical order.', 'Put 6 into the illustrated free heap slot. Finding free space has its own policy. The point here is that inserting does not require sorting the existing rows.'],
     ['Sorted array: make a gap', 1, 'Shift 7, 9, and 11 one position right.', 'Pause before placing 6. Watch the existing keys move to make position four free. The unchanged keys 1, 3, and 5 remain where they were.'],
     ['Sorted array: fill the gap', 1, 'Place 6 between 5 and 7.', 'Insert 6 in the gap. Read the complete sequence across rows: 1, 3, 5, 6, 7, 9, 11. The comparison assumes a packed sorted array with spare capacity.'],
-    ['Hash index: add to bucket 0', 2, '6 mod 3 = 0: add 6 beside 3 and 9.', 'Route 6 to bucket 0. Its entries are 3, 9, and now 6, making clear that bucket contents are not globally sorted. This toy bucket has room; resizing and overflow policies are separate costs.'],
+    ['Hash index: add to bucket 0', 2, '6 mod 3 = 0: add 6 beside 3 and 9.', 'Route 6 to bucket 0. Its entries are 3, 9, and now 6, making clear that bucket contents are not globally sorted. This toy bucket has room. Resizing and overflow policies are separate costs.'],
     ['B+ tree: route the insertion', 3, '6 is below 7: take the left child.', 'Use the root separator to find the target leaf. The left leaf has 1, 3, and 5, and room for one more distinct key.'],
-    ['B+ tree: insert in the leaf', 3, 'Four keys fit: no split is needed yet.', 'Insert 6 after 5 in the left leaf. This example allows four keys per leaf, so it stays legal. A later overfull leaf would split; the following lecture scenes trace that case.'],
+    ['B+ tree: insert in the leaf', 3, 'Four keys fit: no split is needed yet.', 'Insert 6 after 5 in the left leaf. This example allows four keys per leaf, so it stays legal. A later overfull leaf would split. The following lecture scenes trace that case.'],
     ['Range 3 through 9: predict the work', -1, 'All four now contain the inserted key 6.', 'Keep the insertion in every structure. Request the inclusive range from 3 through 9. Predict the same five matches: 3, 5, 6, 7, and 9.'],
-    ['Heap: test every row', 0, 'Check all seven rows; keep five matches.', 'Read the entire unordered heap. Keep 9, 3, 7, 5, and 6 in physical order; reject 1 and 11. There is no key-order boundary that lets the scan stop early.'],
-    ['Sorted array: find the range start', 1, 'Locate the first key at least 3.', 'Locate the lower bound, 3, using the sorted positions. This frame summarizes that binary search; the earlier lookup frames showed its comparisons.'],
-    ['Sorted array: walk forward', 1, 'Read through 9; stop when 11 exceeds it.', 'Move forward through 3, 5, 6, 7, and 9. At 11, the sorted order proves that no later key belongs in the range.'],
+    ['Heap: test every row', 0, 'Check all seven rows. Keep five matches.', 'Read the entire unordered heap. Keep 9, 3, 7, 5, and 6 in physical order. Reject 1 and 11. There is no key-order boundary that lets the scan stop early.'],
+    ['Sorted array: find the range start', 1, 'Locate the first key at least 3.', 'Locate the lower bound, 3, using the sorted positions. This frame summarizes that binary search. The earlier lookup frames showed its comparisons.'],
+    ['Sorted array: walk forward', 1, 'Read through 9. Stop at 11.', 'Move forward through 3, 5, 6, 7, and 9. At 11, the sorted order proves that no later key belongs in the range.'],
     ['Hash index: inspect every bucket', 2, 'Hash buckets do not preserve range order.', 'Inspect all three buckets and keep qualifying entries. Hashing is useful for equality, but key mod 3 gives no contiguous bucket interval for 3 through 9.'],
-    ['B+ tree: find the first leaf', 3, 'Route 3 to the left leaf.', 'Descend using the lower bound 3. Locate the first qualifying entry in the left leaf; do not restart from the root for every result.'],
+    ['B+ tree: find the first leaf', 3, 'Route 3 to the left leaf.', 'Descend using the lower bound 3. Locate the first qualifying entry in the left leaf. Do not restart from the root for every result.'],
     ['B+ tree: collect the left entries', 3, 'Read 3, 5, and 6 in this leaf.', 'Read qualifying keys through the end of the left leaf. The range has not ended, so use its next-leaf link.'],
-    ['B+ tree: follow the leaf link', 3, 'Collect 7 and 9; stop before 11.', 'Follow the orange leaf link into the right leaf, collect 7 and 9, and stop at 11. One descent plus ordered leaf access completes the range.'],
-    ['Compare the work', -1, 'Same five matches: 3, 5, 6, 7, 9.', 'Compare how each structure found the same answer. The heap and hash example inspect all entries; the ordered array and tree locate the start and walk forward. These are conceptual operations, not measured disk reads or universal timing claims.']
+    ['B+ tree: follow the leaf link', 3, 'Collect 7 and 9. Stop before 11.', 'Follow the orange leaf link into the right leaf, collect 7 and 9, and stop at 11. One descent plus ordered leaf access completes the range.'],
+    ['Compare the work', -1, 'Same five matches: 3, 5, 6, 7, 9.', 'Compare how each structure found the same answer. The heap and hash example inspect all entries. The ordered array and tree locate the start and walk forward. These are conceptual operations, not measured disk reads or universal timing claims.']
   ];
 
   function draw(d, step) {
@@ -153,23 +153,23 @@
   const question='Why can a B+ tree follow a range while this hash index must inspect every bucket?';
   const answer='The tree keeps leaf entries in key order and links neighboring leaves. Hashing sends keys to buckets by hash value, so a numeric range can span several buckets.';
   const checks=[
-    ['Do these pictures store different data?', 'No. Each starts with the same six unique keys; only their organization differs.'],
+    ['Do these pictures store different data?', 'No. Each starts with the same six unique keys. Only their organization differs.'],
     ['Can we rule out the remaining heap rows?', 'No. Their physical positions tell us nothing about their key values.'],
     ['How many rows did this unique-key lookup check?', 'Five: 9, 1, 11, 3, and finally 7.'],
     ['Which keys can binary search discard after comparing with 5?', '1, 3, and 5. The target 7 is greater than all of them.'],
     ['What remains after comparing with 9?', 'Only 7. It is the remaining candidate below 9.'],
     ['What property made discarding half safe?', 'The array keeps the keys in sorted order.'],
-    ['Does reaching bucket 1 prove that we found 7?', 'No. The bucket also holds 1; compare actual keys to resolve collisions.'],
+    ['Does reaching bucket 1 prove that we found 7?', 'No. The bucket also holds 1. Compare actual keys to resolve collisions.'],
     ['Which buckets did this equality lookup need?', 'Only bucket 1, chosen by 7 mod 3.'],
     ['At separator 7, does equality go left or right?', 'Right. The right leaf contains keys at least 7, including the actual entry for 7.'],
-    ['Is the root separator itself the matching data entry?', 'No. It routes the search; the leaf entry holds the key and its row addresses.'],
+    ['Is the root separator itself the matching data entry?', 'No. It routes the search. The leaf entry holds the key and its row addresses.'],
     ['Which structure must make a gap for 6?', 'The packed sorted array must shift 7, 9, and 11.'],
     ['Must the heap reorder its existing rows?', 'No. This example uses an available slot without imposing key order.'],
     ['Which keys moved, and why?', '7, 9, and 11 each moved one position to leave room for 6 after 5.'],
     ['What order should we read across these drawn rows?', 'Left to right, then top to bottom: 1, 3, 5, 6, 7, 9, 11.'],
     ['Does bucket 0 now contain sorted values?', 'No. It contains 3, 9, 6. Hash routing does not establish global key order.'],
     ['Will inserting 6 overflow the left leaf?', 'No. It has three keys and room for a fourth.'],
-    ['Why is no split needed?', 'Four keys fit in the illustrated leaf; only exceeding that capacity would require a split.'],
+    ['Why is no split needed?', 'Four keys fit in the illustrated leaf. Only exceeding that capacity would require a split.'],
     ['Which keys should the inclusive range return?', '3, 5, 6, 7, and 9, including the newly inserted 6.'],
     ['Can the heap stop when it encounters 11?', 'No. Later physical rows still include matching keys.'],
     ['Why locate the first key at least 3?', 'Every earlier sorted key is outside the range, so the forward scan can start at this lower bound.'],
@@ -188,7 +188,7 @@
   scene.teaching={
     idea:'Ordering changes how a structure finds one key, makes room for a new key, and reads a range.',
     builds:frames.map(frame=>frame[3]),question,answer,checks,
-    context:'A toy comparison with unique keys and spare space. The initial keys are 1, 3, 5, 7, 9, and 11; insertion adds 6 to all four structures before the range query. Pictures summarize logical work, not disk I/O or measured latency. Index RIDs and heap fetches are omitted. Hash overflow and tree splits are handled separately.'
+    context:'A toy comparison with unique keys and spare space. The initial keys are 1, 3, 5, 7, 9, and 11. Insertion adds 6 to all four structures before the range query. Pictures summarize logical work, not disk I/O or measured latency. Index RIDs and heap fetches are omitted. Hash overflow and tree splits are handled separately.'
   };
   scene.notes=[scene.teaching.idea,...scene.teaching.builds,'Ask: '+question,'Expected answer: '+answer,scene.teaching.context].join('\n\n');
 })();

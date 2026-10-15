@@ -18,8 +18,8 @@ const STUDENTS = [
   const GLOSSARY = {
     'page': {
       title: 'Block · Page',
-      body: '<p>Disks and databases move data in fixed-size chunks, not single bytes, ' +
-        'and the chunk gets a different name depending on where it is sitting:</p>' +
+      body: '<p>Database storage operations move fixed-size chunks of bytes. ' +
+        'This course uses different names for the stored block and its memory copy:</p>' +
         '<svg viewBox="0 0 500 132" role="img" aria-label="A file is an array of fixed-size blocks on disk; one block read into memory is called a page." style="width:100%;height:auto;max-width:520px;display:block;margin:10px 0 6px">' +
         '<title>Block on disk, page in memory</title>' +
         '<text x="6" y="13" font-size="9.5" letter-spacing="0.08em" fill="#6b6459">ON DISK</text>' +
@@ -44,14 +44,13 @@ const STUDENTS = [
         '<text x="6" y="114" font-size="10" fill="#1f1d1a">Same bytes, two names: <tspan font-weight="700">block</tspan> is its name on disk, <tspan font-weight="700">page</tspan> its name in RAM.</text>' +
         '</svg>' +
         '<p>A <strong>block</strong> is one such chunk <em>on disk</em> (microdb and Postgres ' +
-        'default to 4\u20138\u00a0KB); a <strong>page</strong> is that same chunk once it has been ' +
-        'read <em>into memory</em>. Because small reads have a substantial fixed access cost, fetching ' +
-        'a whole block can make nearby data available for later requests without another ' +
-        'storage operation.</p>',
+        'default to 4\u20138\u00a0KB). A <strong>page</strong> is its copy <em>in memory</em>. ' +
+        'Small reads have a substantial fixed access cost. Reading a whole block makes nearby data ' +
+        'available for later requests without another storage operation.</p>',
     },
     'buffer-pool': {
       title: 'Buffer pool',
-      body: "<p>The database’s cache of file blocks. Each memory frame holds one block. A request is a hit if the block is already present; otherwise the pool loads it into a free frame or reuses an unpinned frame. Lab 2 implements the pool and measures its hit rate.</p>",
+      body: "<p>The database’s cache of file blocks. Each memory frame holds one block. A request is a hit if the block is already present. Otherwise, the pool loads the block into a free or unpinned frame. Lab 2 implements the pool and measures its hit rate.</p>",
     },
     'lru': {
       title: 'LRU eviction',
@@ -71,13 +70,7 @@ const STUDENTS = [
     },
     'explain': {
       title: 'EXPLAIN',
-      body: '<p>A SQL command that asks the engine to <em>show its plan instead of running the ' +
-        'query</em>: put <code>EXPLAIN</code> in front of any statement and you get back the ' +
-        'operator tree the planner chose, one node per line, each with the row count and cost it ' +
-        'estimated. <code>EXPLAIN ANALYZE</code> runs the query as well and prints what actually ' +
-        'happened beside those estimates, so you can see where the planner guessed wrong. It is ' +
-        'the standard tool for answering “why is this query slow?”, and week 9 is devoted to ' +
-        'reading one line by line.</p>',
+      body: "<p><code>EXPLAIN</code> displays the execution plan without running the query. Each operator appears with estimated row counts and costs. <code>EXPLAIN ANALYZE</code> also executes the query and reports actual results beside the estimates. Comparing these values helps identify estimation errors and expensive operations. Lecture 9 explains how to read the output.</p>",
     },
     'index': {
       title: 'Index',
@@ -85,31 +78,19 @@ const STUDENTS = [
     },
     'oltp': {
       title: 'OLTP vs OLAP',
-      body: '<p><strong>OLTP</strong> (online transaction processing) is the workload an ' +
-        'application makes: thousands of small operations a second, each touching a handful of ' +
-        'rows, like placing an order or updating a profile. <strong>OLAP</strong> (online ' +
-        'analytical processing) is the workload a dashboard or a notebook makes: a few big ' +
-        'queries that scan millions of rows but read only two or three columns, like revenue ' +
-        'by month.</p>' +
-        '<p>Almost every design decision in this course has an OLTP answer and an OLAP answer, ' +
-        'starting with the block size in this very table: small blocks suit many little reads, ' +
-        'enormous ones suit scans. Act I builds an OLTP engine; week 10 opens Act II by asking ' +
-        'what changes when the workload flips.</p>',
+      body: "<p><strong>OLTP</strong> means online transaction processing. These workloads perform many small reads and writes, such as an order or profile update. <strong>OLAP</strong> means online analytical processing. These workloads often scan many rows but select few columns, such as monthly revenue queries.</p><p>The workload influences storage and execution choices. Small pages can suit short reads. Larger processing units can suit scans. The first course section builds a transactional engine. Lecture 10 examines changes needed for analytical workloads.</p>",
     },
     'operator': {
       title: 'Operator (iterator)',
-      body: '<p>One stage of query execution — scan, filter (select), project, join — built to a ' +
-        'common interface: <em>give me your next row</em>. Operators stack into pipelines: project ' +
-        'pulls from select, select pulls from scan, scan pulls from the buffer pool. Week 4 is ' +
-        'entirely about this pattern.</p>',
+      body: "<p>A stage of query execution, such as scan, select, project, or join. Operators share an interface for requesting the next row. Project requests rows from Select. Select requests rows from Scan. Scan obtains blocks through the buffer pool. Lecture 4 explains this execution pattern.</p>",
     },
     'acid': {
       title: 'ACID',
-      body: "<p>Four transaction properties: <strong>atomicity</strong> groups changes into an all-or-nothing unit; <strong>consistency</strong> preserves declared database constraints; <strong>isolation</strong> controls interactions between concurrent transactions; <strong>durability</strong> preserves committed changes after a crash. Lectures 7–8 examine the mechanisms and isolation levels behind these properties.</p>",
+      body: "<p>ACID names four transaction properties. <strong>Atomicity</strong> groups changes into one all-or-nothing unit. <strong>Consistency</strong> preserves declared database constraints. <strong>Isolation</strong> controls concurrent transaction interactions. <strong>Durability</strong> preserves committed changes after a crash. Lectures 7–8 examine these mechanisms and isolation levels.</p>",
     },
     'fsync': {
       title: 'fsync',
-      body: "<p>A system call that requests that a file’s buffered changes be written to durable storage before it returns successfully. Python file buffers must be flushed first. Lab 1 compares write throughput with and without this durability step; the cost depends on the storage system.</p>",
+      body: "<p>A system call that requests that a file’s buffered changes be written to durable storage before it returns successfully. Python file buffers must be flushed first. Lab 1 compares write throughput with and without this durability step. The cost depends on the storage system.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -137,27 +118,27 @@ const STUDENTS = [
   const LAYERS = [
     { name: 'SQL front end', lab: 'Lab 5 · Sep 24', desc: 'parser · planner',
       detail: '<strong>Job:</strong> turn SQL text into a checked, executable plan tree. ' +
-        '<strong>You build:</strong> a SELECT parser and planner using the provided lexer ' +
-        '(<code>sql_frontend.py</code>). After this lab, microdb answers real SQL typed at a prompt.' },
+        '<strong>You investigate:</strong> the supplied parser and planner in ' +
+        '<code>sql_frontend.py</code>. Trace the code. Write SQL and measure query work through the prompt.' },
     { name: 'Execution engine', lab: 'Lab 4 · Sep 17', desc: 'scan · select · project · join',
-      detail: '<strong>Job:</strong> run the plan — a pipeline of operators, each answering “next row?”. ' +
+      detail: '<strong>Job:</strong> execute the plan through operators that respond to requests for rows. ' +
         '<strong>You build:</strong> <code>query_engine.py</code>: SelectScan, ProjectScan, and a nested-loop join. ' +
         '<strong>You measure:</strong> rows examined vs rows returned on the pinned toy queries.' },
     { name: 'Records & catalog', lab: 'Lab 3 · Sep 10', desc: 'rows in pages · schemas · tables about tables',
-      detail: '<strong>Job:</strong> impose meaning on raw pages — record layout, schemas, and the system catalog. ' +
+      detail: '<strong>Job:</strong> interpret page bytes using record layouts, schemas, and the catalog. ' +
         '<strong>You build:</strong> <code>record_manager.py</code>, used by the provided <code>catalog.py</code>. ' +
         'Each field is addressed by its slot position and layout offset.' },
     { name: 'Buffer pool', lab: 'Lab 2 · Sep 3', desc: 'frames · pin/unpin · eviction',
-      detail: '<strong>Job:</strong> keep hot blocks in memory so most reads never touch the disk. ' +
+      detail: '<strong>Job:</strong> keep reusable blocks in memory to reduce disk reads. ' +
         '<strong>You build:</strong> <code>buffer_manager.py</code> with pin/unpin and LRU eviction. ' +
         '<strong>You measure:</strong> hit rates under sequential scans and repeated access to a hot set.' },
     { name: 'File manager', lab: 'Lab 1 · Thu!', desc: 'files as arrays of fixed-size blocks',
-      detail: '<strong>Job:</strong> the only code that touches the OS — read/write block k of file f, whole blocks at a time. ' +
+      detail: '<strong>Job:</strong> read or write block k of file f through OS operations. Each operation transfers a complete block. ' +
         '<strong>You build:</strong> <code>file_manager.py</code>: BlockId, Page, FileManager. ' +
-        '<strong>You measure:</strong> what fsync really costs your SSD.' },
+        '<strong>You measure:</strong> the cost of fsync on your storage device.' },
     { name: 'Write-ahead log & recovery', lab: 'Lab 7 · Oct 15', side: true, desc: 'logging and recovery for transactions',
       detail: '<strong>Job:</strong> record changes and enforce the ordering needed for crash recovery. ' +
-        '<strong>You build:</strong> the transaction methods in <code>transaction.py</code>, then <code>kill -9</code> microdb mid-write and watch it come back. ' +
+        '<strong>You build:</strong> the transaction methods in <code>transaction.py</code>, as an optional extension. Test recovery after <code>kill -9</code> interrupts a transaction. ' +
         'The transaction layer coordinates logging with data-page changes.' },
   ];
   stack.innerHTML = LAYERS.map((l, i) =>
@@ -259,8 +240,8 @@ const STUDENTS = [
     const misread = dv.getInt32(0, false); // read them back as big-endian
     note.innerHTML = 'Write <code>' + v + '</code> little-endian, read those same four bytes ' +
       'as big-endian, and you get <code>' + misread + '</code>' +
-      (v === misread ? ' (this value is a palindrome in bytes, so the bug hides completely).'
-                     : '. Nothing errors; the number is just wrong.');
+      (v === misread ? ' (its bytes read the same in either order, so this example does not reveal the error).'
+                     : '. No error occurs, but the value is incorrect.');
   }
   input.addEventListener('input', render);
   document.querySelectorAll('[data-en]').forEach(b =>
@@ -277,22 +258,22 @@ const STUDENTS = [
     { lab: 'Lab 7 · Oct 15', name: 'Transactions & recovery',
       desc: 'WAL · rollback · crash recovery · locks',
       detail: '<strong>Build:</strong> transaction updates, commit, rollback, and restart recovery using a provided log manager. ' +
-        '<strong>Measure:</strong> kill microdb mid-transaction; count what survives. (Answer: exactly the committed work.)' },
+        '<strong>Measure:</strong> stop microdb during a transaction. Check which changes survive recovery. Committed work must remain.' },
     { lab: 'Lab 6 · Oct 1', name: 'B+ tree index',
-      desc: 'insert · search · range scan · planner hookup',
+      desc: 'insert · search · range scan · RID lookup',
       detail: '<strong>Build:</strong> an in-memory B+ tree with insert, lookup, and range scanning. ' +
         '<strong>Measure:</strong> lookup and range costs for a table scan versus the index.' },
     { lab: 'Lab 5 · Sep 24', name: 'SQL front end',
       desc: 'lexer · parser · planner',
-      detail: '<strong>Build:</strong> a SELECT parser and a simple planner, using the supplied lexer and INSERT parser for ' +
-        '<code>SELECT … FROM … WHERE …</code> and <code>INSERT</code>. microdb gets a prompt.' },
+      detail: '<strong>Investigate:</strong> the supplied lexer, parser, and planner for ' +
+        '<code>SELECT … FROM … WHERE …</code> and <code>INSERT</code>. Trace execution. Write queries. Compare measurements.' },
     { lab: 'Lab 4 · Sep 17', name: 'Query operators',
       desc: 'select · project · nested-loop join',
       detail: '<strong>Build:</strong> the iterator pipeline — every operator implements next()/get_val(). ' +
         '<strong>Measure:</strong> rows touched by <code>WHERE gpa > 3.5</code> with and without an early filter.' },
     { lab: 'Lab 3 · Sep 10', name: 'Records & catalog',
       desc: 'slotted records · schemas · table files',
-      detail: '<strong>Build:</strong> record layouts, record-page operations, and table scans; the catalog is provided. ' +
+      detail: '<strong>Build:</strong> record layouts, record-page operations, and table scans. The catalog is provided. ' +
         '<strong>Measure:</strong> rows per block at different schema widths.' },
     { lab: 'Lab 2 · Sep 3', name: 'Buffer pool',
       desc: 'frames · pin/unpin · LRU',

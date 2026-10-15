@@ -22,7 +22,7 @@
       const viewport = html('div', 'trace-tree-viewport');
       viewport.tabIndex = 0;
       viewport.setAttribute('role', 'region');
-      viewport.setAttribute('aria-label', 'Tree diagram; scroll horizontally on a small screen');
+      viewport.setAttribute('aria-label', 'Tree diagram. Scroll horizontally on a small screen.');
       const caption = html('figcaption', 'trace-tree-result');
       const legend = html('p', 'trace-tree-legend', 'Orange: current operation or chosen route. Green: matching entries. Dashed arrow: candidate child.');
       const hint = html('p', 'trace-tree-scroll-hint', 'Scroll sideways in the diagram to see the whole tree.');
@@ -50,7 +50,7 @@
             const width = leaf ? (view.compact ? 204 : 300) : Math.max(100,n.keys.length*80);
             return [n.id, {...n, leaf, width, height:leaf ? 112 : 56}];
           }));
-          text(360,22,view.chosen ? 'Selected child 2 · pointer not followed yet' : view.path?.length ? 'path = ['+view.path.join(', ')+']' : (view.compact ? 'Choose a child; the keys stay in place.' : 'Leaf entries: keys above RID lists. Root keys only route.'), 'trace-tree-context');
+          text(360,22,view.chosen ? 'Selected child 2 · pointer not followed yet' : view.path?.length ? 'path = ['+view.path.join(', ')+']' : (view.compact ? 'Choose a child. The keys stay in place.' : 'Leaf entries: keys above RID lists. Root keys only route.'), 'trace-tree-context');
           if (!layout.has('root')) text(360,99,'Leaf split · ORDER = 4', 'trace-tree-heading');
           for (const edge of view.edges) {
             const from = layout.get(edge.from), to = layout.get(edge.to);

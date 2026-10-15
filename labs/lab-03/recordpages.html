@@ -44,7 +44,7 @@
   <div class="byline">Follows Lecture 3 (Record Layout &amp; the Catalog) · in class: 75 min · aim to finish Build + Verify · due Thu Sep 17 at class start</div>
 </header>
 
-<p class="lede">Your buffer manager gives you a block’s bytes. To read a row, you still need to know where that row and its fields begin. In this lab, give each row a fixed-size slot, use the schema to locate its fields, and scan the occupied slots one block at a time. The supplied catalog uses the same record operations to store table definitions.</p>
+<p class="lede">Your buffer manager gives you a block’s bytes. To read a row, you need the starting positions of that row and its fields. In this lab, give each row a fixed-size slot. Use the schema to locate its fields. Scan the occupied slots one block at a time. The supplied catalog uses the same record operations to store table definitions.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 6–7 ·
@@ -64,10 +64,10 @@
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
   <p>Suppose each slot takes 24 bytes and GPA starts 20 bytes into the slot. Where does GPA begin in slot 3, counting slots from 0? If you delete the row in slot 1, do later rows move?</p>
-  <details><summary>Check your explanation</summary><p>GPA begins at byte 3 × 24 + 20 = 92. Deleting a row changes its slot’s status flag; the slots stay in place. A field’s address depends on the layout and slot number, even when earlier slots are empty.</p></details>
+  <details><summary>Check your explanation</summary><p>GPA begins at byte 3 × 24 + 20 = 92. Deleting a row changes its slot’s status flag. The slots stay in place. A field’s address depends on the layout and slot number, even when earlier slots are empty.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>. Predict what the next operation will change. Run the operation. Compare the result with your prediction. Explain any difference before making another change.</p>
 
 <h2 id="try-it">Scanning a table one block at a time</h2>
 
@@ -97,38 +97,38 @@
     <a class="chat-dl-btn" href="starter/test_records.py" download>test_records.py</a>
     <a class="chat-dl-btn" href="starter/measure_layout.py" download>measure_layout.py</a>
   </div>
-  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files, then open this lab’s starter folder:</p>
+  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files. Then open this lab’s starter folder:</p>
 <pre class="clone-cmd"><span class="cl-line">git pull</span>
 <span class="cl-line">cd labs/lab-03/starter</span></pre>
-  <p class="viz-caption">Delete a row, then call <code>before_first()</code> and insert a row to reuse the empty slot. Insertion searches forward from the current slot, so it can miss an earlier empty slot. Continue inserting to see the file grow. The tests check slot reuse, file growth, and scan behavior.</p>
+  <p class="viz-caption">Delete a row. Call <code>before_first()</code>. Insert a row to reuse the empty slot. Insertion searches forward from the current slot, so it can miss an earlier empty slot. Continue inserting to see the file grow. The tests check slot reuse, file growth, and scan behavior.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="big-idea">Record layout and slot addresses</h2>
 
-<p class="keep-in-present">Think of each slot as a fixed compartment for one row. The slot number tells you which compartment to open, the layout tells you where each field begins, and the flag tells you whether a row is stored there. Deleting a row marks the compartment empty. It leaves the old field bytes and neighboring rows in place.</p>
+<p class="keep-in-present">Think of each slot as a fixed compartment for one row. The slot number identifies the compartment. The layout gives each field’s starting position. The flag shows whether the slot contains a row. Deleting a row marks the compartment empty. The old field bytes and neighboring rows stay in place.</p>
 
 <p class="keep-in-present">Each record occupies a fixed-size slot: a <strong>four-byte status flag</strong> followed by the fields in schema order, <code>[flag][fields]</code>. Slot <code>k</code> starts at byte <code>k * slot_size</code>. Deleting a row sets its <span class="gloss" data-gloss="tombstone">status flag to EMPTY</span> so a later insert can reuse the slot. The other rows stay in place.</p>
 
 <!-- ============================================================ -->
 <h2 id="the-api">Classes and methods to implement</h2>
 
-<p><code>Layout</code> calculates field offsets and the slot size. <code>RecordPage</code> reads and writes records within one pinned block. <code>TableScan</code> moves between blocks to scan or insert rows. You will implement the methods below; helpers for pinning, unpinning, and moving between blocks are provided.</p>
+<p><code>Layout</code> calculates field offsets and the slot size. <code>RecordPage</code> reads and writes records within one pinned block. <code>TableScan</code> moves between blocks to scan or insert rows. You will implement the methods below. Helpers for pinning, unpinning, and moving between blocks are provided.</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="lay" data-step-name="Layout" data-explain="Walk through schema.fields() in order. Reserve bytes 0–3 for the status flag. Each int adds 4 bytes; each varchar(n) adds 4+n bytes. Store each field offset in self._offsets and the final size in self.slot_size.">Layout(schema)                    # id→4, name→8, gpa→20 · slot_size 24</div>
+  <div class="code-step" data-step="lay" data-step-name="Layout" data-explain="Walk through schema.fields() in order. Reserve bytes 0–3 for the status flag. Each int adds 4 bytes. Each varchar(n) adds 4+n bytes. Store each field offset in self._offsets and the final size in self.slot_size.">Layout(schema)                    # id→4, name→8, gpa→20 · slot_size 24</div>
   <div class="code-step" data-step="pos" data-step-name="_field_pos" data-explain="The field position is slot * slot_size + layout.offset(field). The four field accessors use this position to read or write the page.">_field_pos(slot, fld)             # slot·24 + offset(fld)</div>
   <div class="code-step" data-step="rw" data-step-name="field get/set" data-explain="Use the corresponding Page method at _field_pos. Reject strings whose UTF-8 byte length exceeds the field’s capacity. After each write, call set_modified() so the buffer manager saves the change when it flushes the page.">get/set_int · get/set_string      # read/write fields; mark writes dirty</div>
   <div class="code-step" data-step="flags" data-step-name="slot search" data-explain="insert_after(k) finds the first EMPTY slot after k, marks it USED, and returns its index. next_after(k) finds the first USED slot after k. Both return -1 when no matching slot remains in the block. delete(k) marks the slot EMPTY.">insert_after / next_after / delete  # find empty/used slots; mark deletions</div>
   <div class="code-step" data-step="scan" data-step-name="TableScan.next" data-explain="Call next_after(current_slot) on the current page. If it returns a slot, position the scan there and return True. If it returns -1, move to the next block and search from slot -1. Return False when no occupied slot remains in the final block.">TableScan.next()                  # cross blocks, skip tombstones</div>
-  <div class="code-step" data-step="scan" data-step-name="TableScan.insert" data-explain="Call insert_after(current_slot) on the current page. If it returns -1, move to the next block or append a block at the end of the file, then search from slot -1. Stop when you find an empty slot and position the scan there. A new zeroed block contains EMPTY slots.">TableScan.insert()                # find an empty slot, or add a block</div>
+  <div class="code-step" data-step="scan" data-step-name="TableScan.insert" data-explain="Call insert_after(current_slot) on the current page. If it returns -1, move to the next block. Append a block if you reached the end of the file. Search that block from slot -1. Stop at an empty slot. Position the scan at that slot. A new zeroed block contains EMPTY slots.">TableScan.insert()                # find an empty slot, or add a block</div>
   <div class="code-explain-panel">Hover or tap a line for its requirements. Implement the methods in the order shown.</div>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
-<p class="keep-in-present">Calculate one record’s field offsets and slot size by hand. Use that layout to test reads and writes within one slot, then implement scanning across blocks. Check that closing the scan unpins its current block.</p>
+<p class="keep-in-present">Calculate one record’s field offsets and slot size by hand. Use that layout to test reads and writes within one slot. Then implement scanning across blocks. Check that closing the scan unpins its current block.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
@@ -136,8 +136,8 @@
 
 <ol>
   <li><strong>Read the slot layout</strong> at the top of <code>record_manager.py</code> (3 min). It defines the required format and includes a worked example.</li>
-  <li><strong><code>Layout.__init__</code></strong>: calculate each field’s offset and the slot size. Run <code>python3 test_records.py --unit Layout.__init__</code>. For the students schema, the expected offsets are 4, 8, and 20 bytes; the slot size is 24 bytes.
-    <p><strong>Pseudocode</strong> for <code>Layout.__init__</code>. Translate these steps into Python using the explanations below. The starter already handles lines 1–2; implement the remaining steps in the marked section.</p>
+  <li><strong><code>Layout.__init__</code></strong>: calculate each field’s offset and the slot size. Run <code>python3 test_records.py --unit Layout.__init__</code>. For the students schema, the expected offsets are 4, 8, and 20 bytes. The slot size is 24 bytes.
+    <p><strong>Pseudocode</strong> for <code>Layout.__init__</code>. Translate these steps into Python using the explanations below. The starter already handles lines 1–2. Implement the remaining steps in the marked section.</p>
 <pre class="language-none"><code> 1  keep the supplied schema
  2  prepare an empty field-offset map
  3  position ← size of the slot's status flag
@@ -155,7 +155,7 @@
         <tr><td>2</td><td>The map will associate each field name with its starting byte offset within a slot.</td></tr>
         <tr><td>3</td><td>Start at byte 4. Bytes 0–3 hold the in-use flag. The position tracks the next free byte within the slot.</td></tr>
         <tr><td>4</td><td>Visit fields in the order the schema defines them so their byte positions stay consistent.</td></tr>
-        <tr><td>5</td><td>Save the current position before advancing it; this is where the field begins.</td></tr>
+        <tr><td>5</td><td>Save the current position before advancing it. This is where the field begins.</td></tr>
         <tr><td>6</td><td>Use the field’s declared type to choose how much space to reserve.</td></tr>
         <tr><td>7</td><td>An integer occupies 4 bytes, so move the position forward by 4.</td></tr>
         <tr><td>8</td><td>The other supported type is a variable-length string.</td></tr>
@@ -191,7 +191,7 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
 
 <span class="t-pass">1/1 unit checks passed (not the grading score)</span></code></pre>
     <p>The single PASS line covers all four schemas above. You can run this check while the other methods are unfinished.</p>
-    <p><strong>Output note:</strong> This command checks only <code>Layout.__init__</code>. Running <code>python3 test_records.py --unit</code> or <code>python3 test_records.py</code> prints additional test results. That is expected; check each PASS/FAIL result and the final summary.</p>
+    <p><strong>Output note:</strong> This command checks only <code>Layout.__init__</code>. Running <code>python3 test_records.py --unit</code> or <code>python3 test_records.py</code> prints additional test results. That is expected. Check each PASS/FAIL result and the final summary.</p>
   </li>
   <li><strong><code>_field_pos</code>, then the four get/set methods</strong>: calculate each field’s byte position and use the page’s read or write method. Reject strings whose UTF-8 byte length exceeds the field’s capacity. Call <code>set_modified()</code> after each write. Test each method with its own target, such as <code>--unit RecordPage._field_pos</code> or <code>--unit RecordPage.set_string</code>.</li>
   <li><strong><code>insert_after</code>, <code>next_after</code>, and <code>delete</code></strong>: search for an EMPTY or USED slot as required, and update the status flag when inserting or deleting. Run <code>--unit RecordPage.insert_after</code>, <code>--unit RecordPage.next_after</code>, and <code>--unit RecordPage.delete</code> as you finish them.</li>
@@ -235,7 +235,7 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
       <div class="ts-code-scroll" tabindex="0" role="region" aria-label="Python code; scroll horizontally on small screens">
         <ol class="ts-code-lines" id="ts-code" aria-label="Method source code"></ol>
       </div>
-      <p class="ts-footnote">A search helper runs as one step; outlined slots show what it checked. Moving blocks unpins the old page before pinning the new one. The final page stays pinned until <code>close()</code>.</p>
+      <p class="ts-footnote">A search helper runs as one step. Outlined slots show what it checked. Moving blocks unpins the old page before pinning the new one. The final page stays pinned until <code>close()</code>.</p>
       <noscript><p>Enable JavaScript to use the walkthrough. Both methods and their line-by-line explanations follow below.</p></noscript>
     </div>
     <p><strong><code>next()</code>: find the next existing row.</strong></p>
@@ -257,7 +257,7 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
         <tr><td>5</td><td>No row remains on this page and there are no later blocks, so return <code>False</code> to end the scan.</td></tr>
         <tr><td>6</td><td>Move to the next block. The helper closes the old record page to unpin it, opens the new page, and resets the current slot to <code>-1</code>.</td></tr>
         <tr><td>7</td><td>Search the new page from before slot 0. Passing <code>-1</code> lets <code>next_after</code> include slot 0 in its search.</td></tr>
-        <tr><td>8</td><td>The loop ends when the current slot identifies a USED row. Return <code>True</code>; the caller can now read that row’s fields.</td></tr>
+        <tr><td>8</td><td>The loop ends when the current slot identifies a USED row. Return <code>True</code>. The caller can now read that row’s fields.</td></tr>
       </tbody>
     </table>
     <div class="callout note">
@@ -272,7 +272,7 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
         </table>
       </div>
       <p>The current slot is <strong>1</strong>, so the search checks slots <strong>2, 3, and 4</strong>. None is USED, so it returns <code>-1</code>, meaning <strong>“no later row in this block.”</strong></p>
-      <p><code>TableScan.next()</code> then moves to block 1 and calls <code>next_after(-1)</code> to search that block starting at slot 0. As an argument, <code>-1</code> starts the search before slot 0; as a return value, it means no matching slot was found.</p>
+      <p><code>TableScan.next()</code> then moves to block 1 and calls <code>next_after(-1)</code> to search that block starting at slot 0. As an argument, <code>-1</code> starts the search before slot 0. As a return value, it means no matching slot was found.</p>
     </div>
     <p>Test this method with <code>python3 test_records.py --unit TableScan.next</code>.</p>
     <p><strong><code>insert()</code>: reserve a slot for a new row.</strong></p>
@@ -292,7 +292,7 @@ Unit checks: fixtures supply unfinished dependencies; integration tests are not 
         <tr><td>2</td><td>Ask the current page to find an EMPTY slot after the current position and mark it USED. Save its slot number, or <code>-1</code> if none remains.</td></tr>
         <tr><td>3</td><td>If no slot was reserved, continue searching forward through the file.</td></tr>
         <tr><td>4</td><td>Check whether there is another existing block to search.</td></tr>
-        <tr><td>5</td><td>At the last block, append a zeroed block. This helper also moves the scan to it; all its slots start EMPTY.</td></tr>
+        <tr><td>5</td><td>At the last block, append a zeroed block. This helper also moves the scan to it. All its slots start EMPTY.</td></tr>
         <tr><td>6</td><td>Otherwise, the file already has another block.</td></tr>
         <tr><td>7</td><td>Move to that existing block, unpinning the old page before opening the next one.</td></tr>
         <tr><td>8</td><td>Try to reserve a slot on the new page, starting before slot 0. If none is available, the loop repeats.</td></tr>
@@ -367,10 +367,10 @@ skinny (id int, x int)                 |    12 |      341 |       4 B |         
 actual file after inserting 10,000 students rows: 59 blocks (236 KB)
 full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember the cliff?)</code></pre>
 
-<p class="key-fact keep-in-present">For 10,000 rows, the students schema needs <strong>59 blocks</strong>; the wide schema needs <strong>527</strong>. Wider records make a full scan read more blocks.</p>
+<p class="key-fact keep-in-present">For 10,000 rows, the students schema needs <strong>59 blocks</strong>. The wide schema needs <strong>527</strong>. Wider records make a full scan read more blocks.</p>
 
 <p><strong>Increase the name field’s capacity.</strong> In <code>measure_layout.py</code>, find the students schema in <code>SCHEMAS</code> and change <code>add_string_field("name", 8)</code> to <code>add_string_field("name", 32)</code>. Keep the dictionary key unchanged: the script uses it to look up the schema, so the printed label will still say <code>vc(8)</code>.</p>
-<p>Before running the script again, use the layout rule and <code>BLOCK_SIZE = 4096</code> to predict the slot size, rows per block, and blocks needed for 10,000 rows. Compare your predictions with the output. Record the actual file size and any change in the scan’s cache-hit rate.</p>
+<p>Use the layout rule with <code>BLOCK_SIZE = 4096</code>. Predict the slot size, rows per block, and blocks needed for 10,000 rows. Run the script again. Compare your predictions with the output. Record the actual file size. Record any change in the scan’s cache-hit rate.</p>
 
 <p class="keep-in-present">The layout calculation predicts the table’s file size. The scan’s cache-hit rate stays low because it reads the blocks in order without revisiting earlier blocks.</p>
 
@@ -378,7 +378,7 @@ full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember
 
 <ul>
   <li><code>\d students</code> in psql and <code>DESCRIBE</code> in DuckDB inspect schema metadata. Your catalog stores similar information: field names, types, capacities, and offsets. <code>df.info()</code> inspects the dataframe’s own metadata rather than querying a database catalog.</li>
-  <li>Columnar formats also distinguish fixed-width and variable-width data. Fixed-width values have predictable offsets; variable-width values need metadata to locate their boundaries. Your <code>Layout</code> avoids that lookup by reserving a fixed number of bytes for each string field.</li>
+  <li>Columnar formats also distinguish fixed-width and variable-width data. Fixed-width values have predictable offsets. Variable-width values need metadata to locate their boundaries. Your <code>Layout</code> avoids that lookup by reserving a fixed number of bytes for each string field.</li>
   <li>In microdb, <code>VARCHAR(8)</code> always reserves eight bytes for the UTF-8 value and four bytes for its length, even for a shorter name. PostgreSQL allows string values to occupy different amounts of space.</li>
   <li><code>TableScan.rid()</code> returns a <span class="gloss" data-gloss="rid">RID</span>: the row’s block number and slot number. Lab 6’s index stores RIDs beside its keys so it can locate matching rows. Vector indexes also return identifiers for matching records, although those identifiers need not be physical block-and-slot addresses.</li>
   <li>PostgreSQL retains old row versions for active snapshots. <code>VACUUM</code> reclaims them when they are no longer visible. This resembles our need to reuse space, but does not use microdb’s EMPTY flag.</li>
@@ -390,7 +390,7 @@ full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
   <p>A deleted slot is reused by a new row. Which address can remain the same, which bytes may still be old, and which fields must the caller initialize?</p>
-  <details><summary>Check your explanation</summary><p>The new row can use the same block number and slot number as the deleted row. Because deletion leaves the field bytes behind, the caller must write every field of the new row. A RID identifies that storage location; a different row may occupy it later.</p></details>
+  <details><summary>Check your explanation</summary><p>The new row can use the same block number and slot number as the deleted row. Because deletion leaves the field bytes behind, the caller must write every field of the new row. A RID identifies that storage location. A different row may occupy it later.</p></details>
 </div>
 
 <p>This question is for practice and class discussion. You do not need to submit an answer.</p>
@@ -417,9 +417,9 @@ full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember
   <thead><tr><th>File</th><th>Provided</th><th>Your task</th></tr></thead>
   <tbody>
     <tr><td><code>record_manager.py</code></td><td>Schema, status-flag helpers, and TableScan block navigation and field accessors</td><td>Layout offsets, <code>_field_pos</code>, four field get/set methods, three slot operations, <code>next()</code>, and <code>insert()</code></td></tr>
-    <tr><td><code>catalog.py</code></td><td>Complete; uses your record and scan methods</td><td>&nbsp;</td></tr>
-    <tr><td><code>file_manager.py</code> · <code>buffer_manager.py</code></td><td>Reference implementations from Labs 1–2; do not edit</td><td>&nbsp;</td></tr>
-    <tr><td><code>test_records.py</code></td><td>Complete; do not edit</td><td>Run the tests</td></tr>
+    <tr><td><code>catalog.py</code></td><td>Complete. Uses your record and scan methods</td><td>&nbsp;</td></tr>
+    <tr><td><code>file_manager.py</code> · <code>buffer_manager.py</code></td><td>Reference implementations from Labs 1–2. Do not edit</td><td>&nbsp;</td></tr>
+    <tr><td><code>test_records.py</code></td><td>Complete. Do not edit</td><td>Run the tests</td></tr>
     <tr><td><code>measure_layout.py</code></td><td>Complete measurement script</td><td>Run it, change the schema as directed in Part 3, and record the results</td></tr>
   </tbody>
 </table>
@@ -466,8 +466,8 @@ full scan read back 10,000 rows through an 8-frame pool: hit rate 1.7% (remember
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=4"></script>
-<script src="scan-walkthrough-model.js?v=1"></script>
+<script src="viz.js?v=ste-20261015"></script>
+<script src="scan-walkthrough-model.js?v=ste-20261015"></script>
 <script src="scan-walkthrough.js?v=1"></script>
 </body>
 </html>

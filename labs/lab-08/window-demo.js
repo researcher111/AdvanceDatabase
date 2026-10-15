@@ -30,8 +30,8 @@
     root.querySelector('#window-current-label').textContent = `Calculate the average for ride ${current + 1}`;
     root.querySelector('#window-equation').textContent = `(${frame.map(money).join(' + ')}) ÷ ${frame.length} = ${money(average(frame))}`;
     root.querySelector('#window-explanation').textContent = [
-      'There are no earlier rides. Use ride 1 alone; divide by 1, not by 3.',
-      'Only one earlier ride exists. Use rides 1 and 2; divide by 2.',
+      'There are no earlier rides. Use ride 1 alone. Divide by 1, not by 3.',
+      'Only one earlier ride exists. Use rides 1 and 2. Divide by 2.',
       'Use rides 1, 2, and 3. Ride 4 comes later, so it is outside this frame.',
       'Use rides 2, 3, and 4. Ride 1 is now too far back, so it leaves the frame.'
     ][current];

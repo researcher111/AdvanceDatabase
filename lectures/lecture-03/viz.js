@@ -11,7 +11,7 @@
     },
     'slot-directory': {
       title: 'Slot directory',
-      body: "<p>An array of entries locating records within a page. Each entry records where the row’s bytes begin, so compacting bytes within the page can update that entry rather than changing its slot number. PostgreSQL uses a page item directory, but an UPDATE can create a new tuple version with a different physical address. microdb instead gives each slot a fixed size and calculates its position directly.</p>",
+      body: "<p>An array of entries locating records within a page. Each entry records the row’s byte position. Page compaction can update that position while retaining the slot number. PostgreSQL uses a page item directory, but an UPDATE can create a new tuple version with a different physical address. microdb instead gives each slot a fixed size and calculates its position directly.</p>",
     },
     'heap-file': {
       title: 'Heap file',
@@ -27,7 +27,7 @@
     },
     'toast': {
       title: 'TOAST',
-      body: "<p>PostgreSQL’s Oversized-Attribute Storage Technique. It can compress large values and store them in a separate table in chunks, leaving a small reference in the main tuple. Some compressed values remain inline. PostgreSQL uses variable-length tuples; this is an alternative to reserving a large maximum capacity in every microdb slot.</p>",
+      body: "<p>PostgreSQL’s Oversized-Attribute Storage Technique. It can compress large values and store them in a separate table in chunks, leaving a small reference in the main tuple. Some compressed values remain inline. PostgreSQL uses variable-length tuples. This avoids reserving a large maximum capacity in every slot, as microdb would require.</p>",
     },
     'bootstrap': {
       title: 'Bootstrapping',
@@ -97,26 +97,26 @@
     const stu = STUDENTS[nextStudent % STUDENTS.length];
     nextStudent += 1;
     slots[k] = { used: true, row: { ...stu } };
-    msg.innerHTML = `insert_after(-1) → slot <strong>${k}</strong>${reused ? ' (reusing a tombstone; the ghost is overwritten)' : ''}: ` +
+    msg.innerHTML = `insert_after(-1) → slot <strong>${k}</strong>${reused ? ' (reuses an EMPTY slot and replaces its old field values)' : ''}: ` +
       `flag@${k * 24} := 1, then fields written at ${k}×24+4, +8, +20.`;
     render(k);
   }
 
   function del() {
     const s = slots[sel];
-    if (!s.used) { msg.innerHTML = `delete(slot ${sel}) → it's already EMPTY.`; return; }
+    if (!s.used) { msg.innerHTML = `delete(slot ${sel}) → the slot is already EMPTY.`; return; }
     s.used = false;
-    msg.innerHTML = `delete(slot ${sel}) → one bit flip: flag@${sel * 24} := 0. ` +
-      `<strong>${s.row.name}'s bytes are still there</strong>: a tombstone, italic below, waiting for reuse.`;
+    msg.innerHTML = `delete(slot ${sel}) → change the flag: flag@${sel * 24} := 0. ` +
+      `<strong>${s.row.name}'s bytes are still there</strong>: the EMPTY slot keeps its old values until reuse. Italic text shows those values.`;
     render(sel);
   }
 
   function rename(name) {
     const s = slots[sel];
-    if (!s.used) { msg.innerHTML = `rename(slot ${sel}) → slot is EMPTY; nothing to rename.`; return; }
+    if (!s.used) { msg.innerHTML = `rename(slot ${sel}) → the slot is EMPTY. There is no row to rename.`; return; }
     if (name.length > 8) {
       msg.innerHTML = `set_string(${sel}, "name", "${name}") → <strong>refused</strong>: ${name.length} chars ` +
-        `in an 8-char reservation. Fixed capacity is the deal; varchar(8) meant it.`;
+        `ASCII characters exceed the 8-byte reservation. These ASCII characters occupy one UTF-8 byte each.`;
       render(sel);
       return;
     }
@@ -168,7 +168,7 @@
       `</div>` +
       `<div class="sc-legend">` +
       `<span><span class="sc-chip data"></span>data + flags</span>` +
-      `<span><span class="sc-chip air"></span>air (unfilled varchar): ${airTotal.toLocaleString()} bytes, <strong>${pct.toFixed(0)}%</strong> of the block</span>` +
+      `<span><span class="sc-chip air"></span>unused varchar capacity: ${airTotal.toLocaleString()} bytes, <strong>${pct.toFixed(0)}%</strong> of the block</span>` +
       `<span><span class="sc-chip left"></span>leftover: ${leftover}</span>` +
       `</div>`;
   }
@@ -251,9 +251,9 @@
     if (renamed) { msg.innerHTML = 'The row has already been renamed. Reset to restore the original name.'; return; }
     renamed = true;
     render();
-    msg.innerHTML = 'ben is now <strong>benjamin</strong>: the length byte changed in place, 5 new ' +
-      'name bytes appeared, and the 34 bytes after them (his gpa, cyd, and dee) shifted 5 places ' +
-      'right. The saved address is unchanged. Read it to see whether it still locates cyd.';
+    msg.innerHTML = 'ben is now <strong>benjamin</strong>. The length byte changed. Five name bytes were added. ' +
+      'The following 34 bytes (ben’s GPA, cyd, and dee) shifted five positions right. ' +
+      'The saved address is unchanged. Read it to check whether it still locates cyd.';
   }
 
   function readSaved() {
@@ -269,15 +269,15 @@
       render(SAVED + 7);
       msg.innerHTML = 'Read a row at byte 30: id = ' + spell(SAVED) + ' → <strong>' + id +
         '</strong> (that "id" is the last n of benjamin plus ben’s gpa), then a name length of ' +
-        len + ' that runs far past the end of the page. The address never moved; the data under it ' +
-        'did. cyd now starts at byte 35 and nothing in the page says so.';
+        len + ' that runs far past the end of the page. The address stayed fixed, but the data moved. ' +
+        'cyd now starts at byte 35. The page has no directory that records this new position.';
     }
   }
 
   function reset() {
     renamed = false;
     render();
-    msg.textContent = 'Four rows, 60 bytes, no gaps. Read the saved address first to prove it works, then rename ben.';
+    msg.textContent = 'Four rows, 60 bytes, no gaps. Read the saved address to check its initial value. Then rename ben.';
     info.textContent = INFO_DEFAULT;
   }
 
@@ -387,9 +387,9 @@
       msg.innerHTML = 'Row is ' + fmt(d.raw) + ' B: under the ~2,000 B threshold, so the essay stores inline like any other field.';
     } else if (d.mode === 'compressed') {
       msg.innerHTML = 'Row would be ' + fmt(d.raw) + ' B: over the threshold. Compression (~3×) brings the essay to ' +
-        fmt(d.comp) + ' B and the row to ' + fmt(d.slot) + ' B, back under; it stays inline, compressed.';
+        fmt(d.comp) + ' B and the row to ' + fmt(d.slot) + ' B. The row now fits below the threshold. The compressed essay stays inline.';
     } else {
-      msg.innerHTML = 'Row would be ' + fmt(d.raw) + ' B; even compressed to ' + fmt(d.comp) +
+      msg.innerHTML = 'Row would be ' + fmt(d.raw) + ' B. Even compressed to ' + fmt(d.comp) +
         ' B it is too wide. The essay moves out: <strong>' + d.chunks +
         ' chunks</strong> in the side table, and the slot keeps ' + FIXED +
         ' B of fields plus an ' + PTR + '-byte pointer.';
@@ -400,7 +400,7 @@
     heap.classList.add('read'); side.classList.remove('read');
     msg.innerHTML = 'SELECT name reads <strong>1 block</strong>: the heap block holding the slot. ' +
       'essay is not in the select list, so its bytes are never fetched' +
-      (cur.mode === 'out' ? '; the pointer is not even followed.' : '.');
+      (cur.mode === 'out' ? '. The query does not follow the pointer.' : '.');
   }
 
   function queryEssay() {
@@ -409,8 +409,8 @@
       side.classList.add('read');
       msg.innerHTML = 'SELECT essay reads 1 heap block + ' + cur.pages + ' side-table page' +
         (cur.pages > 1 ? 's' : '') + ' = <strong>' + (1 + cur.pages) +
-        ' blocks</strong> (plus the index reads that locate the chunks). The chunks are fetched, reassembled, ' +
-        'and decompressed only now, because only now did a query ask for them.';
+        ' blocks</strong> (plus the index reads that locate the chunks). The query fetches the chunks. ' +
+        'It reassembles and decompresses them to return the requested essay.';
     } else {
       side.classList.remove('read');
       msg.innerHTML = 'SELECT essay reads <strong>1 block</strong>: the essay is right there in the slot' +

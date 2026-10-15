@@ -49,10 +49,11 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">At a lab desk, Maya asks the database to list students with a GPA above 3.5. She runs the query twice; both runs return ada, cyd, and eli. Noor points to the counter labeled <q>Disk reads</q>: two on the first run, zero on the second. <q>Why didn’t it read the file again?</q> Maya asks. The first run kept the student data in memory, so the second run can check the same rows without reading them from disk again.</p>
+  <p class="lede">At a lab desk, Maya asks the database to list students with a GPA above 3.5. She runs the query twice. Both runs return ada, cyd, and eli. </p>
+  <p>Noor points to the counter labeled <q>Disk reads</q>: two on the first run, zero on the second. <q>Why did the second run need no disk reads?</q> Maya asks. The first run kept the student data in memory. The second run checks those rows without another disk read.</p>
 </div>
 
-<p class="keep-in-present">Follow one <code>SELECT</code> from SQL text to a plan, from the plan to rows, and from rows to cached pages and stored blocks. The first six labs build these interfaces into <strong>microdb</strong>; an optional transaction lab adds crash recovery.</p>
+<p class="keep-in-present">Follow one <code>SELECT</code> through the engine. SQL text becomes a plan. The plan requests rows from cached pages and stored blocks. The first six labs build these interfaces into <strong>microdb</strong>. An optional transaction lab adds crash recovery.</p>
 
 <div class="cite">
   Built on: Edward Sciore, <a href="https://link.springer.com/book/10.1007/978-3-030-33836-7"><em>Database Design and Implementation</em></a> (the SimpleDB book) ·
@@ -61,9 +62,7 @@
 </div>
 
 <p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon
-you're not expected to know yet: hover or tap one and a plain-language explainer opens
-right below the sentence you're reading.
+Dotted-underlined terms like <span class="gloss-demo">this one</span> have definitions. Hover over or tap a term to open its explanation below the sentence.
 </p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
@@ -76,12 +75,12 @@ right below the sentence you're reading.
 <div class="exercise learning-check">
   <span class="ex-label">Start with what you already know</span>
   <p>If a second scan finds both table blocks in memory, must it still test the six students against the GPA condition? Which count describes the answer, and which counts describe the work?</p>
-  <details><summary>Check your explanation</summary><p>It still tests the rows. In the toy scan, three returned names describe the answer; six examined rows and the storage-read count describe different parts of the work. Reusing pages does not reuse a completed query result.</p></details>
+  <details><summary>Check your explanation</summary><p>It still tests the rows. In the toy scan, three returned names describe the answer. Six examined rows and the storage-read count describe different parts of the work. Reusing pages does not reuse a completed query result.</p></details>
 </div>
 
-<p class="keep-in-present">The opening animation compares two runs of the same query. The first reads two blocks from disk; the second finds both in memory. Our simplified block-access model gives 50 µs for the first run and 0.2 µs for the second.</p>
+<p class="keep-in-present">The opening animation compares two runs of the same query. The first run reads two blocks from disk. The second run finds both in memory. Our simplified block-access model gives 50 µs for the first run and 0.2 µs for the second.</p>
 
-<p>We will follow the query through each component, explain what that component does, and connect it to the lab where you will build it.</p>
+<p>We will follow the query through each component. Each section explains the component and identifies the lab that implements it.</p>
 
 
 <p class="keep-in-present">The main question for this course is: <strong>what does a database do to execute a query?</strong></p>
@@ -137,10 +136,10 @@ right below the sentence you're reading.
 
 <h3 class="new-slide" data-kicker="One query, twice">The second run reuses cached blocks</h3>
 
-<p>The animation introduces several components you will build: disk-block access in Lab 1, the buffer pool in Lab 2, the scan-select-project pipeline of operators in Lab 4, and the parser and planner in Lab 5. Compare the work in the two runs:</p>
+<p>The animation introduces components from four labs. Lab 1 builds disk-block access. Lab 2 builds the buffer pool. Lab 4 connects scan, select, and project operators. Lab 5 adds the parser and planner. Compare the work in the two runs:</p>
 
 <table>
-  <thead><tr><th></th><th>Cold run</th><th>Warm run</th><th>Where it's decided</th></tr></thead>
+  <thead><tr><th></th><th>Cold run</th><th>Warm run</th><th>Responsible component</th></tr></thead>
   <tbody>
     <tr><td>Disk reads</td><td>2</td><td><strong>0</strong></td><td>buffer pool · Lab 2</td></tr>
     <tr><td>Rows examined</td><td>6</td><td>6</td><td>no <span class="gloss" data-gloss="index">index</span> yet · Lab 6 fixes this</td></tr>
@@ -163,7 +162,7 @@ right below the sentence you're reading.
 <table>
   <thead><tr><th>Failure</th><th>pandas + CSV</th><th>A database</th><th>The machinery</th></tr></thead>
   <tbody>
-    <tr><td><strong>Memory</strong></td><td>a default read loads the whole file; chunked processing needs explicit handling</td><td>can process data through a bounded set of pages in memory</td><td>buffer pool · wk 2</td></tr>
+    <tr><td><strong>Memory</strong></td><td>A default read loads the whole file. The script must explicitly handle processing in chunks.</td><td>can process data through a bounded set of pages in memory</td><td>buffer pool · wk 2</td></tr>
     <tr><td><strong>Speed at scale</strong></td><td>a simple filter scans the loaded rows</td><td>can use an index to locate matching rows</td><td>B+ tree · wk 6</td></tr>
     <tr><td><strong>Two writers</strong></td><td>concurrent saves can overwrite one another</td><td>coordinates conflicting transactions and can require retries</td><td>locking &amp; MVCC · wk 7–8</td></tr>
     <tr><td><strong>Crash mid-write</strong></td><td>an interrupted save can leave an incomplete file</td><td>uses its <span class="gloss" data-gloss="wal">write-ahead log</span> to recover after a crash</td><td>WAL &amp; recovery · wk 7</td></tr>
@@ -172,31 +171,31 @@ right below the sentence you're reading.
 
 <h3 class="new-slide" data-kicker="Where pandas stops">Transactions provide ACID guarantees</h3>
 
-<p class="keep-in-present">A transaction groups database operations into a unit of work. The ACID properties are <span class="gloss" data-gloss="acid">atomic, consistent, isolated, and durable</span>: its changes happen together, preserve declared constraints, obey the chosen rules for concurrent execution, and survive a crash after a durable commit. A pandas operation followed by a CSV save does not provide these guarantees by itself<sup class="src"><a href="#src-1" title="Hellerstein, Stonebraker and Hamilton, Architecture of a Database System (Section 6.1 A Note on ACID)">1</a></sup>.</p>
+<p class="keep-in-present">A transaction groups database operations into a unit of work. The ACID properties are <span class="gloss" data-gloss="acid">atomic, consistent, isolated, and durable</span>.</p>
+<p class="keep-in-present">Atomic changes happen together. Consistency preserves declared constraints. Isolation controls concurrent execution according to the selected isolation rules. Durability preserves changes after a durable commit, including after a crash. A pandas operation followed by a CSV save does not provide these guarantees by itself<sup class="src"><a href="#src-1" title="Hellerstein, Stonebraker and Hamilton, Architecture of a Database System (Section 6.1 A Note on ACID)">1</a></sup>.</p>
 
 <!-- ============================================================ -->
 <h2 id="relational">Rows, schemas, and keys</h2>
 
-<p class="keep-in-present">The result contains names, but the engine needs rules for every field it may read. Start by giving the six rows a schema and identifying what can serve as a stable key.</p>
+<p class="keep-in-present">The query returns names. The engine needs rules for every field that it reads. First, give the six rows a schema. Then identify a stable key.</p>
 
-<p>A <strong>relation</strong> is a set of rows (<em>tuples</em>) sharing a <strong>schema</strong>: a list of named fields and their types. We will use this six-row student table throughout the first part of the course:</p>
+<p>A <strong>relation</strong> is a set of rows, also called <em>tuples</em>. The rows share a <strong>schema</strong>, which lists field names and types. We will use this six-row student table throughout the first part of the course:</p>
 
 <div class="viz" id="viz-students">
   <div class="viz-title">The toy table · <code>students(id int, name varchar, gpa int)</code></div>
   <p class="viz-description">This student table is a recurring example. GPA is stored ×10 as an integer (3.9 → 39) because the core microdb labs support integers and strings.</p>
-<p>Lecture widgets sometimes display GPAs as decimals for readability. In runnable microdb examples, use the stored integer scale: <code>gpa &gt; 35</code> means a GPA above 3.5. The two-block widget is an illustration; the Lab 3 layout fits 170 student rows in a 4096-byte block.</p>
+<p>Lecture widgets sometimes display GPAs as decimals for readability. In runnable microdb examples, use the stored integer scale: <code>gpa &gt; 35</code> means a GPA above 3.5. The two-block widget is an illustration. The Lab 3 layout fits 170 student rows in a 4096-byte block.</p>
   <table class="students-table" id="students-table"></table>
-  <p class="viz-caption">Rows 1–3 live in block 0 of <code>students.tbl</code>; rows 4–6 in block 1.
-  The widget spreads the rows across two blocks to make caching visible; the later record layout packs more rows into each block.</p>
+  <p class="viz-caption">Rows 1–3 occupy block 0 of <code>students.tbl</code>. Rows 4–6 occupy block 1. The widget uses two blocks to show caching. The later record layout fits more rows into each block.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="The relational model">A key must identify each row uniquely as the table changes</h3>
 
-<p class="keep-in-present">A <strong>key</strong> is a minimal set of fields that uniquely identifies a row. Here, <code>id</code> is the key. Uniqueness must hold as new rows are added; it is not enough for the current six rows to happen to have different names. A student ID can stay the same when a student changes their name or GPA<sup class="src"><a href="#src-2" title="E. F. Codd, A Relational Model of Data for Large Shared Data Banks (CACM 1970)">2</a></sup>.</p>
+<p class="keep-in-present">A <strong>key</strong> is a minimal set of fields that uniquely identifies a row. Here, <code>id</code> is the key. The key must remain unique when the table receives new rows. Different names in the current six rows do not establish a valid key. A student ID can stay the same when a student changes their name or GPA<sup class="src"><a href="#src-2" title="E. F. Codd, A Relational Model of Data for Large Shared Data Banks (CACM 1970)">2</a></sup>.</p>
 
 <div class="exercise">
   <span class="ex-label">Exercise</span>
-  <p>The registrar proposes <code>(name, gpa)</code> as the key for <code>students</code>. Explain one problem with uniqueness and one problem with using changing values as references.</p>
+  <p>The registrar proposes <code>(name, gpa)</code> as the key for <code>students</code>. Explain one problem with uniqueness. Then explain one problem with references that use changing values.</p>
   <details><summary>Show answer</summary>
   <p>Two students can share both a name and a GPA, so the proposed key would not reliably distinguish them. Names and GPAs can also change. If other tables refer to students using these values, those references must be updated whenever the values change.</p>
   </details>
@@ -213,7 +212,7 @@ right below the sentence you're reading.
     <div class="st-cost">cost ≈ <strong>all table blocks</strong></div>
   </div>
   <div class="strategy">
-    <div class="st-title">Strategy B: jump straight there</div>
+    <div class="st-title">Strategy B: use an index</div>
     <div class="st-steps">Walk a gpa index to 3.5<br>→ follow pointers to just the matching rows<br>→ keep 3</div>
     <div class="st-cost">cost ≈ index traversal plus the blocks holding matching rows</div>
   </div>
@@ -223,7 +222,7 @@ right below the sentence you're reading.
 
 <p class="keep-in-present">Both strategies return the same answer. For a selective query on a large table, an index can reduce block reads by orders of magnitude. The benefit depends on how many rows match and where their blocks are stored. Lectures 5 and 9 explain how the planner chooses between alternatives.</p>
 
-<h3 class="new-slide" data-kicker="The relational model">The schema itself lives in tables: the catalog</h3>
+<h3 class="new-slide" data-kicker="The relational model">The catalog stores the schema in tables</h3>
 
 <p class="keep-in-present">The database must store information about its tables, columns, types, and file locations. The <strong><span class="gloss" data-gloss="catalog">system catalog</span></strong> stores that information in tables that the engine can read. This is a simplified example of microdb’s catalog:</p>
 
@@ -238,22 +237,22 @@ right below the sentence you're reading.
 </table>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Postgres</span><span><code>\dt</code> and <code>\d students</code> are just queries against the catalog: the psql commands read catalog rows, nothing more.</span></div>
-  <div class="lc-row"><span class="lc-k">microdb</span><span>Lab 3 provides the catalog code. The offsets shown above are from Lab 1’s packed example; Lab 3 adds a slot flag and reserved string capacity.</span></div>
+  <div class="lc-row"><span class="lc-k">Postgres</span><span><code>\dt</code> and <code>\d students</code> read catalog rows to describe tables.</span></div>
+  <div class="lc-row"><span class="lc-k">microdb</span><span>Lab 3 provides the catalog code. The offsets above come from Lab 1’s packed example. Lab 3 adds a slot flag and reserved string capacity.</span></div>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="layers">Five layers help us understand a database engine</h2>
 
-<p class="keep-in-present">Think of following an order through a workshop. The front desk records the request; each station asks the next for what it needs. Map the request to SQL, the work instructions to a plan, and the stations to operators and storage layers. The analogy organizes responsibilities; the real interfaces below determine what each layer can do.</p>
+<p class="keep-in-present">Think of following an order through a workshop. The front desk records the request. Each station asks the next station for the items it needs. SQL is the request, and the plan gives the work instructions. Operators and storage layers act as the stations. The analogy describes responsibilities, while the interfaces below define the actual operations.</p>
 
 <p class="keep-in-present">We will study a database engine as five cooperating layers. Production systems organize their code differently, but these layers give us a useful way to separate their responsibilities.</p>
 
-<h3 class="new-slide" data-kicker="The five layers">Each layer runs on the one below it</h3>
+<h3 class="new-slide" data-kicker="The five layers">Each layer uses the layer below it</h3>
 
 <div class="viz" id="viz-layer-stack">
-  <div class="viz-title">Every layer runs on the one below it · hover each</div>
-  <p class="viz-description">The label on the left identifies the lab where you build each layer. We will explain the layers from SQL down to storage, then implement them in the opposite order.</p>
+  <div class="viz-title">Each layer uses the layer below it · hover over a layer</div>
+  <p class="viz-description">The label on the left identifies the lab where you build each layer. We will explain the layers from SQL to storage. The labs implement them in the opposite order.</p>
   <div class="ls-stack" id="ls-stack"></div>
   <div class="ls-info" id="ls-info">Hover a layer to see its job, its microdb file, and the week you build it.</div>
 </div>
@@ -261,11 +260,11 @@ right below the sentence you're reading.
 <h3 class="new-slide" data-kicker="Layer 1 of 5">The front end converts SQL into an execution plan</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Job</span><span>Convert SQL text into a checked execution plan and report invalid syntax.</span></div>
+  <div class="lc-row"><span class="lc-k">Job</span><span>Convert valid SQL text into a checked execution plan. Report invalid syntax.</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span><code>"SELECT name FROM students WHERE gpa &gt; 3.5"</code> → Project(Select(Scan))</span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>a lexer (text → tokens), a recursive-descent parser (tokens → tree), a planner (tree → strategy)</span></div>
-  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 5 · <code>sql_frontend.py</code>; after it, microdb answers SQL typed at a prompt</span></div>
-  <div class="lc-row"><span class="lc-k">Production example</span><span>Postgres's <code>syntax error at or near "FORM"</code> is this layer talking</span></div>
+  <div class="lc-row"><span class="lc-k">You build</span><span>Lab 5 · <code>sql_frontend.py</code>. After this lab, microdb answers SQL entered at a prompt.</span></div>
+  <div class="lc-row"><span class="lc-k">Production example</span><span>Postgres's <code>syntax error at or near "FORM"</code> is an error from this layer</span></div>
 </div>
 
 <p class="keep-in-present">The front end reads SQL text and constructs a plan. Lower layers execute that plan using operators, records, and blocks. The chosen plan is one important determinant of query cost.</p>
@@ -273,23 +272,23 @@ right below the sentence you're reading.
 <h3 class="new-slide" data-kicker="Layer 2 of 5">A common operator interface lets plans combine scans and filters</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Job</span><span>Run the plan: a pipeline of operators, each answering one question, "give me your next row."</span></div>
+  <div class="lc-row"><span class="lc-k">Job</span><span>Run the plan through connected operators. Each operator responds to a request for its next row.</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span>plan tree → result rows, streamed one at a time</span></div>
-  <div class="lc-row"><span class="lc-k">Inside</span><span>Scan reads rows · Select filters them · Project trims columns · Join pairs them · all the same interface, stacked</span></div>
+  <div class="lc-row"><span class="lc-k">Inside</span><span>Scan reads rows. Select filters rows. Project selects columns. Join pairs rows. These operators use the same interface.</span></div>
   <div class="lc-row"><span class="lc-k">You build</span><span>Lab 4 · <code>query_engine.py</code>: an implementation of the iterator (Volcano) model used by many query engines.<sup class="src"><a href="#src-1" title="Hellerstein, Stonebraker and Hamilton, Architecture of a Database System (Section 4.4)">1</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Production example</span><span>every node in an <span class="gloss" data-gloss="explain"><code>EXPLAIN</code></span> output is one of these operators</span></div>
 </div>
 
-<p class="keep-in-present">Each operator provides the same interface for requesting rows. This lets the planner connect operators into a tree, as long as the tree preserves the query’s meaning and provides the fields each operator needs.</p>
+<p class="keep-in-present">Each operator provides the same interface for requesting rows. The planner connects operators into a tree through this interface. The tree must preserve the query’s meaning and provide the fields each operator needs.</p>
 
 <h3 class="new-slide" data-kicker="Layer 3 of 5">The records layer is where bytes become rows</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Job</span><span>Decide how a row's values are arranged inside a page, and record every table's schema in the catalog.</span></div>
+  <div class="lc-row"><span class="lc-k">Job</span><span>Define the positions of a row's values inside a page. Store each table's schema in the catalog.</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span>"row 2 of students" → the exact byte offsets holding <code>(2, 'ben', 31)</code></span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>record pages (fixed layout per schema), table scans (walk every record), the catalog (tables about tables)</span></div>
   <div class="lc-row"><span class="lc-k">You build</span><span>Lab 3 · <code>record_manager.py</code>, used by the provided <code>catalog.py</code></span></div>
-  <div class="lc-row"><span class="lc-k">Production example</span><span>Postgres's <code>\d students</code> is a catalog query; its heap tuples are this layer's records<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: psql">3</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Production example</span><span>Postgres's <code>\d students</code> is a catalog query. Its heap tuples are records in this layer<sup class="src"><a href="#src-3" title="PostgreSQL Documentation: psql">3</a></sup></span></div>
 </div>
 
 <p class="keep-in-present">The record layer translates between field values and byte offsets. The file manager can therefore read and write blocks without knowing the table’s schema.</p>
@@ -301,7 +300,7 @@ right below the sentence you're reading.
   <div class="lc-row"><span class="lc-k">In → out</span><span>"I need block 7 of students.tbl" → a pinned page in memory (from cache if possible)</span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>pin/unpin calls, <span class="gloss" data-gloss="lru">LRU</span> replacement, and hit-rate measurement</span></div>
   <div class="lc-row"><span class="lc-k">You build</span><span>Lab 2 · <code>buffer_manager.py</code>, and you measure its hit rate on a real workload</span></div>
-  <div class="lc-row"><span class="lc-k">Production example</span><span>Postgres's <code>shared_buffers</code> setting sizes exactly this; the demo's warm run was this layer<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Production example</span><span>Postgres's <code>shared_buffers</code> setting controls the buffer-pool size. The warm run in the animation uses this layer<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: Resource Consumption (shared_buffers)">4</a></sup></span></div>
 </div>
 
 <p class="keep-in-present">Queries that repeatedly access a working set that fits in the buffer pool can avoid many disk reads. Lecture 2 examines how the access pattern and eviction policy affect this benefit.</p>
@@ -309,22 +308,22 @@ right below the sentence you're reading.
 <h3 class="new-slide" data-kicker="Layer 5 of 5">The file manager reads and writes database blocks</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Job</span><span>Treat each file as an array of fixed-size blocks; read and write exactly one whole block at a time.</span></div>
+  <div class="lc-row"><span class="lc-k">Job</span><span>Treat each file as an array of fixed-size blocks. Read or write one complete block at a time.</span></div>
   <div class="lc-row"><span class="lc-k">In → out</span><span>BlockId('students.tbl', 1) → 4096 bytes, moved between disk and a <span class="gloss" data-gloss="page">Page</span></span></div>
   <div class="lc-row"><span class="lc-k">Inside</span><span>seek to <code>block × block_size</code> · read/write · and <span class="gloss" data-gloss="fsync">fsync</span> when durability demands it</span></div>
   <div class="lc-row"><span class="lc-k">You build</span><span>Lab 1 · <code>file_manager.py</code>: <strong>Thursday.</strong> Three classes, ten methods, nine tests.</span></div>
-  <div class="lc-row"><span class="lc-k">Production example</span><span>SQLite documents its database file layout; PostgreSQL’s <code>storage/smgr</code> manages storage access.<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/smgr/README">5</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Production example</span><span>SQLite documents its database file layout. PostgreSQL’s <code>storage/smgr</code> manages storage access.<sup class="src"><a href="#src-5" title="PostgreSQL source: src/backend/storage/smgr/README">5</a></sup></span></div>
 </div>
 
 <p class="keep-in-present">The file manager handles bytes at calculated offsets. The record and query layers rely on these reads and writes, so it is the first component you will build.</p>
 
 <h3 class="new-slide" data-kicker="The five layers">The write-ahead log supports crash recovery</h3>
 
-<p class="keep-in-present">The <strong>write-ahead log</strong> records changes in an append-only file. The required log records must reach durable storage before the corresponding changed data pages do. After a crash, recovery uses the log to restore committed changes and remove incomplete changes, according to the engine’s recovery policy<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: Write-Ahead Logging (WAL)">6</a></sup>.</p>
+<p class="keep-in-present">The <strong>write-ahead log</strong> records changes in an append-only file. The required log records must reach durable storage before the corresponding changed data pages do. After a crash, recovery reads the log. The engine’s recovery policy determines how to restore committed changes and remove incomplete changes<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: Write-Ahead Logging (WAL)">6</a></sup>.</p>
 
 <div class="callout insight">
   <span class="label">The kill -9 test</span>
-  <p class="keep-in-present">In optional Lab 7 you can use <code>kill -9</code> to stop microdb during a transaction, restart it, and check that recovery preserves committed work and undoes incomplete work. Lab 1’s <code>fsync</code> measurement introduces the cost of making writes durable.</p>
+  <p class="keep-in-present">Optional Lab 7 tests crash recovery. Use <code>kill -9</code> to stop microdb during a transaction. Restart microdb. Check that recovery preserves committed work and undoes incomplete work. Lab 1’s <code>fsync</code> measurement introduces the cost of making writes durable.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -338,17 +337,13 @@ right below the sentence you're reading.
 
 <div class="viz" id="viz-latency">
   <div class="viz-title">The latency ladder</div>
-  <p class="viz-description">Log scale: every gridline is 10× the one to its left, so bar
-  <em>length</em> counts decades, not multiples: the disk bar is three times the L1 bar and ten
-  million times the latency. That is why the true ratio is printed on the right<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>. Toggle human
-  scale to feel it: if one L1 cache hit took one second, a spinning-disk seek would take four
-  months.</p>
+  <p class="viz-description">The chart uses a logarithmic scale. Each gridline represents 10× the value to its left. Bar <em>length</em> therefore counts powers of ten. The disk bar is three times the L1 bar length, but its latency is ten million times larger. The right column gives the latency ratio<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>. </p>
+  <p class="viz-description">Select human scale to compare familiar durations. If one L1 cache hit took one second, a spinning-disk seek would take four months.</p>
   <div class="qj-controls">
     <button type="button" class="btn" id="lat-human">Human scale: off</button>
   </div>
   <div class="lat-rows" id="lat-rows"></div>
-  <p class="viz-caption">Figures are representative, after Colin Scott's interactive latency page;
-  your hardware varies. The <em>ratios</em> are what to remember.</p>
+  <p class="viz-caption">These representative values come from Colin Scott's interactive latency page. Actual values depend on the hardware. Compare the <em>ratios</em>.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="Pay by the trip">Consequence 1: read and cache a whole block</h3>
@@ -356,7 +351,7 @@ right below the sentence you're reading.
 <p class="keep-in-present">For small reads, the fixed cost of a storage request can dominate transfer time. Reading a whole block lets the database reuse nearby data from memory instead of issuing another storage request.</p>
 
 <div class="callout insight">
-  <span class="label">The arithmetic of a wasted trip</span>
+  <span class="label">Compare one storage read with one memory access</span>
   <p class="keep-in-present">Suppose an NVMe SSD read takes about 25&nbsp;µs and a buffer-pool hit takes 100&nbsp;ns. If ada and ben occupy the same block, reading the block for ada also brings ben into memory. A later access to ben can then avoid another SSD read. In this simplified model, that memory access is 250× faster.</p>
 </div>
 
@@ -364,7 +359,7 @@ right below the sentence you're reading.
 
 <h3 class="new-slide" data-kicker="Pay by the trip">Consequence 2: start by counting disk trips</h3>
 
-<p>Our first cost model counts block accesses. Some requests require a disk read; others find the block in memory. We estimate their total time separately:</p>
+<p>Our first cost model counts block accesses. Some requests require a disk read. Other requests find the block in memory. We estimate their total time separately:</p>
 
 <div class="math">
 \[ T(\text{query}) \;\approx\; n_{\text{disk}} \cdot t_{\text{disk}} \;+\; n_{\text{mem}} \cdot t_{\text{mem}} \]
@@ -373,30 +368,28 @@ buffer-pool hit<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Less
 the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)">7</a></sup>.</p>
 <p><code>students</code> lives in 2 blocks, so the demo's two runs of the same query cost:</p>
 \[ \text{cold run: } 2 \cdot 25\,\mu\text{s} + 0 \cdot 100\,\text{ns} = 50\,\mu\text{s} \qquad\quad \text{warm run: } 0 \cdot 25\,\mu\text{s} + 2 \cdot 100\,\text{ns} = 0.2\,\mu\text{s} \]
-<p>In this simplified I/O model, the warm run is 250× faster. These figures count block access only; they are not measured end-to-end Python query times.</p>
+<p>In this simplified I/O model, the warm run is 250× faster. These estimates count only block access. They do not measure the complete Python query execution time.</p>
 </div>
 
-<p class="keep-in-present">Reducing disk reads is our first optimization target. CPU work, memory bandwidth, parsing, and network traffic also matter; later lectures extend this cost model.</p>
+<p class="keep-in-present">Reducing disk reads is our first optimization target. CPU work, memory bandwidth, parsing, and network traffic also affect query time. Later lectures extend this cost model.</p>
 
 <h3 class="new-slide" data-kicker="Pay by the trip">Check yourself: the speedup grows with the table</h3>
 
 <div class="exercise">
   <span class="ex-label">Check yourself · count block reads</span>
   <p>A table occupies 500 blocks. Query A scans all of them. Query B uses an index that
-  reads 4 index blocks, then jumps to the 3 blocks holding matching rows. With a disk trip
-  at ~25&nbsp;µs and a memory read effectively free: how much faster is B, and what happens
-  to that ratio when the table grows to 500,000 blocks?</p>
+  reads 4 index blocks, then jumps to the 3 blocks holding matching rows. Assume each disk read takes ~25&nbsp;µs and memory-read time is negligible. How much faster is B? What happens to that ratio when the table grows to 500,000 blocks?</p>
   <details><summary>Show answer</summary>
-  <p>A costs \(500 \times 25\,\mu\text{s} \approx 12.5\ \text{ms}\); B costs \(7 \times 25\,\mu\text{s} \approx 0.18\ \text{ms}\), about <strong>70× faster</strong>. If the table grows 1000× while the matching rows still occupy three blocks, A’s work grows 1000×. B’s work grows much more slowly as the index gains levels. The exact ratio depends on the index height and number of matching blocks; Lab 6 measures this difference.</p>
+  <p>A costs \(500 \times 25\,\mu\text{s} \approx 12.5\ \text{ms}\). B costs \(7 \times 25\,\mu\text{s} \approx 0.18\ \text{ms}\), about <strong>70× faster</strong>. If the table grows 1000× while the matching rows still occupy three blocks, A’s work grows 1000×. B’s work grows much more slowly as the index gains levels. The exact ratio depends on index height and the number of matching blocks. Lab 6 measures this difference.</p>
   </details>
 </div>
 
 <h3 class="new-slide" data-kicker="Pay by the trip">Storage units differ across systems and workloads</h3>
 
-<p>These systems group data into different units. Pages are small physical storage units; analytical row groups organize much larger collections of rows and are not necessarily read in a single I/O request:</p>
+<p>These systems group data into different units. Pages are small physical storage units. Analytical row groups contain much larger collections of rows. A row group can require multiple I/O requests:</p>
 
 <table>
-  <thead><tr><th>System</th><th>Unit of I/O</th><th>Size</th><th>Workload it's tuned for</th></tr></thead>
+  <thead><tr><th>System</th><th>Unit of I/O</th><th>Size</th><th>Intended workload</th></tr></thead>
   <tbody>
     <tr><td>microdb (Thursday)</td><td>block</td><td>4 KB</td><td>learning: small enough to hexdump</td></tr>
     <tr><td>SQLite</td><td>page</td><td>4 KB default</td><td>one app, one file, mixed reads/writes<sup class="src"><a href="#src-9" title="SQLite Pragma Statements: PRAGMA page_size">9</a></sup></td></tr>
@@ -416,10 +409,9 @@ the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Less
 
 <div class="viz" id="viz-microdb-plan">
   <div class="viz-title">Bottom-up build order · hover each layer</div>
-  <p class="viz-description">The interfaces between layers are frozen all semester, so week 3's
-  code calls week 2's exactly as published.</p>
+  <p class="viz-description">The published interfaces remain fixed throughout the semester. Week 3 code uses the same week 2 interface.</p>
   <div class="mp-stack" id="mp-stack"></div>
-  <div class="ls-info" id="mp-info">Hover a layer: what it does, what you'll implement, what you'll measure.</div>
+  <div class="ls-info" id="mp-info">Hover over a layer to see its purpose, required implementation, and measurement.</div>
 </div>
 
 <h3 class="new-slide" data-kicker="The microdb plan">Each lab includes working lower layers and a measurement</h3>
@@ -439,16 +431,15 @@ the disk spins)<sup class="src"><a href="#src-7" title="Jeff Dean, Designs, Less
 <h2 id="thursday">Prepare for Lab 1</h2>
 
 <p>Lab 1 builds the bottom layer: the file manager. Its three small classes establish the byte-layout
-contract that later layers depend on. Hover each line to see its role; the full specification is on
-the lab page.</p>
+contract that later layers depend on. Hover over a line to see its role. The lab page gives the complete specification.</p>
 
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="blockid" data-step-name="BlockId" data-explain="A block identifier contains a filename and block number. It is immutable and hashable, so it can be used as a dictionary key. Lab 2 uses a frame-list lookup for simplicity.">class BlockId:               # names block k of a file: ('students.tbl', 0)</div>
-  <div class="code-step" data-step="page" data-step-name="Page" data-explain="A block-sized bytearray with typed accessors. Ints are 4-byte little-endian ('&lt;i'); strings are UTF-8 with a 4-byte length prefix.">class Page:                  # a block-sized bytearray + typed get/set</div>
-  <div class="code-step" data-step="page" data-step-name="Page API" data-explain="You implement all six: get/set for int, bytes, string. The harness round-trips the pinned ada row through them.">    def get_int(off) / set_int(off, val) / get_string(off) / set_string(off, s)</div>
-  <div class="code-step" data-step="fm" data-step-name="FileManager" data-explain="The only class that touches the OS: seek to block k × block_size, read or write exactly one block.">class FileManager:           # moves whole blocks between disk and Pages</div>
-  <div class="code-step" data-step="fm" data-step-name="read / write" data-explain="write() ends with flush + fsync when sync=True, the durability promise you'll price in Part 3 of the lab.">    def read(block, page) / write(block, page, sync=True)</div>
-  <div class="code-step" data-step="fm" data-step-name="append / length" data-explain="append grows the file by one zeroed block and returns its BlockId; length reports the file's size in blocks.">    def append(filename) -> BlockId / length(filename) -> int</div>
+  <div class="code-step" data-step="page" data-step-name="Page" data-explain="A block-sized bytearray with typed accessors. Integers use four-byte little-endian encoding ('&lt;i'). Strings use UTF-8 with a four-byte length prefix.">class Page:                  # a block-sized bytearray + typed get/set</div>
+  <div class="code-step" data-step="page" data-step-name="Page API" data-explain="Implement six methods: get and set for integers, bytes, and strings. The harness writes and reads the fixed ada example.">    def get_int(off) / set_int(off, val) / get_string(off) / set_string(off, s)</div>
+  <div class="code-step" data-step="fm" data-step-name="FileManager" data-explain="This class performs OS file operations. It seeks to block k × block_size. It then reads or writes one complete block.">class FileManager:           # moves whole blocks between disk and Pages</div>
+  <div class="code-step" data-step="fm" data-step-name="read / write" data-explain="When sync=True, write() finishes with flush and fsync. Part 3 measures the cost of this durability requirement.">    def read(block, page) / write(block, page, sync=True)</div>
+  <div class="code-step" data-step="fm" data-step-name="append / length" data-explain="append adds one zeroed block to the file and returns its BlockId. length reports the file's size in blocks.">    def append(filename) -> BlockId / length(filename) -> int</div>
   <div class="code-explain-panel">Hover a line to see its job in the engine.</div>
 </div>
 
@@ -457,13 +448,12 @@ the lab page.</p>
 <h3 class="new-slide" id="byte-order" data-kicker="On Thursday you build this">Reading and writing must use the same byte order</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The decision</span><span><code>set_int(0, 1)</code> has to put four bytes somewhere, and the order it puts them in is a decision, not a fact.</span></div>
-  <div class="lc-row"><span class="lc-k">Both in use</span><span>microdb uses little-endian integers. Many network protocols specify big-endian order; other formats make different choices. Always follow the format’s declared byte order.<sup class="src"><a href="#src-12" title="RFC 1700: Assigned Numbers (Data Notations)">12</a></sup><sup class="src"><a href="#src-13" title="SQLite Database File Format">13</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">The decision</span><span><code>set_int(0, 1)</code> stores four bytes. The file format specifies their order.</span></div>
+  <div class="lc-row"><span class="lc-k">Both in use</span><span>microdb uses little-endian integers. Many network protocols specify big-endian order. Other formats make different choices. Always follow the format’s declared byte order.<sup class="src"><a href="#src-12" title="RFC 1700: Assigned Numbers (Data Notations)">12</a></sup><sup class="src"><a href="#src-13" title="SQLite Database File Format">13</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Thursday's spec</span><span>picks one, <code>struct '&lt;i'</code> (little-endian), and the tests enforce it literally.</span></div>
 </div>
 
-<p>The byte displays in this course use two hexadecimal digits per byte. To convert a pair to decimal, multiply and add: the first digit counts 16s, the second counts 1s, and the digits A through F stand for
-10 through 15. Keep this table handy; it decodes every byte the widget below prints.</p>
+<p>The byte displays in this course use two hexadecimal digits per byte. The first digit counts groups of 16. The second digit counts units. Digits A through F represent 10 through 15. To convert a pair to decimal, calculate 16 × the first digit + the second digit. Use this table to decode the widget bytes.</p>
 
 <table id="hex-table">
   <thead><tr><th>Hex byte</th><th>Arithmetic</th><th>Decimal</th></tr></thead>
@@ -494,10 +484,10 @@ the lab page.</p>
 <h3 class="new-slide" data-kicker="On Thursday you build this">Setup checklist: do this before class</h3>
 
 <ul class="checklist">
-  <li>☐ <strong>Python 3.11+</strong> installed and on your path: <code>python3 --version</code> says so. Any OS, any editor. No packages needed; Lab 1 is pure standard library.</li>
-  <li>☐ A local course folder (not OneDrive/Dropbox-synced; sync clients hold file locks at the worst moments).</li>
+  <li>☐ <strong>Python 3.11+</strong> installed and on your path: <code>python3 --version</code> says so. Any OS, any editor. Lab 1 uses only the standard library. No additional packages are required.</li>
+  <li>☐ Use a local course folder without OneDrive or Dropbox synchronization. Synchronization clients can hold file locks.</li>
   <li>☐ The three starter files downloaded from the lab page: <code>file_manager.py</code>, <code>test_filemanager.py</code>, <code>measure_io.py</code>.</li>
-  <li>☐ Harness runs: <code>python3 test_filemanager.py</code> prints <strong>0/9 passed</strong>; nine clean failures is the correct starting state.</li>
+  <li>☐ Harness runs: <code>python3 test_filemanager.py</code> prints <strong>0/9 passed</strong>. Nine expected failures are the correct starting state.</li>
   <li>☐ Laptop charged. 75 minutes goes fast.</li>
 </ul>
 
@@ -507,10 +497,10 @@ the lab page.</p>
 <div class="exercise learning-check">
   <span class="ex-label">Explain it to a teammate</span>
   <p>Return to the two runs. Suppose a table update happens between them while both blocks stay cached. Can the engine return the old result just because it needs no new disk reads?</p>
-  <details><summary>Check your explanation</summary><p>No. A page cache supplies the current buffered data to execution; it is not a cache of the old answer. Run the plan, examine rows, and apply the predicate again. Keep result counts, examined rows, and storage reads separate.</p></details>
+  <details><summary>Check your explanation</summary><p>No. The page cache supplies buffered data to query execution. It does not store the previous query result.</p><p>Run the plan again. Examine the rows. Apply the predicate again. Keep result counts, examined rows, and storage reads separate.</p></details>
 </div>
 
-<p class="keep-in-present">Trace the same request again: interpret SQL, build a plan, request rows, locate their bytes, and obtain their blocks. The second run can skip storage reads while the other work remains.</p>
+<p class="keep-in-present">Trace the request again. The engine interprets SQL and builds a plan. The plan requests rows. Lower layers locate the bytes and obtain the blocks. The second run can skip storage reads while the other work remains.</p>
 
 <p>Three ideas to carry into the labs:</p>
 
@@ -520,11 +510,10 @@ the lab page.</p>
   <li><strong>Declarative SQL leaves execution choices to the planner.</strong> Different valid plans can return the same rows with very different amounts of work.</li>
 </ul>
 
-<p class="key-fact keep-in-present"><strong>250× · 1000×</strong> one disk trip costs 250 memory reads; two correct plans for one query can differ by 1000×</p>
+<p class="key-fact keep-in-present"><strong>250× · 1000×</strong> one disk read costs as much as 250 memory reads. Two correct plans can differ in work by 1000×.</p>
 
 <p class="keep-in-present"><strong>Thursday:</strong> build the file manager (bring a charged
-laptop). <strong>Next Tuesday:</strong> the buffer pool; bring your fsync ratio and Quiz 1
-opens the class (files, blocks &amp; pages).</p>
+laptop). <strong>Next Tuesday:</strong> the buffer pool. Bring your fsync ratio. Quiz 1 opens the class (files, blocks &amp; pages).</p>
 
 <p class="keep-in-present"><strong>Before Thursday:</strong></p>
 <ul>
@@ -537,20 +526,17 @@ opens the class (files, blocks &amp; pages).</p>
 <h2 id="faq">FAQ</h2>
 
 <h3>Do I need a systems or databases background?</h3>
-<p class="keep-in-present">No, that's the point of the course. You need comfortable Python and basic SQL
-(<code>SELECT</code>/<code>JOIN</code>/<code>GROUP BY</code>). Everything below the SQL line
-is built, not assumed.</p>
+<p class="keep-in-present">No. You need Python proficiency and basic SQL (<code>SELECT</code>/<code>JOIN</code>/<code>GROUP BY</code>). The course teaches the components below the SQL interface.</p>
 
 <h3>What should I review if my SQL is rusty?</h3>
-<p class="keep-in-present">For the first lecture, review single-table <code>SELECT … WHERE</code> queries. Familiarity with basic joins and grouping will help later; the course explains how an engine implements these operations.</p>
+<p class="keep-in-present">For the first lecture, review single-table <code>SELECT … WHERE</code> queries. Basic joins and grouping will help in later lectures. The course explains how an engine implements these operations.</p>
 
 <h3>What do I need installed for Thursday?</h3>
 <p class="keep-in-present">See the setup checklist above: Python 3.11+, an editor, the three starter files, and
-nothing else. Windows users: everything works natively; if <code>os.fsync</code> misbehaves
-under OneDrive-synced folders, work in a local directory like <code>C:\dev\microdb</code>.</p>
+nothing else. The lab runs natively on Windows. If <code>os.fsync</code> fails in a OneDrive-synced folder, use a local directory such as <code>C:\dev\microdb</code>.</p>
 
 <h3>Can I use Copilot / Claude / ChatGPT on labs?</h3>
-<p class="keep-in-present">You may use these tools to help understand the material. For submitted code, the course rule is the same as the project rule: you must be able to explain each line when asked. Use the lab work to prepare for the midterm’s questions about how the engine works.</p>
+<p class="keep-in-present">You may use these tools to help understand the material. The project rule also applies to submitted lab code. You must be able to explain each line when asked. Use the lab work to prepare for the midterm’s questions about how the engine works.</p>
 
 <h3>Is there a textbook to buy?</h3>
 <p class="keep-in-present">No purchase is required. Sciore’s <em>Database Design and Implementation</em> provides additional explanations of the components we build. UVA’s library has electronic access.</p>
@@ -570,14 +556,14 @@ document that supports the claim it is attached to.</p>
   <li id="src-4"><a href="https://www.postgresql.org/docs/current/runtime-config-resource.html">PostgreSQL Documentation: Resource Consumption (shared_buffers)</a></li>
   <li id="src-5"><a href="https://github.com/postgres/postgres/blob/master/src/backend/storage/smgr/README">PostgreSQL source: src/backend/storage/smgr/README</a></li>
   <li id="src-6"><a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL Documentation: Write-Ahead Logging (WAL)</a></li>
-  <li id="src-7"><a href="https://static.googleusercontent.com/media/research.google.com/en//people/jeff/stanford-295-talk.pdf">Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)</a> <span class="src-note">With Dean's figures (L1 0.5 ns, seek 10 ms) the ratio is 2 x 10^7 (about 8 months); with Colin Scott's 2020 model (L1 about 1 ns, seek about 2.5 ms) it is 2.5 x 10^6 (about 1 month); 10^7 sits between the two.</span></li>
-  <li id="src-8"><a href="https://colin-scott.github.io/personal_website/research/interactive_latency.html">Latency Numbers Every Programmer Should Know (interactive)</a> <span class="src-note">The cited latency page models SSD random read at 16,000 ns (16 us) for 2014 onward, so 25 us is the same order of magnitude but not the page's figure.</span></li>
+  <li id="src-7"><a href="https://static.googleusercontent.com/media/research.google.com/en//people/jeff/stanford-295-talk.pdf">Jeff Dean, Designs, Lessons and Advice from Building Large Distributed Systems (Numbers Everyone Should Know)</a> <span class="src-note">Dean uses L1 0.5 ns and seek 10 ms. Their ratio is 2 x 10^7, or about 8 months on the human scale. Colin Scott's 2020 model uses L1 about 1 ns and seek about 2.5 ms. Their ratio is 2.5 x 10^6, or about 1 month. The lecture's 10^7 ratio lies between these values.</span></li>
+  <li id="src-8"><a href="https://colin-scott.github.io/personal_website/research/interactive_latency.html">Latency Numbers Every Programmer Should Know (interactive)</a> <span class="src-note">The cited page models SSD random reads at 16,000 ns (16 us) from 2014 onward. The lecture's 25 us has the same order of magnitude, but differs from the cited value.</span></li>
   <li id="src-9"><a href="https://www.sqlite.org/pragma.html#pragma_page_size">SQLite Pragma Statements: PRAGMA page_size</a></li>
   <li id="src-10"><a href="https://www.postgresql.org/docs/current/storage-page-layout.html">PostgreSQL Documentation: Database Page Layout</a></li>
-  <li id="src-11"><a href="https://duckdb.org/docs/current/guides/performance/how_to_tune_workloads">DuckDB Documentation: Tuning Workloads</a> <span class="src-note">DuckDB's native row group is 122,880 rows; the Parquet project itself recommends much larger row groups of 512 MB to 1 GB.</span></li>
+  <li id="src-11"><a href="https://duckdb.org/docs/current/guides/performance/how_to_tune_workloads">DuckDB Documentation: Tuning Workloads</a> <span class="src-note">DuckDB's native row group contains 122,880 rows. The Parquet project recommends larger row groups of 512 MB to 1 GB.</span></li>
   <li id="src-12"><a href="https://www.rfc-editor.org/rfc/rfc1700">RFC 1700: Assigned Numbers (Data Notations)</a></li>
   <li id="src-13"><a href="https://www.sqlite.org/fileformat.html">SQLite Database File Format</a></li>
-  <li id="src-14"><a href="https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-1-manual.pdf">Intel 64 and IA-32 Architectures Software Developer's Manual, Section 1.3.1 Bit and Byte Order</a> <span class="src-note">Intel's manual states IA-32/Intel 64 processors are little endian; ARM is bi-endian by design, but little-endian is the default (GCC generates little-endian code for aarch64-* targets unless aarch64_be is chosen).</span></li>
+  <li id="src-14"><a href="https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-1-manual.pdf">Intel 64 and IA-32 Architectures Software Developer's Manual, Section 1.3.1 Bit and Byte Order</a> <span class="src-note">Intel's manual specifies little-endian order for IA-32/Intel 64 processors. ARM supports both orders, with little-endian as the default. GCC generates little-endian code for aarch64-* targets unless aarch64_be is selected.</span></li>
 </ol>
 
 </main>
@@ -586,8 +572,8 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="../../labs/_shared/query-journey.js?v=1"></script>
-<script src="viz.js?v=9"></script>
+<script src="../../labs/_shared/query-journey.js?v=ste-20261015"></script>
+<script src="viz.js?v=ste-20261015"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>

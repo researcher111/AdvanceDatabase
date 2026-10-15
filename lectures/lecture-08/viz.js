@@ -5,15 +5,15 @@
   const GLOSSARY = {
     'snapshot-isolation': {
       title: 'Snapshot isolation',
-      body: "<p>A transaction reads from a consistent snapshot of committed data, while also seeing its own changes. Concurrent transactions that write the same row cannot both commit under snapshot isolation. Transactions that read overlapping data but write different rows can still exhibit write skew. PostgreSQL REPEATABLE READ provides snapshot isolation; SERIALIZABLE adds checks for nonserializable outcomes.</p>",
+      body: "<p>A transaction reads a consistent snapshot of committed data and sees its own changes. Concurrent transactions that write the same row cannot both commit. Transactions that read overlapping data but write different rows can still produce write skew. PostgreSQL REPEATABLE READ provides snapshot isolation. SERIALIZABLE adds checks for results that no serial execution permits.</p>",
     },
     'strict-2pl': {
       title: 'Strict 2PL (strict two-phase locking)',
-      body: "<p>Two-phase locking requires a transaction to acquire appropriate locks before access and forbids acquiring new locks after it starts releasing them. Shared locks permit concurrent readers; exclusive locks conflict with other holders. Strict 2PL holds exclusive locks until completion. The lab holds both shared and exclusive locks until completion, a stronger variant also called rigorous 2PL. Predicate or range protection is needed when a query’s matching set must be protected.</p>",
+      body: "<p>Two-phase locking requires appropriate locks before access. After releasing a lock, a transaction cannot acquire another. Shared locks permit concurrent readers. Exclusive locks conflict with other holders. Strict 2PL retains exclusive locks until completion.</p><p>The lab retains both shared and exclusive locks until completion. This stronger variant is also called rigorous 2PL. Queries that need protection for their complete matching set also need predicate or range protection.</p>",
     },
     'mvcc-intro': {
       title: 'MVCC (multi-version concurrency control)',
-      body: "<p>An update creates a new row version while retaining older versions that readers may need. Each read uses its snapshot and version metadata to determine visibility. Ordinary snapshot reads avoid conflicting row locks, but writes can still conflict. At PostgreSQL READ COMMITTED, each statement takes a fresh snapshot; REPEATABLE READ uses one transaction snapshot.</p>",
+      body: "<p>An update creates a new row version and retains older versions that readers can need. A read uses its snapshot and version metadata to determine visibility. Ordinary snapshot reads avoid conflicting row locks. Writes can still conflict. PostgreSQL READ COMMITTED uses a new snapshot for each statement. REPEATABLE READ uses one transaction snapshot.</p>",
     },
     'serializable': {
       title: 'Serializability',
@@ -21,15 +21,15 @@
     },
     'deadlock': {
       title: 'Deadlock',
-      body: "<p>A cycle of lock waits. For example, tx1 holds A and waits for B while tx2 holds B and waits for A. Neither can proceed until the cycle is broken. Engines can detect the cycle and abort one transaction. Consistent lock-acquisition order helps prevent deadlocks; applications should be prepared to retry aborted transactions.</p>",
+      body: "<p>A deadlock is a cycle of lock waits. For example, tx1 holds A and waits for B, while tx2 holds B and waits for A. Neither can proceed until the system breaks the cycle. An engine can detect the cycle and abort one transaction. A consistent lock-acquisition order helps prevent deadlocks. Applications must be able to retry aborted transactions.</p>",
     },
     'vacuum': {
       title: 'VACUUM',
-      body: "<p>PostgreSQL maintenance that reclaims storage from row versions no active snapshot still needs, among other tasks. Autovacuum schedules this work automatically. A long-lived snapshot can delay reclamation of versions it might read, increasing storage use. This differs from microdb’s immediate reuse of deleted slots.</p>",
+      body: "<p>VACUUM reclaims storage from row versions that no active snapshot needs. It also performs other PostgreSQL maintenance. Autovacuum schedules this work automatically. A long transaction snapshot can delay reclamation of old versions and increase storage use. Microdb instead reuses deleted slots immediately.</p>",
     },
     'snapshot': {
       title: 'Snapshot',
-      body: "<p>Information defining which committed changes a read can see, including transaction boundaries and active transaction IDs. Visibility checks combine that information with row-version metadata and transaction status. A statement snapshot can differ from the next statement’s snapshot; under REPEATABLE READ, statements share a transaction snapshot.</p>",
+      body: "<p>A snapshot identifies committed changes that a read can see. It includes transaction boundaries and active transaction IDs. Visibility checks combine this information with row-version metadata and transaction status. Successive statement snapshots can differ. Under REPEATABLE READ, statements share one transaction snapshot.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -77,8 +77,8 @@
       `A = $${A}` +
       (lockBox.checked ? `<div class="lockline">X-lock: ${xlockHolder === null ? 'free' : 'held by tx' + (xlockHolder + 1)}</div>` : '') +
       (both ? (lost
-        ? `<div class="lost">Both committed “+$10”, but A = $${A}. A deposit is GONE.</div>`
-        : `<div>Both committed: $120. Serial-equivalent — correct.</div>`) : '');
+        ? `<div class="lost">Both committed “+$10”, but A = $${A}. One deposit is missing.</div>`
+        : `<div>Both committed. The balance is $120, as in serial execution.</div>`) : '');
     stats.textContent = `tx1: step ${tx[0].pos}/4    tx2: step ${tx[1].pos}/4    locks: ${lockBox.checked ? 'strict 2PL' : 'off'}`;
   }
 
@@ -94,8 +94,8 @@
       if (action === 'write A' && xlockHolder === null && other.pos >= 1 && other.pos < 4) {
         me.refused = true;
         msg.innerHTML = `tx${t + 1} write A → <strong>LockAbortError</strong>: tx${2 - t} still holds a ` +
-          `read lock. (In real engines: tx${t + 1} would WAIT — and if both upgrade, deadlock; ` +
-          `one gets shot. Either way, the lost update is prevented.)`;
+          `read lock. An engine that supports waiting can block tx${t + 1}. If both request upgrades, a deadlock occurs. ` +
+          `The engine must abort a transaction to break the cycle. Both approaches prevent the lost update.`;
         render();
         return;
       }
@@ -119,7 +119,7 @@
       msg.innerHTML = `tx${t + 1} reads A → <strong>$${A}</strong> into its local variable.`;
     } else if (action === 'compute +10') {
       me.local = me.readVal + 10;
-      msg.innerHTML = `tx${t + 1} computes ${me.readVal} + 10 = <strong>${me.local}</strong> — in memory, using its possibly-stale read.`;
+      msg.innerHTML = `tx${t + 1} computes ${me.readVal} + 10 = <strong>${me.local}</strong>. It uses the value from its earlier read, which can be outdated.`;
     } else if (action === 'write A') {
       A = me.local;
       msg.innerHTML = `tx${t + 1} writes A := <strong>$${A}</strong>.` +
@@ -176,7 +176,7 @@
         `<div class="chain-verdict">${visible ? 'VISIBLE to me' : 'invisible'}</div>` +
         `</div>`;
     }).join('<div class="chain-link">→</div>') + '</div>' +
-    `<div class="chain-msg">This reader computes <strong>balance = ${seen.balance}</strong> — ` +
+    `<div class="chain-msg">This reader sees <strong>balance = ${seen.balance}</strong>. ` +
     `A REPEATABLE READ transaction keeps this snapshot for later statements, while still seeing its own changes.</div>`;
   }
   slider.addEventListener('input', render);
@@ -204,13 +204,13 @@
   const LEVELS = [
     { name: 'READ UNCOMMITTED', blocks: [],
       who: 'the weakest standard isolation level',
-      price: 'Allows dirty reads in the standard. Some engines provide stronger behavior; PostgreSQL treats this level as READ COMMITTED.' },
+      price: 'Allows dirty reads in the standard. Some engines provide stronger behavior. PostgreSQL treats this level as READ COMMITTED.' },
     { name: 'READ COMMITTED', blocks: ['dirty'],
       who: 'Postgres’s default',
       price: 'Each statement sees committed data. In PostgreSQL it uses a fresh snapshot, so two statements in one transaction may see different committed values.' },
     { name: 'REPEATABLE READ', blocks: ['dirty', 'nonrep'],
-      who: 'MySQL’s default; in Postgres this level = a full snapshot',
-      price: 'Implementations can retain read locks or a transaction snapshot. The standard permits phantoms at this level; PostgreSQL snapshot reads prevent them but can still allow write skew.' },
+      who: 'MySQL’s default. PostgreSQL uses a transaction snapshot.',
+      price: 'Implementations can retain read locks or a transaction snapshot. The standard permits phantoms at this level. PostgreSQL snapshot reads prevent phantoms but can still permit write skew.' },
     { name: 'SERIALIZABLE', blocks: ['dirty', 'nonrep', 'phantom'],
       who: 'equivalent to a serial execution',
       price: 'Implementations use techniques such as predicate/range locking or conflict detection. Applications must be prepared to retry transactions aborted to preserve serializability.' },

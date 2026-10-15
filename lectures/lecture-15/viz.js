@@ -13,7 +13,7 @@
     },
     'bfs': {
       title: 'Breadth-first search (BFS)',
-      body: "<p>Breadth-first search expands nodes in increasing hop distance from a start node. A visited set avoids repeatedly expanding the same node. With equal edge costs, the first visit to a target finds a shortest path to it. Kuzu provides a shortest-path operator; SQL can express a search with recursive queries and appropriate stopping rules. Weighted paths require an algorithm suited to their costs.</p>",
+      body: "<p>Breadth-first search expands nodes in increasing hop distance from a start node. A visited set prevents repeated expansion of the same node. With equal edge costs, the first target visit identifies a shortest path. Kuzu provides a shortest-path operator. SQL can express search with recursive queries and appropriate stopping rules. Weighted paths require an algorithm suited to their costs.</p>",
     },
     'adjacency-list': {
       title: 'Adjacency list',
@@ -21,7 +21,7 @@
     },
     'ifa': {
       title: 'Index-free adjacency',
-      body: "<p>Index-free adjacency stores direct references between connected nodes, avoiding an index lookup for each traversal step. It reduces neighbor-lookup work, but visiting many neighbors still costs time and may require storage reads. Graph engines differ in their physical representation; not every graph product uses the same pointer layout.</p>",
+      body: "<p>Index-free adjacency stores direct references between connected nodes. It avoids an index lookup at each traversal step. Visiting many neighbors still takes time and can require storage reads. Graph engines use different physical representations. They do not all use the same pointer layout.</p>",
     },
     'supernode': {
       title: 'Supernode',

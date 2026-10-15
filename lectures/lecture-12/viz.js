@@ -9,15 +9,15 @@
     },
     'lost-in-the-middle': {
       title: 'Lost in the middle',
-      body: "<p>Liu et al. found that the tested language models used evidence less reliably when it appeared in the middle of a long context than at the beginning or end. This makes passage selection and ordering worth evaluating. Sending more retrieved text does not automatically improve an answer.</p>",
+      body: "<p>Liu et al. compared evidence at different positions in long prompts. The tested models used evidence less reliably in the middle than at the beginning or end. Evaluate passage selection and order. More retrieved text does not automatically improve an answer.</p>",
     },
     'eval-set': {
       title: 'Eval set',
-      body: "<p>A collection of questions paired with labels identifying relevant source documents or passages. Run each retrieval configuration on the same questions and compare its results with those labels. This makes configurations comparable and exposes failure cases. Keep separate held-out questions for the final evaluation. The lab supplies 12 questions; the project requires its own set.</p>",
+      body: "<p>An evaluation set pairs questions with labels for relevant sources or passages. Run each configuration on the same questions. Compare results with the labels. Retain separate questions for final evaluation. The lab supplies 12 questions. The project requires its own set.</p>",
     },
     'mrr': {
       title: 'MRR (mean reciprocal rank)',
-      body: "<p>Mean reciprocal rank measures how early the first relevant result appears. For each question, take 1 divided by that result’s rank: 1.0 for rank 1, 0.5 for rank 2, and about 0.33 for rank 3. Use zero when no relevant result appears in the evaluated list. Average these values across the questions. Unlike hit@k, MRR distinguishes a relevant result at rank 1 from one at rank 3.</p>",
+      body: "<p>Mean reciprocal rank measures how early the first relevant result appears. Divide 1 by that result’s rank for each question. Ranks 1, 2, and 3 give 1.0, 0.5, and approximately 0.33. Use zero when no relevant result appears in the evaluated list. Average the scores across all questions. Unlike hit@k, MRR rewards earlier relevant results.</p>",
     },
     'hit-at-k': {
       title: 'hit@k',
@@ -33,11 +33,11 @@
     },
     'stale-cache': {
       title: 'Cache invalidation',
-      body: "<p>A cached or derived record becomes stale when the source changes without a corresponding update. In RAG, an old chunk or embedding can keep returning outdated evidence. Track document and embedding versions, update affected records, and coordinate the index change with the source update.</p>",
+      body: "<p>A cached or derived record becomes stale when its source changes without a corresponding update. An old chunk or embedding can return outdated evidence. Track document and embedding versions. Update affected records. Coordinate the index change with the source update.</p>",
     },
     'bm25': {
       title: 'BM25',
-      body: "<p>A keyword-ranking function based on query-term frequency, document length, and how common each term is across documents. It is useful for exact terms such as identifiers and error codes, while learned embeddings can help with paraphrases. PostgreSQL’s built-in full-text search has its own ranking functions; it does not implement BM25 by default.</p>",
+      body: "<p>BM25 ranks documents from query-term frequency, document length, and each term’s frequency across documents. It helps find exact identifiers and error codes. Learned embeddings can help find paraphrases. PostgreSQL’s built-in full-text search uses its own ranking functions. It does not implement BM25 by default.</p>",
     },
     'reranker': {
       title: 'Reranker',
@@ -164,7 +164,7 @@ const RAG_DATA = window.CourseRagMeasurements.preview;
     ).join('') +
     (top[0].score < 0.12
       ? '<div class="ask-warn">Best score ' + top[0].score.toFixed(2) +
-        ' — weak retrieval. No shared content words: this is the synonym wall.</div>'
+        '. Retrieval is weak. Different vocabulary can prevent a useful match.</div>'
       : '');
     promptBox.textContent = RAG.buildPrompt(question, top);
   }
@@ -182,12 +182,12 @@ const RAG_DATA = window.CourseRagMeasurements.preview;
   const val = document.getElementById('ck-val');
   // Generated from chunk_corpus(max_words=…), the exact index, and the eval set.
   const notes = {
-    10: 'Whole sentences can exceed this target; no sentence is cut in half.',
+    10: 'A sentence can exceed this target. The chunker does not split sentences.',
     20: 'More chunks do not necessarily improve retrieval.',
     30: 'This setting ties 20 words on these twelve questions.',
     45: 'Larger chunks recover more relevant sources on this evaluation set.',
     60: 'The lab setting: nearly one chunk per source document.',
-    90: 'Whole short documents tie 60 words here; long documents need their own evaluation.'
+    90: 'Whole short documents tie the 60-word setting here. Evaluate long documents separately.'
   };
   const TABLE = window.CourseRagMeasurements.chunking.map(row => ({
     mw: row.max_words, chunks: row.chunks, hit3: row.hit3, mrr: row.mrr3,
@@ -217,19 +217,19 @@ const RAG_DATA = window.CourseRagMeasurements.preview;
 
   const STAGES = [
     { name: 'Chunk', built: true, io: 'documents → retrievable units',
-      you: "Choose retrievable text units and keep their source ids, titles, and positions. These records need enough context to be useful when retrieved on their own.",
+      you: "Select retrievable text units. Retain their source IDs, titles, and positions. Each record needs enough text to make sense independently.",
       thursday: "chunk_corpus() — provided; use the slider to compare chunk sizes" },
     { name: 'Embed', built: true, io: 'text → unit vector',
       you: "Represent each chunk as a vector. The lab normalizes nonzero vectors so dot products give cosine scores. A new embedding model requires rebuilding the stored vectors.",
       thursday: "embed() — provided; evaluate a learned model for your project" },
     { name: 'Index', built: true, io: 'chunk vectors → ANN structure',
-      you: "Build a searchable structure over the chunk vectors. The lab uses the provided BruteForceIndex at this corpus size; larger workloads can be compared with approximate indexes.",
+      you: "Build a searchable structure over the chunk vectors. The lab uses the supplied BruteForceIndex for this corpus size. For larger workloads, compare it with approximate indexes.",
       thursday: "BruteForceIndex — provided from Lab 9" },
     { name: 'Retrieve', built: true, io: 'question vector → top-k chunks',
-      you: "Embed the question, search the index, and use each returned id to locate the corresponding chunk. Preserve the index-to-chunk mapping and result order.",
+      you: "Embed the question. Search the index. Use each returned ID to locate its chunk. Preserve the index-to-chunk mapping and result order.",
       thursday: "Retriever — implement and test with the evaluation set" },
     { name: 'Assemble + Generate', built: false, io: 'k chunks + question → prompt → answer',
-      you: "Format the retrieved chunks with source labels, add the question, and send the prompt to the generator. In echo mode, inspect the prompt directly instead of calling a model.",
+      you: "Format retrieved chunks with source labels. Add the question. Send the prompt to the generator. In echo mode, inspect the prompt without calling a model.",
       thursday: "build_prompt — implement; answer() — provided" },
   ];
 

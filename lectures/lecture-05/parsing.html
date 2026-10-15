@@ -51,7 +51,7 @@
   <p class="lede">At the SQL prompt, Maya circles <code>FROM</code> and the quoted value <code>'from'</code>. <q>Same letters. Can I treat them the same?</q> Noor asks her to show the tokens before drawing a plan. The engine must recognize <code>FROM</code> as a keyword and <code>'from'</code> as a string value.</p>
 </div>
 
-<p class="keep-in-present">Follow SQL through three inspectable representations: tokens, a statement description, and an executable scan tree. The supplied Lab 5 front end builds those representations. Your work is to trace them, write queries, predict their work, and compare measurements.</p>
+<p class="keep-in-present">Follow SQL through three inspectable representations: tokens, a statement description, and an executable scan tree. The supplied Lab 5 front end builds those representations. Trace these representations. Write queries. Predict their work before execution. Compare the predictions with measurements.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 9 (parsing) &amp; ch. 10 (planning)<sup class="src"><a href="#src-1" title="Database Design and Implementation: Second Edition, Edward Sciore (Google Books record)">1</a></sup> ·
@@ -73,12 +73,12 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 <div class="exercise learning-check">
   <span class="ex-label">Start with what you already know</span>
   <p>Does the quoted value <code>'from'</code> act as the FROM keyword? When the parser finishes a <code>QueryData</code> object, has it read any student rows?</p>
-  <details><summary>Check your explanation</summary><p>The lexer makes the quoted value one string token; the keyword has a different token kind. Parsing records the request. Executing the resulting scan tree reads the rows later.</p></details>
+  <details><summary>Check your explanation</summary><p>The lexer makes the quoted value one string token. The keyword has a different token kind. Parsing records the request. Executing the resulting scan tree reads the rows later.</p></details>
 </div>
 
 <p class="keep-in-present">We begin with Quiz 4 (the iterator model, 10 min), then add the SQL front end to the layers you have built.</p>
 
-<p class="keep-in-present">To execute <code>SELECT name FROM students WHERE gpa &gt; 35</code>, the engine must recognize the statement’s words and punctuation, check their order, and choose the operators needed to produce the result.</p>
+<p class="keep-in-present">Consider <code>SELECT name FROM students WHERE gpa &gt; 35</code>. The engine recognizes the words and punctuation. It checks their order. It then selects the operators that produce the result.</p>
 
 
 <p class="keep-in-present">The parser follows grammar rules using four token-stream helpers: <code>peek</code>, <code>next</code>, <code>match</code>, and <code>expect</code>.</p>
@@ -86,24 +86,24 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 <!-- ============================================================ -->
 <h2 id="pipeline">Separate token recognition from statement structure</h2>
 
-<p class="keep-in-present">Reading a sentence requires both recognizing words and recognizing their roles. The lexer supplies token kinds and values; the parser checks their grammatical arrangement. This comparison stops at syntax: the schema and planner still determine whether fields exist and how to execute the request.</p>
+<p class="keep-in-present">Reading a sentence requires both recognizing words and recognizing their roles. The lexer supplies token kinds and values. The parser checks their arrangement against the grammar. This comparison stops at syntax: the schema and planner still determine whether fields exist and how to execute the request.</p>
 
-<p class="keep-in-present">In <code>SELECT name FROM students WHERE nick = 'from'</code>, one occurrence of <code>from</code> is a keyword and the other is part of a quoted string. A search for that word alone cannot distinguish them. The lexer reads the quoted value as one <code>STR</code> token and the keyword as a <code>KEYWORD</code> token. The parser then works with those tokens, without having to process quote characters itself.</p>
+<p class="keep-in-present">Consider <code>SELECT name FROM students WHERE nick = 'from'</code>. One occurrence of <code>from</code> is a keyword. The other occurrence belongs to a quoted string. A search for that word alone cannot distinguish them. The lexer reads the quoted value as one <code>STR</code> token and the keyword as a <code>KEYWORD</code> token. The parser then works with those tokens, without having to process quote characters itself.</p>
 
-<h3 class="new-slide" data-kicker="Two simple machines">The lexer recognizes tokens; the parser checks their order</h3>
+<h3 class="new-slide" data-kicker="Two simple machines">The lexer recognizes tokens. The parser checks their order.</h3>
 
 <table>
   <thead><tr><th>Stage</th><th>In → out</th><th>Knows about</th><th>In the lab</th></tr></thead>
   <tbody>
-    <tr><td><strong>Lexer</strong></td><td>characters → tokens</td><td>recognizes numbers, quoted strings, words, and punctuation and assigns token kinds</td><td>provided. Read if curious; not required.</td></tr>
-    <tr><td><strong>Parser</strong></td><td>tokens → description</td><td>checks whether tokens follow the grammar and records the statement’s fields, tables, and conditions</td><td>provided; walk through it</td></tr>
-    <tr><td><strong>Planner</strong></td><td>description → scan tree</td><td>the catalog, to look up each table's layout, and Lab 4's scan operators, to build a tree that produces the rows</td><td>provided; walk through it</td></tr>
+    <tr><td><strong>Lexer</strong></td><td>characters → tokens</td><td>recognizes numbers, quoted strings, words, and punctuation and assigns token kinds</td><td>provided. Implementation reading is optional.</td></tr>
+    <tr><td><strong>Parser</strong></td><td>tokens → description</td><td>checks whether tokens follow the grammar and records the statement’s fields, tables, and conditions</td><td>provided. Trace its execution.</td></tr>
+    <tr><td><strong>Planner</strong></td><td>description → scan tree</td><td>The catalog supplies table layouts. Lab 4 scan operators form the execution tree.</td><td>provided. Trace its execution.</td></tr>
   </tbody>
 </table>
 
 <div class="callout note">
   <span class="label">Lexer implementation is optional reading</span>
-  <p>Tools such as <a href="https://www.antlr.org/">ANTLR</a> can generate lexer and parser code from a grammar. You supply the language rules and the code that interprets the parsed input.<sup class="src"><a href="#src-16" title="ANTLR v4: Getting Started (generating lexer and parser code)">16</a></sup> In this course, the lexer is provided. You need to understand its output tokens and how the parser consumes them; you do not need to study its implementation or learn ANTLR. We focus on building a query description and connecting it to database operators.</p>
+  <p>Tools such as <a href="https://www.antlr.org/">ANTLR</a> can generate lexer and parser code from a grammar. You supply the language rules and the code that interprets the parsed input.<sup class="src"><a href="#src-16" title="ANTLR v4: Getting Started (generating lexer and parser code)">16</a></sup> In this course, the lexer is provided. You must understand the output tokens and how the parser consumes them. Lexer implementation and ANTLR are optional topics. We focus on building a query description and connecting it to database operators.</p>
 </div>
 
 <h3 id="token-kinds" class="new-slide" data-kicker="Two simple machines">Five token kinds cover all of microSQL</h3>
@@ -116,22 +116,20 @@ Hover or tap an underlined term like <span class="gloss-demo">this one</span> to
 (KEYWORD where)  (ID gpa)  (PUNCT >)      (NUM 35)</code></pre>
 
 <p class="keep-in-present">Five token kinds cover all of microSQL: <code>KEYWORD · ID · NUM ·
-STR · PUNCT</code>. Keywords are ordinary words that happen to be on the lexer's fixed list of <span class="gloss" data-gloss="reserved-word">reserved</span>
-words; any word on that list is labeled KEYWORD wherever it appears, which is why
-microdb rejects <code>select</code> as a table name; PostgreSQL permits it as a quoted identifier, written <code>"select"</code><sup class="src"><a href="#src-3" title="PostgreSQL Documentation, Appendix C. SQL Key Words">3</a></sup>.</p>
+STR · PUNCT</code>. The lexer has a fixed list of <span class="gloss" data-gloss="reserved-word">reserved</span> words. It labels each unquoted word on that list KEYWORD. microdb therefore rejects <code>select</code> as a table name. PostgreSQL permits the quoted identifier <code>"select"</code><sup class="src"><a href="#src-3" title="PostgreSQL Documentation, Appendix C. SQL Key Words">3</a></sup>.</p>
 
 <h3 class="new-slide" data-kicker="Two simple machines">Reserved words simplify microdb’s naming rules</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The rule</span><span>the lexer labels any word in its keyword set as KEYWORD the moment it reads the word, before the parser has seen what comes before or after it, so <code>select</code> can never reach the parser as a table name.</span></div>
+  <div class="lc-row"><span class="lc-k">The rule</span><span>The lexer labels an unquoted word from its keyword set KEYWORD before parsing starts. Thus, <code>select</code> cannot reach the parser as a table-name token.</span></div>
   <div class="lc-row"><span class="lc-k">microdb’s choice</span><span>The parser can treat KEYWORD and ID as separate token kinds throughout the small microSQL grammar.</span></div>
   <div class="lc-row"><span class="lc-k">PostgreSQL’s choice</span><span>PostgreSQL permits quoted identifiers, such as <code>"select"</code> for a column name, and distinguishes reserved from non-reserved keywords. Double quotes tell the parser to treat the enclosed text as a name.<sup class="src"><a href="#src-3" title="PostgreSQL Documentation, Appendix C. SQL Key Words">3</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">The lesson</span><span>More flexible naming requires additional lexical or grammatical rules. microdb uses a small reserved-word set to keep the lab focused.</span></div>
 </div>
 
-<h3 id="quoted-identifiers" class="new-slide" data-kicker="Names and values">Double quotes name a column; single quotes supply a value</h3>
+<h3 id="quoted-identifiers" class="new-slide" data-kicker="Names and values">Double quotes identify a column. Single quotes enclose a value.</h3>
 
-<p class="keep-in-present">In PostgreSQL, double quotes let us use the reserved word <code>select</code> as a column name. Here we create that column and store one row. This is a PostgreSQL example; microSQL does not support quoted identifiers.<sup class="src"><a href="#src-15" title="PostgreSQL Documentation, 4.1. Lexical Structure">15</a></sup></p>
+<p class="keep-in-present">In PostgreSQL, double quotes let us use the reserved word <code>select</code> as a column name. Here we create that column and store one row. This example uses PostgreSQL. microSQL does not support quoted identifiers.<sup class="src"><a href="#src-15" title="PostgreSQL Documentation, 4.1. Lexical Structure">15</a></sup></p>
 
 <pre><code class="language-sql">CREATE TABLE demo ("select" TEXT);
 INSERT INTO demo ("select") VALUES ('ada');
@@ -148,15 +146,14 @@ SELECT 'select' FROM demo;  -- returns the literal text: select</code></pre>
 
 <div class="viz" id="viz-sql">
   <div class="viz-title">Text → tokens → description → plan</div>
-  <p class="viz-description">Each stage's real output, computed as you watch. The plan stage
-  shows the scan tree the supplied simple planner builds.</p>
+  <p class="viz-description">The widget computes the output of each stage. The plan stage shows the scan tree from the supplied simple planner.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="sq-q1">the honors query</button>
     <button type="button" class="btn primary" id="sq-q2">the join</button>
     <button type="button" class="btn" id="sq-q3">an INSERT</button>
     <button type="button" class="btn" id="sq-q4">broken SQL</button>
   </div>
-  <div class="qj-msg" id="sq-msg">Pick a statement to push through the pipeline.</div>
+  <div class="qj-msg" id="sq-msg">Select a statement to inspect each processing stage.</div>
   <div class="sq-stages" id="sq-stages"></div>
   <p class="viz-caption">Try <strong>broken SQL</strong> to inspect an error message. It identifies the expected token and the token found instead, giving the user a specific place to start fixing the statement.</p>
 </div>
@@ -168,8 +165,8 @@ SELECT 'select' FROM demo;  -- returns the literal text: select</code></pre>
   <tbody>
     <tr><td>text</td><td>a string</td><td>raw characters, including quotes and whitespace</td><td>the user, who typed it</td></tr>
     <tr><td>lexer</td><td>token list</td><td>a list of (kind, value) pairs, one per token</td><td>provided</td></tr>
-    <tr><td>parser</td><td><code>QueryData</code> (a compact <span class="gloss" data-gloss="ast">AST</span> representation)</td><td>a plain object holding the field list, the table list, and the <span class="gloss" data-gloss="predicate">predicate</span>; <a href="#ast-example">see the example below</a></td><td>provided; walk through it</td></tr>
-    <tr><td>planner</td><td>scan tree</td><td>a tree of Lab 4 scan objects; calling next() on the root pulls rows through the whole tree</td><td>provided; walk through it</td></tr>
+    <tr><td>parser</td><td><code>QueryData</code> (a compact <span class="gloss" data-gloss="ast">AST</span> representation)</td><td>a plain object holding the field list, the table list, and the <span class="gloss" data-gloss="predicate">predicate</span>. <a href="#ast-example">See the example below</a></td><td>provided. Trace its execution.</td></tr>
+    <tr><td>planner</td><td>scan tree</td><td>A tree of Lab 4 scan objects. Calling next() on the root requests rows through this tree.</td><td>provided. Trace its execution.</td></tr>
   </tbody>
 </table>
 
@@ -179,7 +176,7 @@ SELECT 'select' FROM demo;  -- returns the literal text: select</code></pre>
 
 <pre><code class="language-sql">SELECT name FROM students WHERE gpa &gt; 35;</code></pre>
 
-<p class="keep-in-present">An <strong>abstract syntax tree (AST)</strong> represents the structure of this request. Here is one way to draw it. The node names are illustrative; the supplied implementation does not use classes called <code>SelectQuery</code> or <code>GreaterThan</code>.</p>
+<p class="keep-in-present">An <strong>abstract syntax tree (AST)</strong> represents the structure of this request. Here is one way to draw it. The node names are illustrative. The supplied implementation does not use classes called <code>SelectQuery</code> or <code>GreaterThan</code>.</p>
 
 <pre class="equation"><code>SelectQuery
 ├── fields
@@ -193,7 +190,7 @@ SELECT 'select' FROM demo;  -- returns the literal text: select</code></pre>
 
 <p class="keep-in-present">The tree keeps the requested field, source table, and comparison. It does not need nodes for spaces or the semicolon. <code>Number(35)</code> records a numeric value, while <code>Field("gpa")</code> names a value to read later from a row. Building this description does not read any student rows.</p>
 
-<h3 id="query-data" class="new-slide" data-kicker="Structure to execution">QueryData stores the request; the planner chooses operators</h3>
+<h3 id="query-data" class="new-slide" data-kicker="Structure to execution">QueryData stores the request. The planner chooses operators.</h3>
 
 <p class="keep-in-present">Lab 5 stores the same structure in a compact object. For this query, the parser returns the equivalent of:</p>
 
@@ -209,12 +206,12 @@ SELECT 'select' FROM demo;  -- returns the literal text: select</code></pre>
 └── SelectScan   predicate = gpa &gt; 35
     └── TableScan   table = students</code></pre>
 
-<p class="keep-in-present">The AST records <em>what</em> was requested. The scan tree specifies <em>how</em> this implementation will produce it: read students, keep rows with <code>gpa &gt; 35</code>, and expose <code>name</code>. Constructing the tree still does not run the query. Calling <code>next()</code> on its root starts pulling rows.</p>
+<p class="keep-in-present">The AST records <em>what</em> was requested. The scan tree specifies <em>how</em> to produce the result. It reads students, keeps rows with <code>gpa &gt; 35</code>, and exposes <code>name</code>. Constructing the tree still does not run the query. Calling <code>next()</code> on its root starts pulling rows.</p>
 
 <!-- ============================================================ -->
 <h2 id="grammar">A small grammar defines microSQL’s supported statements</h2>
 
-<p class="keep-in-present">Tokens identify the pieces of a statement, but the parser still needs rules for their order. A grammar specifies the allowed sequences; each rule below will correspond to a method that consumes part of the token stream.</p>
+<p class="keep-in-present">Tokens identify the pieces of a statement, but the parser still needs rules for their order. A grammar specifies the permitted sequences. Each rule below corresponds to a method that consumes part of the token stream.</p>
 
 <pre class="equation"><code>query   :=  SELECT fieldlist FROM tablelist [ WHERE predicate ]
 fieldlist := * | field { , field }
@@ -229,8 +226,8 @@ literal :=  number | 'string'</code></pre>
 
 <div class="callout note keep-in-present">
   <span class="label">Reading <code>*</code> and <code>|</code></span>
-  <p>In <code>fieldlist := * | field { , field }</code>, the <strong>asterisk <code>*</code></strong> is a literal SQL token meaning “all columns.” You type it in a query such as <code>SELECT * FROM students;</code>. Here, repetition is written with braces, not with <code>*</code>.</p>
-  <p>The <strong>vertical bar <code>|</code></strong> means “choose one alternative” in the grammar. Read the rule as: “a field list is either <code>*</code>, or one field followed by zero or more comma-and-field pairs.” The bar is grammar notation; you do not type it into the SQL query.</p>
+  <p>Consider <code>fieldlist := * | field { , field }</code>. The <strong>asterisk <code>*</code></strong> is a literal SQL token that means “all columns.” You type it in a query such as <code>SELECT * FROM students;</code>. Here, repetition is written with braces, not with <code>*</code>.</p>
+  <p>The <strong>vertical bar <code>|</code></strong> means “choose one alternative” in the grammar. A field list can be <code>*</code>. Alternatively, it can contain one field followed by zero or more comma-and-field pairs. The bar is grammar notation. Do not type it into the SQL query.</p>
   <pre><code class="language-sql">SELECT * FROM students;          -- the * alternative: all columns
 SELECT name FROM students;       -- one field, no repetitions
 SELECT name, gpa FROM students;  -- one field, then one comma-and-field pair</code></pre>
@@ -242,7 +239,7 @@ SELECT name, gpa FROM students;  -- one field, then one comma-and-field pair</co
 <table>
   <thead><tr><th>microSQL has</th><th>microSQL lacks (and who adds it)</th></tr></thead>
   <tbody>
-    <tr><td>SELECT · multi-table FROM · WHERE with AND · INSERT · CREATE TABLE</td><td>Lecture 9 discusses the sort and grouping operators used by ORDER BY and GROUP BY. OR and parentheses in WHERE are optional lab extensions. INNER JOIN … ON can express the same joins as a multi-table FROM with a WHERE condition. UPDATE and DELETE need parsing rules and execution support; <a href="https://link.springer.com/chapter/10.1007/978-3-030-33836-7_9" title="Edward Sciore, Database Design and Implementation, Chapter 9: Parsing">Sciore ch. 9</a> discusses them.</td></tr>
+    <tr><td>SELECT · multi-table FROM · WHERE with AND · INSERT · CREATE TABLE</td><td>Lecture 9 discusses the sort and grouping operators used by ORDER BY and GROUP BY. OR and parentheses in WHERE are optional lab extensions. INNER JOIN … ON can express the same joins as a multi-table FROM with a WHERE condition. UPDATE and DELETE need parsing rules and execution support. <a href="https://link.springer.com/chapter/10.1007/978-3-030-33836-7_9" title="Edward Sciore, Database Design and Implementation, Chapter 9: Parsing">Sciore ch. 9</a> discusses them.</td></tr>
   </tbody>
 </table>
 
@@ -251,11 +248,12 @@ SELECT name, gpa FROM students;  -- one field, then one comma-and-field pair</co
 <!-- ============================================================ -->
 <h2 id="descent">One grammar rule becomes one Python method</h2>
 
-<p class="keep-in-present">Recursive descent assigns a method to each grammar rule. Each method inspects or consumes tokens through four helpers. Step through the provided INSERT parser below to connect a grammar rule to its Python method, then follow the same patterns in Lab 5’s supplied SELECT implementation.</p>
+<p class="keep-in-present">Recursive descent assigns a method to each grammar rule. Each method inspects or consumes tokens through four helpers. Step through the provided INSERT parser below. Match each grammar rule to its Python method. Find the same patterns in Lab 5’s supplied SELECT implementation.</p>
 
 <p class="key-fact keep-in-present"><strong>4 verbs</strong> peek, next, match, expect: the supplied parsing methods use these token-stream helpers</p>
 
-<p class="keep-in-present">The <strong>token cursor</strong> identifies the next token to process. <code>peek()</code> reads that token without advancing. <code>match(...)</code> checks it without advancing. <code>next()</code> returns the current token and advances to the following one. A successful <code>expect(...)</code> checks and consumes the token, returning its value; a mismatch raises an error without advancing. <strong>Consuming</strong> means moving past a token, not deleting it from the list.</p>
+<p class="keep-in-present">The <strong>token cursor</strong> identifies the next token to process. <code>peek()</code> reads that token without advancing. <code>match(...)</code> checks it without advancing. <code>next()</code> returns the current token and advances to the following one.</p>
+<p class="keep-in-present">A successful <code>expect(...)</code> checks and consumes the token, then returns its value. A mismatch raises an error without advancing. <strong>Consuming</strong> means moving past a token, not deleting it from the list.</p>
 
 <div class="viz rd-viz" id="viz-insert" role="region" aria-labelledby="rd-title">
   <div class="viz-title" id="rd-title">Grammar → Python → token cursor</div>
@@ -310,25 +308,25 @@ SELECT name, gpa FROM students;  -- one field, then one comma-and-field pair</co
     </div>
   </div>
   <pre class="rd-data" aria-label="Parsed data so far"><code id="rd-data"></code></pre>
-  <p class="viz-caption">The highlighted token is next to be read. <code>peek</code> and <code>match</code> leave the cursor in place; <code>next</code> consumes one token; <code>expect</code> checks and consumes, or raises an error. Calls inside <code>expect</code> are grouped into one step. Try “Missing value” to see <code>peek</code> prepare the error message.</p>
+  <p class="viz-caption">The highlighted token is next to be read. <code>peek</code> and <code>match</code> leave the cursor in place. <code>next</code> consumes one token. <code>expect</code> checks and consumes the expected token, or raises an error. Calls inside <code>expect</code> are grouped into one step. Try “Missing value” to see <code>peek</code> prepare the error message.</p>
   <noscript><p>Enable JavaScript for the diagram, or expand the annotated parser below.</p></noscript>
 </div>
 
 <details class="rd-reference">
 <summary>Read the annotated INSERT parser without stepping</summary>
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="h" data-step-name="the four verbs" data-explain="peek looks without consuming; next consumes; match asks 'is the current token this?'; expect either consumes the token it expects or raises an error naming what it wanted. Every rule below is built from only these.">peek() · next() · match(kind, val) · expect(kind, val)</div>
+  <div class="code-step" data-step="h" data-step-name="the four verbs" data-explain="peek reads without consuming. next consumes one token. match checks the current token without consuming. expect consumes the expected token or raises an error. All rules below use these helpers.">peek() · next() · match(kind, val) · expect(kind, val)</div>
   <div class="code-step" data-step="i1" data-explain="The rule: INSERT INTO table VALUES ( value {, value} ). The method consumes exactly the tokens the rule owns, no more, no fewer.">def parse_insert(self):</div>
-  <div class="code-step" data-step="i1" data-explain="Keywords are checked and discarded; they carry no information beyond their presence.">    self.lex.expect("KEYWORD", "insert")</div>
+  <div class="code-step" data-step="i1" data-explain="Check and consume the keywords. Their values do not need to appear in the parsed data.">    self.lex.expect("KEYWORD", "insert")</div>
   <div class="code-step" data-step="i1" data-explain="">    self.lex.expect("KEYWORD", "into")</div>
-  <div class="code-step" data-step="i1" data-explain="An ID token's value IS the table name; expect returns it.">    table = self.lex.expect("ID")</div>
+  <div class="code-step" data-step="i1" data-explain="The ID token contains the table name. expect returns that value.">    table = self.lex.expect("ID")</div>
   <div class="code-step" data-step="i1" data-explain="">    self.lex.expect("KEYWORD", "values")</div>
   <div class="code-step" data-step="i1" data-explain="">    self.lex.expect("PUNCT", "(")</div>
-  <div class="code-step" data-step="i2" data-step-name="the { , } idiom" data-explain="The grammar's { , value } becomes: read one, then while a comma is next, consume it and read another. You will see this same shape in three places on Thursday: field lists, table lists, AND chains.">    values = [self._parse_literal()]</div>
+  <div class="code-step" data-step="i2" data-step-name="the { , } idiom" data-explain="Read the first value. If the next token is a comma, consume it. Read another value. Repeat this check for each comma. Field lists, table lists, and AND chains use a similar loop.">    values = [self._parse_literal()]</div>
   <div class="code-step" data-step="i2" data-explain="">    while self.lex.match("PUNCT", ","):</div>
   <div class="code-step" data-step="i2" data-explain="">        self.lex.next(); values.append(self._parse_literal())</div>
   <div class="code-step" data-step="i1" data-explain="">    self.lex.expect("PUNCT", ")")</div>
-  <div class="code-step" data-step="i3" data-step-name="plain data out" data-explain="Return the table name and values as InsertData. Parsing describes the operation; execution writes the table later.">    return InsertData(table, values)</div>
+  <div class="code-step" data-step="i3" data-step-name="plain data out" data-explain="Return the table name and values as InsertData. Parsing describes the operation. Execution writes the table later.">    return InsertData(table, values)</div>
   <div class="code-explain-panel">Hover a line to connect its operation to the corresponding grammar rule.</div>
 </div>
 </details>
@@ -344,7 +342,7 @@ SELECT name, gpa FROM students;  -- one field, then one comma-and-field pair</co
   </tbody>
 </table>
 
-<p class="keep-in-present">When one grammar rule contains another, its method calls the method for that rule. A debugger’s call stack therefore shows the nested rules currently being processed. It does not retain the complete parse tree; completed calls have already returned their data.</p>
+<p class="keep-in-present">When one grammar rule contains another, its method calls the method for that rule. A debugger’s call stack therefore shows the nested rules currently being processed. It does not retain the complete parse tree. Completed calls have already returned their data.</p>
 
 <h3 class="new-slide" data-kicker="Recursive descent">Follow calls into nested grammar rules</h3>
 
@@ -377,20 +375,20 @@ SELECT name, gpa FROM students;  -- one field, then one comma-and-field pair</co
 <tr><td>ben and statistics</td><td>2, read from mid</td><td>2, read through F("mid2")</td><td>2 = 2: keep (ben, stat)</td></tr>
 <tr><td>ben and data science</td><td>2, read from mid</td><td>1, read through F("mid2")</td><td>2 ≠ 1: reject this pair</td></tr>
 </tbody></table>
-<p class="keep-in-present">The <code>2</code> in the name <code>mid2</code> does not determine the stored value. The statistics row stores 2 there; the data-science row stores 1. <code>F("mid2")</code> means “read that field from the current row.” A plain string <code>"mid2"</code> would instead mean fixed text. A field comparison can also compare columns from the same table.</p>
+<p class="keep-in-present">The <code>2</code> in the name <code>mid2</code> does not determine the stored value. The statistics row stores 2 in that field. The data-science row stores 1. <code>F("mid2")</code> means “read that field from the current row.” A plain string <code>"mid2"</code> would instead mean fixed text. A field comparison can also compare columns from the same table.</p>
 
 <h3 id="statement-data" class="new-slide" data-kicker="Recursive descent">The parser returns data, not scans</h3>
 
 <table>
   <thead><tr><th>Statement</th><th>Parses into</th><th>Holding</th></tr></thead>
   <tbody>
-    <tr><td>SELECT…</td><td><code>QueryData</code></td><td>the field list, the table list, and the predicate: a record of what the user asked for, with no scan objects built yet</td></tr>
+    <tr><td>SELECT…</td><td><code>QueryData</code></td><td>The field list, table list, and predicate describe the request. No scan objects exist yet.</td></tr>
     <tr><td>INSERT…</td><td><code>InsertData</code></td><td>the table name and the list of values to store</td></tr>
     <tr><td>CREATE TABLE…</td><td><code>CreateData</code></td><td>the table name and a Lab 3 Schema object describing its columns</td></tr>
   </tbody>
 </table>
 
-<p class="keep-in-present">The parser returns a structured description rather than executable scans. This keeps planning separate from parsing. An optimizer can later use the same <code>QueryData</code> to choose another equivalent plan. Lecture 9 explains that possibility; implementing the optimizer is optional.</p>
+<p class="keep-in-present">The parser returns a structured description rather than executable scans. This keeps planning separate from parsing. An optimizer can later use the same <code>QueryData</code> to choose another equivalent plan. Lecture 9 explains this possibility. Implementing the optimizer is optional.</p>
 
 <!-- ============================================================ -->
 <h2 id="planner">The lab planner constructs a plan in four steps</h2>
@@ -398,15 +396,15 @@ SELECT name, gpa FROM students;  -- one field, then one comma-and-field pair</co
 <p class="keep-in-present">The parser has recorded fields, tables, and conditions without reading result rows. The planner now connects Lab 4 operators to execute that request.</p>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">1 · scans</span><span>a TableScan per table in the FROM list; layouts fetched from your Lab 3 catalog.</span></div>
-  <div class="lc-row"><span class="lc-k">2 · products</span><span>combine them into ProductScans left to right: the first two TableScans become one ProductScan, that product is paired with the third table's scan, and so on: <code>((t1 × t2) × t3)</code>. With a single table there is no product at all.</span></div>
+  <div class="lc-row"><span class="lc-k">1 · scans</span><span>Create one TableScan for each table in the FROM list. Obtain each layout from the Lab 3 catalog.</span></div>
+  <div class="lc-row"><span class="lc-k">2 · products</span><span>Combine the first two TableScans in one ProductScan. Pair that product with the third table scan. Continue from left to right: <code>((t1 × t2) × t3)</code>. A single table requires no product.</span></div>
   <div class="lc-row"><span class="lc-k">3 · select</span><span>one SelectScan with the whole WHERE predicate, if there is one.</span></div>
   <div class="lc-row"><span class="lc-k">4 · project</span><span>one ProjectScan with the field list, unless it was <code>*</code>. For <code>SELECT * FROM t</code>, the plan is just a TableScan.</span></div>
 </div>
 
 <h3 id="plan-comparison" class="new-slide" data-kicker="The naive planner">Compare the simple planner with an equivalent filtered plan</h3>
 
-<p>Lab 5 supplies both the simple plan and an early-filter alternative. Predict their work, then compare actual source-row visits, candidate pairs, predicate comparisons, output cells, and repeated execution timings:</p>
+<p>Lab 5 supplies both the simple plan and an early-filter alternative. Predict the work for each plan. Compare source-row visits, candidate pairs, predicate comparisons, and output cells. Compare timings from repeated executions:</p>
 
 <pre><code class="language-sql">SELECT name, dept FROM students, majors
 WHERE mid = mid2 AND gpa &gt; 35 AND dept = 'ds';</code></pre>
@@ -417,7 +415,7 @@ early-filter plan: Select[join] ← Product(σ(s) × σ(m))      60 pairs examin
 
 <p class="key-fact keep-in-present"><strong>900 vs 60</strong> pairs examined by the two supplied plans for the same join query</p>
 
-<p class="keep-in-present">Lecture 9 explains how an optimizer chooses among plans using statistics. Lab 5 compares two supplied plans so you can reason about their work first. The 15× reduction counts candidate pairs; it does not promise a 15× runtime improvement.</p>
+<p class="keep-in-present">Lecture 9 explains how an optimizer chooses among plans using statistics. Lab 5 compares two supplied plans so you can reason about their work first. The 15× reduction measures candidate pairs. It does not establish a 15× runtime improvement.</p>
 
 <h3 id="execution" class="new-slide" data-kicker="The naive planner">Trace a SQL query through the completed layers</h3>
 
@@ -427,9 +425,9 @@ early-filter plan: Select[join] ← Product(σ(s) × σ(m))      60 pairs examin
   <thead><tr><th>Layer</th><th>Week</th><th>What it does for this one query</th></tr></thead>
   <tbody>
     <tr><td><span class="gloss" data-gloss="repl">REPL</span> → Parser</td><td>5</td><td>the REPL reads the typed line and the parser turns it into a QueryData object</td></tr>
-    <tr><td>Planner → operators</td><td>5, 4</td><td>the planner turns the QueryData into a scan tree, a ProjectScan over a SelectScan over a TableScan, and the REPL pulls rows through it one at a time</td></tr>
-    <tr><td>TableScan → catalog</td><td>3</td><td>the planner obtains the table’s layout from the catalog; TableScan uses it to decode slots into field values</td></tr>
-    <tr><td>Buffer pool</td><td>2</td><td>serves a cached block when available; otherwise asks the file manager to read it. A cached block can be reused until it is evicted.</td></tr>
+    <tr><td>Planner → operators</td><td>5, 4</td><td>The planner builds ProjectScan above SelectScan above TableScan. The REPL requests one row at a time from the tree.</td></tr>
+    <tr><td>TableScan → catalog</td><td>3</td><td>The planner obtains the table’s layout from the catalog. TableScan uses that layout to decode slot bytes into field values.</td></tr>
+    <tr><td>Buffer pool</td><td>2</td><td>Uses the cached block if available. Otherwise, it asks the file manager to read the block. A cached block can be reused until it is evicted.</td></tr>
     <tr><td>File manager</td><td>1</td><td>seeks to offset k × 4096 and reads block k, the same bytes you once wrote by hand in Lab 1</td></tr>
   </tbody>
 </table>
@@ -446,7 +444,7 @@ early-filter plan: Select[join] ← Product(σ(s) × σ(m))      60 pairs examin
   <div class="code-step" data-step="e1" data-explain="">    return self.next()[1]</div>
   <div class="code-step" data-step="e2" data-step-name="the payoff" data-explain="SELECT name FORM students reaches the check for the FROM keyword and fails with: expected from, found form. The shared expect helper supplies that consistent error format.">Parser("SELECT name FORM students").parse()
 # ParseError: expected 'from', found 'form'</div>
-  <div class="code-explain-panel">Hover a line: the REPL prints these messages verbatim; your classmates are the users.</div>
+  <div class="code-explain-panel">Hover over a line to inspect the error. The REPL displays this message directly to its user.</div>
 </div>
 
 <h3 class="new-slide" data-kicker="Errors for free">Compare messages for the same syntax mistake</h3>
@@ -465,7 +463,7 @@ early-filter plan: Select[join] ← Product(σ(s) × σ(m))      60 pairs examin
 <!-- ============================================================ -->
 <h2 id="thursday">Prepare to trace, query, and measure in Lab 5</h2>
 
-<p class="keep-in-present">The parser and planner are complete. We will read <code>parse_query</code>, <code>_parse_predicate</code>, <code>_parse_term</code>, and <code>Database.plan_query</code> together, then use the engine to test predictions about query work.</p>
+<p class="keep-in-present">The parser and planner are complete. We will read <code>parse_query</code>, <code>_parse_predicate</code>, <code>_parse_term</code>, and <code>Database.plan_query</code> together. We will then use the engine to test predictions about query work.</p>
 <table><thead><tr><th>You investigate</th><th>Reason from</th></tr></thead><tbody>
 <tr><td>A selective WHERE</td><td>TableScan visits versus returned rows</td></tr>
 <tr><td>One output field versus *</td><td>projection and output decoding</td></tr>
@@ -478,9 +476,9 @@ early-filter plan: Select[join] ← Product(σ(s) × σ(m))      60 pairs examin
 <ul class="checklist">
   <li>☐ Download or pull the complete Lab 5 files and query/report templates.</li>
   <li>☐ Run <code>python3 test_sql.py</code>: expect <strong>12/12 passed</strong> immediately.</li>
-  <li>☐ Step through INSERT and identify which helpers consume tokens.</li>
+  <li>☐ Step through INSERT. Identify the helpers that consume tokens.</li>
   <li>☐ Open the <a href="../../labs/lab-05/sqlfrontend.html#big-idea">guided implementation walkthrough</a>.</li>
-  <li>☐ Keep predictions before running <code>measure_sql.py</code>; explain changed predictions using the operators.</li>
+  <li>☐ Record predictions before running <code>measure_sql.py</code>. Explain any differences using the operator behavior.</li>
 </ul>
 
 <!-- ============================================================ -->
@@ -489,28 +487,28 @@ early-filter plan: Select[join] ← Product(σ(s) × σ(m))      60 pairs examin
 <div class="exercise learning-check">
   <span class="ex-label">Explain it to a teammate</span>
   <p>Adding <code>WHERE gpa &gt; 35</code> reduces 300 returned names to 60. Does this mean TableScan skipped 240 students? Which stage tests their GPAs?</p>
-  <details><summary>Check your explanation</summary><p>No. The parser records the condition; this scan-based plan still visits all 300 students and SelectScan rejects some afterward. Explain source visits, comparisons, output work, and repeated timings separately.</p></details>
+  <details><summary>Check your explanation</summary><p>No. The parser records the condition. This scan-based plan visits all 300 students. SelectScan then rejects students who fail the condition. Explain source visits, comparisons, output work, and repeated timings separately.</p></details>
 </div>
 
-<p class="keep-in-present">Return to the prompt: characters become tokens, tokens become a query description, the planner creates scans, and execution asks those scans for rows. Each boundary has an artifact you can inspect.</p>
+<p class="keep-in-present">Return to the SQL prompt. The lexer converts characters to tokens. The parser creates a query description. The planner creates scans. Execution requests rows from those scans. Each boundary has an artifact you can inspect.</p>
 
 <p>Three points to remember:</p>
 
 <ul class="recap-list">
-  <li><strong>Lexing and parsing have separate responsibilities.</strong> The lexer recognizes tokens; the parser checks how they form a statement.</li>
+  <li><strong>Lexing and parsing have separate responsibilities.</strong> The lexer recognizes tokens. The parser checks how they form a statement.</li>
   <li><strong>Recursive descent follows the grammar.</strong> Each parsing method uses the four token-stream helpers, and <code>expect()</code> reports a mismatch consistently.</li>
-  <li><strong>The parser produces data; the planner produces operators.</strong> Keeping these stages separate allows different plans to be built from the same query description.</li>
+  <li><strong>The parser produces data. The planner produces operators.</strong> Keeping these stages separate allows different plans to be built from the same query description.</li>
 </ul>
 
 <p class="key-fact keep-in-present">Four helpers support token processing. Filtering inputs reduces the example join from 900 candidate pairs to 60.</p>
 
-<p class="keep-in-present"><strong>Thursday:</strong> walk through the supplied implementation, write SQL, predict the work, and measure both plans. <strong>Next Tuesday:</strong> B+ trees: the structure that finds one row in a
+<p class="keep-in-present"><strong>Thursday:</strong> trace the supplied implementation. Write SQL. Predict the work. Measure both plans. <strong>Next Tuesday:</strong> B+ trees: the structure that finds one row in a
 million without scanning. Quiz 5 opens class: parsing &amp; planning.</p>
 
 <p class="keep-in-present"><strong>Before Thursday:</strong></p>
 <ul>
   <li><strong>Read</strong> <code>parse_insert</code> until you can say what each line consumes (<a href="https://link.springer.com/chapter/10.1007/978-3-030-33836-7_9" title="Edward Sciore, Database Design and Implementation, Chapter 9: Parsing">Sciore ch. 9</a> for the long form).</li>
-  <li><strong>Run</strong> <code>python3 test_sql.py</code> on the complete Lab 5 files; it should immediately print <strong>12/12 passed</strong>.</li>
+  <li><strong>Run</strong> <code>python3 test_sql.py</code> on the complete Lab 5 files. Check that it immediately prints <strong>12/12 passed</strong>.</li>
   <li><strong>Bring</strong> a laptop with Lab 4 submitted and the Lab 5 starter on it.</li>
 </ul>
 
@@ -518,13 +516,13 @@ million without scanning. Quiz 5 opens class: parsing &amp; planning.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Is real SQL parsed this way?</h3>
-<p class="keep-in-present">SQL engines use several parser designs. SQLite uses a handwritten lexer and a Lemon-generated parser. PostgreSQL uses Bison to generate its parser from a grammar. DuckDB used a PostgreSQL-derived parser through v1.x and introduced a PEG parser in v2.0. Handwritten recursive descent, used in languages such as Lua and Go, makes the relationship between grammar rules and code easy to inspect<sup class="src"><a href="#src-7" title="Architecture of SQLite">7</a></sup><sup class="src"><a href="#src-8" title="PostgreSQL Documentation, 51.3. The Parser Stage">8</a></sup><sup class="src"><a href="#src-9" title="DuckDB v2.0: Your Database Deserves a Better Parser (DuckDB blog)">9</a></sup><sup class="src"><a href="#src-10" title="The Implementation of Lua 5.0 (Ierusalimschy, de Figueiredo, Celes), Journal of Universal Computer Science, 2005">10</a></sup><sup class="src"><a href="#src-11" title="Go compiler internals: adding a new statement to Go - Part 1 (Eli Bendersky)">11</a></sup>.</p>
+<p class="keep-in-present">SQL engines use several parser designs. SQLite uses a handwritten lexer and a Lemon-generated parser. PostgreSQL uses Bison to generate its parser from a grammar. DuckDB used a PostgreSQL-derived parser through v1.x and introduced a PEG parser in v2.0. Languages such as Lua and Go use handwritten recursive descent. This approach makes the relationship between grammar rules and code easy to inspect<sup class="src"><a href="#src-7" title="Architecture of SQLite">7</a></sup><sup class="src"><a href="#src-8" title="PostgreSQL Documentation, 51.3. The Parser Stage">8</a></sup><sup class="src"><a href="#src-9" title="DuckDB v2.0: Your Database Deserves a Better Parser (DuckDB blog)">9</a></sup><sup class="src"><a href="#src-10" title="The Implementation of Lua 5.0 (Ierusalimschy, de Figueiredo, Celes), Journal of Universal Computer Science, 2005">10</a></sup><sup class="src"><a href="#src-11" title="Go compiler internals: adding a new statement to Go - Part 1 (Eli Bendersky)">11</a></sup>.</p>
 
 <h3 class="keep-in-present">Why does microSQL forbid naming a column <code>select</code>?</h3>
 <p class="keep-in-present">microdb labels an unquoted word in its keyword set as <code>KEYWORD</code> before parsing. It therefore cannot use that token where an <code>ID</code> is required. PostgreSQL supports quoted identifiers and distinguishes reserved from non-reserved keywords, which requires more detailed naming and grammar rules<sup class="src"><a href="#src-14" title="PostgreSQL source: src/backend/parser/gram.y (REL_17_STABLE, about 19,500 lines)">14</a></sup>.</p>
 
 <h3 id="parameter-binding" class="keep-in-present">How does parameter binding keep input out of SQL syntax?</h3>
-<p class="keep-in-present">SQL injection can occur when untrusted input is concatenated into SQL text and interpreted as part of the statement. Parameterized queries keep bound values separate from SQL syntax, so a value cannot introduce a new clause or statement. Parameter binding would be a useful optional extension to microdb; it is not part of the required parser<sup class="src"><a href="#src-12" title="OWASP SQL Injection Prevention Cheat Sheet">12</a></sup>.</p>
+<p class="keep-in-present">SQL injection can occur when untrusted input is concatenated into SQL text and interpreted as part of the statement. Parameterized queries keep bound values separate from SQL syntax, so a value cannot introduce a new clause or statement. Parameter binding is an optional extension to microdb. The required parser does not include it<sup class="src"><a href="#src-12" title="OWASP SQL Injection Prevention Cheat Sheet">12</a></sup>.</p>
 <p class="keep-in-present"><strong>The task:</strong> an application wants the name of the student whose ID a user enters. In this small example, student 42 is ada and student 43 is ben. The SQL text says which table, field, and comparison to use. The <code>?</code> marks one value the application will supply separately. Associating that value with the placeholder is called <strong>parameter binding</strong>.</p>
 
 <p>This complete example runs in Python using its <code>sqlite3</code> library<sup class="src"><a href="#src-17" title="Python sqlite3 documentation: placeholders and parameter binding">17</a></sup>:</p>
@@ -542,7 +540,7 @@ print(connection.execute(sql, ["42 OR 1=1"]).fetchall())  # []
 connection.close()</code></pre>
 
 <p class="keep-in-present"><code>execute(sql, [42])</code> has two arguments: the SQL text and a list containing one value. SQLite compares <code>sid</code> with 42 and returns ada. Changing the list to <code>[43]</code> returns ben. The SQL string still contains <code>?</code> in both calls.</p>
-<p class="keep-in-present"><strong>Why this matters:</strong> the final call passes <code>"42 OR 1=1"</code> as one string value. It never becomes an extra SQL condition. Neither integer ID matches that string, so this SQLite example returns no rows. Binding supplies data for the comparison; it does not paste user input into the statement.</p>
+<p class="keep-in-present"><strong>Why this matters:</strong> the final call passes <code>"42 OR 1=1"</code> as one string value. It never becomes an extra SQL condition. Neither integer ID matches that string, so this SQLite example returns no rows. Binding supplies data for the comparison. It does not insert user input into the SQL text.</p>
 <p class="keep-in-present">The supplied microSQL terminal does not support placeholders or this two-argument call. This is an optional extension. Other database libraries use their own binding APIs and placeholder conventions, and may reject an incompatible value instead of returning no rows. Parameters supply values, not table names, column names, or arbitrary SQL fragments.</p>
 
 <h3 class="keep-in-present">Could the planner cache plans for repeated queries?</h3>
@@ -560,12 +558,12 @@ document that supports the claim it is attached to.</p>
   <li id="src-1"><a href="https://books.google.com/books/about/Database_Design_and_Implementation.html?id=6GTTDwAAQBAJ">Database Design and Implementation: Second Edition, Edward Sciore (Google Books record)</a></li>
   <li id="src-2"><a href="https://craftinginterpreters.com/parsing-expressions.html">Crafting Interpreters, chapter 6: Parsing Expressions (Robert Nystrom)</a></li>
   <li id="src-3"><a href="https://www.postgresql.org/docs/current/sql-keywords-appendix.html">PostgreSQL Documentation, Appendix C. SQL Key Words</a></li>
-  <li id="src-4"><a href="https://www.cl.cam.ac.uk/~mgk25/iso-14977.pdf">ISO/IEC 14977:1996 Extended BNF (final draft text)</a> <span class="src-note">Braces for repetition and square brackets for optional items are Extended BNF (EBNF) conventions standardized in ISO/IEC 14977; plain BNF as introduced for ALGOL 60 has neither construct.</span></li>
+  <li id="src-4"><a href="https://www.cl.cam.ac.uk/~mgk25/iso-14977.pdf">ISO/IEC 14977:1996 Extended BNF (final draft text)</a> <span class="src-note">ISO/IEC 14977 standardizes Extended BNF (EBNF), including braces for repetition and square brackets for optional items. Plain BNF, introduced for ALGOL 60, has neither construct.</span></li>
   <li id="src-5"><a href="https://www.postgresql.org/docs/current/xfunc-sql.html">PostgreSQL Documentation, 36.5. Query Language (SQL) Functions</a></li>
   <li id="src-6"><a href="https://github.com/mysql/mysql-server/blob/trunk/share/messages_to_clients.txt">mysql-server/share/messages_to_clients.txt (MySQL source, GitHub)</a></li>
   <li id="src-7"><a href="https://www.sqlite.org/arch.html">Architecture of SQLite</a></li>
   <li id="src-8"><a href="https://www.postgresql.org/docs/current/parser-stage.html">PostgreSQL Documentation, 51.3. The Parser Stage</a></li>
-  <li id="src-9"><a href="https://duckdb.org/2026/08/20/duckdb-20-peg-parser">DuckDB v2.0: Your Database Deserves a Better Parser (DuckDB blog)</a> <span class="src-note">True for DuckDB from its first 2018 commit through v1.x (it used the PostgreSQL parser repackaged as libpg_query), but DuckDB v2.0, announced August 20, 2026, replaced the PostgreSQL-derived parser with a PEG-based parser.</span></li>
+  <li id="src-9"><a href="https://duckdb.org/2026/08/20/duckdb-20-peg-parser">DuckDB v2.0: Your Database Deserves a Better Parser (DuckDB blog)</a> <span class="src-note">DuckDB used the PostgreSQL parser, repackaged as libpg_query, from its first 2018 commit through v1.x. DuckDB v2.0 replaced that parser with a PEG-based parser. The announcement date was August 20, 2026.</span></li>
   <li id="src-10"><a href="https://www.lua.org/doc/jucs05.pdf">The Implementation of Lua 5.0 (Ierusalimschy, de Figueiredo, Celes), Journal of Universal Computer Science, 2005</a></li>
   <li id="src-11"><a href="https://eli.thegreenplace.net/2019/go-compiler-internals-adding-a-new-statement-to-go-part-1/">Go compiler internals: adding a new statement to Go - Part 1 (Eli Bendersky)</a></li>
   <li id="src-12"><a href="https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html">OWASP SQL Injection Prevention Cheat Sheet</a></li>
@@ -581,7 +579,7 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="insert-trace.js?v=1"></script>
-<script src="viz.js?v=7"></script>
+<script src="insert-trace.js?v=ste-20261015"></script>
+<script src="viz.js?v=ste-20261015"></script>
 </body>
 </html>

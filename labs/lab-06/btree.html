@@ -46,7 +46,8 @@
   <div class="byline">Follows Lecture 6 (B+ Trees from First Principles) · in class: 75 min · aim to finish Build + Verify · due Thu Oct 8 at class start</div>
 </header>
 
-<p class="lede">Your table already stores the rows. A B+ tree gives you a faster way to find a row’s address: look up its key, get its record ID (RID), and read that block and slot. Build exact-key lookup, insertion, splitting, and range search, including keys shared by several rows. Then compare the index with a full scan. The tree lives in memory in this lab, so visiting a node does not count as a disk read.</p>
+<p class="lede">Your table already stores the rows. A B+ tree finds a row’s address from its key. The lookup returns a record ID (RID), which identifies the row’s block and slot.</p>
+<p class="lede">Build exact-key lookup, insertion, splitting, and range search. Include keys that several rows share. Then compare the index with a full scan. The tree lives in memory in this lab. Visiting a node does not count as a disk read.</p>
 
 <div class="cite">
   Companion reading: Sciore, <em>Database Design and Implementation</em>, ch. 12 ·
@@ -66,23 +67,23 @@
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
   <p>The root has separator key 36. Does a search for 36 go left or right? If key 31 has two RIDs, can a range search return more rows than matching keys?</p>
-  <details><summary>Check your explanation</summary><p>In this tree, a key equal to the separator goes right. Each leaf key holds a list of RIDs, so key 31 returns two rows. Internal keys choose a search path; leaf entries identify the matching rows.</p></details>
+  <details><summary>Check your explanation</summary><p>In this tree, a key equal to the separator goes right. Each leaf key holds a list of RIDs, so key 31 returns two rows. Internal keys choose a search path. Leaf entries identify the matching rows.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>. Predict what the next operation will change. Run the operation. Compare the result with your prediction. Explain any difference before making another change.</p>
 
-<h2 id="try-it">Leaves copy the middle key up; internal nodes move it</h2>
+<h2 id="try-it">Leaves copy the middle key up. Internal nodes move it</h2>
 
 <p>Use the widget to practice splitting an overfull node before implementing <code>_split</code>. For each example, identify the key sent to the parent and the keys left in each child.</p>
 
 <div class="viz" id="viz-split">
   <div class="viz-title">The split drill · ORDER = 4</div>
-  <p class="viz-description">Select the key to send to the parent. Before revealing the answer, identify the keys that belong in the left and right nodes and decide whether the selected key is copied or moved.</p>
+  <p class="viz-description">Select the key to send to the parent. Before revealing the answer, identify the keys for the left and right nodes. Decide whether the split copies or moves the selected key.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="sd-deal">Deal an overfull node</button>
     <button type="button" class="btn" id="sd-reveal" hidden>Reveal the full split</button>
   </div>
-  <div class="qj-msg" id="sd-msg">Press deal. Leaves and internal nodes split differently; the drill mixes both.</div>
+  <div class="qj-msg" id="sd-msg">Press deal. Leaves and internal nodes split differently. The drill mixes both.</div>
   <div class="sd-area" id="sd-area"></div>
   <div class="bs-stats" id="sd-stats"></div>
   <div class="chat-downloads">
@@ -96,16 +97,16 @@
     <a class="chat-dl-btn" href="starter/test_btree.py" download>test_btree.py</a>
     <a class="chat-dl-btn" href="starter/measure_index.py" download>measure_index.py</a>
   </div>
-  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files, then open this lab’s starter folder:</p>
+  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files. Then open this lab’s starter folder:</p>
 <pre class="clone-cmd"><span class="cl-line">git pull</span>
 <span class="cl-line">cd labs/lab-06/starter</span></pre>
-  <p class="viz-caption">In a leaf split, copy the first key of the new right leaf into the parent; keep that key in the leaf with its data. In an internal-node split, move the middle separator into the parent and remove it from both resulting children.</p>
+  <p class="viz-caption">In a leaf split, copy the first key of the new right leaf into the parent. Keep that key in the leaf with its data. In an internal-node split, move the middle separator into the parent and remove it from both resulting children.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="big-idea">The tree stores no rows, only RIDs into your heap</h2>
 
-<p class="keep-in-present">Think of an ordered directory whose entries contain addresses. Internal separator keys route the search to a leaf; that leaf lists the RIDs for the matching key. Use each RID to read its row from the heap. Links between leaves let a range scan continue through neighboring keys in sorted order.</p>
+<p class="keep-in-present">Think of an ordered directory whose entries contain addresses. Internal separator keys route the search to a leaf. That leaf lists the RIDs for the matching key. Use each RID to read its row from the heap. Links between leaves let a range scan continue through neighboring keys in sorted order.</p>
 
 <p>This index stores keys and record IDs rather than complete rows. Each record ID identifies a block and slot in the heap file. The reference <code>TableScan.move_to_rid()</code> positions the scan at that address. Index entries must be updated when rows are inserted, deleted, or moved so they continue to identify the intended rows.</p>
 
@@ -114,9 +115,9 @@
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace the supplied helpers before writing the methods</h2>
 
-<p class="keep-in-present">Before each step, predict which child the search visits or which RIDs it returns. The helper traces show supplied Python code; the split and range traces use pseudocode. Use each example to check your understanding before running the matching function test.</p>
+<p class="keep-in-present">Before each step, predict which child the search visits or which RIDs it returns. The helper traces show supplied Python code. The split and range traces use pseudocode. Use each example to check your understanding before running the matching function test.</p>
 
-<p>Step through the lookup with its tree, then choose <code>child_index_for</code> and <code>_descend</code> to trace the supplied Python helpers. The split and range cases use teaching pseudocode; each highlighted operation has a matching tree state. Positions inside a node are zero-based. A leaf stores one RID list per distinct key; an internal node stores one more child than separator.</p>
+<p>Step through the lookup with its tree, then choose <code>child_index_for</code> and <code>_descend</code> to trace the supplied Python helpers. The split and range cases use teaching pseudocode. Each highlighted operation has a matching tree state. Positions inside a node are zero-based. A leaf stores one RID list per distinct key. An internal node stores one more child than separator.</p>
 <div data-teaching-trace="btree-search btree-child-index btree-descend btree-split btree-range">
   <p><strong>Worked result:</strong> <code>search(36)</code> returns <code>[(0,4)]</code>. <code>search(35)</code> returns <code>[]</code>. <code>range(31,37)</code> returns five RIDs because key 31 has two rows.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
@@ -131,22 +132,22 @@
 <div class="code-annotated" data-lang="python">
   <div class="code-step" data-step="se" data-step-name="search" data-explain="Use the provided _descend helper to reach the leaf at path[-1]. If the key exists, return a copy of its RID list. Return [] if it is absent.">search(key)      # descend, find in leaf, return the RID list</div>
   <div class="code-step" data-step="in" data-step-name="insert" data-explain="Descend to the leaf. For an existing key, append the RID to its list. For a new key, find its sorted position and insert the key and [rid] at matching indexes. Then walk toward the root, splitting any node that exceeds its capacity.">insert(key, rid) # insort into the leaf, then repair upward</div>
-  <div class="code-step" data-step="sp" data-step-name="_split" data-explain="Choose mid = len(node.keys) // 2. For a leaf, move keys and RID lists from mid onward to a right sibling, copy its first key to the parent, and update the leaf chain. For an internal node, move the middle key to the parent and split the remaining keys and children around it. If there is no parent, create a new root and increment height.">_split(node, parent)  # split the node and update its parent</div>
-  <div class="code-step" data-step="ra" data-step-name="range" data-explain="Descend to lo's leaf, then walk: through this leaf's sorted keys, across .next to the sibling, collecting rids while key <= hi. Return them in key order.">range(lo, hi)    # descend once, then walk the chain</div>
-  <div class="code-explain-panel">Hover a line. Read the provided Node class first; its docstring shows both node shapes with real values.</div>
+  <div class="code-step" data-step="sp" data-step-name="_split" data-explain="Choose mid = len(node.keys) // 2. For a leaf, move keys and RID lists from mid onward to a right sibling. Copy its first key to the parent. Update the leaf chain. For an internal node, move the middle key to the parent. Split the remaining keys and children around it. If there is no parent, create a new root. Then increment height.">_split(node, parent)  # split the node and update its parent</div>
+  <div class="code-step" data-step="ra" data-step-name="range" data-explain="Descend to lo's leaf. Visit the sorted keys in that leaf. Follow .next to subsequent leaves. Collect rids while key <= hi. Return them in key order.">range(lo, hi)    # descend once, then walk the chain</div>
+  <div class="code-explain-panel">Hover a line. Read the provided Node class first. Its docstring shows both node shapes with real values.</div>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="build">Part 1 · Build <span class="part-time">~35 min in class</span></h2>
 
-<p class="keep-in-present">Draw one leaf split before coding it. Move each key with its complete RID list into the correct leaf, link the old leaf to the new right leaf, and keep the right leaf linked to the old successor. Then check whether adding the separator makes the parent overflow.</p>
+<p class="keep-in-present">Draw one leaf split before writing code. Move each key and its complete RID list into the correct leaf. Link the old leaf to the new right leaf. Keep the right leaf linked to the old successor. Check whether adding the separator makes the parent overflow.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
 <ol>
   <li>Read <code>Node</code> and <code>_descend</code> (5 min). The docstring illustrates leaf and internal-node layouts. Check how the provided <code>child_index_for</code> chooses a child when the search key equals a separator.</li>
-  <li><code>search</code>: descend to the leaf and look up the key. Run <code>python3 test_btree.py --unit BPlusTree.search</code> immediately; the fixture supplies the tree while insertion and splitting remain unfinished.</li>
-  <li><strong><code>insert</code> without splits</strong>: insert the key and its RID list at matching positions. Duplicate keys share a slot. Check a tree with at most four distinct keys first; the full TREE group also requires splits.</li>
+  <li><code>search</code>: descend to the leaf and look up the key. Run <code>python3 test_btree.py --unit BPlusTree.search</code> immediately. The fixture supplies the tree while insertion and splitting remain unfinished.</li>
+  <li><strong><code>insert</code> without splits</strong>: insert the key and its RID list at matching positions. Duplicate keys share a slot. Check a tree with at most four distinct keys first. The full TREE group also requires splits.</li>
   <li><code>_split</code>: implement leaf splits, internal-node splits, and creation of a new root. Then add the bottom-up split loop in <code>insert</code>. Run the TREE and SEARCH tests.</li>
   <li><code>range</code>: descend to <code>lo</code>, then follow the leaf chain through the requested range. Run all nine tests and revisit the widget if a split rule is still unclear.</li>
 </ol>
@@ -185,7 +186,7 @@
 <div class="exercise">
   <span class="ex-label">Exercise · read the failure</span>
   <p>A classmate passes everything except <code>500 keys, height stays logarithmic</code>:
-  their height reaches 9 at 500 sequential keys (expected ≤ 6). Ordering and equal-depth checks hold; search
+  their height reaches 9 at 500 sequential keys (expected ≤ 6). Ordering and equal-depth checks hold. Search
   still works. Their <code>_split</code> uses <code>mid = 1</code> instead of
   <code>len(keys) // 2</code>. Why does everything stay <em>correct</em>, and what exactly
   degrades?</p>
@@ -199,7 +200,7 @@
 
 <p class="keep-in-present">Check what the lookup timer measures: it includes both searching the tree and fetching the matching row. Count those two kinds of work separately. Building the index has its own timer because later lookups reuse the completed tree.</p>
 
-<p>The output below shows the shape of a completed run. For the supplied 100,000 distinct keys, the scan visits 294 blocks and the reference tree has height 11. Values marked <code>&lt;measured&gt;</code> come from your machine. The index timer includes both tree descent and heap lookup; index construction is timed separately.</p>
+<p>The output below shows the shape of a completed run. For the supplied 100,000 distinct keys, the scan visits 294 blocks and the reference tree has height 11. Values marked <code>&lt;measured&gt;</code> come from your machine. The index timer includes both tree descent and heap lookup. Index construction is timed separately.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 measure_index.py</span>
 loading 100,000 rows...
@@ -217,9 +218,10 @@ lookup speedup: &lt;measured&gt;x</code></pre>
 <p><strong>Now change something.</strong> <code>N_ROWS</code> in
 <code>measure_index.py</code> is <code>100_000</code>. Set it to <code>1_000_000</code> (the load
 takes longer) and report scan ms, index ms, tree height, and the speedup. Before you look, compute
-an estimated height under an explicit occupancy assumption. <code>ORDER = 4</code> means four keys and up to five children per internal node; leaf capacity is four distinct keys. Exact height also depends on insertion order and occupancy. Compare your estimate with the measured height, and explain how lookup work changed with the row count.</p>
+an estimated height under an explicit occupancy assumption.</p>
+<p><code>ORDER = 4</code> means four keys and up to five children per internal node. Leaf capacity is four distinct keys. Exact height also depends on insertion order and occupancy. Compare your estimate with the measured height, and explain how lookup work changed with the row count.</p>
 
-<p class="keep-in-present">Your timing ratio depends on the machine, caching, and measurement overhead, especially for a very short lookup. The tree uses a deliberately small node capacity; a disk index with a larger <span class="gloss" data-gloss="fanout">fan-out</span> could store these keys in fewer levels. The matching-heap-block count describes row locations, not physical reads or all setup work performed by <code>TableScan</code>. Buffering and indexing reduce different kinds of work.</p>
+<p class="keep-in-present">Your timing ratio depends on the machine, caching, and measurement overhead, especially for a very short lookup. The tree uses a deliberately small node capacity. A disk index with a larger <span class="gloss" data-gloss="fanout">fan-out</span> could store these keys in fewer levels. The matching-heap-block count describes row locations, not physical reads or all setup work performed by <code>TableScan</code>. Buffering and indexing reduce different kinds of work.</p>
 
 <h3 class="new-slide" data-kicker="Part 3 · Measure">When a B-tree index can help a query</h3>
 
@@ -231,9 +233,9 @@ an estimated height under an explicit occupancy assumption. <code>ORDER = 4</cod
   <thead><tr><th>The query asks</th><th>With an index on the column</th><th>Why</th></tr></thead>
   <tbody>
     <tr><td><code>WHERE user_id = 77777</code>, or a range on <code>user_id</code></td><td>descends the tree</td><td>the ordering allows the engine to locate the matching key or range</td></tr>
-    <tr><td><code>WHERE lower(email) = ...</code>, <code>WHERE score * 2 &gt; 100</code>, <code>LIKE</code> with a leading wildcard</td><td>may not support a direct lookup</td><td>an index on the raw column may not match the expression; an expression index or a valid predicate rewrite can sometimes help</td></tr>
+    <tr><td><code>WHERE lower(email) = ...</code>, <code>WHERE score * 2 &gt; 100</code>, <code>LIKE</code> with a leading wildcard</td><td>may not support a direct lookup</td><td>an index on the raw column may not match the expression. An expression index or a valid predicate rewrite can sometimes help</td></tr>
     <tr><td>"this user's events in a time range", index on <code>(user_id, event_time)</code></td><td>can locate a matching key range</td><td>a composite index is one tree sorted by <code>user_id</code> first, <code>event_time</code> second</td></tr>
-    <tr><td>"all users' events last Tuesday", same composite index</td><td>less directly useful; the engine may scan the index or use skip-scan</td><td>column order in <code>CREATE INDEX</code> is the sort order of the tree</td></tr>
+    <tr><td>"all users' events last Tuesday", same composite index</td><td>less directly useful. The engine may scan the index or use skip-scan</td><td>column order in <code>CREATE INDEX</code> is the sort order of the tree</td></tr>
   </tbody>
 </table>
 
@@ -245,7 +247,7 @@ an estimated height under an explicit occupancy assumption. <code>ORDER = 4</cod
 <div class="exercise learning-check">
   <span class="ex-label">Explain the mechanism without reading your code</span>
   <p>Insert a second RID for an existing key in a full leaf. Does this add another distinct-key slot? During a later split, what would go wrong if only one RID moved with that key?</p>
-  <details><summary>Check your explanation</summary><p>The new RID goes into the existing key’s list, so it uses no new key slot. During a split, move the whole list with its key; otherwise a later lookup could miss a matching row. Keep the keys sorted, the leaves linked, and the parent separators correct. A search returns a copy of the matching RID list.</p></details>
+  <details><summary>Check your explanation</summary><p>The new RID goes into the existing key’s list, so it uses no new key slot. During a split, move the whole list with its key. Otherwise a later lookup could miss a matching row. Keep the keys sorted, the leaves linked, and the parent separators correct. A search returns a copy of the matching RID list.</p></details>
 </div>
 
 <p>This question is for practice and class discussion. You do not need to submit an answer.</p>
@@ -253,24 +255,19 @@ an estimated height under an explicit occupancy assumption. <code>ORDER = 4</cod
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present"><strong>Submit <code>btree.py</code> to Gradescope, per the course submission
-instructions, by Thursday Oct 8 at class start.</strong> One file; the harness score you see locally is the grade.</p>
+instructions, by Thursday Oct 8 at class start.</strong> Submit one file. Your local harness score determines the grade.</p>
 
 <h3>Deliverables</h3>
 <ul>
   <li>☐ <code>btree.py</code>: all nine local tests pass (<code>9/9</code>).</li>
 </ul>
-<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests. Measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>Use the measurement and reflection questions to explain your results. They are not graded, but bring your measurements and answers to class for discussion.</p>
 <ul>
-  <li>The full measurement output plus answers to the
-  script's three questions (selectivity; the height at 100M rows, computed both at ORDER 4
-  and fan-out 200; who pays the build price).</li>
-  <li>Reflection (3–5 sentences): (1)&nbsp;Why must a leaf split <em>copy</em> its middle
-  key up while an internal split <em>moves</em> it? (2)&nbsp;Your index became <span class="gloss" data-gloss="stale-index">stale</span> the
-  moment someone inserts a row without telling it: what would a real engine do about that,
-  and at what cost per write?</li>
+  <li>Bring the full measurement output. Answer the script’s three questions about selectivity, height at 100M rows, and who pays the build cost. Calculate the height at both ORDER 4 and fan-out 200.</li>
+  <li>Reflection (3–5 sentences): (1)&nbsp;Why must a leaf split <em>copy</em> its middle key up while an internal split <em>moves</em> it? (2)&nbsp;Someone inserts a row without updating your index. The index is now <span class="gloss" data-gloss="stale-index">stale</span>. What would a real engine do to prevent this? What cost would that add per write?</li>
 </ul>
 
 <h3>Provided code and required work</h3>
@@ -309,7 +306,7 @@ instructions, by Thursday Oct 8 at class start.</strong> One file; the harness s
 <p class="keep-in-present">Duplicate values share a key entry whose RID list grows. This is convenient at the lab’s scale, but a large list would exceed a fixed-size disk page. Production designs can order entries by <code>(key, RID)</code> or use additional pages for large duplicate lists. The duplicate test checks that all three matching RIDs are returned.</p>
 
 <h3 class="keep-in-present">Is <code>bisect</code> cheating?</h3>
-<p class="keep-in-present"><code>bisect</code> performs binary search within a sorted node. Your tree code chooses which node to visit; <code>bisect</code> helps locate a key or insertion position inside it. Using the standard-library helper is allowed.</p>
+<p class="keep-in-present"><code>bisect</code> performs binary search within a sorted node. Your tree code chooses which node to visit. <code>bisect</code> helps locate a key or insertion position inside it. Using the standard-library helper is allowed.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -321,8 +318,8 @@ instructions, by Thursday Oct 8 at class start.</strong> One file; the harness s
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=2"></script>
-<script src="../_shared/teaching-traces.js?v=4"></script>
-<script src="../_shared/btree-trace-view.js?v=1"></script>
+<script src="../_shared/teaching-traces.js?v=ste-20261015"></script>
+<script src="../_shared/btree-trace-view.js?v=ste-20261015"></script>
 <script src="../_shared/teaching-trace.js?v=2"></script>
 </body>
 </html>

@@ -115,7 +115,7 @@ const { chromium } = require('playwright');
     assert(await root.evaluate(root => root.contains(document.activeElement)), 'Fullscreen retains keyboard focus');
     if (process.env.QUERY_REVIEW_DIR) await page.screenshot({ path: path.join(process.env.QUERY_REVIEW_DIR, 'lab5-query-fullscreen.png') });
     await page.locator('#qw-fullscreen').click();
-    await page.waitForFunction(() => !document.fullscreenElement);
+    await page.waitForFunction(() => !document.fullscreenElement && document.querySelector('#qw-fullscreen').textContent === 'Full screen');
     assert.equal(await page.locator('#qw-fullscreen').textContent(), 'Full screen');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#qw-example').selectOption('0');

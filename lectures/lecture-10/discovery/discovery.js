@@ -11,7 +11,7 @@ const fmt=n=>typeof n==='number'?n.toLocaleString('en-US',{maximumFractionDigits
 function element(tag,text){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;}
 function svgNode(tag,attrs,text){const e=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));if(text!==undefined)e.textContent=text;return e;}
 cases.forEach((c,i)=>{const o=element('option',(i+1)+'. '+c.title);o.value=i;$('case').append(o);});
-$('mode').textContent=live?'Live database: edit SQL and run it against your local taxi.duckdb. Up to 200 result rows are displayed.':'Website preview: reveal saved results computed from the bundled data. Start the local workbench above to edit and execute SQL.';
+$('mode').textContent=live?'Live database: edit the SQL. Run it against local taxi.duckdb. The display shows up to 200 result rows.':'Website preview: reveal saved results from the supplied data. Start the local workbench to edit and run SQL.';
 $('run').textContent=live?'Run query':'Reveal computed result';$('sql').readOnly=!live;
 function save(){Object.assign(notes[index],{sql:$('sql').value,prediction:$('prediction').value,conclusion:$('conclusion').value});}
 function choose(next){
@@ -37,7 +37,7 @@ function show(data,sql){
  const original=sql.trim()===c.sql.trim();
  $('interpretation').textContent=original?c.interpret:'You changed the query. Describe the new population, unit, and denominator before comparing this result with the original example. The original interpretation may no longer apply.';
  $('follow-up').textContent=c.follow;$('evidence').hidden=false;
- $('query-status').textContent=`${data.rows.length} rows ${live?'returned by DuckDB':'in the saved result'}${data.truncated?' · display limited to 200; add an aggregate or LIMIT for a smaller result':''}.`;
+ $('query-status').textContent=`${data.rows.length} rows ${live?'returned by DuckDB':'in the saved result'}${data.truncated?' · display limited to 200. Add an aggregate or LIMIT for fewer rows':''}.`;
  draw();
 }
 function draw(){
@@ -48,7 +48,7 @@ function draw(){
  if(invalid){$('chart-note').textContent='Inspect the table: this example chart supports finite, nonnegative measurements.';return;}
  const max=Math.max(...result.rows.map(r=>r[mi]),1),svg=svgNode('svg',{role:'img','aria-labelledby':'chart-title chart-desc'});
  svg.append(svgNode('title',{id:'chart-title'},c.title+' — '+human(metric)));
- svg.append(svgNode('desc',{id:'chart-desc'},`${units(metric)}. Values come from the SQL result; the full table is below.`));
+ svg.append(svgNode('desc',{id:'chart-desc'},`${units(metric)}. Values come from the SQL result. The full table is below.`));
  const text=(x,y,t,attrs={})=>svg.append(svgNode('text',{x,y,'font-size':14,...attrs},t));
  if(c.chart.type==='heatmap'&&cols.includes(c.chart.group)){
   const gi=cols.indexOf(c.chart.group),groups=[...new Set(result.rows.map(r=>r[gi]))];
@@ -70,7 +70,7 @@ function draw(){
    text(290+390*r[mi]/max,y+21,fmt(r[mi]),{'font-size':13});
   });
  }
- $('chart').append(svg);$('chart-note').textContent=(c.chart.type==='heatmap'?'Compare profiles, then check the counts. ':'The bar scale starts at zero. ')+(result.rows.length>24&&c.chart.type!=='heatmap'?'Chart shows the first 24 result rows. ':'')+'On a small screen, scroll sideways for the full chart. The table preserves every displayed value.';
+ $('chart').append(svg);$('chart-note').textContent=(c.chart.type==='heatmap'?'Compare profiles. Check the counts. ':'The bar scale starts at zero. ')+(result.rows.length>24&&c.chart.type!=='heatmap'?'Chart shows the first 24 result rows. ':'')+'On a small screen, scroll sideways for the full chart. The table preserves every displayed value.';
 }
 $('run').addEventListener('click',async()=>{
  if(busy)return;busy=true;save();const sql=$('sql').value;$('sql').readOnly=true;

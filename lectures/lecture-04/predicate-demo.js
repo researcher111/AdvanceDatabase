@@ -26,10 +26,10 @@
       case 'term': return `Term ${term}: unpack ${formatTerm(state.terms[state.termIndex])} into field, op, and rhs. Each term must pass because they are joined by AND.`;
       case 'lhs': return `Read the left value: scan.get_val("${field}") returns ${state.lhsVal} from the current row. Save it in lhs_val.`;
       case 'rhs': return rhs && rhs.field
-        ? `rhs is F("${rhs.field}"). The wrapper stores the name "${rhs.field}"; scan.get_val(rhs.name) now reads ${state.rhsVal} from that field in the same row. Save it in rhs_val.`
+        ? `rhs is F("${rhs.field}"). The wrapper stores the name "${rhs.field}". scan.get_val(rhs.name) now reads ${state.rhsVal} from that field in the same row. Save it in rhs_val.`
         : `rhs is the literal ${formatRhs(rhs)}. isinstance(rhs, F) is False, so use rhs directly: rhs_val = ${state.rhsVal}. No field lookup is needed on the right.`;
       case 'compare': return `OPS["${op}"] compares ${state.lhsVal} and ${state.rhsVal}: ${bool(state.comparison)}. ` + (state.comparison
-        ? `The condition "if not True" is False, so skip return False. ${term < state.terms.length ? 'The next step starts the next term.' : 'All terms passed; the next step reaches return True.'}`
+        ? `The condition "if not True" is False, so skip return False. ${term < state.terms.length ? 'The next step starts the next term.' : 'All terms passed. The next step reaches return True.'}`
         : 'The condition "if not False" is True, so the next step enters the branch and returns False.');
       case 'reject': return `Return False: reject this row because term ${term} failed. ` + (skipped
         ? `${skipped} later term${skipped === 1 ? ' is' : 's are'} skipped, including ${state.terms.slice(term).map(t => `the ${t[0]} lookup`).join(' and ')}. `

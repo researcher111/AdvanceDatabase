@@ -92,13 +92,13 @@
       record(0, rule, 'call', 'Call _parse_literal()',
         'The literal rule has its own method. parse_insert waits for one value to be returned.');
       const numeric = match('NUM', undefined, 1, rule,
-        'Is this token a number? match only inspects it; the cursor stays put.');
+        'Is this token a number? match inspects the token without advancing the cursor.');
       const string = !numeric && match('STR', undefined, 2, rule,
         'The number test was False, so Python tries the string alternative. The cursor still stays put.');
       if (numeric || string) {
         const token = current(); pos++;
         record(3, rule, 'consume', 'next() → ' + tokenText(token),
-          'The kind check passed. next consumes the token; [1] extracts its value.');
+          'The kind check passed. next consumes the token. [1] extracts its value.');
         stack.pop(); values.push(token[1]);
         record(callerLine, rule, 'return', 'Return ' + repr(token[1]) + ' to parse_insert()',
           'The caller saves the value. The literal method leaves the following comma or closing parenthesis unread.');
@@ -127,7 +127,7 @@
       expect('PUNCT', ')', 10, 'close');
       result = { table, values: [...values] }; stack.pop();
       record(11, 'result', 'return', 'Return InsertData',
-        'Parsing is complete. This object describes the requested insert; execution has not written any rows.');
+        'Parsing is complete. This object describes the requested insert. Execution has not written any rows.');
     } catch (error) {
       if (!(error instanceof ParseFailure)) throw error;
     }

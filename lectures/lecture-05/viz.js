@@ -5,19 +5,19 @@
   const GLOSSARY = {
     'pushdown': {
       title: 'Pushdown (selection pushdown)',
-      body: "<p>Applying a filter earlier in a plan when the rewrite preserves the result. For our inner join, each single-table condition can filter its own input before the product. The join condition then examines fewer candidate pairs. Lecture 9 explains how statistics help a planner compare such alternatives; implementing that optimizer is optional.</p>",
+      body: "<p>Applying a filter earlier in a plan when the rewrite preserves the result. For our inner join, each single-table condition can filter its own input before the product. The join condition then examines fewer candidate pairs. Lecture 9 explains how statistics help a planner compare alternatives. Implementing that optimizer is optional.</p>",
     },
     'predicate': {
       title: 'Predicate',
-      body: '<p>The condition in a WHERE clause: the part that decides whether a row is kept. In microSQL a predicate is one or more terms joined by AND, and each term compares a field to a number, a string, or another field, such as gpa &gt; 35. The parser stores the predicate as plain data inside QueryData. The planner later wraps the scan tree in a SelectScan that evaluates the predicate against each row and passes through only the rows for which it is true. Lab 4 already built SelectScan; this week you trace the supplied code that reads a predicate out of the text.</p>',
+      body: "<p>A condition that determines whether a row passes a filter. In microSQL, a predicate contains one or more terms joined by AND. Each term compares a field with a number, string, or another field. For example, gpa &gt; 35 compares a field with a number. The parser stores the predicate in QueryData.</p><p>The planner adds SelectScan to evaluate the predicate against each row. SelectScan keeps rows for which the predicate is true. Lab 4 built SelectScan. Lab 5 traces the supplied code that parses predicate text.</p>",
     },
     'token': {
       title: 'Token',
-      body: '<p>The smallest meaningful unit of a statement after the lexer has split it up: a keyword, a name, a number, a quoted string, or a punctuation mark. Each token is a (kind, value) pair, so the word students becomes (ID, students) and the number 35 becomes (NUM, 35). The lexer produces the token list by scanning the characters left to right; the parser reads only that list and never looks at raw characters again. That split is what keeps a quoted string like &#39;from&#39; from ever being mistaken for the keyword FROM.</p>',
+      body: "<p>A meaningful unit of a statement: a keyword, name, number, quoted string, or punctuation mark. Each token has a kind and value. For example, students becomes (ID, students), and 35 becomes (NUM, 35). The lexer scans characters from left to right and creates the token list. The parser reads these tokens without processing raw characters. Distinct token kinds separate the quoted string &#39;from&#39; from the keyword FROM.</p>",
     },
     'front-end': {
       title: 'Front end (of a language system)',
-      body: "<p>The stages that interpret a statement’s text and prepare it for execution. In this lecture the lexer produces tokens, the parser produces a structured statement description, and the planner builds the scan tree that the execution engine will run.</p>",
+      body: "<p>The stages that interpret statement text and prepare execution. The lexer produces tokens. The parser produces a structured statement description. The planner builds the scan tree. The execution engine runs that tree.</p>",
     },
     'bnf': {
       title: 'BNF (Backus–Naur form)',
@@ -181,7 +181,7 @@
   $('sq-q4').addEventListener('click', () =>
     run("SELECT name students",
         ''));
-  msg.textContent = 'Pick a statement to push through the pipeline.';
+  msg.textContent = 'Select a statement to inspect each processing stage.';
 })();
 
 /* ---------------- Grammar → provided INSERT parser ---------------- */
@@ -291,7 +291,7 @@
       data: { fields: ['name', 'gpa'], tables: ['students'] } },
     { c: 10, stack: ['parse_query', '_parse_predicate'], note: 'no AND next — predicate complete, RETURN Predicate((gpa, >, 35))',
       data: { fields: ['name', 'gpa'], tables: ['students'], predicate: 'gpa > 35' } },
-    { c: 10, stack: ['parse_query'], note: 'tokens exhausted — RETURN the finished QueryData. The stack unwinds; the description remains.',
+    { c: 10, stack: ['parse_query'], note: 'tokens exhausted — RETURN the finished QueryData. The calls return. The completed description remains.',
       data: { fields: ['name', 'gpa'], tables: ['students'], predicate: 'gpa > 35', done: true } },
   ];
 

@@ -79,7 +79,7 @@ panel.textContent = decode(widget.match(/<div class="code-explain-panel">([\s\S]
 const defaultPanel = panel.textContent;
 root.querySelectorAll = selector => { assert.equal(selector, '.pd-code .code-step'); return lines; };
 root.querySelector = selector => { assert.equal(selector, '.pd-code .code-explain-panel'); return panel; };
-for (const [asset, version] of [['predicate-model.js', 2], ['predicate-demo.js', 1]]) {
+for (const [asset, version] of [['predicate-model.js', 2], ['predicate-demo.js', 'ste-20261015']]) {
   assert.equal((html.match(new RegExp(`<script src="${asset.replace('.', '\\.')}\\?v=${version}"></script>`, 'g')) || []).length, 1);
 }
 assert(html.indexOf('src="predicate-model.js') < html.indexOf('src="predicate-demo.js'), 'Model loads before controller');

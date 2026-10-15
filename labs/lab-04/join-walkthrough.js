@@ -12,10 +12,10 @@
   const slots = [], blocks = [];
   const jobs = {
     project: ['Project(name, dept)', 'next() asks Select for a row. When Select returns True, get_val() can read name or dept from that row. Reading a field does not advance either table.'],
-    select: ['Select(mid = mid2 AND gpa > 35)', 'next() keeps asking ProductScan for pairs. It compares the two major IDs first. Only when they match does it read GPA. A rejected pair stays below Select; a passing pair becomes its current row.'],
+    select: ['Select(mid = mid2 AND gpa > 35)', 'next() keeps asking ProductScan for pairs. It compares the two major IDs first. Only when they match does it read GPA. Select rejects a failing pair. A passing pair becomes its current row.'],
     product: ['ProductScan(students, majors)', 'Keep one student selected while visiting each major. After the last major, reset the majors scan, move to the next student, and start with the first major again. get_val() reads each field from the input that contains it. The Python operator keeps two cursors rather than copying a combined row.'],
     students: ['TableScan(students)', 'RecordPage.next_after() checks four-byte slot flags after the cursor. It skips EMPTY slots. TableScan unpins the old block and pins the next block when necessary. get_val() uses the catalog layout to locate a field within the current slot.'],
-    majors: ['TableScan(majors)', 'The inner scan repeats for each student. before_first() returns to block 0, slot -1. This block has six slots; only the first three are USED. Closing the plan releases its pin.']
+    majors: ['TableScan(majors)', 'The inner scan repeats for each student. before_first() returns to block 0, slot -1. This block has six slots. Only the first three are USED. Closing the plan releases its pin.']
   };
 
   function element(tag, className, text) {
@@ -121,7 +121,7 @@
         element('strong', '', typeof value === 'string' ? '"' + value + '"' : value),
         element('small', '', '@' + field.offset + ' · ' + field.size + ' B'));
       region.title = field.name + ': slot-relative bytes ' + field.offset + '–' + (field.offset + field.size - 1) +
-        (field.type === 'varchar' ? '; 4-byte length prefix + 8-byte capacity' : '');
+        (field.type === 'varchar' ? '. 4-byte length prefix + 8-byte capacity' : '');
       layout.append(region);
     });
     let address = 'Slot base = ' + target.slot + ' × ' + table.slotSize + ' = byte ' + base + ' of block ' + target.block + '.';

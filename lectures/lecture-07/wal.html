@@ -38,7 +38,7 @@
 </button>
 
 <main>
-<div class="callout note"><strong>Bonus material.</strong> This topic is optional and outside the October 22 midterm. Follow the <a href="../../schedule.html">revised schedule</a> for required sessions; analytics now follows B+ trees.</div>
+<div class="callout note"><strong>Bonus material.</strong> This topic is optional and outside the October 22 midterm. Follow the <a href="../../schedule.html">revised schedule</a> for required sessions. Analytics now follows B+ trees.</div>
 
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 7 · Bonus reading · optional, self-paced</div>
@@ -52,7 +52,7 @@
   <p class="lede">Maya tries to transfer $50 from account A, which holds $60, to account B, which holds $90. The database saves A’s new $10 balance to disk, then a power failure interrupts the transfer before B is credited. After restarting, Maya sees $100 across the two accounts instead of $150. Noor opens the database’s log of transaction changes: <q>Can the log tell us A’s balance before the transfer?</q></p>
 </div>
 
-<p class="keep-in-present">Track three things separately: the log information needed to undo a change, the changed data pages, and the records that mark a transaction complete. The optional lab uses a FORCE/STEAL buffer policy: it makes the old-value log record durable before changing a page and flushes changed data pages before recording a commit. We will define both parts of that policy as we undo unfinished work, then compare policies that also need redo.</p>
+<p class="keep-in-present">Track three items separately: undo information in the log, changed data pages, and transaction completion records. The optional lab uses a FORCE/STEAL buffer policy. It makes the old-value log record durable before changing a page. It flushes changed data pages before recording a commit. We will define this policy while tracing undo. We will then compare policies that also require redo.</p>
 
 <div class="cite">
   Companion reading: Sciore,<sup class="src"><a href="#src-1" title="Database Design and Implementation: Second Edition (Google Books)">1</a></sup> <em>Database Design and Implementation</em>, ch. 5 (transactions) ·
@@ -61,8 +61,7 @@
 </div>
 
 <p class="glossary-hint">
-Dotted-underlined terms like <span class="gloss-demo">this one</span> are systems jargon;
-hover or tap for a plain-language explainer that opens right below the sentence you're reading.
+Dotted-underlined terms like <span class="gloss-demo">this one</span> have definitions. Hover over or tap a term to open its explanation below the sentence.
 </p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
@@ -90,7 +89,7 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 
 <p class="key-fact keep-in-present"><strong>10 to 1000×</strong> a buffered write: what one fsync costs, measured in Lab 1</p>
 
-<h3 class="new-slide" data-kicker="The promise">Atomicity removes incomplete changes; durability preserves commits</h3>
+<h3 class="new-slide" data-kicker="The promise">Atomicity removes incomplete changes. Durability preserves commits.</h3>
 
 <table>
   <thead><tr><th></th><th>The promise</th><th>Kept by</th><th>When</th></tr></thead>
@@ -107,13 +106,11 @@ hover or tap for a plain-language explainer that opens right below the sentence 
 <!-- ============================================================ -->
 <h2 id="try-it">Trace a crash during a transfer</h2>
 
-<p>Step through a process-crash example based on the lab’s <code><span class="gloss" data-gloss="kill-9">kill -9</span></code> test. Track the data pages and log records that reach disk, then run recovery and check the account total.</p>
+<p>Step through a process-crash example based on the lab’s <code><span class="gloss" data-gloss="kill-9">kill -9</span></code> test. Track the data pages and log records that reach disk. Run recovery. Check the account total.</p>
 
 <div class="viz" id="viz-crash">
   <div class="viz-title">A committed $40 transfer, an interrupted $50 transfer, and recovery</div>
-  <p class="viz-description">Disk state on the left, the write-ahead log on the right;
-  <span class="hexlegend hit">green</span> entries are fsync'd (safe),
-  <span class="hexlegend miss">warm</span> entries have been written but not fsync'd, so they sit in the operating system's cache and may be lost if the power goes. Step through the timeline.</p>
+  <p class="viz-description">The left panel shows disk state. The right panel shows the write-ahead log. <span class="hexlegend hit">Green</span> entries have completed fsync and are durable. <span class="hexlegend miss">Warm</span> entries remain in the OS cache without a completed fsync. A power failure can lose those entries. Step through the timeline.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="cr-play">▶ Play</button>
     <button type="button" class="btn" id="cr-step">Step</button>
@@ -125,13 +122,13 @@ hover or tap for a plain-language explainer that opens right below the sentence 
     <div class="cr-panel"><div class="cr-title">the write-ahead log</div><div id="cr-log" class="cr-body"></div></div>
   </div>
   <div class="bs-stats" id="cr-stats"></div>
-  <p class="viz-caption">Replay the recovery step. Reading the log <em>backward</em> encounters a transaction’s COMMIT or ROLLBACK record before its earlier changes, allowing recovery to distinguish completed transactions from unfinished ones.</p>
+  <p class="viz-caption">Replay the recovery step. A <em>backward</em> log scan encounters a transaction’s COMMIT or ROLLBACK before its earlier changes. Recovery can then distinguish completed transactions from unfinished ones.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="wal">Log the old value before the page changes</h2>
 
-<p class="keep-in-present">Before editing a number, write down its previous value so you can restore it. A SET log record remembers the old value; the changed page holds the new one. The analogy motivates ordering, but a record in memory is insufficient: the required log information must be durable before the protected data reaches storage.</p>
+<p class="keep-in-present">Before editing a number, write down its previous value so you can restore it. A SET log record stores the old value. The changed page holds the new value. This analogy introduces the ordering requirement. A record in memory is insufficient. The required log information must be durable before the changed data reaches storage.</p>
 
 <pre class="equation"><code>WRITE-AHEAD:   log(old value) → sync log → modify page → later flush page<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup>
 
@@ -152,30 +149,31 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <table>
   <thead><tr><th>Event</th><th>fsync?</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>each SET record</td><td>yes in this lab</td><td><code>LogManager.append</code> syncs by default. The old value is durable before the page changes. Production engines can batch log writes, but must make the log durable through the page’s latest logged change before flushing that page. A log sequence number (LSN) identifies that change.</td></tr>
-    <tr><td>data pages at commit</td><td>yes (our <span class="gloss" data-gloss="force">FORCE</span> policy)</td><td>every dirty page the transaction touched is written to disk before the COMMIT record is appended. A durable COMMIT record therefore identifies a transaction whose data changes were already flushed; this design needs no redo pass</td></tr>
-    <tr><td><strong>the COMMIT record</strong></td><td><strong>yes, before reporting success</strong></td><td>after this fsync succeeds, the completion record is durable and the engine can report a successful commit. If the call is interrupted, the outcome may be uncertain: the record may already be durable. Recovery follows the durable log; the client cannot infer failure merely because it missed the acknowledgement<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 3.4 Transactions">5</a></sup></td></tr>
-    <tr><td>ROLLBACK records</td><td>yes, after undo is durable</td><td>Restore and flush the old values first, then append and sync the ROLLBACK record. Logging completion before the undo reaches disk could make recovery skip unfinished repair.</td></tr>
+    <tr><td>each SET record</td><td>yes in this lab</td><td><code>LogManager.append</code> syncs by default. The old value is durable before the page changes. Production engines can batch log writes. Before flushing a page, they must make the log durable through that page’s latest logged change. A log sequence number (LSN) identifies that change.</td></tr>
+    <tr><td>data pages at commit</td><td>yes (our <span class="gloss" data-gloss="force">FORCE</span> policy)</td><td>every dirty page the transaction touched is written to disk before the COMMIT record is appended. A durable COMMIT record therefore identifies a transaction whose data changes are already durable. This design needs no redo pass.</td></tr>
+    <tr><td><strong>the COMMIT record</strong></td><td><strong>yes, before reporting success</strong></td><td>after this fsync succeeds, the completion record is durable and the engine can report a successful commit. If the call is interrupted, the outcome may be uncertain: the record may already be durable. Recovery follows the durable log. A missing acknowledgement does not prove that the commit failed<sup class="src"><a href="#src-5" title="PostgreSQL Documentation: 3.4 Transactions">5</a></sup></td></tr>
+    <tr><td>ROLLBACK records</td><td>yes, after undo is durable</td><td>Restore the old values. Flush the restored pages. Append the ROLLBACK record. Sync the log. Logging completion before the undo reaches disk could make recovery skip unfinished repair.</td></tr>
   </tbody>
 </table>
 
 <p class="key-fact keep-in-present"><strong>FORCE/STEAL in Lab 7:</strong> sync log records, flush dirty data pages, then sync COMMIT.</p>
 
-<p class="keep-in-present">Lab 7 chooses simple ordering over speed and can issue multiple syncs per transaction. A NO-FORCE production design can make commit depend on a log flush while writing data pages later; group commit can share that flush across transactions. Redo information lets recovery reconstruct committed changes whose data pages were still unwritten at the crash.</p>
+<p class="keep-in-present">Lab 7 chooses simple ordering over speed and can issue multiple syncs per transaction. A NO-FORCE production design can commit after a log flush and write data pages later. Group commit shares that flush across transactions. Redo information lets recovery reconstruct committed changes whose data pages were still unwritten at the crash.</p>
 
 <h3 class="new-slide" data-kicker="The write-ahead rule">Handle fsync errors without assuming a retry is safe</h3>
 
 <div class="callout note">
   <span class="label">Case study · PostgreSQL fsync error handling, 2018</span>
-  <p class="keep-in-present">In 2018, PostgreSQL developers investigated an unsafe assumption in handling <code>fsync</code> errors. On affected Linux filesystems, a failed write could leave pages marked clean, so retrying <code>fsync</code> could report success without saving the lost data. PostgreSQL changed its handling of these data-file sync failures to stop the server and require crash recovery. The lesson is that a successful retry does not necessarily repair an earlier I/O failure; recovery depends on which durable information is still available.<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: A Brief History of PostgreSQL">6</a></sup><sup class="src"><a href="#src-7" title="PostgreSQL's handling of fsync() errors is unsafe and risks data loss at least on XFS (pgsql-hackers, Craig Ringer, 2018-03-28)">7</a></sup><sup class="src"><a href="#src-8" title="PostgreSQL 11.2 Release Notes">8</a></sup></p>
+  <p class="keep-in-present">In 2018, PostgreSQL developers investigated an unsafe assumption in handling <code>fsync</code> errors. On affected Linux filesystems, a failed write could leave pages marked clean. A subsequent <code>fsync</code> could report success without saving the lost data. PostgreSQL changed its handling of these data-file sync failures to stop the server and require crash recovery.</p>
+  <p class="keep-in-present">A successful retry does not necessarily repair an earlier I/O failure. Recovery depends on the durable information that remains available.<sup class="src"><a href="#src-6" title="PostgreSQL Documentation: A Brief History of PostgreSQL">6</a></sup><sup class="src"><a href="#src-7" title="PostgreSQL's handling of fsync() errors is unsafe and risks data loss at least on XFS (pgsql-hackers, Craig Ringer, 2018-03-28)">7</a></sup><sup class="src"><a href="#src-8" title="PostgreSQL 11.2 Release Notes">8</a></sup></p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace recovery when one value changes twice</h2>
 
-<p>A SET record stores the old value <em>for one write</em>. Track the buffer value after each undo and distinguish it from the last durable page value. The example uses the lab’s physical undo policy; PostgreSQL uses a different recovery design.</p>
+<p>A SET record stores the old value <em>for one write</em>. Track the buffer value after each undo. Compare it with the last durable page value. This example uses the lab’s physical undo policy. PostgreSQL uses a different recovery design.</p>
 <div data-teaching-trace="undo">
-  <p><strong>Worked result:</strong> tx2 changed <code>60 → 40 → 10</code>. Recovery restores <code>40</code>, then <code>60</code>. It skips tx1 after seeing its COMMIT, flushes the restored value, then syncs ROLLBACK for tx2.</p>
+  <p><strong>Worked result:</strong> tx2 changed <code>60 → 40 → 10</code>. Recovery restores <code>40</code>, then <code>60</code>. It skips tx1 after finding its COMMIT. It flushes the restored value before syncing ROLLBACK for tx2.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
 </div>
 <p><strong>Lab connection:</strong> <a href="../../labs/lab-07/transactions.html#worked-example">Lab 7 traces the same log</a>. Explain why each restore happens before writing the recovery loop.</p>
@@ -183,18 +181,18 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <!-- ============================================================ -->
 <h2 id="recovery">Recovery restores values from unfinished transactions</h2>
 
-<p class="keep-in-present">Read the log backward. Completion records identify transactions to skip; SET records for unfinished transactions supply the old values to restore.</p>
+<p class="keep-in-present">Read the log backward. Completion records identify transactions to skip. SET records for unfinished transactions supply the old values to restore.</p>
 
 <p class="keep-in-present">Under the lab’s FORCE/STEAL policy, committed changes are on disk, but some changes from unfinished transactions may also be there. <span class="gloss" data-gloss="steal">STEAL</span> allows a dirty page to be flushed before its transaction commits. Recovery reads the log backward and restores the old values of unfinished transactions, then flushes those repairs.</p>
 
 <h3 class="new-slide" data-kicker="Recovery">Match each post-crash state to its recovery action</h3>
 
 <table>
-  <thead><tr><th>Found on disk after the crash</th><th>Why it's there</th><th>Recovery's move</th></tr></thead>
+  <thead><tr><th>Found on disk after the crash</th><th>Cause</th><th>Recovery's move</th></tr></thead>
   <tbody>
     <tr><td>committed data</td><td>FORCE flushed it before its COMMIT record</td><td>keep it: the COMMIT record in the log says the transaction finished</td></tr>
     <tr><td>uncommitted data</td><td>the buffer pool evicted (stole) a dirty page belonging to a transaction that had not committed</td><td>undo it: the log's SET record holds the old value, so write that value back</td></tr>
-    <tr><td>uncommitted changes never reached disk</td><td>the dirty page was still in the process’s buffer pool when it exited</td><td>this lab still undoes the unfinished transaction’s SET records: the log does not identify which pages reached disk. A complete backward pass restores the committed value even if disk already held it</td></tr>
+    <tr><td>uncommitted changes never reached disk</td><td>the dirty page was still in the process’s buffer pool when it exited</td><td>The lab still undoes the unfinished transaction’s SET records. The log does not identify which pages reached disk. A complete backward pass restores the committed value, including when disk already contains that value.</td></tr>
   </tbody>
 </table>
 
@@ -213,7 +211,7 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">The threat</span><span>a crash can interrupt recovery itself. Recovery then runs again at the next startup, and the second run must do no new damage.</span></div>
-  <div class="lc-row"><span class="lc-k">Idempotence</span><span>Repeating the complete backward pass reaches the same final state. Intermediate restores can change a value again when one slot has several SET records. Finish recovery before admitting new transactions, and mark an undo complete only after its restored pages are durable.</span></div>
+  <div class="lc-row"><span class="lc-k">Idempotence</span><span>Repeating the complete backward pass reaches the same final state. Intermediate restores can change a value again when one slot has several SET records. Finish recovery before admitting new transactions. Mark an undo complete only after its restored pages are durable.</span></div>
   <div class="lc-row"><span class="lc-k">Completion records</span><span>after restored pages are durable, the ROLLBACK records mark undo as complete. A later pass skips those transactions. The lab runs <code>recover()</code> twice and checks that the balances remain unchanged.</span></div>
   <div class="lc-row"><span class="lc-k">The rule</span><span>a general rule of systems design: <strong>any repair process must survive being interrupted by the disaster it repairs.</strong></span></div>
 </div>
@@ -223,7 +221,7 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 
 <p class="keep-in-present">The repair works under the lab’s policy. Change the policy next: can disk contain unfinished changes, or lack completed ones? Those two possibilities determine the need for undo and redo.</p>
 
-<p class="keep-in-present">Select a quadrant and identify whether disk can contain uncommitted changes or lack committed changes. These two possibilities determine whether the model needs undo, redo, or both.</p>
+<p class="keep-in-present">Select a quadrant. Determine whether disk can contain uncommitted changes. Determine whether committed changes can be absent from disk. These two possibilities determine whether the model needs undo, redo, or both.</p>
 
 <div class="viz" id="viz-quad">
   <div class="viz-title">buffer policy → recovery duty · click a quadrant</div>
@@ -241,7 +239,7 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
     </div>
     <div class="quad-detail" id="quad-detail"></div>
   </div>
-  <p class="viz-caption">microdb uses FORCE + STEAL, which requires undo but not redo. NO-FORCE + STEAL allows commits without immediate data-page writes and allows dirty pages to be evicted. ARIES supports this combination with redo and undo. Other engines can handle unfinished work differently; PostgreSQL uses WAL redo and MVCC visibility rather than an ARIES-style physical undo pass.<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup></p>
+  <p class="viz-caption">microdb uses FORCE + STEAL, which requires undo but not redo. NO-FORCE + STEAL allows commits without immediate data-page writes and allows dirty pages to be evicted. ARIES supports this combination with redo and undo. Other engines can handle unfinished work differently. PostgreSQL uses WAL redo and MVCC visibility instead of an ARIES-style physical undo pass.<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup></p>
 </div>
 
 <h3 class="new-slide" data-kicker="Force and steal">NO-FORCE can commit after flushing the log</h3>
@@ -250,8 +248,8 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
   <thead><tr><th></th><th>microdb (Lab 7)</th><th>ARIES-style design</th></tr></thead>
   <tbody>
     <tr><td>Policy</td><td>FORCE + STEAL</td><td>NO-FORCE + STEAL</td></tr>
-    <tr><td>Commit cost</td><td>flush every dirty page, then the log fsync</td><td><strong>the log fsync only</strong>; data pages can flush later, subject to the write-ahead rule</td></tr>
-    <tr><td>Recovery</td><td>one undo pass</td><td>three passes: analysis (which transactions were still running at the crash), then <span class="gloss" data-gloss="redo">redo</span>, then undo; bounded by <span class="gloss" data-gloss="checkpoint-recall">checkpoints</span></td></tr>
+    <tr><td>Commit cost</td><td>flush every dirty page, then the log fsync</td><td><strong>the log fsync only</strong>. Data pages can be flushed later, subject to the write-ahead rule.</td></tr>
+    <tr><td>Recovery</td><td>one undo pass</td><td>Three passes: analysis, <span class="gloss" data-gloss="redo">redo</span>, and undo. Analysis identifies transactions still active at the crash. <span class="gloss" data-gloss="checkpoint-recall">Checkpoints</span> limit the required log scan.</td></tr>
     <tr><td>Why</td><td>keeps this teaching engine’s recovery algorithm small enough to inspect and test</td><td>defers scattered data-page writes and allows one sequential log flush to cover several transactions through group commit</td></tr>
   </tbody>
 </table>
@@ -259,7 +257,7 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <h3 class="new-slide" data-kicker="Force and steal">ARIES adds redo and recovery metadata</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Redo values</span><span>redo records describe changes to reapply after a crash; undo records support rolling back unfinished work.</span></div>
+  <div class="lc-row"><span class="lc-k">Redo values</span><span>Redo records describe changes to reapply after a crash. Undo records support rollback of unfinished work.</span></div>
   <div class="lc-row"><span class="lc-k">LSNs</span><span>every record is numbered with a log sequence number (LSN), so a page can record which log entry last changed it.</span></div>
   <div class="lc-row"><span class="lc-k">Checkpoints</span><span>a checkpoint records transaction and dirty-page state, helping recovery determine how far back in the log it must read<sup class="src"><a href="#src-2" title="ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging">2</a></sup>.</span></div>
   <div class="lc-row"><span class="lc-k">The rule</span><span>the write-ahead rule still applies: make the required log records durable before flushing a changed page.</span></div>
@@ -268,14 +266,14 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <!-- ============================================================ -->
 <h2 id="nextweek">Prepare for the transaction and recovery lab</h2>
 
-<p>Optional Lab 7 adds transaction support to microdb. If you take this extension, the log manager and lock table are provided; you implement the five transaction operations below.</p>
+<p>Optional Lab 7 adds transaction support to microdb. The starter provides the log manager and lock table. You implement the five transaction operations below.</p>
 
 <table>
   <thead><tr><th>You write</th><th>Responsibility</th></tr></thead>
   <tbody>
-    <tr><td><code>set_int / set_string</code></td><td>the WAL rule as four steps, in this order: take an exclusive lock (xlock) on the block, append the old value to the log, write the new value into the page, then mark the page modified (set_modified). The logger syncs the old value before the page is modified, so undo information is durable before the page can be flushed</td></tr>
-    <tr><td><code>commit</code></td><td>flush every dirty page this transaction touched, append and fsync the COMMIT record, then release the transaction's locks</td></tr>
-    <tr><td><code>rollback</code></td><td>restore this transaction’s old values in reverse order, flush restored pages, then sync the ROLLBACK record</td></tr>
+    <tr><td><code>set_int / set_string</code></td><td>Follow this order. Take an exclusive lock (xlock) on the block. Append the old value to the log. Write the new value into the page. Mark the page modified (set_modified). The logger syncs the old value before the page changes. This makes undo information durable before any page flush.</td></tr>
+    <tr><td><code>commit</code></td><td>Flush every dirty page that this transaction touched. Append the COMMIT record. Sync the log. Release the transaction's locks.</td></tr>
+    <tr><td><code>rollback</code></td><td>Restore this transaction’s old values in reverse order. Flush the restored pages. Append and sync the ROLLBACK record.</td></tr>
     <tr><td><code>recover</code></td><td>the one backward pass from this lecture, exactly as written above</td></tr>
   </tbody>
 </table>
@@ -283,10 +281,10 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <h3 class="new-slide" data-kicker="Optional extension">Prepare for the optional transaction lab</h3>
 
 <ul class="checklist">
-  <li>☐ The six required labs build the core engine; optional Lab 7 adds transaction support.</li>
+  <li>☐ The six required labs build the core engine. Optional Lab 7 adds transaction support.</li>
   <li>☐ Download the eight starter files from the Lab 7 page.</li>
   <li>☐ Harness runs: <code>python3 test_tx.py</code> prints <strong>0/9 passed</strong>
-  (two tests spawn a subprocess and kill it; that's supposed to happen).</li>
+  (two tests deliberately create and kill a subprocess).</li>
   <li>☐ Be ready to explain the lab’s write-ahead rule: <em>old value to the log before the page
   changes</em>. Explain why the old value must be durable before the changed page can reach disk.</li>
 </ul>
@@ -300,12 +298,12 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
   <details><summary>Check your explanation</summary><p>The lab must flush the repaired value before syncing ROLLBACK. Otherwise later recovery could see a completed transaction and skip an undo whose repaired page never reached disk. An undo is complete only when the repaired pages are durable.</p></details>
 </div>
 
-<p class="keep-in-present">Return to the interrupted transfer. Identify completed transactions, undo unfinished changes in reverse order, make repairs durable, and only then record recovery completion. WAL and the buffer policy jointly determine that order.</p>
+<p class="keep-in-present">Return to the interrupted transfer. Identify completed transactions. Undo unfinished changes in reverse order. Make the repairs durable. Then record recovery completion. WAL and the buffer policy jointly determine that order.</p>
 
 <ul class="recap-list">
   <li><strong>Atomicity and durability require recovery,</strong> and the append-only log provides the information to undo incomplete transactions while preserving committed changes.</li>
   <li><strong>The rule has an order:</strong> old value to the log, log ahead of the page,
-  COMMIT record fsync'd last. Lab 7 also syncs the undo log and flushes data pages; a production NO-FORCE design can defer those data writes.</li>
+  COMMIT record fsync'd last. Lab 7 also syncs the undo log and flushes data pages. A production NO-FORCE design can defer those data writes.</li>
   <li><strong>Recovery rolls back unfinished transactions</strong>: scan backward, identify completed transactions, and restore old values for the others. The procedure must remain safe if recovery itself is interrupted.</li>
 </ul>
 
@@ -316,7 +314,7 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <p class="keep-in-present"><strong>Before trying the optional lab:</strong></p>
 <ul>
   <li><strong>Read</strong> Sciore ch. 5 (transactions) and Postgres's WAL introduction, linked above.</li>
-  <li><strong>Run</strong> <code>python3 test_tx.py</code> on the eight Lab 7 starter files; it should print <strong>0/9 passed</strong>.</li>
+  <li><strong>Run</strong> <code>python3 test_tx.py</code> on the eight Lab 7 starter files. Check that it prints <strong>0/9 passed</strong>.</li>
   <li><strong>Review</strong> Lab 6 and be ready to explain the WAL rule: old value to the log before the page changes.</li>
 </ul>
 
@@ -324,9 +322,9 @@ the log itself:  an APPEND-ONLY file, structured records appended in order.
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">What happens if the log is corrupted?</h3>
-<p class="keep-in-present">Production WAL formats use checksums and record boundaries to distinguish an incomplete tail from corruption. Corruption can occur elsewhere too and must not be silently discarded. The lab’s JSON-lines log detects malformed JSON but has no checksum or torn-write repair; its crash tests cover process termination, not arbitrary storage damage.</p>
+<p class="keep-in-present">Production WAL formats use checksums and record boundaries to distinguish an incomplete tail from corruption. Corruption can occur elsewhere too and must not be silently discarded. The lab’s JSON-lines log detects malformed JSON. It has no checksum or torn-write repair. The crash tests cover process termination, not arbitrary storage damage.</p>
 
-<h3 class="keep-in-present">Doesn't logging every change double the write traffic?</h3>
+<h3 class="keep-in-present">Does logging every change double write traffic?</h3>
 <p class="keep-in-present">Logging adds writes, but there is no fixed doubling factor: log record size and data-page activity differ. In a NO-FORCE design, sequential log appends let the engine defer and batch data-page writes. That can reduce commit latency despite the extra log traffic.<sup class="src"><a href="#src-4" title="PostgreSQL Documentation: 28.1 Reliability (WAL introduction)">4</a></sup></p>
 
 <h3 class="keep-in-present">How does a checkpoint reduce recovery work?</h3>
@@ -349,7 +347,7 @@ document that supports the claim it is attached to.</p>
   <li id="src-3"><a href="https://cs-people.bu.edu/mathan/reading-groups/papers-classics/recovery.pdf">Principles of Transaction-Oriented Database Recovery (Haerder and Reuter, ACM Computing Surveys 15(4), 1983)</a></li>
   <li id="src-4"><a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL Documentation: 28.1 Reliability (WAL introduction)</a></li>
   <li id="src-5"><a href="https://www.postgresql.org/docs/current/tutorial-transactions.html">PostgreSQL Documentation: 3.4 Transactions</a></li>
-  <li id="src-6"><a href="https://www.postgresql.org/docs/current/history.html">PostgreSQL Documentation: A Brief History of PostgreSQL</a> <span class="src-note">PostgreSQL 6.0 dates to 1996 to 1997, so the project was about 21 to 22 years old in 2018; sources describe the flaw as long-standing but none pins an exact age, so twenty years is a reasonable round figure rather than a documented one.</span></li>
+  <li id="src-6"><a href="https://www.postgresql.org/docs/current/history.html">PostgreSQL Documentation: A Brief History of PostgreSQL</a> <span class="src-note">PostgreSQL 6.0 dates to 1996–1997. The project was about 21–22 years old in 2018. Sources describe the flaw as long-standing, but give no exact age. Twenty years is an estimate, not a documented duration.</span></li>
   <li id="src-7"><a href="https://www.postgresql.org/message-id/CAMsr+YHh+5Oq4xziwwoEfhoTZgr07vdGG+hu=1adXx59aTeaoQ@mail.gmail.com">PostgreSQL's handling of fsync() errors is unsafe and risks data loss at least on XFS (pgsql-hackers, Craig Ringer, 2018-03-28)</a></li>
   <li id="src-8"><a href="https://www.postgresql.org/docs/release/11.2/">PostgreSQL 11.2 Release Notes</a></li>
   <li id="src-9"><a href="https://www.postgresql.org/docs/current/mvcc-intro.html">PostgreSQL Documentation: 13.1 Introduction (Concurrency Control)</a></li>
@@ -357,7 +355,7 @@ document that supports the claim it is attached to.</p>
   <li id="src-11"><a href="https://www.postgresql.org/message-id/50742FB9.7040906%40vmware.com">Re: Behavior for crash recovery when it detects a corrupt WAL record (pgsql-hackers, Heikki Linnakangas, 2012-10-09)</a></li>
   <li id="src-12"><a href="https://www.postgresql.org/docs/current/wal-configuration.html">PostgreSQL Documentation: 28.5 WAL Configuration</a></li>
   <li id="src-13"><a href="https://www.sqlite.org/wal.html">SQLite: Write-Ahead Logging</a></li>
-  <li id="src-14"><a href="https://source.android.com/docs/core/perf/compatibility-wal">Android Open Source Project: Compatibility write-ahead logging for apps</a> <span class="src-note">Android 9 and later enable (compatibility) WAL by default for app databases, and Room enables full WAL by default; the source does not speak to every messaging app specifically, and iOS behavior is not documented here.</span></li>
+  <li id="src-14"><a href="https://source.android.com/docs/core/perf/compatibility-wal">Android Open Source Project: Compatibility write-ahead logging for apps</a> <span class="src-note">Android 9 and later enable compatibility WAL by default for app databases. Room enables full WAL by default. The source does not establish the behavior of every messaging app. It does not document iOS behavior.</span></li>
   <li id="src-15"><a href="https://www.sqlite.org/atomiccommit.html">SQLite: Atomic Commit In SQLite</a></li>
 </ol>
 
@@ -366,8 +364,8 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=3"></script>
-<script src="../../labs/_shared/teaching-traces.js?v=4"></script>
+<script src="viz.js?v=ste-20261015"></script>
+<script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../labs/_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

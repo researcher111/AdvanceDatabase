@@ -5,7 +5,7 @@
   const GLOSSARY = {
     'the-fsync': {
       title: "Durable write ordering",
-      body: "<p>Lab 7 uses FORCE/STEAL. LogManager syncs old values before changed pages can be flushed. Commit flushes data pages before syncing COMMIT. Rollback and recovery flush restored values before syncing ROLLBACK. These operations perform multiple syncs; production designs can batch work using log sequence numbers and redo information.</p>",
+      body: "<p>Lab 7 uses FORCE/STEAL. LogManager syncs old values before changed pages can be flushed. Commit flushes data pages before syncing COMMIT. Rollback and recovery flush restored values before syncing ROLLBACK. These operations perform multiple syncs. Production designs can batch work using log sequence numbers and redo information.</p>",
     },
     'idempotent-recall': {
       title: "Idempotence",
@@ -49,7 +49,7 @@
     { recs: [
         'START tx1', 'SET A old=100 tx1', 'ROLLBACK tx1',
         'START tx2', 'SET A old=100 tx2', 'COMMIT tx2', 'START tx3', 'SET B old=50 tx3'],
-      note: 'tx1 has completed rollback; recovery can skip its changes' },
+      note: 'tx1 has completed rollback. Recovery can skip its changes' },
   ];
   let scen = null, dealt = 0, cursor = -1, score, total;
 
@@ -76,7 +76,7 @@
     score = 0; total = 0;
     autoBtn.hidden = true;
     msg.innerHTML = `Scenario: <em>${scen.note}</em>. Start at the <strong>bottom</strong> — ` +
-      `predict the action for the newest record, then click to reveal it: mark complete, undo, or skip.`;
+      `Predict the action for the newest record: mark complete, undo, or skip. Click to reveal it.`;
     render();
   }
 
@@ -110,7 +110,7 @@
                 : v === 'fate' ? 'a completion record: mark this transaction finished and skip its earlier SET records'
                 : 'skippable: it is a START record or a SET from a transaction whose completion was already found';
     msg.innerHTML = `Record ${i} (<code>${scen.recs[i]}</code>) is ${label}.` +
-      (cursor < 0 ? ' <strong>The backward scan is complete. Recovery must now write the restored values to disk, then sync ROLLBACK records for the repaired transactions. Load another scenario to practice.</strong>' : '');
+      (cursor < 0 ? ' <strong>The backward scan is complete. Recovery must now write the restored values to disk. Then it must sync ROLLBACK records for the repaired transactions. Load another scenario to practice.</strong>' : '');
     if (cursor < 0) autoBtn.hidden = true;
     render();
   }

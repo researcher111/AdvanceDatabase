@@ -18,12 +18,12 @@
     premise: 'Query: SELECT name FROM students WHERE gpa > 35. Toy rows in scan order: ada 39, ben 31, cyd 37, dee 28, eli 36, fay 34. The schema stores name as text and gpa as an integer.',
     code: ['lex = Lexer(sql)', 'consume SELECT and the field list', 'consume FROM and the table list', 'if WHERE follows: parse its terms', 'query = QueryData(fields, tables, predicate)', 'scan = TableScan(existing catalog layout)', 'scan = SelectScan(scan, query.predicate)', 'scan = ProjectScan(scan, query.fields)', 'while scan.next(): read projected fields'],
     frames: [
-      frame('The lexer labels the input', [1], [['first token', 'KEYWORD select'], ['second token', 'ID name'], ['last token', 'NUM 35']], 'Token kinds tell the parser which items are keywords, names, or literal values. The numeric token holds integer 35. peek() reads the next token without advancing; next() consumes it.'),
+      frame('The lexer labels the input', [1], [['first token', 'KEYWORD select'], ['second token', 'ID name'], ['last token', 'NUM 35']], 'Token kinds tell the parser which items are keywords, names, or literal values. The numeric token holds integer 35. peek() reads the next token without advancing. next() consumes it.'),
       frame('The parser consumes the lists', [2, 3], [['fields', '[name]'], ['tables', '[students]'], ['next token', 'KEYWORD where']], 'The field list ends when no comma follows name. expect(FROM) then checks and consumes the required keyword before reading the table name.'),
       frame('The predicate records an integer comparison', [4], [['left field', 'gpa'], ['operator', '>'], ['right literal', '35']], 'This term describes a comparison. Parsing does not inspect any table rows or decide whether a particular student passes.'),
       frame('QueryData holds the request', [5], [['fields', '[name]'], ['tables', '[students]'], ['predicate', 'gpa > 35'], ['rows read by parser', '0']], 'The planner can now work with the description without reparsing the SQL text. The catalog supplies the stored table layout.'),
       frame('The planner wraps the input scan', [6, 7, 8], [['inner scan', 'TableScan(students)'], ['middle scan', 'SelectScan(gpa > 35)'], ['outer scan', 'ProjectScan(name)']], 'Keep the gpa field available until selection has evaluated it. Projection narrows the fields exposed by the outer scan to name.'),
-      frame('Pulling rows executes the plan', [9], [['rows examined', '6'], ['matching rows', '3'], ['names in this scan order', 'ada, cyd, eli']], 'The outer next() calls the scans inside it until a row passes the filter. ProjectScan exposes name for that current row. The trace fixes input order for teaching; SQL without ORDER BY does not promise a general result order.')
+      frame('Pulling rows executes the plan', [9], [['rows examined', '6'], ['matching rows', '3'], ['names in this scan order', 'ada, cyd, eli']], 'The outer next() calls the scans inside it until a row passes the filter. ProjectScan exposes name for that current row. The trace fixes input order for teaching. SQL without ORDER BY does not promise a general result order.')
     ],
     question: 'How does name = dept differ from name = \'dept\'?',
     answer: 'The unquoted ID dept becomes F("dept"), a field reference whose value comes from the current row. The quoted STR token is the literal text dept. Removing that distinction changes a join condition into a comparison with a constant.'
@@ -59,13 +59,13 @@
     code: ['path = tree._descend(key)', 'leaf = path[-1]', 'if key not in leaf.keys: return []', 'i = leaf.keys.index(key)', 'rids = list(leaf.rids[i])', 'for rid in rids:', '    table.move_to_rid(rid)', '    read the requested fields'],
     frames: [
       frame('Start with the search key', [], [['key', '36'], ['root.keys', '[36]'], ['height', '2']], 'Internal keys divide ranges. A matching separator still needs a leaf lookup because RIDs live in leaves.'),
-      frame('Equality routes right', [1], [['comparison', '36 >= 36'], ['child index', '1'], ['nodes touched', '2']], 'child_index_for advances past separators less than or equal to the key. Child 0 holds keys below 36; child 1 holds keys at least 36.'),
+      frame('Equality routes right', [1], [['comparison', '36 >= 36'], ['child index', '1'], ['nodes touched', '2']], 'child_index_for advances past separators less than or equal to the key. Child 0 holds keys below 36. Child 1 holds keys at least 36.'),
       frame('Find the leaf entry', [2, 3, 4], [['leaf.keys', '[36, 37, 39]'], ['key position i', '0'], ['leaf.rids[0]', '[(0, 4)]']], 'The child index selected a subtree. The key position selects an entry inside its leaf. They are different indexes.'),
       frame('Return a copy of the RID list', [5], [['search(36)', '[(0, 4)]'], ['tree visits', '2 in-memory nodes'], ['heap rows fetched', '0 so far']], 'search returns addresses, not rows. Returning a new list prevents callers from changing the list stored in the tree.'),
       frame('Fetch the matching heap row', [6, 7, 8], [['RID', '(0, 4)'], ['block', '0'], ['slot', '4'], ['row', 'eli, gpa 36']], 'The provided IndexSelectScan calls move_to_rid when next() succeeds. Only then can get_val read fields from that row. The lab tree is in memory, so node visits are not disk reads.')
     ],
     question: 'What should search(35) return? What if two rows have key 31?',
-    answer: '35 routes left but is absent, so return []. Key 31 returns [(0, 1), (1, 0)]. One distinct key can have several RIDs; an equality scan must visit every matching row.'
+    answer: '35 routes left but is absent, so return []. Key 31 returns [(0, 1), (1, 0)]. One distinct key can have several RIDs. An equality scan must visit every matching row.'
   });
   add('btree-split', {
     title: 'The fifth distinct key triggers a leaf split',
@@ -75,19 +75,19 @@
       frame('Full is still legal', [], [['keys', '[1, 2, 3, 4]'], ['RID lists', '[a, b, c, d]'], ['height', '1']], 'Four keys fill this leaf. Splitting happens only after a fifth distinct key arrives. Another RID for an existing key does not add a key slot.'),
       frame('Insert the fifth entry', [1], [['keys', '[1, 2, 3, 4, 5]'], ['RID lists', '[a, b, c, d, e]']], 'Insert 5 and its RID list at matching positions. The fifth slot is temporary overflow, not an increase in this node’s capacity.'),
       frame('Check is_full(): five is greater than four', [2], [['len(node.keys)', '5'], ['ORDER', '4'], ['overflow?', 'True']], 'Despite its name, is_full() checks whether the node is over capacity: its condition is len(keys) > ORDER. A node with exactly four keys does not split.'),
-      frame('Choose the slice boundary', [3], [['mid', '5 // 2 = 2'], ['key at position 2', '3']], 'Python indexes start at zero. The new right leaf begins with key 3; the left leaf will keep the two entries before position 2.'),
-      frame('Copy the right half into a new leaf', [4], [['right.keys', '[3, 4, 5]'], ['right.rids', '[c, d, e]'], ['left still holds', '[1, 2, 3, 4, 5]']], 'Slicing creates a new list. At this intermediate line the entries are in both nodes; the next assignment trims the original leaf. The insertion is not finished yet.'),
+      frame('Choose the slice boundary', [3], [['mid', '5 // 2 = 2'], ['key at position 2', '3']], 'Python indexes start at zero. The new right leaf begins with key 3. The left leaf will keep the two entries before position 2.'),
+      frame('Copy the right half into a new leaf', [4], [['right.keys', '[3, 4, 5]'], ['right.rids', '[c, d, e]'], ['left still holds', '[1, 2, 3, 4, 5]']], 'Slicing creates a new list. At this intermediate line the entries are in both nodes. The next assignment trims the original leaf. The insertion is not finished yet.'),
       frame('Trim the original leaf', [5], [['left.keys', '[1, 2]'], ['left.rids', '[a, b]'], ['right.keys / rids', '[3, 4, 5] / [c, d, e]']], 'Now each key and its RID list lives in exactly one leaf again. The new right leaf is still detached from the root and the leaf chain.'),
-      frame('Preserve the old successor', [6], [['old left.next', 'None'], ['right.next', 'None']], 'Copy the old successor before replacing left.next. Here there is no successor; in a longer chain this assignment would preserve the link to the following leaf.'),
+      frame('Preserve the old successor', [6], [['old left.next', 'None'], ['right.next', 'None']], 'Copy the old successor before replacing left.next. Here there is no successor. In a longer chain this assignment would preserve the link to the following leaf.'),
       frame('Link left to right', [7], [['left.next', 'right'], ['right.next', 'None'], ['all leaf keys', '[1, 2, 3, 4, 5]']], 'The leaf chain now reaches the new sibling. Search still needs a parent separator and a second child pointer before this insertion is complete.'),
-      frame('Copy the separator into a new root', [8, 9], [['root.keys', '[3]'], ['root children', 'left, right'], ['height', '2'], ['key 3 remains', 'in the right leaf']], 'There was no parent, so create the new root with a routing copy of 3 and pointers to both leaves. Every leaf gains one level together; its actual entries remain unchanged.')
+      frame('Copy the separator into a new root', [8, 9], [['root.keys', '[3]'], ['root children', 'left, right'], ['height', '2'], ['key 3 remains', 'in the right leaf']], 'There was no parent, so create the new root with a routing copy of 3 and pointers to both leaves. Every leaf gains one level together. Its actual entries remain unchanged.')
     ],
     question: 'How would an internal node [3, 5, 7, 9, 11] split?',
-    answer: 'Move separator 7 to the parent. Left keeps [3, 5] and its first three children; right keeps [9, 11] and its last three children. An internal node with two separators needs three children. The actual entry for key 7 remains in a leaf.'
+    answer: 'Move separator 7 to the parent. The left node keeps [3, 5] and its first three children. The right node keeps [9, 11] and its last three children. An internal node with two separators needs three children. The actual entry for key 7 remains in a leaf.'
   });
   add('btree-range', {
     title: 'A range crosses a leaf boundary',
-    premise: 'Use root [36]. Left leaf [28, 31, 34] links to right leaf [36, 37, 39]. Key 31 has two RIDs; every other key has one. Request range(31, 37), including both endpoints.',
+    premise: 'Use root [36]. Left leaf [28, 31, 34] links to right leaf [36, 37, 39]. Key 31 has two RIDs. Every other key has one. Request range(31, 37), including both endpoints.',
     code: ['leaf = tree._descend(lo)[-1]', 'for each key and RID list in this leaf:', '    if key > hi: return result', '    if key >= lo: append all its RIDs', 'leaf = leaf.next', 'repeat until there is no leaf', 'return result'],
     frames: [
       frame('Descend once to the lower bound', [1], [['bounds', '31 <= key <= 37'], ['first leaf', '[28, 31, 34]'], ['selected keys', '[]']], '31 is below separator 36, so begin in the left leaf. A range scan does not restart at the root for every match.'),
@@ -119,11 +119,11 @@
   const splitFinal = splitView([1,2],[3,4,5], {active:['root'], marked:['root:3','right:3'],
     edges:[{from:'root',to:'left',label:'child 0 · key < 3'}, {from:'root',to:'right',label:'child 1 · key ≥ 3'}],
     links:[{from:'left',to:'right'}, {from:'right',to:null}],
-    result:'Height = 2. Copy 3 upward; keep key 3 and [c] in the leaf.'});
+    result:'Height = 2. Copy 3 upward. Keep key 3 and [c] in the leaf.'});
   splitFinal.nodes[0].label = 'left leaf';
   splitFinal.nodes.push({id:'root',label:'new root · routing copy',keys:[3],x:360,y:72});
   attachTrees('btree-split', [
-    splitView([1,2,3,4],null,{result:'Height = 1. Four keys fit; there is no parent.'}),
+    splitView([1,2,3,4],null,{result:'Height = 1. Four keys fit. There is no parent.'}),
     splitView([1,2,3,4,5],null,{marked:['left:5'], result:'Insert 5 → [e]. Five entries temporarily occupy a four-key leaf.'}),
     splitView([1,2,3,4,5],null,{overflow:['left'], result:'is_full() → 5 > 4 → True. A split is required.'}),
     splitView([1,2,3,4,5],null,{boundary:{node:'left',index:2},result:'mid = 2: [1, 2] | [3, 4, 5]. Split RID lists at the same position.'}),
@@ -144,16 +144,16 @@
   add('btree-child-index', {
     title:'child_index_for: equality advances to the next child',
     codeLabel:'Provided Python · Node.child_index_for',
-    premise:'Use key 36 and root separators [31, 36]. Three children hold [28], [31, 34], and [36, 37, 39]. The helper returns a child index; it does not visit that child or change any keys.',
+    premise:'Use key 36 and root separators [31, 36]. Three children hold [28], [31, 34], and [36, 37, 39]. The helper returns a child index. It does not visit that child or change any keys.',
     code:['i = 0','while i < len(self.keys) and key >= self.keys[i]:','    i += 1','return i'],
     frames:[
       frame('Begin with child index zero', [1], [['key','36'],['i','0'],['self.keys','[31, 36]']], 'The index i starts at child 0, whose range ends before the first separator. The orange comparison marker will move through the root’s separators.'),
       frame('Compare with separator 31', [2], [['i < len(keys)','0 < 2: True'],['key >= keys[0]','36 >= 31: True']], 'Both parts of the while condition are true. The key cannot belong in child 0, so the next line advances the candidate child index.'),
-      frame('Advance to child 1', [3], [['i','1'],['candidate range','31 <= key < 36']], 'Increment i once. This is still a candidate child index; the loop must test the next separator before it can return a final routing decision.'),
+      frame('Advance to child 1', [3], [['i','1'],['candidate range','31 <= key < 36']], 'Increment i once. This is still a candidate child index. The loop must test the next separator before it can return a final routing decision.'),
       frame('Equality passes separator 36', [2], [['i < len(keys)','1 < 2: True'],['key >= keys[1]','36 >= 36: True']], 'The greater-than-or-equal comparison is deliberate. A key equal to 36 belongs to the child on the right of 36, not the child ending just below it.'),
-      frame('Advance to child 2', [3], [['i','2'],['candidate range','key >= 36']], 'There are two separators but three children. Child index 2 is valid even though key index 2 does not exist; these arrays have different lengths.'),
+      frame('Advance to child 2', [3], [['i','2'],['candidate range','key >= 36']], 'There are two separators but three children. Child index 2 is valid even though key index 2 does not exist. These arrays have different lengths.'),
       frame('Stop before indexing beyond keys', [2], [['i < len(keys)','2 < 2: False'],['second comparison','not evaluated']], 'Python short-circuits and: when the first condition is false, it never reads self.keys[2]. The loop ends safely with i equal to the number of separators.'),
-      frame('Return the child index', [4], [['return','2'],['next action in _descend','visit node.children[2]']], 'The helper only returns the number 2. The highlighted arrow shows the selected route; _descend is responsible for following the pointer and extending the path.')
+      frame('Return the child index', [4], [['return','2'],['next action in _descend','visit node.children[2]']], 'The helper only returns the number 2. The highlighted arrow shows the selected route. _descend is responsible for following the pointer and extending the path.')
     ],
     question:'What changes for key 35? What about key 30?',
     answer:'35 passes 31 but fails 35 >= 36, so return child index 1. 30 fails the first comparison with 31, so return child index 0. The leaf contents never change during routing.'
@@ -179,20 +179,20 @@
   add('btree-descend', {
     title:'_descend: build the path one pointer at a time',
     codeLabel:'Provided Python · BPlusTree._descend',
-    premise:'Find key 36 in the two-level tree with root [36]. Start nodes_touched at 0. Watch path grow from the root to the right leaf; the helper returns nodes, not matching RIDs or heap rows.',
+    premise:'Find key 36 in the two-level tree with root [36]. Start nodes_touched at 0. Watch path grow from the root to the right leaf. The helper returns nodes, not matching RIDs or heap rows.',
     code:['path = [self.root]','while not path[-1].leaf:','    node = path[-1]','    path.append(node.children[node.child_index_for(key)])','self.nodes_touched += len(path)','return path'],
     frames:[
-      frame('Start the path at the root', [1], [['key','36'],['path','[root]'],['nodes_touched','0']], 'The first item in path is the root object. The diagram marks it as the current path endpoint; no child pointer has been followed yet.'),
+      frame('Start the path at the root', [1], [['key','36'],['path','[root]'],['nodes_touched','0']], 'The first item in path is the root object. The diagram marks it as the current path endpoint. No child pointer has been followed yet.'),
       frame('The root is not a leaf', [2], [['path[-1]','root'],['not root.leaf','True']], 'The last node on the path is internal, so the loop must descend. This check prevents trying to read child pointers from a leaf.'),
       frame('Bind node to the current endpoint', [3], [['node','root'],['path','[root]']], 'node refers to the same root object already in path. Binding this name does not copy the node, change its keys, or extend the path.'),
-      frame('Call child_index_for(36)', [4], [['node.keys','[36]'],['child_index_for(36)','1'],['path before append','[root]']], 'Evaluate the inner helper call first. Equality routes right, so the result is 1. The pending orange arrow is a choice; path has not grown yet.'),
+      frame('Call child_index_for(36)', [4], [['node.keys','[36]'],['child_index_for(36)','1'],['path before append','[root]']], 'Evaluate the inner helper call first. Equality routes right, so the result is 1. The pending orange arrow is a choice. path has not grown yet.'),
       frame('Append the chosen child', [4], [['node.children[1]','right leaf'],['path','[root, right]']], 'Follow child pointer 1 and append that leaf object. path[-1] now refers to the right leaf, while the local variable node still refers to the root.'),
       frame('The leaf ends the loop', [2], [['path[-1]','right leaf'],['not path[-1].leaf','False']], 'The new endpoint is a leaf, so the while condition is false. Descent stops here without searching for key 36 inside the leaf.'),
-      frame('Count the nodes on the path', [5], [['len(path)','2'],['nodes_touched','0 + 2 = 2']], 'Count the root and the leaf once each. This counter accumulates in-memory node visits in the lab; it is not a measurement of physical disk reads.'),
-      frame('Return the complete path', [6], [['return','[root, right]'],['caller’s leaf','path[-1]'],['heap rows fetched','0']], 'search can now look for a key in this leaf; insert can use the same path to repair ancestors after splitting. _descend itself never changes the tree structure.')
+      frame('Count the nodes on the path', [5], [['len(path)','2'],['nodes_touched','0 + 2 = 2']], 'Count the root and the leaf once each. This counter accumulates in-memory node visits in the lab. It is not a measurement of physical disk reads.'),
+      frame('Return the complete path', [6], [['return','[root, right]'],['caller’s leaf','path[-1]'],['heap rows fetched','0']], 'search can now look for a key in this leaf. insert can use the same path to repair ancestors after splitting. _descend itself never changes the tree structure.')
     ],
     question:'What happens when the root is already a leaf?',
-    answer:'path starts as [root], the while condition is immediately false, and nodes_touched increases by one. Return [root]; there is no child_index_for call.'
+    answer:'path starts as [root], the while condition is immediately false, and nodes_touched increases by one. Return [root]. There is no child_index_for call.'
   });
   attachTrees('btree-descend', [
     treeView({active:['root'],path:['root'],result:'path = [root] · nodes_touched = 0'}),
@@ -244,7 +244,7 @@
     premise: 'Toy disk index model: N = 100,000 rows, B = 1,000 heap pages, tree height h = 3. Charge one page access per matching RID, ignore caching and CPU work, and keep units in page accesses.',
     code: ['matches = N * selectivity', 'scan_cost = B', 'index_cost = h + matches', 'choose the smaller estimated cost', 'compare estimates with observed work'],
     frames: [
-      frame('Record the assumptions', [], [['N: rows', '100,000'], ['B: heap pages', '1,000'], ['h: index pages', '3']], 'N counts rows; B counts pages. Adding N directly to B without a model that converts matching rows to page accesses mixes units.'),
+      frame('Record the assumptions', [], [['N: rows', '100,000'], ['B: heap pages', '1,000'], ['h: index pages', '3']], 'N counts rows. B counts pages. Adding N directly to B without a model that converts matching rows to page accesses mixes units.'),
       frame('A predicate keeps 0.1% of rows', [1], [['selectivity', '0.001 = 0.1%'], ['matching rows', '100'], ['scan pages', '1,000']], 'Percent must be converted to a fraction: 100,000 × 0.001 = 100. Both access paths return the same matching rows.'),
       frame('Price both access paths', [2, 3, 4], [['scan estimate', '1,000 page accesses'], ['index estimate', '3 + 100 = 103'], ['chosen path', 'index']], 'The index estimate includes both descent and heap access. This is an illustrative cost calculation, not a measured runtime.'),
       frame('At 2%, the choice flips', [1, 2, 3, 4], [['matching rows', '2,000'], ['index estimate', '3 + 2,000 = 2,003'], ['scan estimate', '1,000'], ['chosen path', 'scan']], 'Keeping more rows increases the assumed heap work for the index. The complete scan still visits the same table pages.'),
@@ -263,10 +263,10 @@
     frames: [
       frame('Start with four trips', [], [['January trips', '$12 and $8'], ['February trips', '$24 and $6'], ['input row count', '4']], 'Calculate fare + tip for each trip. We have four rows, and each row represents one trip. The goal is a running total by month: revenue collected so far at the end of each month.'),
       frame('Combine trips into monthly totals', [1, 2, 3, 4], [['January revenue', '$20'], ['February revenue', '$30'], ['monthly row count', '2']], 'GROUP BY month combines the two January trips and the two February trips. Four trip rows become two monthly rows. We have monthly revenue, but have not yet calculated the running total.'),
-      frame('January: include January only', [5, 6, 7], [['current month', 'January'], ['included months', 'January'], ['running total', '$20']], 'A window describes the rows a window function works with; its frame selects rows for the current calculation. Here the frame runs from the first month through the current month. For January, include January only: $20. Point to the outlined row. The calculation adds a value to the row; it does not remove the row.'),
+      frame('January: include January only', [5, 6, 7], [['current month', 'January'], ['included months', 'January'], ['running total', '$20']], 'A window describes the rows a window function works with. Its frame selects rows for the current calculation. Here the frame runs from the first month through the current month. For January, include January only: $20. Point to the outlined row. The calculation adds a value to the row. It does not remove the row.'),
       frame('February: include both months', [5, 6, 7], [['current month', 'February'], ['included months', 'January + February'], ['running total', '$20 + $30 = $50']], 'For February, extend the highlighted frame to include January and February. Add $20 and $30 to get $50 collected so far. ROWS UNBOUNDED PRECEDING means all rows from the start through the current row. The January result stays $20.'),
-      frame('Keep one result per month', [8], [['January: revenue / running', '$20 / $20'], ['February: revenue / running', '$30 / $50'], ['output row count', '2']], 'GROUP BY changed four trip rows into two monthly rows. The running-total calculation kept those two rows and added a column. ORDER BY inside OVER sets the calculation order; the final ORDER BY sets the displayed result order.'),
-      frame('Ask: which trip crossed $40?', [], [['trip revenues, shown order', '12, 8, 24, 6'], ['running totals per trip', '12, 20, 44, 50'], ['running totals per month', '20, 50'], ['discovery question', 'Which trip first passed $40?']], 'Compare the results of two queries: a running total after each trip, and a running total after each month. Both finish at $50. Ask whether both results can identify the trip that first pushed revenue above $40. Let students use the tables before revealing the highlighted answer. Trip totals use the shown order 1, 2, 3, 4. A trip-level SQL query must specify a deterministic order, such as trip time plus a unique trip ID; month alone leaves same-month trips tied.'),
+      frame('Keep one result per month', [8], [['January: revenue / running', '$20 / $20'], ['February: revenue / running', '$30 / $50'], ['output row count', '2']], 'GROUP BY changed four trip rows into two monthly rows. The running-total calculation kept those two rows and added a column. ORDER BY inside OVER sets the calculation order. The final ORDER BY sets the displayed result order.'),
+      frame('Ask: which trip crossed $40?', [], [['trip revenues, shown order', '12, 8, 24, 6'], ['running totals per trip', '12, 20, 44, 50'], ['running totals per month', '20, 50'], ['discovery question', 'Which trip first passed $40?']], 'Compare the results of two queries: a running total after each trip, and a running total after each month. Both finish at $50. Ask whether both results can identify the trip that first pushed revenue above $40. Let students use the tables before revealing the highlighted answer. Trip totals use the shown order 1, 2, 3, 4. A trip-level SQL query must specify a deterministic order, such as trip time plus a unique trip ID. Month alone leaves same-month trips tied.'),
       frame('Reveal what each result can tell us', [], [['first trip above $40', 'Trip 3: $44'], ['first month above $40', 'February: $50'], ['detail in monthly totals', 'No individual trip values'], ['next step to identify the trip', 'Return to the trip-level data']], 'In the shown trip order, trip 2 ends at $20 and trip 3 takes the total to $44, so trip 3 first crosses $40. The monthly result moves from $20 after January to $50 after February. With these positive revenues, we can locate the crossing in February, but cannot identify the trip from monthly totals alone. Grouping summarizes the data and leaves out the individual trip detail. Choose the level of detail for the question you want to answer.')
     ],
     question: 'Both calculations finish at $50. Can both tell us which trip first pushed total revenue above $40?',
@@ -320,12 +320,12 @@
       frame('Compute this question’s metrics', [7], [['hit@3', '1'], ['reciprocal rank@3', '1 / 1 = 1'], ['if first relevant is rank 3', 'hit 1; reciprocal rank 1/3']], 'hit@3 asks whether any relevant source occurs in the three returned chunks. Reciprocal rank uses the first relevant position. Average these per-question values to obtain hit rate and MRR@3.')
     ],
     question: 'If wal appears twice, does this question earn two hits? Does a citation prove an answer is supported?',
-    answer: 'No to both. One question contributes at most one hit. A citation identifies a source; checking answer support requires reading that source and comparing it with the answer. The graded lab can run in echo mode without generating an answer.'
+    answer: 'No to both. One question contributes at most one hit. A citation identifies a source. Checking answer support requires reading that source and comparing it with the answer. The graded lab can run in echo mode without generating an answer.'
   });
   const documents = ['WAL, wal!', 'Page wal.'];
   const mapped = documents.flatMap(text => (text.toLowerCase().match(/[a-z]+/g) || []).map(word => [word,1]));
   add('shuffle', {
-    title: 'Map emits occurrences; shuffle groups equal keys',
+    title: 'Map emits occurrences. Shuffle groups equal keys.',
     premise: 'Toy records: d0="WAL, wal!", d1="Page wal.". For this drawing only, wal routes to partition 0 and page to partition 1. The Python lab uses hash(key) % n, whose bucket numbers can differ between runs.',
     code: ['for each input record:', '    emit (word, 1) for each word occurrence', 'partitions = one independent dict per bucket', 'for key, value in mapped_pairs:', '    p = partition_for(key, n)', '    append value to partitions[p][key]', 'for each key and values in each partition:', '    emit (key, sum(values))'],
     frames: [
@@ -340,7 +340,7 @@
   });
   add('lsm', {
     title: 'A tombstone must hide an older value',
-    premise: 'Follow three writes to key k: old at sequence 5 is flushed to SSTable A, new at 8 is flushed to B, then DELETE at 9 stays in memory. Read after each write, then consider compaction.',
+    premise: 'Follow three writes to key k. Flush old at sequence 5 to SSTable A. Flush new at sequence 8 to B. Keep DELETE at sequence 9 in memory. Read after each write. Then consider compaction.',
     code: ['collect possible records for key k', 'ignore versions newer than the snapshot', 'choose the highest visible sequence', 'if it is a tombstone: return absent', 'otherwise: return its value', 'compact only when old versions are safe to drop'],
     frames: [
       frame('An older value remains in an immutable file', [], [['SSTable A', 'k = old @ 5'], ['latest visible value', 'old']], 'Immutable files keep their contents until compaction replaces them. An update cannot simply overwrite this entry inside the file.'),
@@ -376,7 +376,7 @@
       frame('Two hops produce repeated endpoints', [1, 2], [['path endpoints', '[dee, ada, dee, eli]'], ['path rows at depth 2', '4'], ['distinct new people', '[dee, eli]']], 'ada→ben→dee and ada→cyd→dee are different paths to one person. ada→ben→ada returns to the already visited start.'),
       frame('BFS keeps a new frontier', [5, 6], [['frontier at depth 2', '[dee, eli]'], ['visited people', 'ada, ben, cyd, dee, eli'], ['edge visits so far', '6']], 'The visited set keeps dee and ada out of the queue a second time. It finds every reachable person without keeping every route.'),
       frame('Depth three gives different work counts', [1, 2, 3, 5, 6], [['new BFS frontier', '[fay]'], ['BFS edge visits total', '8'], ['walk rows at depth 3', '5'], ['walk rows over depths 1–3', '2 + 4 + 5 = 11']], 'These walk rows include repeated endpoints and cycles up to the bound. The depth-3 BFS frontier is returned but not expanded, so it does not inspect fay→ada.'),
-      frame('Choose what the question asks for', [2, 6], [['unique people within 3 hops', 'ben, cyd, dee, eli, fay'], ['distinct people count', '5'], ['walk rows before exclusions', '11']], 'One query returns walks; the other returns distinct people. These counts do not compare SQL and graph-database speed. Recursive SQL can also deduplicate reachability. An unbounded traversal needs a stopping or cycle rule.')
+      frame('Choose what the question asks for', [2, 6], [['unique people within 3 hops', 'ben, cyd, dee, eli, fay'], ['distinct people count', '5'], ['walk rows before exclusions', '11']], 'One query returns walks. The other returns distinct people. These counts do not compare SQL and graph-database speed. Recursive SQL can also deduplicate reachability. An unbounded traversal needs a stopping or cycle rule.')
     ],
     question: 'Can DISTINCT at the very end prevent the earlier repeated path expansions?',
     answer: 'No. Final DISTINCT removes duplicate result rows after those rows were generated. A visited set changes the expansion itself. Also specify whether repeated vertices or edges are legal: this example counts bounded walks, and Cypher path rules depend on the chosen syntax and engine.'

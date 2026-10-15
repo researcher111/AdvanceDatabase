@@ -7,7 +7,7 @@
   const GLOSSARY = {
     'heap-file': {
       title: 'Heap file',
-      body: "<p>A file that stores table records without sorting them by a key. A row can occupy any available slot. A scan visits the blocks in sequence; an index can locate rows by a field value.</p>",
+      body: "<p>A file that stores table records without sorting them by a key. A row can occupy any available slot. A scan visits the blocks in sequence. An index can locate rows by a field value.</p>",
     },
     'tombstone': {
       title: 'Tombstone',
@@ -118,7 +118,7 @@
     if (!sl.used) { msg.innerHTML = 'The current slot is already marked EMPTY.'; return; }
     sl.used = false; sl.ghost = true;
     msg.innerHTML = `delete() → slot at RID (${cur.b}, ${cur.s}) is now EMPTY († marks the old field bytes). ` +
-      `next() skips it; insert() may reuse it.`;
+      `next() skips it. insert() may reuse it.`;
     render();
   }
 
@@ -133,7 +133,7 @@
         blocks[b][free] = { used: true, ghost: false, id: nextId };
         cur = { b, s: free }; pinned = b; done = false;
         msg.innerHTML = `insert() → id ${nextId} is stored at RID (${b}, ${free})` +
-          (wasGhost ? ' — <strong>reused a deleted slot</strong>; the file did not grow.' : '.');
+          (wasGhost ? '. <strong>Reused a deleted slot</strong>. The file did not grow.' : '.');
         nextId += 1;
         render();
         return;

@@ -3,11 +3,11 @@
   const GLOSSARY = {
     'left-deep': {
       title: 'Left-deep join order',
-      body: "<p>A join plan in which the first join combines two base tables and each later join combines the previous result with one additional base table. System R restricted its search to such plans, which reduced the search space and supported pipelining. The widget shows three examples, not every possible ordering of the three tables.</p>",
+      body: "<p>A left-deep plan first joins two base tables. Each later join combines the previous result with one additional base table. System R restricted its search to these plans to reduce alternatives and support pipelining. The widget shows three examples. It does not show every possible order of the three tables.</p>",
     },
     'dynamic-programming': {
       title: 'Dynamic programming (for join order)',
-      body: "<p>Solve smaller planning problems, retain useful solutions, and reuse them when constructing larger plans. An optimizer can plan single tables, then pairs, then larger subsets. It may retain several plans for a subset when they provide different useful properties, such as sort order. The search still grows rapidly, so large joins often need heuristics.</p>",
+      body: "<p>Dynamic programming solves smaller planning problems and retains useful results for larger plans. An optimizer can plan single tables, pairs, and then larger subsets. It can retain several plans with different useful properties, such as sort order. The search still grows rapidly. Large joins therefore often require heuristics.</p>",
     },
     'system-r': {
       title: 'System R',
@@ -19,7 +19,7 @@
     },
     'selectivity': {
       title: 'Selectivity',
-      body: "<p>The fraction of input rows that a predicate keeps, between 0 and 1. Keeping 3 of 300 rows gives selectivity 0.01. A planner estimates this using statistics such as value frequencies and histograms. Simple formulas assume uniformity or independence; skewed or correlated data can make those estimates inaccurate.</p>",
+      body: "<p>Selectivity is the fraction of input rows that a predicate retains, from 0 to 1. Keeping 3 of 300 rows gives 0.01. A planner estimates selectivity from value frequencies, histograms, and other statistics. Simple formulas assume uniformity or independence. Uneven or correlated values can make those estimates inaccurate.</p>",
     },
     'statistics': {
       title: 'Statistics (of a table)',
@@ -27,7 +27,7 @@
     },
     'cost-model': {
       title: 'Cost model',
-      body: "<p>Formulas that estimate a plan’s work before execution. This lecture’s model counts block accesses; production models also estimate CPU work and account for different access patterns. The optimizer compares alternatives using those estimates. Inaccurate assumptions can cause it to select a slower plan.</p>",
+      body: "<p>A cost model estimates a plan’s work before execution. This lecture’s model counts block accesses. Production models also estimate CPU work and account for access patterns. The optimizer compares plans with these estimates. Incorrect assumptions can cause selection of a slower plan.</p>",
     },
     'histogram': {
       title: 'Histogram (equi-depth)',
@@ -78,7 +78,7 @@
       bar('seq scan: read every block', seq, N + HEIGHT, !idxWins) +
       `<div class="flip-verdict">${Math.round(sel * N).toLocaleString()} of 100,000 rows match. ` +
       `${idxWins ? 'Index scan' : 'Sequential scan'} has ${ratio.toFixed(ratio < 10 ? 1 : 0)}× lower estimated block cost` +
-      `${Math.abs(idx - seq) < seq * 0.15 ? ' — near the crossover, where small estimate changes can alter the choice' : ''}.</div>`;
+      `${Math.abs(idx - seq) < seq * 0.15 ? '. Near the crossover, small estimate changes can select a different plan' : ''}.</div>`;
   }
   slider.addEventListener('input', render);
   render();

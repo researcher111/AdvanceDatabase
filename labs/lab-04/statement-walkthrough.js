@@ -147,7 +147,7 @@
     counts.append(el('span', '', 'cumulative since setup'));
     $('sw-transfer').textContent = frame.event === 'disk-write' ? 'RAM → FileManager.write(): copy this page into its file block' :
       frame.event === 'pin-miss' ? 'File → RAM: load a block into a buffer frame' :
-      frame.event === 'pin-hit' ? 'Buffer hit: reuse the resident page; no file read' :
+      frame.event === 'pin-hit' ? 'Buffer hit: reuse the resident page. No file read' :
       frame.event === 'unpin' || frame.event === 'scan-close' ? 'Unpin releases the scan’s hold. It does not flush or evict the page.' :
       'Files → pin loads missing blocks · flush writes dirty pages → files';
   }
@@ -199,7 +199,7 @@
     const diffCount = ram ? ram.filter((v, i) => v !== disk[i]).length : 0;
     $('sw-inspector-note').textContent = (held ? 'Inspection held here. ' : 'Following execution. ') +
       (ram ? diffCount ? diffCount + ' byte(s) differ between RAM and the file. Amber cells show pending changes.' :
-        'The RAM and file bytes currently match.' : 'The file block exists; no frame currently holds it.');
+        'The RAM and file bytes currently match.' : 'The file block exists. No frame currently holds it.');
     const cursors = frame.cursors.filter(c => !c.closed && c.file === target.file);
     $('sw-cursors').textContent = cursors.length ? cursors.map(c => c.name + ': block ' + c.block + ', current_slot = ' + c.slot).join(' · ') : 'No open scan holds a cursor on this file.';
     renderSlots(frame, target, layout, ram, disk, 'ram');
@@ -223,7 +223,7 @@
     if (accessed && Number.isInteger(frame.focus.byteOffset)) {
       address = (fieldName || 'flag') + ': ' + target.slot + ' × ' + layout.slotSize + ' + ' +
         (frame.focus.byteOffset - base) + ' = block byte ' + frame.focus.byteOffset +
-        '; file offset ' + (target.block * data.blockSize + frame.focus.byteOffset) + '.';
+        '. File offset ' + (target.block * data.blockSize + frame.focus.byteOffset) + '.';
     }
     $('sw-address').textContent = address;
     const bytes = $('sw-bytes');

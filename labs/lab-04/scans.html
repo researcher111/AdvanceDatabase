@@ -72,17 +72,17 @@
   <details><summary>Check your explanation</summary><p>The product produces all six pairs. The selection then rejects four and returns two. Count the pairs examined and the rows returned separately. Neither count tells you how many blocks were read from disk.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>. Predict what the next operation will change. Run the operation. Compare the result with your prediction. Explain any difference before making another change.</p>
 
 <h2 id="try-it">Combining operators into a query plan</h2>
 
-<p class="keep-in-present">Predict how many rows the whole plan returns and how many rows or pairs each operator examines along the way. Run the plan, then use the counters to check each prediction.</p>
+<p class="keep-in-present">Predict how many rows the whole plan returns and how many rows or pairs each operator examines along the way. Run the plan. Use the counters to check each prediction.</p>
 
 <p>Use the widget to combine operators over the <code>students</code> and <code>majors</code> tables. Run a plan and compare how many rows each operator processes. Start with the join preset to see the behavior you will implement.</p>
 
 <div class="viz" id="viz-stack">
   <div class="viz-title">Plan builder · students(6) ⋈ majors(3)</div>
-  <p class="viz-description">Pick a preset plan, press run, and compare the number of rows each operator processes with the number of result rows the plan returns.</p>
+  <p class="viz-description">Choose a preset plan. Press run. Compare the rows each operator processes with the rows the plan returns.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="st-q1">SELECT name WHERE gpa &gt; 35</button>
     <button type="button" class="btn primary" id="st-q2">the join (honors × majors)</button>
@@ -103,7 +103,7 @@
     <a class="chat-dl-btn" href="starter/measure_pipeline.py" download>measure_pipeline.py</a>
     <a class="chat-dl-btn" href="starter/sql_walkthrough.py" download>sql_walkthrough.py (demo)</a>
   </div>
-  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files, then open this lab’s starter folder:</p>
+  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files. Then open this lab’s starter folder:</p>
 <pre class="clone-cmd"><span class="cl-line">git pull</span>
 <span class="cl-line">cd labs/lab-04/starter</span></pre>
   <p class="viz-caption">The join preset constructs 18 pairs and returns three matching rows. Query optimization aims to reduce unnecessary work while preserving the result.</p>
@@ -112,7 +112,7 @@
 <!-- ============================================================ -->
 <h2 id="sql-walkthrough">From a SQL statement to the code that does the work</h2>
 
-<p class="keep-in-present">Follow one small database through <strong>CREATE → INSERT → DELETE → SELECT → JOIN</strong>. The SQL states the request; the Python beneath it carries out that request using the actual Lab 4 APIs. <strong>We translate by hand here.</strong> The SQL front end begins in Lab 5; this lab does not accept SQL strings.</p>
+<p class="keep-in-present">Follow one small database through <strong>CREATE → INSERT → DELETE → SELECT → JOIN</strong>. The SQL states the request. The Python beneath it carries out that request using the actual Lab 4 APIs. <strong>We translate by hand here.</strong> The SQL front end begins in Lab 5. This lab does not accept SQL strings.</p>
 
 <p>Read the snippets in order: they share the setup below. The complete <a href="starter/sql_walkthrough.py" download>sql_walkthrough.py</a> includes these operations, result checks, and cleanup in <code>finally</code> blocks. Run its storage examples immediately, then add <code>--queries</code> after implementing your scan operators.</p>
 
@@ -169,9 +169,9 @@ majors_layout = catalog.get_layout("majors")</code></pre>
 
 <p class="keep-in-present"><code>students_layout.slot_size == 28</code>. A 128-byte block holds four student slots, with 16 bytes left over. Field <code>f</code> in slot <code>k</code> starts at byte <code>k * 28 + students_layout.offset(f)</code> within its block.</p>
 
-<p>The corresponding catalog records are <code>("students", 28)</code> in <code>table_catalog</code> and <code>("students", "sid", "int", 0, 4)</code>, <code>("students", "name", "varchar", 8, 8)</code>, <code>("students", "gpa", "int", 0, 20)</code>, and <code>("students", "mid", "int", 0, 24)</code> in <code>field_catalog</code>. Its columns are <code>(tblname, fldname, fldtype, length, offset)</code>.</p>
+<p>The record in <code>table_catalog</code> is <code>("students", 28)</code>. The records in <code>field_catalog</code> are: <code>("students", "sid", "int", 0, 4)</code>, <code>("students", "name", "varchar", 8, 8)</code>, <code>("students", "gpa", "int", 0, 20)</code>, and <code>("students", "mid", "int", 0, 24)</code>. Its columns are <code>(tblname, fldname, fldtype, length, offset)</code>.</p>
 
-<p class="keep-in-present">In this storage API, the string capacity is <strong>UTF-8 bytes</strong>; eight non-ASCII characters may need more than eight bytes. Our names use ASCII. GPAs are stored in tenths: <code>39</code> represents <code>3.9</code>. These examples do not add SQL constraints or transaction handling.</p>
+<p class="keep-in-present">In this storage API, the string capacity is <strong>UTF-8 bytes</strong>. Eight non-ASCII characters may need more than eight bytes. Our names use ASCII. GPAs are stored in tenths: <code>39</code> represents <code>3.9</code>. These examples do not add SQL constraints or transaction handling.</p>
 
 <h3 class="new-slide" data-kicker="SQL → storage → scans">2 · INSERT reserves a slot, then writes its fields</h3>
 
@@ -226,9 +226,9 @@ try:
 finally:
     students.close()</code></pre>
 
-<p class="keep-in-present"><code>TableScan.delete()</code> calls <code>RecordPage.delete(current_slot)</code>. It changes the flag from <code>1</code> to <code>0</code>; it does not shift other rows or erase the old field bytes. Future scans skip that slot. An insertion can reuse it when its free-slot search reaches it.</p>
+<p class="keep-in-present"><code>TableScan.delete()</code> calls <code>RecordPage.delete(current_slot)</code>. It changes the flag from <code>1</code> to <code>0</code>. It does not shift other rows or erase the old field bytes. Future scans skip that slot. An insertion can reuse it when its free-slot search reaches it.</p>
 
-<p class="keep-in-present">The six original students remain. The loop checks every live row because this schema declares no uniqueness constraint on <code>sid</code>. This update uses the writable <code>TableScan</code> directly; the new query wrappers expose the read-only scan interface.</p>
+<p class="keep-in-present">The six original students remain. The loop checks every live row because this schema declares no uniqueness constraint on <code>sid</code>. This update uses the writable <code>TableScan</code> directly. The new query wrappers expose the read-only scan interface.</p>
 
 <p class="keep-in-present"><a href="#statement-walkthrough" data-statement-stage="delete">▶ Execute DELETE line by line: find Temp → clear its flag → compare RAM and file</a></p>
 
@@ -246,9 +246,9 @@ try:
 finally:
     plan.close()  # delegates down to source.close()</code></pre>
 
-<p class="keep-in-present"><strong>Plan:</strong> <code>Project(name) ← Select(gpa &gt; 35) ← TableScan(students)</code>. Calls travel from the root to its inputs; accepted rows are exposed back up the tree. The first root <code>next()</code> finds Ada. The second skips Ben and finds Cyd; later calls find Eli, skip Fay and the deleted slot, then report exhaustion.</p>
+<p class="keep-in-present"><strong>Plan:</strong> <code>Project(name) ← Select(gpa &gt; 35) ← TableScan(students)</code>. Calls travel from the root to its inputs. Accepted rows are exposed back up the tree. The first root <code>next()</code> finds Ada. The second skips Ben and finds Cyd. Later calls find Eli, skip Fay and the deleted slot, then report exhaustion.</p>
 
-<p class="keep-in-present"><strong>Output:</strong> <code>ada</code>, <code>cyd</code>, <code>eli</code>. The projection belongs above selection because the filter needs <code>gpa</code>, while the output exposes only <code>name</code>. These snippets run once you implement the operators below. The shown order follows this scan; SQL without <code>ORDER BY</code> does not promise an order.</p>
+<p class="keep-in-present"><strong>Output:</strong> <code>ada</code>, <code>cyd</code>, <code>eli</code>. The projection belongs above selection because the filter needs <code>gpa</code>, while the output exposes only <code>name</code>. These snippets run once you implement the operators below. The shown order follows this scan. SQL without <code>ORDER BY</code> does not promise an order.</p>
 
 <p class="keep-in-present"><a href="#statement-walkthrough" data-statement-stage="select">▶ Execute SELECT line by line: pull → test → read the projected field</a></p>
 
@@ -256,7 +256,7 @@ finally:
 
 <div class="viz sw" id="viz-statements" role="region" aria-label="Line-by-line database statements">
   <div class="viz-title">One database, four statements, every storage change</div>
-  <p class="viz-description">Choose a statement. <strong>Step</strong> enters its storage calls; <strong>Next line</strong> finishes the next Python line. The highlighted line and its explanation distinguish work inside a call from a completed line.</p>
+  <p class="viz-description">Choose a statement. <strong>Step</strong> enters its storage calls. <strong>Next line</strong> finishes the next Python line. The highlighted line and its explanation distinguish work inside a call from a completed line.</p>
   <div class="sw-stages" role="group" aria-label="Choose a statement">
     <button type="button" class="btn" data-stage="create" aria-pressed="true">1 · CREATE</button>
     <button type="button" class="btn" data-stage="insert" aria-pressed="false">2 · INSERT</button>
@@ -316,7 +316,8 @@ finally:
     </div>
   </section>
   <details class="sw-layout-detail"><summary id="sw-layout-title">Layout computed by the catalog</summary><div class="sw-layout" id="sw-layout"></div></details>
-  <p class="viz-caption">The stages continue from the previous stage’s final state. Reset rewinds only this demonstration. Snapshots are recorded from the lab’s Python storage code and completed reference scan operators; the browser replays them. Explicit <code>bm.flush_all()</code> checkpoints after CREATE, INSERT, and DELETE make file writes visible. A flush is not a transaction commit. With a diagram button focused, use ← / → to step, Home to reset, and End to finish.</p>
+  <p class="viz-caption">The stages continue from the previous stage’s final state. Reset rewinds only this demonstration. Snapshots are recorded from the lab’s Python storage code and completed reference scan operators. The browser replays them. Explicit <code>bm.flush_all()</code> checkpoints after CREATE, INSERT, and DELETE make file writes visible. A flush is not a transaction commit.</p>
+<p class="viz-caption">With a diagram button focused, use ← / → to step, Home to reset, and End to finish.</p>
   <noscript><p>Enable JavaScript to inspect the execution. The examples above show the same schemas, rows, deletion, and selection.</p></noscript>
 </div>
 
@@ -339,13 +340,13 @@ try:
 finally:
     plan.close()         # recursively closes both table scans</code></pre>
 
-<p class="keep-in-present"><strong>Output:</strong> <code>(ada, ds)</code>, <code>(cyd, ds)</code>, <code>(eli, stat)</code>. <code>F("mid2")</code> reads the right row’s field; plain <code>"mid2"</code> would compare <code>mid</code> with a string literal. The distinct names <code>mid</code> and <code>mid2</code> let the product route each field correctly; this API has no SQL table aliases or qualified-name resolution.</p>
+<p class="keep-in-present"><strong>Output:</strong> <code>(ada, ds)</code>, <code>(cyd, ds)</code>, <code>(eli, stat)</code>. <code>F("mid2")</code> reads the right row’s field. Plain <code>"mid2"</code> would compare <code>mid</code> with a string literal. The distinct names <code>mid</code> and <code>mid2</code> let the product route each field correctly. This API has no SQL table aliases or qualified-name resolution.</p>
 
 <h3 id="join-walkthrough" class="new-slide" data-kicker="JOIN · follow the pull">Follow the plan all the way to a slot</h3>
 
 <div class="viz jw" id="viz-join-slots" role="region" aria-label="Interactive join execution and record slots">
   <div class="viz-title">One root call, two cursors, actual record layouts</div>
-  <p class="viz-description">Step through the same Python plan above. Requests travel down; matching rows return up. Click a slot to inspect its fields and bytes, or an operator to see its job.</p>
+  <p class="viz-description">Step through the same Python plan above. Requests travel down. Matching rows return up. Click a slot to inspect its fields and bytes, or an operator to see its job.</p>
   <noscript><p>Enable JavaScript to step through Project → Select → ProductScan → the two TableScans and their record slots. The Python above executes the same plan.</p></noscript>
   <div class="jw-controls" role="group" aria-label="Execution controls">
     <button type="button" class="btn" id="jw-back">← Back</button>
@@ -425,14 +426,15 @@ finally:
     <p class="jw-address" id="jw-address"></p>
     <details class="jw-bytes-detail">
       <summary>Show every byte in this slot</summary>
-      <p>Offsets are relative to the start of the block. Integers and string lengths use four bytes in little-endian order; strings use UTF-8. Unused string capacity stays zero in this fresh example.</p>
+      <p>Offsets are relative to the start of the block. Integers and string lengths use four bytes in little-endian order. Strings use UTF-8. Unused string capacity stays zero in this fresh example.</p>
       <div class="jw-bytes" id="jw-bytes" aria-label="Slot bytes with block-relative offsets"></div>
     </details>
   </section>
-  <p class="viz-caption">128-byte blocks: four 28-byte student slots or six 20-byte major slots. Field offsets come from each table’s catalog layout. This teaching trace shows the completed operators over the data created above. It tracks buffer pins, not cache misses or disk reads. Displaying the three returned rows is a caller action; the product streams one pair at a time. With a diagram button focused, use ← / → to step, Home to reset, or End to finish.</p>
+  <p class="viz-caption">128-byte blocks: four 28-byte student slots or six 20-byte major slots. Field offsets come from each table’s catalog layout. This teaching trace shows the completed operators over the data created above. It tracks buffer pins, not cache misses or disk reads. Displaying the three returned rows is a caller action. The product streams one pair at a time.</p>
+<p class="viz-caption">With a diagram button focused, use ← / → to step, Home to reset, or End to finish.</p>
 </div>
 
-<p class="keep-in-present">Each request at the root makes the product enumerate pairs until the selection accepts one. Ada is paired with DS, Stat, and Econ before the left cursor advances to Ben. Six students × three majors produces <strong>18 candidate pairs</strong>; the predicate keeps <strong>three</strong>. The product holds the current pair instead of constructing an 18-row intermediate table. The measurement later moves the GPA filter below the product to reduce this work.</p>
+<p class="keep-in-present">Each request at the root makes the product enumerate pairs until the selection accepts one. Ada is paired with DS, Stat, and Econ before the left cursor advances to Ben. Six students × three majors produces <strong>18 candidate pairs</strong>. The predicate keeps <strong>three</strong>. The product holds the current pair instead of constructing an 18-row intermediate table. The measurement later moves the GPA filter below the product to reduce this work.</p>
 
 <details>
   <summary>Finish the shared snippet session and inspect the complete demo</summary>
@@ -450,7 +452,7 @@ All scans closed; no buffer pins remain.</code></pre>
 <!-- ============================================================ -->
 <h2 id="big-idea">How each operator uses its input scans</h2>
 
-<p class="keep-in-present">A chain of Python generators provides a useful comparison: each stage requests an item from its input, then skips or returns it. Scan operators also return one row at a time, but must support resetting the cursor, reading fields from the correct input, reporting the end of input, and closing their input scans.</p>
+<p class="keep-in-present">A chain of Python generators provides a useful comparison. Each stage requests an item from its input, then skips or returns it. Scan operators also return one row at a time. They must reset the cursor and read fields from the correct input. They must also report the end of input and close their input scans.</p>
 
 <p class="keep-in-present">Each operator refers to its input scan or scans and implements the same five methods. These operators expose one current row at a time without storing a copy of the full result. Their memory use depends on the plan and its active scans, rather than the number of result rows. The table shows which behaviors each operator changes.</p>
 
@@ -459,17 +461,17 @@ All scans closed; no buffer pins remain.</code></pre>
   <tbody>
     <tr><td><strong>SelectScan</strong></td><td><code>next</code>: skip until the <span class="gloss" data-gloss="predicate">predicate</span> passes</td><td>everything about row shape</td></tr>
     <tr><td><strong>ProjectScan</strong></td><td><code>get_val / has_field</code>: answer only for kept columns</td><td>everything about row flow</td></tr>
-    <tr><td><strong>ProductScan</strong></td><td>all five: it has two children</td><td>none; it coordinates two inputs</td></tr>
+    <tr><td><strong>ProductScan</strong></td><td>all five: it has two children</td><td>none. It coordinates two inputs</td></tr>
   </tbody>
 </table>
 
 <!-- ============================================================ -->
 <h2 id="the-api">Control flow for the scan operators</h2>
 
-<p>The annotated sketches below describe the control flow; they are not executable Python. Handle empty inputs. Once <code>ProductScan.next()</code> returns <code>False</code>, it must keep returning <code>False</code> until the product is rewound.</p>
+<p>The annotated sketches below describe the control flow. They are not executable Python. Handle empty inputs. Once <code>ProductScan.next()</code> returns <code>False</code>, it must keep returning <code>False</code> until the product is rewound.</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="sel" data-step-name="SelectScan.next" data-explain="Advance the underlying scan until a row satisfies the predicate; False when it runs out. Rejected rows are skipped in place, never copied, never seen above.">SelectScan.next:      while scan.next(): if pred.is_satisfied(scan): return True</div>
+  <div class="code-step" data-step="sel" data-step-name="SelectScan.next" data-explain="Advance the underlying scan until a row satisfies the predicate. False when it runs out. Rejected rows are skipped in place, never copied, never seen above.">SelectScan.next:      while scan.next(): if pred.is_satisfied(scan): return True</div>
   <div class="code-step" data-step="prj" data-step-name="ProjectScan column check" data-explain="get_val returns values only for projected fields and raises ValueError for other names. has_field reports whether the field belongs to the projection.">ProjectScan.get_val:  raise ValueError unless fld in self.fields</div>
   <div class="code-step" data-step="pb" data-step-name="ProductScan.before_first" data-explain="Rewind both children, then advance the left child once and store its result in self._left_ready. Keep the right child before its first row. next() uses this shared state to detect an empty or exhausted left input.">ProductScan.before_first:  left rewind + next · right rewind</div>
   <div class="code-step" data-step="pn" data-step-name="ProductScan.next" data-explain="Advance the right child. When it is exhausted, rewind it and advance the left child. Stop when no valid pair remains, including when either input is empty.">ProductScan.next:     right.next() or (right rewind · left.next() and right.next())</div>
@@ -477,11 +479,7 @@ All scans closed; no buffer pins remain.</code></pre>
   <div class="code-explain-panel">Hover a line: if you can explain each one aloud, you are ready to implement the operators.</div>
 </div>
 
-<p class="keep-in-present">Join conditions need no new machinery: a predicate term's right
-side may be <code>F("mid2")</code> (a field instead of a literal), and
-<code>Predicate.is_satisfied</code> (provided) already handles it. The
-<span class="gloss" data-gloss="cartesian-product">cartesian product</span> plus that
-predicate <em>is</em> the join.</p>
+<p class="keep-in-present">A predicate term can use <code>F("mid2")</code> as its right side. This expression identifies a field instead of a literal. The provided <code>Predicate.is_satisfied</code> method already handles it. The <span class="gloss" data-gloss="cartesian-product">cartesian product</span> combined with this predicate <em>is</em> the join.</p>
 
 <h3 id="product-initialization" class="new-slide" data-kicker="ProductScan · getting started">Why reset the left scan and then call next()?</h3>
 
@@ -520,12 +518,10 @@ predicate <em>is</em> the join.</p>
 
 <p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
 
-<p>Work in <code>labs/lab-04/starter/</code> after pulling the latest files, or download the starter files into <code>microdb-lab4/</code>. Four files provide reference implementations of the lower layers; <code>sql_walkthrough.py</code> is an optional runnable companion. Read the two new methods at the bottom of the reference <code>TableScan</code>, then implement the operators in test order:</p>
+<p>Work in <code>labs/lab-04/starter/</code> after pulling the latest files, or download the starter files into <code>microdb-lab4/</code>. Four files provide reference implementations of the lower layers. <code>sql_walkthrough.py</code> is an optional runnable companion. Read the two new methods at the bottom of the reference <code>TableScan</code>. Implement the operators in test order:</p>
 
 <ol>
-  <li><strong>Read <code>query_engine.py</code> top to bottom</strong> (5 min); the module
-  docstring shows a full plan being stacked and run; <code>Predicate</code> and
-  <code>F</code> are provided and worth reading closely.</li>
+  <li><strong>Read <code>query_engine.py</code> from start to end</strong> (5 min). The module docstring shows how to construct and run a full plan. Read the provided <code>Predicate</code> and <code>F</code> implementations carefully.</li>
   <li><strong><code>SelectScan.next</code></strong>: the skip-loop. Run the SELECT tests.</li>
   <li><strong><code>ProjectScan.get_val / has_field</code></strong>: answer only for kept columns, raise for the rest. Run the PROJECT tests.</li>
   <li><strong><code>ProductScan</code></strong>: implement <code>before_first</code> first, using the
@@ -534,7 +530,7 @@ predicate <em>is</em> the join.</p>
 
 <div class="callout note">
   <span class="label">Common implementation mistakes</span>
-  <p>In <code>ProductScan.before_first</code>, rewind both children and store the result of <code>left.next()</code> in <code>self._left_ready</code>. The unit tests use this shared state to test <code>before_first</code> and <code>next</code> independently. During iteration, advance the right child; when it is exhausted, rewind it and advance the left child, updating <code>self._left_ready</code>. Keep it false once either input is exhausted and no pair remains. Finally, <code>close()</code> must close both children so their buffer pins are released.</p>
+  <p>In <code>ProductScan.before_first</code>, rewind both children and store the result of <code>left.next()</code> in <code>self._left_ready</code>. The unit tests use this shared state to test <code>before_first</code> and <code>next</code> independently. During iteration, advance the right child. When it is exhausted, rewind it and advance the left child, updating <code>self._left_ready</code>. Keep it false once either input is exhausted and no pair remains. Finally, <code>close()</code> must close both children so their buffer pins are released.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -549,7 +545,7 @@ predicate <em>is</em> the join.</p>
 
 <h3>Run the full tests</h3>
 
-<p>The eleven tests are grouped by operator. The join test runs <code>Project(name, dept) ← Select(mid = mid2 AND gpa &gt; 35) ← Product(students, majors)</code> and expects exactly <code>(ada, ds), (cyd, ds), (eli, stat)</code>. A separate test checks that no frame remains pinned after the join is closed.</p>
+<p>The eleven tests form groups by operator. The join test runs <code>Project(name, dept) ← Select(mid = mid2 AND gpa &gt; 35) ← Product(students, majors)</code>. It expects exactly <code>(ada, ds), (cyd, ds), (eli, stat)</code>. A separate test checks that closing the join releases every pin.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_scans.py</span>
 <span class="t-head">SELECT group</span>
@@ -565,7 +561,7 @@ predicate <em>is</em> the join.</p>
   <span class="ex-label">Exercise · read the failure</span>
   <p>A classmate’s product has <code>before_first()</code> rewind both children, but does not advance the left child. Its first <code>next()</code> advances the right child. Why is the resulting pair invalid?</p>
   <details><summary>Show answer</summary>
-  <p>The left scan is still before its first row, so there is no valid left value to pair with the right row. Rewind both children, advance the left once, and remember whether that advance succeeded. If either input is empty, the product must return no rows.</p>
+  <p>The left scan is still before its first row, so there is no valid left value to pair with the right row. Rewind both children. Advance the left child once. Store whether that advance succeeded. If either input is empty, the product must return no rows.</p>
   </details>
 </div>
 
@@ -589,22 +585,20 @@ same query, same answer, two shapes (300 students x 3 majors):
 
 <p class="key-fact keep-in-present">Filtering before the product produces <strong>15× fewer pairs</strong> and still returns the same 20 rows.</p>
 
-<p class="keep-in-present">Filtering before the product reduces the number of pairs examined by a factor of 15 in this example, while returning the same rows. The right input is scanned once per left row, so input order also affects the work. Caching the inner input can reduce repeated reads; Lecture 9 introduces hash joins as another way to avoid enumerating every pair.</p>
+<p class="keep-in-present">Filtering before the product reduces the number of pairs examined by a factor of 15 in this example, while returning the same rows. The right input is scanned once per left row, so input order also affects the work. Caching the inner input can reduce repeated reads. Lecture 9 introduces hash joins as another way to avoid enumerating every pair.</p>
 
-<p class="keep-in-present"><strong>Now change something.</strong> Both plans in <code>measure_pipeline.py</code>
-filter on <code>("gpa", ">", 35)</code>. Change the 35 to 25 in both places and run, then to 20
-and run again. Report pairs built for A and B and the A / B ratio at each threshold, and explain in
-one sentence why Plan A's count never moves while the ratio does.</p>
+<p class="keep-in-present"><strong>Change the experiment.</strong> Both plans in <code>measure_pipeline.py</code> filter on <code>("gpa", ">", 35)</code>. Change the threshold from 35 to 25 in both places. Run the script. Then change both thresholds to 20. Run the script again.</p>
+<p class="keep-in-present">Report the pairs built by A and B at each threshold. Report the A / B ratio at each threshold. In one sentence, explain why Plan A’s count stays constant while the ratio changes.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · Measure">pandas materializes join results; ProductScan streams pairs</h3>
+<h3 class="new-slide" data-kicker="Part 3 · Measure">pandas materializes join results. ProductScan streams pairs</h3>
 
 <table>
   <thead><tr><th>Tool</th><th>How rows are processed</th><th>Plan shape</th></tr></thead>
   <tbody>
-    <tr><td><strong>pandas</strong></td><td><code>df.merge</code> <span class="gloss" data-gloss="materialization">materializes</span> matching rows; a large many-to-many result can exhaust memory without constructing the full Cartesian product</td><td>Result materialized in memory</td></tr>
+    <tr><td><strong>pandas</strong></td><td><code>df.merge</code> <span class="gloss" data-gloss="materialization">materializes</span> matching rows. A large many-to-many result can exhaust memory without constructing the full Cartesian product</td><td>Result materialized in memory</td></tr>
     <tr><td><strong>Your <code>ProductScan</code></strong></td><td>builds the same pairs one at a time through <code>next()</code> and holds one</td><td>Plan A, streamed</td></tr>
     <tr><td><strong>Python generators</strong></td><td><code>next()</code> resumes a generator, and <code>yield</code> returns its next value. Chained generators can process rows incrementally.</td><td>whatever you chain</td></tr>
-    <tr><td><strong>Polars lazy · Spark DataFrame</strong></td><td>Builds a plan that executes when an action requests results; the optimizer can move eligible filters earlier.</td><td>Filter placement chosen by the optimizer</td></tr>
+    <tr><td><strong>Polars lazy · Spark DataFrame</strong></td><td>Builds a plan that executes when an action requests results. The optimizer can move eligible filters earlier.</td><td>Filter placement chosen by the optimizer</td></tr>
   </tbody>
 </table>
 
@@ -628,14 +622,14 @@ one sentence why Plan A's count never moves while the ratio does.</p>
 <h2 id="assignment">Assignment</h2>
 
 <p class="keep-in-present"><strong>Submit</strong> <code>query_engine.py</code> to Gradescope, per the course
-submission instructions, by <strong>Thursday Sep 24 at class start</strong>. One file; the harness
+submission instructions, by <strong>Thursday Sep 24 at class start</strong>. One file. The harness
 score you see locally is the grade.</p>
 
 <h3>Deliverables</h3>
 <ul>
   <li>☐ <code>query_engine.py</code>: all eleven local tests pass (<code>11/11</code>).</li>
 </ul>
-<p>Submit only the file listed above. Grading uses the lab’s correctness tests; measurements and reflections are for class discussion.</p>
+<p>Submit only the file listed above. Grading uses the lab’s correctness tests. Measurements and reflections are for class discussion.</p>
 
 <h3>Discussion prompts (not graded)</h3>
 <p>Use the measurement and reflection questions to explain your results. They are not graded, but bring your measurements and answers to class for discussion.</p>
@@ -644,7 +638,7 @@ score you see locally is the grade.</p>
   three questions (where B's advantage comes from, the 60-through-a-1-row-filter puzzle, and
   who should choose plan shapes).</li>
   <li>Reflection (3–5 sentences): (1)&nbsp;Why must ProjectScan raise rather than quietly
-  delegating an un-projected field? (2)&nbsp;A plan's memory footprint doesn't grow with table
+  delegating an un-projected field? (2)&nbsp;A plan's memory footprint does not grow with table
   size: what <em>does</em> it grow with, and why?</li>
 </ul>
 
@@ -676,7 +670,7 @@ score you see locally is the grade.</p>
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">My join returns 18 rows, not 3.</h3>
-<p class="keep-in-present">Check that the plan places the join’s <code>SelectScan</code> above <code>ProductScan</code> and that <code>SelectScan.next()</code> evaluates the predicate before returning a row. The product generates 18 pairs; the selection must keep only the three that match.</p>
+<p class="keep-in-present">Check that the plan places the join’s <code>SelectScan</code> above <code>ProductScan</code> and that <code>SelectScan.next()</code> evaluates the predicate before returning a row. The product generates 18 pairs. The selection must keep only the three that match.</p>
 
 <h3 class="keep-in-present">My join returns 0 rows but cardinality passes.</h3>
 <p class="keep-in-present">Check field routing first. <code>ProductScan.get_val("mid2")</code> must ask the child that contains <code>mid2</code>. Use each child’s <code>has_field</code> method to choose which child supplies the value.</p>
@@ -685,7 +679,7 @@ score you see locally is the grade.</p>
 <p class="keep-in-present">The result stays the same because every AND term must be true. The amount of work can change: <code>is_satisfied</code> stops at the first false term. Checking a cheap condition that often fails can save the later comparisons. Query optimizers can use this idea when ordering conditions.</p>
 
 <h3 class="keep-in-present">Why "left wins ties" instead of an error on ambiguous fields?</h3>
-<p class="keep-in-present">Microdb checks the left input first when both inputs have the same field name. The tests avoid that ambiguity. SQL normally requires a qualified name such as <code>students.id</code> when an unqualified reference is ambiguous; supporting that would require a name-resolution layer beyond this lab.</p>
+<p class="keep-in-present">Microdb checks the left input first when both inputs have the same field name. The tests avoid that ambiguity. SQL normally requires a qualified name such as <code>students.id</code> when an unqualified reference is ambiguous. Supporting that would require a name-resolution layer beyond this lab.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -698,9 +692,9 @@ score you see locally is the grade.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=4"></script>
-<script src="join-walkthrough-model.js?v=1"></script>
-<script src="join-walkthrough.js?v=2"></script>
+<script src="join-walkthrough-model.js?v=ste-20261015"></script>
+<script src="join-walkthrough.js?v=ste-20261015"></script>
 <script src="statement-traces.js?v=1"></script>
-<script src="statement-walkthrough.js?v=1"></script>
+<script src="statement-walkthrough.js?v=ste-20261015"></script>
 </body>
 </html>

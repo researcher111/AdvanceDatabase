@@ -112,7 +112,7 @@ function analyticsFareScan(d,step,column) {
     else d.text('scan-predict-result',1027.5,452,'Predict the result.',25,P.muted);
   }
   d.text('scan-legend',640,570,step===0?'Same three rides. Only the fare contributes to this query.':column?'Green: fares used. Gray: other column chunks skipped.':'Green: fares used. Orange: other fields stored beside them.',25,P.muted);
-  d.text('scan-takeaway',640,618,column?'Read the fare chunk; skip pickup and payment.':'Reading row data can bring along fields the query does not use.',28,P.ink,'middle',650);
+  d.text('scan-takeaway',640,618,column?'Read the fare chunk. Skip pickup and payment.':'Reading row data can bring along fields the query does not use.',28,P.ink,'middle',650);
   d.text('scan-caveat',640,656,'This shows value grouping. Actual reads depend on pages, caches, and indexes.',21,P.muted);
 }
 function analyticsQueryChoice(d,step) {
@@ -230,7 +230,7 @@ function analyticsByteSavings(d,step) {
     d.text('byte-ratio',968,593,'5,760 KB ÷ 40 KB = 144',29,P.green,'middle',650);
     d.text('byte-ratio-meaning',968,632,'1/144 of the full value data remains.',25,P.ink);
   }
-  d.text('byte-caveat',640,666,'Value bytes only; metadata, encoding, and compression excluded. This is not a speed ratio.',20,P.muted);
+  d.text('byte-caveat',640,666,'Value bytes only. Metadata, encoding, and compression excluded. This is not a speed ratio.',20,P.muted);
 }
 const analyticsMLSQL={
   train:[
@@ -539,7 +539,7 @@ function analyticsPyTorch(d,step) {
       d.text('torch-error-value-'+i,1213,y+51,'$'+mae.toFixed(2),28,stroke,'end',650);
     });
     d.text('torch-error-sample',1027,558,'Same 10,000 test rides. Lower is better.',22,P.muted);
-    d.text('torch-error-caveat',1027,594,'One run; a larger model may not win.',22,P.muted);
+    d.text('torch-error-caveat',1027,594,'One run. Model size can increase error.',22,P.muted);
   }
   d.text('torch-takeaway',65,626,[
     'Hash order mixes training rides so batches do not follow date order.',
@@ -614,7 +614,7 @@ function analyticsBatchPipeline(d,step) {
     d.text('microdb-pages',640,547,'TableScan reads pages, but its scan interface exposes one row at a time.',25,P.muted);
     d.text('microdb-prompt',640,581,'What if these operators handled several rows in each call?',25,P.blue);
   }
-  d.text('batch-takeaway',640,634,step===5?'Same fares: 36 and 30. Batching shares the call overhead.':step>=3?'Same scan, filter, and projection jobs; more rows per handoff.':"next() selects one match; get_val('fare') reads its value.",27,P.ink,'middle',650);
+  d.text('batch-takeaway',640,634,step===5?'Same fares: 36 and 30. Batching shares the call overhead.':step>=3?'Same scan, filter, and projection jobs. More rows per handoff.':"next() selects one match. get_val('fare') reads its value.",27,P.ink,'middle',650);
   if(step>=3)d.text('batch-scale',640,664,'Toy batch: 3 rows. Batch processing still tests each fare.',21,P.muted);
 }
 const draws={
@@ -631,7 +631,7 @@ const draws={
 (d,s)=>{treeNode(d,'root',640,180,s<2?[3]:[3,5]);const leaves=s<2?[[1,2],s===0?[3,4,5]:[3,4,5,6]]:[[1,2],[3,4],[5,6,7]];leaves.forEach((ks,i)=>{let x=leaves.length===2?380+i*520:260+i*380;branch(d,'br'+i,640,242,x,405);treeNode(d,'leaf'+i,x,405,ks,true);});if(s<2)chip(d,'in',595,550,s===0?'6?':'7?',P.orangeLight,90);},
 (d,s)=>{const root=s===0?[3,5,7,9]:s===1?[3,5,7,9,11]:[7];treeNode(d,'root',640,150,root);if(s<2){const xx=s===0?[170,380,590,800,1050]:[160,350,540,730,920,1110];xx.forEach((x,i)=>{branch(d,'b'+i,640,212,x,420);const ks=s===0&&i===4?[9,10,11,12]:s===1&&i===5?[11,12,13]:[i*2+1,i*2+2];treeNode(d,'leaf'+i,x,420,ks,true);});if(s===1)tx(d,'over',640,300,'5 > 4',42,P.orange);}else{treeNode(d,'left',345,320,[3,5]);treeNode(d,'right',930,320,[9,11]);branch(d,'i1',640,212,345,320);branch(d,'i2',640,212,930,320);[160,350,540,730,920,1110].forEach((x,i)=>{branch(d,'b'+i,i<3?345:930,382,x,520);treeNode(d,'leaf'+i,x,520,i===5?[11,12,13]:[i*2+1,i*2+2],true);});}},
 (d,s)=>{const heights=[16,7,4];const h=heights[s];tx(d,'f',990,300,['2','20','200'][s],70,P.green);tx(d,'symbol',990,375,'children',26);for(let i=0;i<h;i++){const width=140+(i/(h-1))*530;d.rect('level'+i,450-width/2,255+i*(315/h),width,Math.min(46,240/h),P.greenLight,P.green,5);}tx(d,'h',990,495,[27,7,4][s]+' levels',36);if(s===0)tx(d,'ellipsis',450,602,'⋮',38);},
-(d,s)=>{tx(d,'title',640,125,'Four node visits can mean fewer disk reads',39);const labels=['root','internal','internal','leaf'];labels.forEach((label,i)=>{const y=200+i*95;d.box('node'+i,195,y,280,70,label,i<2?P.blueLight:P.greenLight,i<2?P.blue:P.green,28);if(i<3)line(d,'a'+i,335,y+74,335,y+90);tx(d,'status'+i,730,y+45,i<2?'already in the buffer pool':s===0?'is this page cached?':i===2?'cached in this example':'read if not cached',27);});if(s>=2){d.line('heap-down',335,555,335,605,P.orange,4);d.line('heap-across',335,605,1085,605,P.orange,4);line(d,'heap-arrow',1085,605,1085,575,P.orange);d.box('heap',975,475,220,90,'heap row',P.orangeLight,P.orange,29);tx(d,'rid-label',710,580,'follow the RID',25,P.orange);}tx(d,'foot',640,655,'Lab 6 keeps every tree node in memory; heap pages use the buffer pool.',24,P.muted);},
+(d,s)=>{tx(d,'title',640,125,'Four node visits can mean fewer disk reads',39);const labels=['root','internal','internal','leaf'];labels.forEach((label,i)=>{const y=200+i*95;d.box('node'+i,195,y,280,70,label,i<2?P.blueLight:P.greenLight,i<2?P.blue:P.green,28);if(i<3)line(d,'a'+i,335,y+74,335,y+90);tx(d,'status'+i,730,y+45,i<2?'already in the buffer pool':s===0?'is this page cached?':i===2?'cached in this example':'read if not cached',27);});if(s>=2){d.line('heap-down',335,555,335,605,P.orange,4);d.line('heap-across',335,605,1085,605,P.orange,4);line(d,'heap-arrow',1085,605,1085,575,P.orange);d.box('heap',975,475,220,90,'heap row',P.orangeLight,P.orange,29);tx(d,'rid-label',710,580,'follow the RID',25,P.orange);}tx(d,'foot',640,655,'Lab 6 keeps every tree node in memory. Heap pages use the buffer pool.',24,P.muted);},
 (d,s)=>{d.box('row',480,120,320,100,'+ row',P.greenLight,P.green,36);d.box('heap',480,335,320,100,'heap',P.white,P.line,30);line(d,'a',640,230,640,322);const count=s+1;for(let i=0;i<count;i++){const x=200+i*290;treeNode(d,'index'+i,x,550,[i+1],true);line(d,'b'+i,640,440,x,530,P.orange);}tx(d,'writecount',1035,180,(count+1)+' structures',29);},
 (d,s)=>{heap(d,'heap',550,190,8,11,s===0?[25]:s===1?[2,8,17,29,37,44,57,63]:Array.from({length:88},(_,i)=>i));treeNode(d,'idx',235,250,[35]);for(let i=0;i<(s===0?1:s===1?6:15);i++)line(d,'jump'+i,280,320,570+(i*137)%550,205+(i*83)%300,P.orange);tx(d,'sel',235,455,['1%','20%','99%'][s],50);if(s===2)line(d,'scan',570,585,1115,585,P.green);},
 (d,s)=>{treeNode(d,'root',640,150,[36]);treeNode(d,'l',350,360,[28,31,34],true);treeNode(d,'r',910,360,s<2?[37,39]:[36,37,39],true);branch(d,'a',640,212,350,360);branch(d,'b',640,212,910,360);line(d,'c',470,450,790,450);tx(d,'range',640,560,'[34, 37]',38);if(s===1)d.circle('gap',818,389,28,P.orangeLight,P.red,4);if(s===2)tx(d,'fix',640,620,'34  36  37',34,P.green);},
@@ -756,7 +756,7 @@ const plans = [
         "title": "A complete scan checks every row",
         "minutes": 3,
         "kind": "visual",
-        "notes": "A scan has no shortcut to the matching value.\n\nRead the request uid = 77777. Explain that this is the separate 100,000-row Lab 6 benchmark.\n\nHalfway through, 50,000 rows and 147 heap blocks have been visited. The diagram is schematic.\n\nThe complete scan has tested 100,000 rows across 294 blocks. Cached blocks may avoid new disk reads.\n\nAsk: Why keep scanning after the first match?\n\nExpected answer: The scan returns all matches; its implementation does not stop after finding one.",
+        "notes": "A scan has no shortcut to the matching value.\n\nRead the request uid = 77777. Explain that this is the separate 100,000-row Lab 6 benchmark.\n\nHalfway through, 50,000 rows and 147 heap blocks have been visited. The diagram is schematic.\n\nThe complete scan has tested 100,000 rows across 294 blocks. Cached blocks may avoid new disk reads.\n\nAsk: Why keep scanning after the first match?\n\nExpected answer: The scan returns all matches. Its implementation does not stop after finding one.",
         "id": "one-row-every-block",
         "steps": 3,
         "states": [
@@ -775,7 +775,7 @@ const plans = [
             "The complete scan has tested 100,000 rows across 294 blocks. Cached blocks may avoid new disk reads."
           ],
           "question": "Why keep scanning after the first match?",
-          "answer": "The scan returns all matches; its implementation does not stop after finding one."
+          "answer": "The scan returns all matches. Its implementation does not stop after finding one."
         }
       },
       {
@@ -810,7 +810,7 @@ const plans = [
         "title": "Different structures suit different requests",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Keeping keys in order makes range access possible.\n\nCompare ways to find one value. Define a hash bucket simply as the group selected by the hash function.\n\nNow add a key. A sorted array may shift many entries; a B+ tree can split a single overfull node.\n\nFor a range, the sorted array reads forward and the B+ tree follows leaf links. A hash index has no key order to follow.\n\nAsk: Why are hashes not our only index?\n\nExpected answer: They support equality lookups but do not preserve the key order used for range scans.",
+        "notes": "Keeping keys in order makes range access possible.\n\nCompare ways to find one value. Define a hash bucket simply as the group selected by the hash function.\n\nNow add a key. A sorted array may shift many entries. A B+ tree can split a single overfull node.\n\nFor a range, the sorted array reads forward and the B+ tree follows leaf links. A hash index has no key order to follow.\n\nAsk: Why are hashes not our only index?\n\nExpected answer: They support equality lookups but do not preserve the key order used for range scans.",
         "id": "four-storage-choices",
         "steps": 3,
         "states": [
@@ -825,7 +825,7 @@ const plans = [
           "idea": "Keeping keys in order makes range access possible.",
           "builds": [
             "Compare ways to find one value. Define a hash bucket simply as the group selected by the hash function.",
-            "Now add a key. A sorted array may shift many entries; a B+ tree can split a single overfull node.",
+            "Now add a key. A sorted array may shift many entries. A B+ tree can split a single overfull node.",
             "For a range, the sorted array reads forward and the B+ tree follows leaf links. A hash index has no key order to follow."
           ],
           "question": "Why are hashes not our only index?",
@@ -836,7 +836,7 @@ const plans = [
         "title": "Four keys fit in one leaf",
         "minutes": 3,
         "kind": "visual",
-        "notes": "A node splits only after it exceeds its capacity.\n\nStart a fresh example with key 1. This is separate from the GPA tree.\n\nInsert 2 in sorted order. The single node is both the root and a leaf.\n\nInsert 3. There is still one free key slot.\n\nInsert 4. The leaf is full but legal. ORDER = 4 means four keys, not four children.\n\nAsk: Does inserting another RID for key 4 trigger a split?\n\nExpected answer: No. It extends the RID list for key 4; it does not add another distinct key.",
+        "notes": "A node splits only after it exceeds its capacity.\n\nStart a fresh example with key 1. This is separate from the GPA tree.\n\nInsert 2 in sorted order. The single node is both the root and a leaf.\n\nInsert 3. There is still one free key slot.\n\nInsert 4. The leaf is full but legal. ORDER = 4 means four keys, not four children.\n\nAsk: Does inserting another RID for key 4 trigger a split?\n\nExpected answer: No. It extends the RID list for key 4. It does not add another distinct key.",
         "id": "first-four-keys",
         "steps": 4,
         "states": [
@@ -858,7 +858,7 @@ const plans = [
             "Insert 4. The leaf is full but legal. ORDER = 4 means four keys, not four children."
           ],
           "question": "Does inserting another RID for key 4 trigger a split?",
-          "answer": "No. It extends the RID list for key 4; it does not add another distinct key."
+          "answer": "No. It extends the RID list for key 4. It does not add another distinct key."
         }
       },
       {
@@ -960,10 +960,10 @@ const plans = [
         }
       },
       {
-        "title": "Full is allowed; overfull needs a split",
+        "title": "A node splits when it exceeds capacity",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Inserting 6 fills the leaf; inserting 7 adds a fifth key, so the leaf must split.\n\nShow root [3] over [1, 2] and [3, 4, 5]. Ask partners to draw the result of inserting 6.\n\nReveal [3, 4, 5, 6]. Four keys fit, so no split occurs. Now ask them to insert 7.\n\nSplit into [3, 4] and [5, 6, 7]. Copy 5 into the parent, which becomes [3, 5]. Height stays at two levels.\n\nAsk: Why does the tree not grow taller here?\n\nExpected answer: The parent has room for the new separator; it does not need a new parent.",
+        "notes": "Inserting 6 fills the leaf. Inserting 7 adds a fifth key, so the leaf must split.\n\nShow root [3] over [1, 2] and [3, 4, 5]. Ask partners to draw the result of inserting 6.\n\nReveal [3, 4, 5, 6]. Four keys fit, so no split occurs. Now ask them to insert 7.\n\nSplit into [3, 4] and [5, 6, 7]. Copy 5 into the parent, which becomes [3, 5]. Height stays at two levels.\n\nAsk: Why does the tree not grow taller here?\n\nExpected answer: The parent has room for the new separator. It does not need a new parent.",
         "id": "predict-the-next-split",
         "steps": 3,
         "states": [
@@ -976,21 +976,21 @@ const plans = [
         ],
         "demo": "viz-btree",
         "teaching": {
-          "idea": "Inserting 6 fills the leaf; inserting 7 adds a fifth key, so the leaf must split.",
+          "idea": "Inserting 6 fills the leaf. Inserting 7 adds a fifth key, so the leaf must split.",
           "builds": [
             "Show root [3] over [1, 2] and [3, 4, 5]. Ask partners to draw the result of inserting 6.",
             "Reveal [3, 4, 5, 6]. Four keys fit, so no split occurs. Now ask them to insert 7.",
             "Split into [3, 4] and [5, 6, 7]. Copy 5 into the parent, which becomes [3, 5]. Height stays at two levels."
           ],
           "question": "Why does the tree not grow taller here?",
-          "answer": "The parent has room for the new separator; it does not need a new parent."
+          "answer": "The parent has room for the new separator. It does not need a new parent."
         }
       },
       {
         "title": "An internal split moves a separator",
         "minutes": 4,
         "kind": "visual",
-        "notes": "The middle separator moves to the parent while every child is preserved.\n\nThis is the tree after inserting 1 through 12. The root has four separators and five children.\n\nInsert 13. Splitting its leaf adds separator 11, so the root now has five separators and six children.\n\nMove 7 to a new root. Left keeps [3, 5] and three children; right keeps [9, 11] and three children. All leaves gain one level together.\n\nAsk: Did moving 7 remove its lookup entry?\n\nExpected answer: No. The actual key 7 and its RID list remain in a leaf below the internal nodes.",
+        "notes": "The middle separator moves to the parent while every child is preserved.\n\nThis is the tree after inserting 1 through 12. The root has four separators and five children.\n\nInsert 13. Splitting its leaf adds separator 11, so the root now has five separators and six children.\n\nMove 7 to a new root. The left node keeps [3, 5] and three children. The right node keeps [9, 11] and three children. All leaves gain one level together.\n\nAsk: Did moving 7 remove its lookup entry?\n\nExpected answer: No. The actual key 7 and its RID list remain in a leaf below the internal nodes.",
         "id": "a-root-splits",
         "steps": 3,
         "states": [
@@ -1007,7 +1007,7 @@ const plans = [
           "builds": [
             "This is the tree after inserting 1 through 12. The root has four separators and five children.",
             "Insert 13. Splitting its leaf adds separator 11, so the root now has five separators and six children.",
-            "Move 7 to a new root. Left keeps [3, 5] and three children; right keeps [9, 11] and three children. All leaves gain one level together."
+            "Move 7 to a new root. The left node keeps [3, 5] and three children. The right node keeps [9, 11] and three children. All leaves gain one level together."
           ],
           "question": "Did moving 7 remove its lookup entry?",
           "answer": "No. The actual key 7 and its RID list remain in a leaf below the internal nodes."
@@ -1017,7 +1017,7 @@ const plans = [
         "title": "More children keep the tree short",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Fan-out is the number of children a node can point to.\n\nCompare the fully packed model for 100 million distinct keys. Two children and two leaf entries need 27 levels; the drawing abbreviates them.\n\nWith 20 children and 20 entries per leaf, the model needs seven levels.\n\nWith 200 children and 200 entries per leaf, it needs four levels. This is a capacity estimate, not a guarantee about a real tree.\n\nAsk: Why does more branching reduce the number of levels?\n\nExpected answer: Each choice narrows the search to one of more groups, so fewer choices are needed.",
+        "notes": "Fan-out is the number of children a node can point to.\n\nCompare the fully packed model for 100 million distinct keys. Two children and two leaf entries need 27 levels. The drawing abbreviates them.\n\nWith 20 children and 20 entries per leaf, the model needs seven levels.\n\nWith 200 children and 200 entries per leaf, it needs four levels. This is a capacity estimate, not a guarantee about a real tree.\n\nAsk: Why does more branching reduce the number of levels?\n\nExpected answer: Each choice narrows the search to one of more groups, so fewer choices are needed.",
         "definition": "Fan-out is the number of children an internal node can have.",
         "id": "fan-out",
         "steps": 3,
@@ -1034,7 +1034,7 @@ const plans = [
         "teaching": {
           "idea": "Fan-out is the number of children a node can point to.",
           "builds": [
-            "Compare the fully packed model for 100 million distinct keys. Two children and two leaf entries need 27 levels; the drawing abbreviates them.",
+            "Compare the fully packed model for 100 million distinct keys. Two children and two leaf entries need 27 levels. The drawing abbreviates them.",
             "With 20 children and 20 entries per leaf, the model needs seven levels.",
             "With 200 children and 200 entries per leaf, it needs four levels. This is a capacity estimate, not a guarantee about a real tree."
           ],
@@ -1046,7 +1046,7 @@ const plans = [
         "title": "Node visits and disk reads are different counts",
         "minutes": 3,
         "kind": "visual",
-        "notes": "A cached page can be visited without reading it from disk again.\n\nThis is a disk-based index example. The upper two nodes are already in the buffer pool.\n\nSuppose the third level is cached too. The leaf needs a disk read only if it is not cached.\n\nAfter finding a RID, fetch the matching heap row. Its page may also be cached. In Lab 6, all tree nodes are in memory.\n\nAsk: Are four node visits always four physical reads?\n\nExpected answer: No. Cached index pages need no new read; fetching the heap row adds separate work.",
+        "notes": "A cached page can be visited without reading it from disk again.\n\nThis is a disk-based index example. The upper two nodes are already in the buffer pool.\n\nSuppose the third level is cached too. The leaf needs a disk read only if it is not cached.\n\nAfter finding a RID, fetch the matching heap row. Its page may also be cached. In Lab 6, all tree nodes are in memory.\n\nAsk: Are four node visits always four physical reads?\n\nExpected answer: No. Cached index pages need no new read. Fetching the heap row adds separate work.",
         "id": "index-pages-and-heap-pages",
         "steps": 3,
         "states": [
@@ -1065,7 +1065,7 @@ const plans = [
             "After finding a RID, fetch the matching heap row. Its page may also be cached. In Lab 6, all tree nodes are in memory."
           ],
           "question": "Are four node visits always four physical reads?",
-          "answer": "No. Cached index pages need no new read; fetching the heap row adds separate work."
+          "answer": "No. Cached index pages need no new read. Fetching the heap row adds separate work."
         }
       },
       {
@@ -1150,7 +1150,7 @@ const plans = [
         "title": "Explain one split and one lookup",
         "minutes": 2,
         "kind": "recap",
-        "notes": "Leaves keep the entries, and a root split adds a level above every leaf.\n\nShow [1, 2, 3, 4] and ask where 5 belongs. Four keys fit; five do not.\n\nSplit into [1, 2] and [3, 4, 5]. Copy 3 into the new root; keep its RID list in the leaf.\n\nTrace a lookup for 4: go right, find its RID list, then fetch the matching row.\n\nAsk: What will you implement in Lab 6?\n\nExpected answer: Search, insertion, splitting, and inclusive range lookup. Nodes live in memory; the provided scan fetches heap rows.",
+        "notes": "Leaves keep the entries, and a root split adds a level above every leaf.\n\nShow [1, 2, 3, 4] and ask where 5 belongs. Four keys fit. Five do not.\n\nSplit into [1, 2] and [3, 4, 5]. Copy 3 into the new root. Keep its RID list in the leaf.\n\nTrace a lookup for 4: go right, find its RID list, then fetch the matching row.\n\nAsk: What will you implement in Lab 6?\n\nExpected answer: Search, insertion, splitting, and inclusive range lookup. Nodes live in memory. The provided scan fetches heap rows.",
         "id": "exit-trace",
         "steps": 3,
         "states": [
@@ -1164,12 +1164,12 @@ const plans = [
         "teaching": {
           "idea": "Leaves keep the entries, and a root split adds a level above every leaf.",
           "builds": [
-            "Show [1, 2, 3, 4] and ask where 5 belongs. Four keys fit; five do not.",
-            "Split into [1, 2] and [3, 4, 5]. Copy 3 into the new root; keep its RID list in the leaf.",
+            "Show [1, 2, 3, 4] and ask where 5 belongs. Four keys fit. Five do not.",
+            "Split into [1, 2] and [3, 4, 5]. Copy 3 into the new root. Keep its RID list in the leaf.",
             "Trace a lookup for 4: go right, find its RID list, then fetch the matching row."
           ],
           "question": "What will you implement in Lab 6?",
-          "answer": "Search, insertion, splitting, and inclusive range lookup. Nodes live in memory; the provided scan fetches heap rows."
+          "answer": "Search, insertion, splitting, and inclusive range lookup. Nodes live in memory. The provided scan fetches heap rows."
         }
       }
     ]
@@ -1185,7 +1185,7 @@ const plans = [
         "title": "Money disappears",
         "minutes": 4,
         "kind": "visual",
-        "notes": "This is an optional bonus deck; no quiz or deadline is attached. Ask whether each assignment was valid on its own and where the missing money should be found. Expected: the transfer was only partly applied; individual writes do not establish transaction atomicity. Separate the live RAM image from durable storage in the visual. The missing 50 is a deliberately inconsistent intermediate state, not literal destruction of banknotes.",
+        "notes": "This is an optional bonus deck. No quiz or deadline is attached. Ask whether each assignment was valid on its own and where the missing money should be found. Expected: the transfer was only partly applied. Individual writes do not establish transaction atomicity. Separate the live RAM image from durable storage in the visual. The missing 50 is a deliberately inconsistent intermediate state, not literal destruction of banknotes.",
         "id": "money-disappears",
         "steps": 3,
         "states": [
@@ -1201,7 +1201,7 @@ const plans = [
         "title": "Transaction",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define the unit of work and distinguish database atomicity from application correctness. A perfectly atomic transfer can still debit the wrong account. Introduce the familiar ACID letters verbally: today emphasizes atomicity and durability; declared constraints and correct application logic matter for consistency; the next lecture addresses concurrency. Ask what a successful commit acknowledgement promises to the client.",
+        "notes": "Define the unit of work and distinguish database atomicity from application correctness. A perfectly atomic transfer can still debit the wrong account. Introduce the familiar ACID letters verbally: today emphasizes atomicity and durability. Declared constraints and correct application logic matter for consistency. The next lecture addresses concurrency. Ask what a successful commit acknowledgement promises to the client.",
         "definition": "A transaction groups operations into one unit that commits completely or rolls back.",
         "id": "transaction",
         "steps": 3,
@@ -1219,7 +1219,7 @@ const plans = [
         "title": "Two kinds of unfinished",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Before each failure, ask which copies of the data will survive. Process termination leaves the OS cache alive; power failure does not. An application write reaching the OS is not the same as an acknowledged fsync. The lab uses abrupt process termination, not arbitrary power-loss or torn-write testing. This distinction is essential before showing the scripted bank recovery; avoid implying that kill -9 proves all hardware failure behavior.",
+        "notes": "Before each failure, ask which copies of the data will survive. Process termination leaves the OS cache alive. Power failure does not. An application write reaching the OS is not the same as an acknowledged fsync. The lab uses abrupt process termination, not arbitrary power-loss or torn-write testing. This distinction is essential before showing the scripted bank recovery. Avoid implying that kill -9 proves all hardware failure behavior.",
         "id": "two-kinds-of-unfinished",
         "steps": 3,
         "states": [
@@ -1269,7 +1269,7 @@ const plans = [
         "title": "A complete transfer",
         "minutes": 4,
         "kind": "visual",
-        "notes": "The widget starts at 100 and 50; this first committed transaction transfers 40. Build sequence: START, SET A old=100, SET B old=50, then data flush and COMMIT. Ask where the new balances live after each SET. Expected: in buffers until the FORCE commit flushes them. All default append records are synced in the current lab logger. Use lecture-07/styles.css and viz.js; no database process is required for this visual. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "The widget starts at 100 and 50. This first committed transaction transfers 40. Build sequence: START, SET A old=100, SET B old=50, then data flush and COMMIT. Ask where the new balances live after each SET.\n\nExpected: in buffers until the FORCE commit flushes them. All default append records are synced in the current lab logger. Use lecture-07/styles.css and viz.js. No database process is required for this visual.\n\nThe slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "a-complete-transfer",
         "steps": 4,
         "states": [
@@ -1287,7 +1287,7 @@ const plans = [
         "title": "Crash after eviction",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Let students choose what they would preserve or restore. The second transaction begins a 50 transfer but only its debit has reached disk. The old value 60 is already durable in its SET record. Ask whether a dirty-page eviction implicitly commits the transaction. Expected: no. Writing one page does not tell the buffer manager whether the transaction has finished. Do not run recovery until the class has identified tx2 as unfinished. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Let students choose what they would preserve or restore. The second transaction begins a 50 transfer but only its debit has reached disk. The old value 60 is already durable in its SET record. Ask whether a dirty-page eviction implicitly commits the transaction.\n\nExpected: no. Writing one page does not tell the buffer manager whether the transaction has finished. Do not run recovery until the class has identified tx2 as unfinished. The slide recreates the mechanism as editable SVG.\n\nThe optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "crash-after-eviction",
         "steps": 3,
         "states": [
@@ -1304,7 +1304,7 @@ const plans = [
         "title": "Read the log backward",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Explain why each log record is restored or skipped. A backward scan encounters completion records before earlier writes from the same transaction. It restores records for unfinished transactions and skips finished ones. Ask why tx1 must not return to 100/50. Expected: its commit is durable and the FORCE policy placed its data on disk first. Flush the repaired pages before saving the record that says recovery is complete. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Explain why each log record is restored or skipped. A backward scan encounters completion records before earlier writes from the same transaction. It restores records for unfinished transactions and skips finished ones. Ask why tx1 must not return to 100/50.\n\nExpected: its commit is durable and the FORCE policy placed its data on disk first. Flush the repaired pages before saving the record that says recovery is complete. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget.\n\nIts full-page explanatory prose is not projected in this deck.",
         "id": "read-the-log-backward",
         "steps": 3,
         "states": [
@@ -1321,7 +1321,7 @@ const plans = [
         "title": "Two writes, reverse undo",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask partners to predict both replay directions before revealing the values. Each saved old value undoes one change. Start with the latest change and work backward. Tie the exercise directly to rollback and records_backwards. Recovery must also determine which transactions finished and follow the locking rules; this toy demonstration concerns a serial stream of field changes. Avoid presenting before-image assignment alone as a complete general recovery algorithm.",
+        "notes": "Ask partners to predict both replay directions before revealing the values. Each saved old value undoes one change. Start with the latest change and work backward. Tie the exercise directly to rollback and records_backwards. Recovery must also determine which transactions finished and follow the locking rules. This toy demonstration concerns a serial stream of field changes. Avoid presenting before-image assignment alone as a complete general recovery algorithm.",
         "id": "two-writes-reverse-undo",
         "steps": 3,
         "states": [
@@ -1337,7 +1337,7 @@ const plans = [
         "title": "Repair can crash too",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define idempotence with assignment rather than subtraction. Ask what happens if ROLLBACK reaches disk before the repaired pages: the next restart could skip changes that still need undoing. In the lab, repeated full recovery passes reach the same repaired state under its assumptions. Production ARIES adds compensation records and more bookkeeping for robust partial-progress recovery.",
+        "notes": "Define idempotence with assignment rather than subtraction. Ask what happens if ROLLBACK reaches disk before the repaired pages. The next restart could skip changes that still need undoing. In the lab, repeated full recovery passes reach the same repaired state under its assumptions. Production ARIES adds compensation records and more bookkeeping for robust partial-progress recovery.",
         "definition": "Idempotence means repeating an operation has the same effect as performing it once.",
         "id": "repair-can-crash-too",
         "steps": 3,
@@ -1371,7 +1371,7 @@ const plans = [
         "title": "Four recovery duties",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Derive the textbook matrix: FORCE/NO-STEAL neither undo nor redo for transaction updates; FORCE/STEAL undo; NO-FORCE/NO-STEAL redo; NO-FORCE/STEAL both. These are update-recovery requirements under the model, not proof that a system needs no recovery metadata or protection from partial writes. The existing widget overgeneralizes all engines as ARIES and calls FORCE/NO-STEAL always correct; do not expose those explanatory strings. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Derive the textbook matrix. FORCE/NO-STEAL requires neither undo nor redo for transaction updates. FORCE/STEAL requires undo. NO-FORCE/NO-STEAL requires redo. NO-FORCE/STEAL requires both.\n\nThese are update-recovery requirements under the model, not proof that a system needs no recovery metadata or protection from partial writes. The existing widget overgeneralizes all engines as ARIES and calls FORCE/NO-STEAL always correct. Do not expose those explanatory strings. The slide recreates the mechanism as editable SVG.\n\nThe optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "four-recovery-duties",
         "steps": 4,
         "states": [
@@ -1389,7 +1389,7 @@ const plans = [
         "title": "Commit boundary",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Ask where acknowledgement may appear in each lane. Microdb commits can require several syncs and dirty-page flushes. A NO-FORCE engine can acknowledge a commit once its log is durable, then write the pages later. Group commit lets transactions share a log flush. If the connection fails after durability but before acknowledgement, the client may not know the outcome. A missing reply leaves the client unsure; it does not prove that the commit failed.",
+        "notes": "Ask where acknowledgement may appear in each lane. Microdb commits can require several syncs and dirty-page flushes. A NO-FORCE engine can acknowledge a commit once its log is durable, then write the pages later. Group commit lets transactions share a log flush.\n\nIf the connection fails after durability but before acknowledgement, the client may not know the outcome. A missing reply leaves the client unsure. It does not prove that the commit failed.",
         "id": "commit-boundary",
         "steps": 3,
         "states": [
@@ -1405,7 +1405,7 @@ const plans = [
         "title": "Recovery at scale",
         "minutes": 4,
         "kind": "visual",
-        "notes": "Provide the bridge to production without teaching ARIES as merely three generic loops. LSNs track logged changes. Checkpoints save state to reduce restart work. Redo may replay changes, then undo reverses unfinished transactions. PostgreSQL uses WAL redo with MVCC visibility instead of the exact physical-undo lab design. A simple lab checkpoint is safe only after unfinished transactions are resolved and relevant data is durable; an arbitrary timestamp is not a safe cutoff.",
+        "notes": "Provide the bridge to production without teaching ARIES as merely three generic loops. LSNs track logged changes. Checkpoints save state to reduce restart work. Redo may replay changes, then undo reverses unfinished transactions.\n\nPostgreSQL uses WAL redo with MVCC visibility instead of the exact physical-undo lab design. A simple lab checkpoint is safe only after unfinished transactions are resolved and relevant data is durable. An arbitrary timestamp is not a safe cutoff.",
         "id": "recovery-at-scale",
         "steps": 3,
         "states": [
@@ -1421,7 +1421,7 @@ const plans = [
         "title": "Place the crash",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Spend two minutes in pairs, then ask one group per cut point. Expected: no durable change before the log boundary; undo if uncommitted data survives; keep a transaction with durable commit under FORCE. Ask the harder case: the client never receives the commit reply. Expected: inspect or retry through an idempotent application protocol; outcome may already be committed. Mention fsync errors must propagate rather than being reported as successful commits.",
+        "notes": "Spend two minutes in pairs, then ask one group per cut point. Expected: no durable change before the log boundary. Undo if uncommitted data survives. Keep a transaction with durable commit under FORCE.\n\nAsk the harder case: the client never receives the commit reply. Expected: inspect or retry through an idempotent application protocol. Outcome may already be committed. Mention fsync errors must propagate rather than being reported as successful commits.",
         "id": "place-the-crash",
         "steps": 4,
         "states": [
@@ -1438,7 +1438,7 @@ const plans = [
         "title": "From promise to code",
         "minutes": 3,
         "kind": "recap",
-        "notes": "Have students narrate the WAL order and one recovery example without reading prose. Lab 7 will ask for set_int/set_string, commit, rollback and recover; the supplied logger and lock table provide the supporting pieces. Crash tests cover process termination and repeated recovery, not arbitrary corrupt storage. The concurrency bonus reading addresses two correct transactions interfering even when no crash occurs. The full sequence is exactly 60 teaching minutes.",
+        "notes": "Have students narrate the WAL order and one recovery example without reading prose. Lab 7 will ask for set_int/set_string, commit, rollback and recover. The supplied logger and lock table provide the supporting pieces. Crash tests cover process termination and repeated recovery, not arbitrary corrupt storage. The concurrency bonus reading addresses two correct transactions interfering even when no crash occurs. The full sequence is exactly 60 teaching minutes.",
         "id": "from-promise-to-code",
         "steps": 3,
         "states": [
@@ -1463,7 +1463,7 @@ const plans = [
         "title": "Concurrency & MVCC",
         "minutes": 2,
         "kind": "title",
-        "notes": "Start with two clients intending to add ten to one account. Ask students to predict the outcome if both transactions complete, then reveal the possibility of 110. Expected: 120 is the intended serial outcome; interleaving can lose an update even without a crash. Keep this unsolved until the scheduler scene. Today students will construct bad schedules and justify lock and snapshot behavior. This bonus deck is outside the required midterm scope.",
+        "notes": "Start with two clients intending to add ten to one account. Ask students to predict the outcome if both transactions complete, then reveal the possibility of 110. Expected: 120 is the intended serial outcome. Interleaving can lose an update even without a crash.\n\nKeep this unsolved until the scheduler scene. Today students will construct bad schedules and justify lock and snapshot behavior. This bonus deck is outside the required midterm scope.",
         "id": "concurrency-mvcc",
         "steps": 2,
         "states": [
@@ -1494,7 +1494,7 @@ const plans = [
         "title": "Schedule the failure",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Let two volunteers alternate the buttons and predict each shared balance. Both read 100 and compute 110; the second write overwrites the first result. Both commit and final A is 110. Ask whether a WAL can infer the missing intended deposit. Expected: recovery preserves committed writes; it cannot infer the missing deposit that the users intended. Reuse lecture-08/styles.css and viz.js; consider hiding verbose message and stats elements. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Let two volunteers alternate the buttons and predict each shared balance. Both read 100 and compute 110. The second write overwrites the first result. Both commit and final A is 110.\n\nAsk whether a WAL can infer the missing intended deposit. Expected: recovery preserves committed writes. It cannot infer the missing deposit that the users intended. Reuse lecture-08/styles.css and viz.js.\n\nConsider hiding verbose message and stats elements. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "schedule-the-failure",
         "steps": 4,
         "states": [
@@ -1512,7 +1512,7 @@ const plans = [
         "title": "Serializability",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Introduce serializability as equivalence to some serial execution, not a requirement to execute literally one transaction at a time. Ask whether every interleaving is bad. Expected: no; many preserve the same dependencies and result. Either deposit can go first and still give 120. Use dependency arrows to show that serializability concerns all reads and writes, not just the final balance.",
+        "notes": "Introduce serializability as equivalence to some serial execution, not a requirement to execute literally one transaction at a time. Ask whether every interleaving is bad. Expected: no. Many preserve the same dependencies and result. Either deposit can go first and still give 120. Use dependency arrows to show that serializability concerns all reads and writes, not just the final balance.",
         "definition": "A serializable execution is equivalent to some serial order of its transactions.",
         "id": "serializability",
         "steps": 3,
@@ -1530,7 +1530,7 @@ const plans = [
         "title": "Anomaly gallery",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Ask students to describe the difference before naming dirty read, non-repeatable read and phantom. Dirty read depends on uncommitted data; non-repeatable read changes an existing row; phantom changes the set selected by a predicate. These are examples, not the entire isolation model. Keep each timeline on screen long enough for an audience member to retell it.",
+        "notes": "Ask students to describe the difference before naming dirty read, non-repeatable read and phantom. Dirty read depends on uncommitted data. Non-repeatable read changes an existing row. Phantom changes the set selected by a predicate. These are examples, not the entire isolation model. Keep each timeline on screen long enough for an audience member to retell it.",
         "id": "anomaly-gallery",
         "steps": 3,
         "states": [
@@ -1546,7 +1546,7 @@ const plans = [
         "title": "Shared and exclusive",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Define shared read and exclusive write locks orally. Ask why two shared holders are allowed even when both eventually intend to write. Expected: a read lock alone protects reading, while an upgrade requires compatibility with other holders. The lock scope in microdb is a block, not necessarily a row; coarse locks can create conflicts between distinct rows on one page. Keep this caveat in notes, not a dense slide.",
+        "notes": "Define shared read and exclusive write locks orally. Ask why two shared holders are allowed even when both eventually intend to write. Expected: a read lock alone protects reading, while an upgrade requires compatibility with other holders. The lock scope in microdb is a block, not necessarily a row. Coarse locks can create conflicts between distinct rows on one page. Keep this caveat in notes, not a dense slide.",
         "id": "shared-and-exclusive",
         "steps": 2,
         "states": [
@@ -1561,7 +1561,7 @@ const plans = [
         "title": "Replay with locks",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Ask exactly where the previous schedule is refused. Both reads succeed; the first attempted X-lock upgrade conflicts with the other transaction’s S lock. The lab raises LockAbortError rather than waiting; the caller must roll back and retry. The existing console has no rollback control, so do not pretend it can finish this deadlocked schedule; reset and demonstrate a safe serial schedule if needed. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Ask exactly where the previous schedule is refused. Both reads succeed. The first attempted X-lock upgrade conflicts with the other transaction’s S lock. The lab raises LockAbortError rather than waiting.\n\nThe caller must roll back and retry. The existing console has no rollback control, so do not pretend it can finish this deadlocked schedule. Reset and demonstrate a safe serial schedule if needed. The slide recreates the mechanism as editable SVG.\n\nThe optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "replay-with-locks",
         "steps": 3,
         "states": [
@@ -1578,8 +1578,8 @@ const plans = [
         "title": "Two phases",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define the growing and shrinking phases. Under classic 2PL, acquiring a new lock after releasing one is forbidden. Explain the lab’s stronger hold-all-locks-until-end rule; terminology varies, and holding all S and X locks until completion is often called rigorous 2PL, while strict 2PL requires X locks until completion. Predicate protection is needed for serializable range queries, not only row locks.",
-        "definition": "Two-phase locking acquires locks before releasing any; once release begins, no new locks are acquired.",
+        "notes": "Define the growing and shrinking phases. Under classic 2PL, acquiring a new lock after releasing one is forbidden. Explain the lab’s stronger hold-all-locks-until-end rule. Terminology varies, and holding all S and X locks until completion is often called rigorous 2PL, while strict 2PL requires X locks until completion. Predicate protection is needed for serializable range queries, not only row locks.",
+        "definition": "Two-phase locking acquires locks before releasing any. Once release begins, no new locks are acquired.",
         "id": "two-phases",
         "steps": 3,
         "states": [
@@ -1596,7 +1596,7 @@ const plans = [
         "title": "Deadlock",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Ask whether waiting longer can resolve a true cycle. Expected: no. A database can detect a cycle and abort a participant; application code must safely retry the transaction. A consistent lock acquisition order avoids this two-resource cycle. Distinguish a deadlock from ordinary blocking. microdb aborts on conflict because its simple single-threaded transaction model cannot safely wait for an idle holder.",
+        "notes": "Ask whether waiting longer can resolve a true cycle. Expected: no. A database can detect a cycle and abort a participant. Application code must safely retry the transaction. A consistent lock acquisition order avoids this two-resource cycle. Distinguish a deadlock from ordinary blocking. microdb aborts on conflict because its simple single-threaded transaction model cannot safely wait for an idle holder.",
         "id": "deadlock",
         "steps": 3,
         "states": [
@@ -1612,7 +1612,7 @@ const plans = [
         "title": "Protect the empty space",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Use the phantom example to show that locking existing rows does not stop a new row from matching the same condition. In a locking design, protect the matching range or condition, including space where new rows could appear. Serializable MVCC systems may detect dangerous read/write dependencies instead and retry. This scene prevents the false inference that basic per-row S/X rules alone solve every anomaly.",
+        "notes": "Use the phantom example. Locks on existing rows do not stop a new row from matching the same condition. In a locking design, protect the matching range or condition, including space where new rows could appear. Serializable MVCC systems may detect dangerous read/write dependencies instead and retry. This scene prevents the false inference that basic per-row S/X rules alone solve every anomaly.",
         "id": "protect-the-empty-space",
         "steps": 3,
         "states": [
@@ -1628,7 +1628,7 @@ const plans = [
         "title": "Isolation ladder",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Ask which minimum SQL level disallows each of dirty reads, non-repeatable reads and phantoms. The standard permits implementation differences, and the three-anomaly table is not a complete definition of serializability. PostgreSQL READ UNCOMMITTED behaves as READ COMMITTED; its REPEATABLE READ uses a transaction snapshot and prevents these phantom changes while still allowing write skew. Do not present the source’s gray zone as PostgreSQL allowing snapshot phantoms. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Ask which minimum SQL level disallows each of dirty reads, non-repeatable reads and phantoms. The standard permits implementation differences, and the three-anomaly table is not a complete definition of serializability. PostgreSQL READ UNCOMMITTED behaves as READ COMMITTED. Its REPEATABLE READ uses a transaction snapshot and prevents these phantom changes while still allowing write skew.\n\nDo not present the source’s gray zone as PostgreSQL allowing snapshot phantoms. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "isolation-ladder",
         "steps": 4,
         "states": [
@@ -1664,7 +1664,7 @@ const plans = [
         "title": "Walk the version chain",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Before each slider move ask the balance a reader should see. After committed tx100 it sees 120; after tx103 it sees 70; after tx107 it sees 50. The widget assumes all these transaction IDs commit in order. Real visibility requires transaction status, snapshot membership and the reader’s own writes, not simply comparing two transaction numbers. Crop or rewrite its final whole-run message so it applies to a transaction snapshot. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Before each slider move ask the balance a reader should see. After committed tx100 it sees 120. After tx103 it sees 70. After tx107 it sees 50.\n\nThe widget assumes all these transaction IDs commit in order. Real visibility requires transaction status, snapshot membership and the reader’s own writes, not simply comparing two transaction numbers. Crop or rewrite its final whole-run message so it applies to a transaction snapshot. The slide recreates the mechanism as editable SVG.\n\nThe optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "walk-the-version-chain",
         "steps": 3,
         "states": [
@@ -1681,7 +1681,7 @@ const plans = [
         "title": "Statement or transaction snapshot",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Use the same update and ask which second read changes. PostgreSQL’s default READ COMMITTED takes a new statement snapshot; REPEATABLE READ shares a transaction snapshot. MVCC by itself does not specify when snapshots are taken. Tie the outcome back to the anomaly gallery, and ask why long reports may request a stable snapshot even when they are read-only.",
+        "notes": "Use the same update and ask which second read changes. PostgreSQL’s default READ COMMITTED takes a new statement snapshot. REPEATABLE READ shares a transaction snapshot. MVCC by itself does not specify when snapshots are taken. Tie the outcome back to the anomaly gallery, and ask why long reports may request a stable snapshot even when they are read-only.",
         "id": "statement-or-transaction-snapshot",
         "steps": 3,
         "states": [
@@ -1697,7 +1697,7 @@ const plans = [
         "title": "The version bill",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Explain why old versions cannot be reclaimed while a valid snapshot may still need them. Ask why an idle transaction can grow a table even without producing queries. Expected: other transactions add versions, while its old snapshot prevents cleanup. MVCC moves work into version management; it does not erase the cost of isolation. Distinguish VACUUM reclamation from the immediate slot reuse in the teaching record manager.",
+        "notes": "Explain why old versions cannot be reclaimed while a valid snapshot may still need them. Ask why an idle transaction can grow a table even without producing queries. Expected: other transactions add versions, while its old snapshot prevents cleanup. MVCC moves work into version management. It does not erase the cost of isolation. Distinguish VACUUM reclamation from the immediate slot reuse in the teaching record manager.",
         "id": "the-version-bill",
         "steps": 3,
         "states": [
@@ -1713,7 +1713,7 @@ const plans = [
         "title": "Write skew",
         "minutes": 5,
         "kind": "activity",
-        "notes": "Give pairs thirty seconds to find the missing conflict. Expected: they wrote different rows, so no direct write/write conflict stopped them, but both doctors leave, breaking the rule that someone must stay on call. In any serial execution the second doctor would see nobody else on call and remain. Serializable Snapshot Isolation can detect dangerous dependency patterns and abort a transaction; snapshot isolation alone does not guarantee serializability.",
+        "notes": "Give pairs thirty seconds to find the missing conflict. Expected: they wrote different rows, so no direct write/write conflict stopped them, but both doctors leave, breaking the rule that someone must stay on call. In any serial execution the second doctor would see nobody else on call and remain. Serializable Snapshot Isolation can detect dangerous dependency patterns and abort a transaction. Snapshot isolation alone does not guarantee serializability.",
         "id": "write-skew",
         "steps": 3,
         "states": [
@@ -1729,7 +1729,7 @@ const plans = [
         "title": "Three mechanisms, three jobs",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Ask which mechanism prevents eviction, which protects a shared in-memory operation, and which controls transaction access. Expected: pin, latch, transaction lock. A pin never makes a row immune to another client’s write. Finish by asking whether lock waiting, transaction retries and retained versions are interchangeable costs; they solve related problems through distinct protocols.",
+        "notes": "Ask which mechanism prevents eviction, which protects a shared in-memory operation, and which controls transaction access. Expected: pin, latch, transaction lock. A pin never makes a row immune to another client’s write. Finish by asking whether lock waiting, transaction retries and retained versions are interchangeable costs. They solve related problems through distinct protocols.",
         "id": "three-mechanisms-three-jobs",
         "steps": 3,
         "states": [
@@ -1745,7 +1745,7 @@ const plans = [
         "title": "Exit schedule",
         "minutes": 2,
         "kind": "recap",
-        "notes": "Ask a student to identify the first lock conflict in read/read/compute/compute/write, then another to name what snapshot isolation still allows. Expected: first X upgrade; write skew. Lab 7 joins today’s locks with the WAL protocol, but does not implement MVCC. Next lecture reads and improves the plans built by the engine. Quizzes follow the revised schedule; this material also supports optional review.",
+        "notes": "Ask a student to identify the first lock conflict in read/read/compute/compute/write, then another to name what snapshot isolation still allows. Expected: first X upgrade. Write skew. Lab 7 joins today’s locks with the WAL protocol, but does not implement MVCC. Next lecture reads and improves the plans built by the engine. Quizzes follow the revised schedule. This material also supports optional review.",
         "id": "exit-schedule",
         "steps": 3,
         "states": [
@@ -1786,7 +1786,7 @@ const plans = [
         "title": "Optimizer",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define the optimizer and separate correctness from efficiency. The supplied Lab 5 planner translates a correct query into a fixed shape; optimization searches alternatives. It estimates each plan’s cost without running every alternative. Estimates, physical properties and a limited search budget all affect the choice. Ask which plan transformations students measured in Lab 5 and what an automatic optimizer must now choose.",
+        "notes": "Define the optimizer and separate correctness from efficiency. The supplied Lab 5 planner translates a correct query into a fixed shape. Optimization searches alternatives. It estimates each plan’s cost without running every alternative. Estimates, physical properties and a limited search budget all affect the choice. Ask which plan transformations students measured in Lab 5 and what an automatic optimizer must now choose.",
         "definition": "A query optimizer chooses an execution plan using estimated costs and data statistics.",
         "id": "optimizer",
         "steps": 3,
@@ -1804,7 +1804,7 @@ const plans = [
         "title": "Read a plan",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Explain that EXPLAIN displays the chosen plan; EXPLAIN ANALYZE also executes it and measures behavior. Have students trace the inside-out dataflow and compare estimated versus actual row counts at each node. Costs in PostgreSQL are model units, not milliseconds or literally just blocks. For writes, ANALYZE execution has effects; today’s example is a read. Keep SQL and large plan text in notes or optional detail view.",
+        "notes": "Explain that EXPLAIN displays the chosen plan. EXPLAIN ANALYZE also executes it and measures behavior. Have students trace the inside-out dataflow and compare estimated versus actual row counts at each node. Costs in PostgreSQL are model units, not milliseconds or literally just blocks. For writes, ANALYZE execution has effects. Today’s example is a read. Keep SQL and large plan text in notes or optional detail view.",
         "id": "read-a-plan",
         "steps": 3,
         "states": [
@@ -1853,7 +1853,7 @@ const plans = [
         "title": "When estimates fail",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Use city = Charlottesville and state = Virginia as the correlation example; the second condition does not independently remove two thirds of the same rows. Ask how stale statistics differ from wrong independence assumptions. Expected: ANALYZE refreshes data summaries, while correlated conditions may need richer statistics or a better model. Do not imply that a statistics refresh automatically fixes every bad plan.",
+        "notes": "Use city = Charlottesville and state = Virginia as the correlation example. The second condition does not independently remove two thirds of the same rows. Ask how stale statistics differ from wrong independence assumptions. Expected: ANALYZE refreshes data summaries, while correlated conditions may need richer statistics or a better model. Do not imply that a statistics refresh automatically fixes every bad plan.",
         "id": "when-estimates-fail",
         "steps": 3,
         "states": [
@@ -1885,7 +1885,7 @@ const plans = [
         "title": "Watch the access path flip",
         "minutes": 3,
         "kind": "activity",
-        "notes": "The model fixes N=100,000, B=1,000 and tree height 3. The index estimate is 3+matching RIDs; sequential scan is 1,000. Before crossing ask for the break-even fraction: (1000−3)/100000≈0.997%. Slider 50 is 1%, so the scan slightly wins. This is a toy model, not a universal 1% rule; clustering, caching and index-only scans change the crossover. Bar widths are logarithmic, so use numeric values for ratio comparisons. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "The model fixes N=100,000, B=1,000 and tree height 3. The index estimate is 3+matching RIDs. Sequential scan is 1,000. Before crossing ask for the break-even fraction: (1000−3)/100000≈0.997%.\n\nSlider 50 is 1%, so the scan slightly wins. This is a toy model, not a universal 1% rule. Clustering, caching and index-only scans change the crossover. Bar widths are logarithmic, so use numeric values for ratio comparisons.\n\nThe slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "watch-the-access-path-flip",
         "steps": 3,
         "states": [
@@ -1902,7 +1902,7 @@ const plans = [
         "title": "Choose the join machine",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Expected choices: indexed nested-loop for few outer rows and cheap probes; hash for a suitable equality join with a manageable build side; merge for appropriately sorted inputs. Ask why the same algorithm is not always best. Include duplicates in the merge picture: equal-key groups must produce every matching pair, not just one zip. The total answer size is unavoidable work.",
+        "notes": "Expected choices: indexed nested-loop for few outer rows and cheap probes. Hash for a suitable equality join with a manageable build side. Merge for appropriately sorted inputs. Ask why the same algorithm is not always best. Include duplicates in the merge picture: equal-key groups must produce every matching pair, not just one zip. The total answer size is unavoidable work.",
         "id": "choose-the-join-machine",
         "steps": 3,
         "states": [
@@ -1918,7 +1918,7 @@ const plans = [
         "title": "Join order",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Ask which first pair has no connecting predicate. Expected: majors and enrollments, producing a 9,000-row cross product. Distinguish first-intermediate ratios from total produced rows: SM totals 3,300, SE 6,000, ME 12,000 in this widget. Do not claim total work is thirty times larger merely because the first intermediate is. Each plan has the same answer under the stated join assumptions. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Ask which first pair has no connecting predicate. Expected: majors and enrollments, producing a 9,000-row cross product. Distinguish first-intermediate ratios from total produced rows: SM totals 3,300, SE 6,000, ME 12,000 in this widget. Do not claim total work is thirty times larger merely because the first intermediate is.\n\nEach plan has the same answer under the stated join assumptions. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "join-order",
         "steps": 3,
         "states": [
@@ -1935,7 +1935,7 @@ const plans = [
         "title": "Search without enumerating everything",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Explain dynamic programming by showing how a plan for two tables can be reused when planning a larger join. Physical properties such as sorted output can justify retaining multiple plans for the same subset; a slightly more expensive plan may be worth keeping if its sorted output saves work later. The 10!×Catalan(9) count is about 17.6 billion labeled binary join trees under one counting convention, not the number every optimizer actually enumerates. Larger joins often trigger restricted search or heuristics.",
+        "notes": "Explain dynamic programming by showing how a plan for two tables can be reused when planning a larger join. Physical properties such as sorted output can justify retaining multiple plans for the same subset. A slightly more expensive plan may be worth keeping if its sorted output saves work later. The 10!×Catalan(9) count is about 17.6 billion labeled binary join trees under one counting convention, not the number every optimizer actually enumerates. Larger joins often trigger restricted search or heuristics.",
         "id": "search-without-enumerating-everything",
         "steps": 3,
         "states": [
@@ -1967,7 +1967,7 @@ const plans = [
         "title": "Review: storage and memory",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Spend one minute individual recall, one minute partner explanation and two minutes checking mechanisms. Ask why fsync differs from buffered write and why a repeated 50-page loop can thrash a 49-frame LRU cache. Expected: durability ordering and working-set capacity, not a universal measured ratio. Pinning prevents eviction; dirty eviction may need a write. Use actual benchmark values only as examples, not fixed promises across machines.",
+        "notes": "Spend one minute individual recall, one minute partner explanation and two minutes checking mechanisms. Ask why fsync differs from buffered write and why a repeated 50-page loop can thrash a 49-frame LRU cache. Expected: durability ordering and working-set capacity, not a universal measured ratio. Pinning prevents eviction. Dirty eviction may need a write. Use actual benchmark values only as examples, not fixed promises across machines.",
         "id": "review-storage-and-memory",
         "steps": 3,
         "states": [
@@ -1983,7 +1983,7 @@ const plans = [
         "title": "Review: rows and pipelines",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask students to explain fixed slot arithmetic, byte capacity for UTF-8 strings, and when RID reuse is unsafe for stale references. Then ask why a streaming operator does not imply every operator uses constant memory: sort, aggregation and some joins can hold state. Have them reconstruct the 900-to-60 candidate-pair change. The target is a mechanism explanation, not memorized API signatures.",
+        "notes": "Ask students to calculate a fixed slot address. Ask how UTF-8 affects string capacity. Ask when reusing a RID makes an old reference unsafe. Then ask why a streaming operator does not imply every operator uses constant memory: sort, aggregation and some joins can hold state. Have them reconstruct the 900-to-60 candidate-pair change. The target is a mechanism explanation, not memorized API signatures.",
         "id": "review-rows-and-pipelines",
         "steps": 3,
         "states": [
@@ -1999,7 +1999,7 @@ const plans = [
         "title": "Review: SQL and indexes",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask what each stage accepts and produces, why parsing a query does not optimize it, and why the copied separator must remain in a leaf. Expected distinctions: tokens versus syntax structure versus query description versus executable scans; leaf copy-up versus internal move-up; one descent followed by leaf traversal. Then ask about a filter that keeps most rows: would the index still be worth using?",
+        "notes": "Ask what each stage accepts and produces. Ask why parsing a query does not optimize it. Ask why the copied separator must remain in a leaf. Expected distinctions: tokens versus syntax structure versus query description versus executable scans. Leaf copy-up versus internal move-up. One descent followed by leaf traversal. Then ask about a filter that keeps most rows: would the index still be worth using?",
         "id": "review-sql-and-indexes",
         "steps": 3,
         "states": [
@@ -2015,7 +2015,7 @@ const plans = [
         "title": "Review: recovery and isolation",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Ask students to place the durable log before data, and the FORCE commit receipt after dirty data is durable. Recovery undoes unfinished transactions under the lab model; it does not infer intended concurrent operations. In the lost-update schedule both S reads succeed and the first X upgrade conflicts. Ask why MVCC’s snapshots do not by themselves eliminate write skew. Spend the final minute on the distinction between crash safety and isolation.",
+        "notes": "Ask students to place the durable log before data, and the FORCE commit receipt after dirty data is durable. Recovery undoes unfinished transactions under the lab model. It does not infer intended concurrent operations. In the lost-update schedule both S reads succeed and the first X upgrade conflicts. Ask why MVCC’s snapshots do not by themselves eliminate write skew. Spend the final minute on the distinction between crash safety and isolation.",
         "id": "review-recovery-and-isolation",
         "steps": 3,
         "states": [
@@ -2031,7 +2031,7 @@ const plans = [
         "title": "Exit mechanism",
         "minutes": 4,
         "kind": "recap",
-        "notes": "Use a rapid oral retrieval round: each student explains one mechanism in twenty seconds and names a failure if it is missing. Correct misconceptions rather than reveal assessment answers. Distinguish optional topics from the required exam: the October 22 midterm covers Lectures 1–6 and Labs 1–6 only. Analytics starts October 8. This twenty-minute synthesis completes the 60-minute deck without adding a lab-day deck.",
+        "notes": "Give each student twenty seconds. Ask for one mechanism and the failure that its absence permits. Correct misconceptions rather than reveal assessment answers. Distinguish optional topics from the required exam: the October 22 midterm covers Lectures 1–6 and Labs 1–6 only. Analytics starts October 8. This twenty-minute synthesis completes the 60-minute deck without adding a lab-day deck.",
         "id": "exit-mechanism",
         "steps": 3,
         "states": [
@@ -2056,7 +2056,7 @@ const plans = [
         "minutes": 2,
         "kind": "visual",
         "clarityNative": true,
-        "notes": "Start with the same three made-up taxi rides as the reading. Introduce pickup, payment, and fare before comparing how storage groups the values. Highlight one complete ride, then the column groups, then only the three fares. Ask students to calculate the average before revealing $30. These strips show grouping, not disk-page boundaries or measured reads. The ten-minute Quiz 6 is separate from this sixty-minute teaching deck. Later scenes connect the layout to compression, execution batches, file metadata, and training a model with SQL.",
+        "notes": "Start with the same three made-up taxi rides as the reading. Introduce pickup, payment, and fare before comparing how storage groups the values. Highlight one complete ride, then the column groups, then only the three fares. Ask students to calculate the average before revealing $30.\n\nThese strips show grouping, not disk-page boundaries or measured reads. The ten-minute Quiz 6 is separate from this sixty-minute teaching deck. Later scenes connect the layout to compression, execution batches, file metadata, and training a model with SQL.",
         "id": "the-analytics-stack",
         "steps": 5,
         "states": [
@@ -2075,7 +2075,7 @@ const plans = [
         "minutes": 2,
         "kind": "visual",
         "clarityNative": true,
-        "notes": "Compare the fixed-size row slots from Lab 3 with a simplified columnar layout for the same three made-up rides. Ride 2 occupies slot 1 in the illustrated block 7; RID (7, 1) identifies the whole row. On the right, locate logical position 1 within each column chunk of row group 0. Gather LGA, card, and $24. Parquet row groups contain one chunk per column; each chunk contains encoded pages. Positions preserve row correspondence but do not promise constant byte offsets or equal page boundaries across columns. Status flags, null encoding, headers, and other metadata are omitted. Other column engines may use different addressing structures; this is a conceptual comparison, not a universal on-disk format.",
+        "notes": "Compare the fixed-size row slots from Lab 3 with a simplified columnar layout for the same three made-up rides. Ride 2 occupies slot 1 in the illustrated block 7. RID (7, 1) identifies the whole row. On the right, locate logical position 1 within each column chunk of row group 0.\n\nGather LGA, card, and $24. Parquet row groups contain one chunk per column. Each chunk contains encoded pages. Positions preserve row correspondence but do not promise constant byte offsets or equal page boundaries across columns.\n\nStatus flags, null encoding, headers, and other metadata are omitted. Other column engines may use different addressing structures. This is a conceptual comparison, not a universal on-disk format.",
         "id": "the-workload-rotates",
         "steps": 5,
         "states": [
@@ -2096,7 +2096,7 @@ const plans = [
         "title": "Average fares in row storage",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Keep the same three made-up rides used in the opening and slot comparison. First ask which fields avg(fare) needs. Highlight the three fares in green and the neighboring pickup and payment fields in orange. Orange means stored alongside the fares, not an exact count of measured I/O. Reveal the average of $30 only after a prediction. With row storage, a scan can bring unrelated fields into memory because the fields share row pages. Pages, caching, indexes, and encodings affect real costs. Compare the next slide with the same query and same data.",
+        "notes": "Keep the same three made-up rides used in the opening and slot comparison. First ask which fields avg(fare) needs. Highlight the three fares in green and the neighboring pickup and payment fields in orange. Orange means stored alongside the fares, not an exact count of measured I/O.\n\nReveal the average of $30 only after a prediction. With row storage, a scan can bring unrelated fields into memory because the fields share row pages. Pages, caching, indexes, and encodings affect real costs. Compare the next slide with the same query and same data.",
         "id": "read-a-row-layout",
         "steps": 3,
         "states": [
@@ -2113,7 +2113,7 @@ const plans = [
         "title": "Average fares in column storage",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Keep the same three rides and avg(fare) query from the preceding slide. The data is now grouped by field. Highlight the fare chunk in green; pickup and payment stay gray because this query can skip those chunks. Reveal the same $30 result. The benefit is less unrelated data to read, not a different calculation or guaranteed speedup. These cell groups are conceptual, not literal disk page boundaries. Do not equate three values with three disk operations. If the query needs other fields for filtering or grouping, those columns must also be accessed.",
+        "notes": "Keep the same three rides and avg(fare) query from the preceding slide. The data is now grouped by field. Highlight the fare chunk in green. Pickup and payment stay gray because this query can skip those chunks.\n\nReveal the same $30 result. The benefit is less unrelated data to read, not a different calculation or guaranteed speedup. These cell groups are conceptual, not literal disk page boundaries. Do not equate three values with three disk operations.\n\nIf the query needs other fields for filtering or grouping, those columns must also be accessed.",
         "id": "read-a-column-layout",
         "steps": 3,
         "states": [
@@ -2130,7 +2130,7 @@ const plans = [
         "title": "Different queries need different data",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Define workload as the mix of queries a database runs. Use two requests about the same rides: show all of Ride 2, and calculate the average fare for all rides. Highlight the three fields of Ride 2, then all three fares, then both patterns. The small tables show values the queries need, not physical page layouts. A row layout keeps one ride together; a column layout keeps fares from many rides together. Both layouts can answer both questions. Their benefit depends on the query mix and physical execution, not an automatic rotation of storage whenever a query changes. Some systems maintain separate operational and analytical copies.",
+        "notes": "Define workload as the mix of queries a database runs. Use two requests about the same rides: show all of Ride 2, and calculate the average fare for all rides. Highlight the three fields of Ride 2, then all three fares, then both patterns. The small tables show values the queries need, not physical page layouts.\n\nA row layout keeps one ride together. A column layout keeps fares from many rides together. Both layouts can answer both questions. Their benefit depends on the query mix and physical execution, not an automatic rotation of storage whenever a query changes.\n\nSome systems maintain separate operational and analytical copies.",
         "id": "the-point-lookup-reverses-it",
         "steps": 3,
         "states": [
@@ -2148,7 +2148,7 @@ const plans = [
         "minutes": 2,
         "kind": "visual",
         "clarityNative": true,
-        "notes": "Define a file format as rules for how data is stored in a file. Use the same three rides from the opening. Parquet is an open, binary, column-oriented format; rides.parquet holds the table data, while DuckDB is software that executes SQL. Reveal one row group with three column chunks, preserving the order of rides within each chunk. A larger file can contain many row groups, each with one chunk per column. The metadata records field types and chunk locations. For avg(fare), DuckDB can read the fare chunk and skip pickup and payment; metadata still needs reading. Reveal the same $30 average. This is a simplified logical picture, not a byte-accurate file layout. Column chunks contain pages that can use encodings and compression, which the next slides explain.",
+        "notes": "Define a file format as rules for how data is stored in a file. Use the same three rides from the opening. Parquet is an open, binary, column-oriented format. The file rides.parquet holds the table data, while DuckDB is software that executes SQL.\n\nReveal one row group with three column chunks, preserving the order of rides within each chunk. A larger file can contain many row groups, each with one chunk per column. The metadata records field types and chunk locations. For avg(fare), DuckDB can read the fare chunk and skip pickup and payment.\n\nMetadata still needs reading. Reveal the same $30 average. This is a simplified logical picture, not a byte-accurate file layout. Column chunks contain pages that can use encodings and compression, which the next slides explain.",
         "id": "parquet-is-a-file-format",
         "steps": 4,
         "states": [
@@ -2167,7 +2167,7 @@ const plans = [
         "title": "Lossless compression",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define lossless compression and ask why it can make scans faster despite decode work. Expected: fewer bytes to fetch can outweigh decompression cost. Repeated values and data types help determine which encoding works well; no fixed compression factor is guaranteed. Distinguish encoding from a general-purpose compression codec, while noting they can combine.",
+        "notes": "Define lossless compression and ask why it can make scans faster despite decode work. Expected: fewer bytes to fetch can outweigh decompression cost. Repeated values and data types help determine which encoding works well. No fixed compression factor is guaranteed. Distinguish encoding from a general-purpose compression codec, while noting they can combine.",
         "definition": "Lossless compression stores the same information using fewer bytes.",
         "id": "compression",
         "steps": 3,
@@ -2185,7 +2185,7 @@ const plans = [
         "title": "Runs",
         "minutes": 4,
         "kind": "activity",
-        "notes": "Before the reveal ask how to represent eight 1s, eight 2s and eight 3s. Expected: three runs. In the widget the teaching byte model changes 96 bytes into 24, a factor of four. Ask what happens if the same months alternate randomly. Expected: runs become short and the benefit can collapse. Sorting can improve compression but has a write and ordering cost. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Before the reveal ask how to represent eight 1s, eight 2s and eight 3s. Expected: three runs. In the widget the teaching byte model changes 96 bytes into 24, a factor of four. Ask what happens if the same months alternate randomly.\n\nExpected: runs become short and the benefit can collapse. Sorting can improve compression but has a write and ordering cost. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget.\n\nIts full-page explanatory prose is not projected in this deck.",
         "id": "runs",
         "steps": 3,
         "states": [
@@ -2202,7 +2202,7 @@ const plans = [
         "title": "Dictionary and deltas",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Ask which patterns justify each encoding: low-cardinality strings favor a dictionary; smooth numeric sequences favor deltas. The widget assumes a tiny dictionary and bit-packed codes, and its delta example also compresses repeated differences. These are illustrative byte counts, not a promise of exact Parquet output size. Have students recover one original value from the encoded form before moving on. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget; its full-page explanatory prose is not projected in this deck.",
+        "notes": "Ask which patterns justify each encoding: low-cardinality strings favor a dictionary. Smooth numeric sequences favor deltas. The widget assumes a tiny dictionary and bit-packed codes, and its delta example also compresses repeated differences. These are illustrative byte counts, not a promise of exact Parquet output size.\n\nHave students recover one original value from the encoded form before moving on. The slide recreates the mechanism as editable SVG. The optional source-demo link provides the original widget. Its full-page explanatory prose is not projected in this deck.",
         "id": "dictionary-and-deltas",
         "steps": 3,
         "states": [
@@ -2219,13 +2219,13 @@ const plans = [
         "title": "From microdb rows to batches",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Use the same made-up fares 36, 24, and 30 in the illustrated scan order. This SELECT-FROM-WHERE query matches the microdb operators students implemented: ProjectScan wraps SelectScan, which wraps TableScan. next() returns a Boolean and positions a current row; get_val reads a field. One SelectScan.next() call can make multiple child next() calls while rejecting rows. A final unsuccessful call detects exhaustion and is omitted from the animation. Arrows between boxes indicate conceptual value flow, not copied row objects; the text below gives the inward request chain. TableScan already reads buffered pages, so one row per successful call does not mean one disk read per row. The second pipeline is an illustrative batched counterpart, not an existing microdb API or an exact DuckDB physical plan. Filter selection can be represented by a mask or selection vector rather than copying matching rows. DuckDB operates on DataChunks made of column vectors; its default standard vector size is 2048, but actual chunks can be smaller. Batching spreads call overhead across rows while each predicate still needs evaluation. It does not require changing the disk layout, and it is distinct from multicore parallelism and CPU SIMD. SQL without ORDER BY does not promise this illustrated output order.",
+        "notes": "Use the same made-up fares 36, 24, and 30 in the illustrated scan order. This SELECT-FROM-WHERE query matches the microdb operators students implemented: ProjectScan wraps SelectScan, which wraps TableScan. next() returns a Boolean and positions a current row. get_val reads a field. One SelectScan.next() call can make multiple child next() calls while rejecting rows. A final unsuccessful call detects exhaustion and is omitted from the animation.\n\nArrows between boxes indicate conceptual value flow, not copied row objects. The text below gives the inward request chain. TableScan already reads buffered pages, so one row per successful call does not mean one disk read per row. The second pipeline is an illustrative batched counterpart, not an existing microdb API or an exact DuckDB physical plan.\n\nFilter selection can be represented by a mask or selection vector rather than copying matching rows. DuckDB operates on DataChunks made of column vectors. Its default standard vector size is 2048, but actual chunks can be smaller. Batching spreads call overhead across rows while each predicate still needs evaluation.\n\nIt does not require changing the disk layout, and it is distinct from multicore parallelism and CPU SIMD. SQL without ORDER BY does not promise this illustrated output order.",
         "id": "batches-through-the-pipeline",
         "steps": 6,
         "states": [
           "Recall the microdb scans",
           "Get the first matching row",
-          "Skip a row; get the next match",
+          "Skip the row and find the next match",
           "Read a toy batch",
           "Filter the values in the batch",
           "Pass the matching fares together"
@@ -2242,7 +2242,7 @@ const plans = [
         "title": "Skip a row group",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Let students decide which groups can be ruled out before opening them. Min/max statistics can prove absence; they cannot prove every row in the surviving group matches. Partition pruning and row-group skipping operate at different levels. Unsorted or overlapping ranges reduce skipping effectiveness. Explain that metadata itself must be read, and selected compressed pages still need decoding.",
+        "notes": "Let students decide which groups can be ruled out before opening them. Min/max statistics can prove absence. They cannot prove every row in the surviving group matches. Partition pruning and row-group skipping operate at different levels. Unsorted or overlapping ranges reduce skipping effectiveness. Explain that metadata itself must be read, and selected compressed pages still need decoding.",
         "id": "skip-a-row-group",
         "steps": 3,
         "states": [
@@ -2258,7 +2258,7 @@ const plans = [
         "title": "Skip eleven month folders",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Start with one year of taxi rides. A partition is a group of rows selected by a rule; here, all rides with the same month belong together. In this Hive-style file layout, rides/month=12/data.parquet stores December rides. The directory name supplies the month value. A partition can contain several files; one file is drawn per folder for clarity. A folder is one way to represent a partition, not the general definition: other database systems manage partitions internally. For the December query, DuckDB can skip files in the other eleven folders, then read fare column chunks inside the December files. Distinguish a partition folder, a Parquet file inside it, and row groups inside each file. Equal month sizes are only an assumption for the next arithmetic example.",
+        "notes": "Start with one year of taxi rides. A partition is a group of rows selected by a rule. Here, all rides with the same month belong together. In this Hive-style file layout, rides/month=12/data.parquet stores December rides.\n\nThe directory name supplies the month value. A partition can contain several files. One file is drawn per folder for clarity. A folder is one way to represent a partition, not the general definition: other database systems manage partitions internally.\n\nFor the December query, DuckDB can skip files in the other eleven folders, then read fare column chunks inside the December files. Distinguish a partition folder, a Parquet file inside it, and row groups inside each file. Equal month sizes are only an assumption for the next arithmetic example.",
         "id": "skip-eleven-partitions",
         "steps": 3,
         "states": [
@@ -2276,7 +2276,7 @@ const plans = [
         "title": "How much data can we skip?",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Keep one question throughout: average fare for December. Use a toy year with 60,000 rides, twelve stored data columns including fare, and exactly eight bytes per field value. Each of twelve monthly partitions contains 5,000 rides. Month comes from the directory, not an additional scanned data column. Each grid square represents one month of one column: 5,000 values times eight bytes, or 40,000 bytes. Squares are equal pieces of value data, not disk pages or measured reads. Highlight all 144 squares as the full-table value-data baseline: 5,760,000 bytes. Keep the fare column across all months: twelve squares, 480,000 bytes. Keep December fares: one square, 40,000 bytes. Let pairs predict the fraction before revealing 1/144. The two factors of twelve describe independent choices: which columns and which months. Use decimal units: KB = 1,000 bytes and MB = 1,000,000 bytes. Exclude metadata, encoding, and compression; this is not a latency prediction or a claim that every row engine must read the full table. Optional extension: if December holds half the rides, the second saving is a factor of two, giving 1/24 of the full value data.",
+        "notes": "Keep one question throughout: average fare for December. Use a toy year with 60,000 rides, twelve stored data columns including fare, and exactly eight bytes per field value. Each of twelve monthly partitions contains 5,000 rides. Month comes from the directory, not an additional scanned data column.\n\nEach grid square represents one month of one column: 5,000 values times eight bytes, or 40,000 bytes. Squares are equal pieces of value data, not disk pages or measured reads. Highlight all 144 squares as the full-table value-data baseline: 5,760,000 bytes. Keep the fare column across all months: twelve squares, 480,000 bytes.\n\nKeep December fares: one square, 40,000 bytes. Let pairs predict the fraction before revealing 1/144. The two factors of twelve describe independent choices: which columns and which months. Use decimal units: KB = 1,000 bytes and MB = 1,000,000 bytes.\n\nExclude metadata, encoding, and compression. This is not a latency prediction or a claim that every row engine must read the full table. Optional extension: if December holds half the rides, the second saving is a factor of two, giving 1/24 of the full value data.",
         "id": "predict-the-byte-ratio",
         "steps": 6,
         "states": [
@@ -2296,7 +2296,7 @@ const plans = [
         "title": "An engine inside the process",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Explain the embedded deployment: no separate database server is required for the lab. DuckDB provides analytical SQL over files and in-process dataframes. It supports transactions and WAL and can have concurrent writers within one process; cross-process write coordination differs from a client-server database. DuckDB can query data held in a Pandas dataframe. Keep code invocation details in presenter notes so the audience sees the dataflow.",
+        "notes": "Explain the embedded deployment: no separate database server is required for the lab. DuckDB provides analytical SQL over files and in-process dataframes. It supports transactions and WAL and can have concurrent writers within one process. Cross-process write coordination differs from a client-server database. DuckDB can query data held in a Pandas dataframe. Keep code invocation details in presenter notes so the audience sees the dataflow.",
         "id": "an-engine-inside-the-process",
         "steps": 3,
         "states": [
@@ -2312,7 +2312,7 @@ const plans = [
         "title": "Storage and compute separate",
         "minutes": 3,
         "kind": "visual",
-        "notes": "Ask what can scale independently. Expected: durable stored data and compute used to query it. Describe warehouse and data-lake ideas as architecture, not identical vendor implementation. A lake can be files readable by multiple engines; a warehouse adds managed execution and services. Object storage supports range reads but not arbitrary in-place file edits like a local disk. Avoid the source’s overbroad whole-object-only claim.",
+        "notes": "Ask what can scale independently. Expected: durable stored data and compute used to query it. Describe warehouse and data-lake ideas as architecture, not identical vendor implementation. A lake can be files readable by multiple engines. A warehouse adds managed execution and services. Object storage supports range reads but not arbitrary in-place file edits like a local disk. Avoid the source’s overbroad whole-object-only claim.",
         "id": "storage-and-compute-separate",
         "steps": 3,
         "states": [
@@ -2328,7 +2328,7 @@ const plans = [
         "title": "A table over files",
         "minutes": 3,
         "kind": "definition",
-        "notes": "Define the lakehouse briefly. Explain that transactional metadata identifies the files belonging to a table snapshot; readers do not discover partial commits by naively listing a folder. Iceberg and Delta use different metadata and commit protocols; a single generic manifest is a conceptual picture. Connect snapshot history to MVCC and mention cleanup retention costs. Atomic metadata publication and concurrency control are necessary, not just writing a file list.",
+        "notes": "Define the lakehouse briefly. Explain that transactional metadata identifies the files belonging to a table snapshot. Readers do not discover partial commits by naively listing a folder. Iceberg and Delta use different metadata and commit protocols. A single generic manifest is a conceptual picture. Connect snapshot history to MVCC and mention cleanup retention costs. Atomic metadata publication and concurrency control are necessary, not just writing a file list.",
         "definition": "A lakehouse adds transactional table metadata to data stored in open files.",
         "id": "a-table-over-files",
         "steps": 3,
@@ -2346,7 +2346,7 @@ const plans = [
         "title": "SQL learns a fare model",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Project the training SQL, not just function names. The prepared fare_features view contains the six made-up rides from in_database_ml.py after filtering positive distances and nonnegative fares. Define distance in miles as the input feature and fare in dollars as the label. First read the six rows, then highlight FROM and WHERE split = train along with the four training rows. Highlight the regression aggregates next: regr_intercept(fare, distance) and regr_slope(fare, distance), with target first and feature second. They fit a least-squares line, learning intercept 3 and slope 2. count(*) records four training rows. CREATE TABLE stores the query result in fare_model. Read the saved row and form predicted fare = 3 + 2 times distance. The intercept is the line value at zero miles, not a verified taxi base fare. Python only submits these SQL statements and prints results; DuckDB performs the fit. Both test rows stay out of training. The exact setup and complete runnable SQL are in the reading and linked script. This tiny synthetic example teaches execution, not real taxi-fare accuracy.",
+        "notes": "Project the training SQL, not just function names. The prepared fare_features view contains the six made-up rides from in_database_ml.py after filtering positive distances and nonnegative fares. Define distance in miles as the input feature and fare in dollars as the label. First read the six rows, then highlight FROM and WHERE split = train along with the four training rows.\n\nHighlight the regression aggregates next: regr_intercept(fare, distance) and regr_slope(fare, distance), with target first and feature second. They fit a least-squares line, learning intercept 3 and slope 2. count(*) records four training rows. CREATE TABLE stores the query result in fare_model. Read the saved row and form predicted fare = 3 + 2 times distance.\n\nThe intercept is the line value at zero miles, not a verified taxi base fare. Python only submits these SQL statements and prints results. DuckDB performs the fit. Both test rows stay out of training.\n\nThe exact setup and complete runnable SQL are in the reading and linked script. This tiny synthetic example teaches execution, not real taxi-fare accuracy.",
         "id": "train-inside-the-query-engine",
         "steps": 5,
         "states": [
@@ -2367,7 +2367,7 @@ const plans = [
         "title": "SQL checks and applies the saved model",
         "minutes": 3,
         "kind": "activity",
-        "notes": "Keep fare_model fixed at intercept 3 and slope 2. Show CREATE VIEW held_out_predictions with the test-only filter. CROSS JOIN pairs each test ride with the one model row, and the expression m.intercept + m.slope * r.distance calculates its fare. Ask the class to predict results before showing 8 and 12 dollars for distances 2.5 and 4.5. The actual fares 9 and 11 did not influence training. On the next build replace the SQL with avg(abs(fare - predicted_fare)), explain absolute error, and calculate a one-dollar MAE. The query also reports the two test rows and RMSE, which is one dollar here. Explain RMSE as the square root of mean squared error. Then show a separate SELECT for VALUES (3.5), cross joined with the same model, and pause before revealing 10 dollars. The new query needs only distance, not an actual fare, and does not retrain. The projected queries retain ride_id from the reading so each output still identifies its input ride. CROSS JOIN is safe here because fare_model has exactly one row; a multi-version model table requires selecting a model first. Two synthetic test rows demonstrate the mechanics, not generalization.",
+        "notes": "Keep fare_model fixed at intercept 3 and slope 2. Show CREATE VIEW held_out_predictions with the test-only filter. CROSS JOIN pairs each test ride with the one model row, and the expression m.intercept + m.slope * r.distance calculates its fare. Ask the class to predict results before showing 8 and 12 dollars for distances 2.5 and 4.5.\n\nThe actual fares 9 and 11 did not influence training. On the next build replace the SQL with avg(abs(fare - predicted_fare)), explain absolute error, and calculate a one-dollar MAE. The query also reports the two test rows and RMSE, which is one dollar here. Explain RMSE as the square root of mean squared error.\n\nThen show a separate SELECT for VALUES (3.5), cross joined with the same model, and pause before revealing 10 dollars. The new query needs only distance, not an actual fare, and does not retrain. The projected queries retain ride_id from the reading so each output still identifies its input ride. CROSS JOIN is safe here because fare_model has exactly one row.\n\nA multi-version model table requires selecting a model first. Two synthetic test rows demonstrate the mechanics, not generalization.",
         "id": "evaluate-and-apply-the-model",
         "steps": 6,
         "states": [
@@ -2404,7 +2404,7 @@ const plans = [
           "Predict the reserved rides",
           "Compare prediction errors"
         ],
-        "notes": "Use the core Lab 8 investigation as a concrete local bridge between the small SQL regression and the managed BigQuery ML example. This example uses the real, cleaned 2024 taxi sample rather than the six made-up rides. Train on 50,000 January–October rides and reserve the 10,000 November–December rides for evaluation. DuckDB filters and projects rows, Arrow carries batches, and Python converts them to tensors. ORDER BY hash(ride_id) gives the training rides a repeatable mixed order so batches do not follow date order. This mixing is useful but optional. The same mixed order repeats each epoch, and the month filter still excludes the test rides. In the network diagram, the single distance node connects to all 16 hidden nodes through the first Linear layer, then all 16 hidden nodes connect to the fare output through the second Linear layer. Each line is a learned weight. ReLU acts at the hidden nodes. Biases and scaling are omitted from the diagram. PyTorch trains a one-input, 16-hidden-unit, one-output ReLU network for 30 epochs. The source code also learns scaling from training rows only. Four detail builds unpack the two prediction and loss lines. Use two invented rides with distances 3 and 5 miles and recorded fares 20 and 30 dollars. Assume the full training set already gave distance mean 3 and std 2, and fare mean 20 and std 10. Those statistics are not computed from the displayed batch. The scaled distances and targets are 0 and 1. Assume the current model outputs 0.2 and 0.8, giving squared errors 0.04 and 0.04 and mean loss 0.04. This loss is in squared standardized-fare units, not dollars. Conversion back to dollars gives 22 and 28, each two dollars away from the recorded fare. The toy values illustrate the calculation and are separate from the measured lab results later. The forward prediction and loss calculation do not update weights; optimizer.step does that after backward computes gradients. Projected Python is an excerpt: imports, tensor conversion, scaling statistics, optimizer setup, and the surrounding loops are in the linked script. Create the network once, then update it on each training batch. The predict_fare callback runs the frozen model under inference_mode and returns an Arrow array. create_function registers it as predict_fare_nn on this connection. Arrow means Apache Arrow, a format for column data in memory. The SQL function has one DOUBLE input and one DOUBLE output per row, while type=arrow tells DuckDB to call the Python function with a batch of values. The two Arrow builds show distances 3 and 5 entering one callback and illustrative fares 22 and 28 returning at matching positions. The real callback receives a PyArrow ChunkedArray, converts it to tensors, applies the fixed model, and returns a PyArrow array with the same number of entries. Returning values in a different order would attach fares to the wrong rides. DuckDB controls these UDF batch sizes; the earlier to_arrow_reader batch_size=1024 applies only to the training loop. This lab copies values into torch.tensor, so avoid claiming that every conversion is free. It is not a built-in DuckDB function. The test SELECT invokes PyTorch through that callback without retraining. Its first two sample predictions are rounded from the completed run: ride 50000, distance 2.00, actual fare 20.50, neural prediction 15.17; ride 50001, distance 0.94, actual fare 10.00, prediction 9.50. The script materializes predictions with both linear_fare and neural_fare before the final aggregate. In the documented run with seed 6042, DuckDB 1.5.6, and PyTorch 2.14.1, MAE is 3.53 dollars for the straight line and 3.26 for the neural network. Both use only distance and the same training/test split. These are measured results for one sample and configuration, not guaranteed accuracy or evidence that larger models always win. The next slide moves training management into Google Cloud.",
+        "notes": "Introduce the core Lab 8 investigation after the small SQL regression. Use this local investigation to prepare for managed BigQuery ML. This example uses the real, cleaned 2024 taxi sample rather than the six made-up rides. Train on 50,000 January–October rides and reserve the 10,000 November–December rides for evaluation.\n\nDuckDB filters and projects rows, Arrow carries batches, and Python converts them to tensors. ORDER BY hash(ride_id) gives the training rides a repeatable mixed order so batches do not follow date order. This mixing is useful but optional. The same mixed order repeats each epoch, and the month filter still excludes the test rides.\n\nIn the network diagram, the first Linear layer connects the distance node to all 16 hidden nodes. The second Linear layer connects those nodes to the fare output. Each line is a learned weight. ReLU acts at the hidden nodes.\n\nBiases and scaling are omitted from the diagram. PyTorch trains a one-input, 16-hidden-unit, one-output ReLU network for 30 epochs. The source code also learns scaling from training rows only. Four detail builds unpack the two prediction and loss lines.\n\nUse two invented rides with distances 3 and 5 miles and recorded fares 20 and 30 dollars. Assume the full training set already gave distance mean 3 and std 2, and fare mean 20 and std 10. Those statistics are not computed from the displayed batch. The scaled distances and targets are 0 and 1.\n\nAssume the current model outputs 0.2 and 0.8, giving squared errors 0.04 and 0.04 and mean loss 0.04. This loss is in squared standardized-fare units, not dollars. Conversion back to dollars gives 22 and 28, each two dollars away from the recorded fare. The toy values illustrate the calculation and are separate from the measured lab results later.\n\nThe forward prediction and loss calculation do not update weights. optimizer.step does that after backward computes gradients. Projected Python is an excerpt: imports, tensor conversion, scaling statistics, optimizer setup, and the surrounding loops are in the linked script. Create the network once, then update it on each training batch. The predict_fare callback runs the frozen model under inference_mode and returns an Arrow array. create_function registers it as predict_fare_nn on this connection.\n\nArrow means Apache Arrow, a format for column data in memory. The SQL function has one DOUBLE input and one DOUBLE output per row. type=arrow tells DuckDB to pass batches to the Python function. The two Arrow builds show distances 3 and 5 entering one callback and illustrative fares 22 and 28 returning at matching positions. The callback receives a PyArrow ChunkedArray.\n\nIt converts the values to tensors and applies the fixed model. It returns a PyArrow array with the same number of entries. Returning values in a different order would attach fares to the wrong rides. DuckDB controls these UDF batch sizes.\n\nThe earlier to_arrow_reader batch_size=1024 applies only to the training loop. This lab copies values into torch.tensor, so avoid claiming that every conversion is free. It is not a built-in DuckDB function. The test SELECT invokes PyTorch through that callback without retraining.\n\nIts first two sample predictions are rounded from the completed run: ride 50000, distance 2.00, actual fare 20.50, neural prediction 15.17. Ride 50001, distance 0.94, actual fare 10.00, prediction 9.50. The script materializes predictions with both linear_fare and neural_fare before the final aggregate. The documented run uses seed 6042, DuckDB 1.5.6, and PyTorch 2.14.1.\n\nMAE is 3.53 dollars for the straight line and 3.26 dollars for the neural network. Both use only distance and the same training/test split. These are measured results for one sample and configuration, not guaranteed accuracy or evidence that larger models always win. The next slide moves training management into Google Cloud.",
         "sources": [
           "labs/lab-08/duckdb.html#pytorch",
           "labs/lab-08/starter/pytorch_fares.py",
@@ -2425,7 +2425,7 @@ const plans = [
           "ML.EVALUATE checks separate test rides",
           "ML.PREDICT applies the saved model"
         ],
-        "notes": "Show actual GoogleSQL for the same six toy rides. This optional cloud example requires replacing YOUR_PROJECT with a BigQuery project ID, a demo dataset, and demo.ml_rides loaded with the six rows and compatible BigQuery types. Use the setup and permissions instructions in the reading before running it; BigQuery may incur charges. CREATE MODEL with linear_reg learns a distance-to-fare line. input_label_cols identifies fare as the outcome, leaving distance as the feature. NO_SPLIT uses all rows supplied by the training SELECT; WHERE split = train keeps the two test rows out. NORMAL_EQUATION with l2_reg = 0 selects an unregularized least-squares fit. The next build passes explicit test rows to ML.EVALUATE and requests mean_absolute_error. The final build gives ML.PREDICT the saved model and a new distance. The projected code uses the same YOUR_PROJECT placeholder and demo dataset names as the reading. Unlike DuckDB's ordinary one-row coefficient table, BigQuery saves a managed model object. These statements use BigQuery syntax and do not run in DuckDB. The cloud statements are documented examples; projected output values are not presented as results from an executed cloud job.",
+        "notes": "Show actual GoogleSQL for the same six toy rides. This cloud example is optional. Replace YOUR_PROJECT with a BigQuery project ID. Create a demo dataset.\n\nLoad the six rows into demo.ml_rides with compatible BigQuery types. Use the setup and permissions instructions in the reading before running it. BigQuery may incur charges. CREATE MODEL with linear_reg learns a distance-to-fare line. input_label_cols identifies fare as the outcome, leaving distance as the feature.\n\nNO_SPLIT uses all rows supplied by the training SELECT. WHERE split = train keeps the two test rows out. NORMAL_EQUATION with l2_reg = 0 selects an unregularized least-squares fit. The next build passes explicit test rows to ML.EVALUATE and requests mean_absolute_error.\n\nThe final build gives ML.PREDICT the saved model and a new distance. The projected code uses the same YOUR_PROJECT placeholder and demo dataset names as the reading. Unlike DuckDB's ordinary one-row coefficient table, BigQuery saves a managed model object. These statements use BigQuery syntax and do not run in DuckDB.\n\nThe cloud statements are documented examples. Projected output values are not presented as results from an executed cloud job.",
         "sources": [
           "lectures/lecture-10/analytics.html#managed-ml",
           "https://docs.cloud.google.com/bigquery/docs/bqml-introduction",
@@ -2438,7 +2438,7 @@ const plans = [
         "title": "Performance becomes cost",
         "minutes": 1,
         "kind": "activity",
-        "notes": "Ask which changes can lower bytes-scanned billing and which may lower compute duration. BigQuery on-demand commonly prices scanned data; Snowflake-style compute billing is different, so avoid one pricing rule for every warehouse. No actual price quote is needed. In Lab 8’s optional storage experiments, students compare CSV/Parquet, projection and pruning; actual timings depend on machine, caching and data, so the deck must not promise the source’s universal 100× result.",
+        "notes": "Ask which changes can lower bytes-scanned billing and which may lower compute duration. BigQuery on-demand commonly prices scanned data. Snowflake-style compute billing is different, so avoid one pricing rule for every warehouse. No actual price quote is needed. In Lab 8’s optional storage experiments, students compare CSV/Parquet, projection and pruning. Actual timings depend on machine, caching and data, so the deck must not promise the source’s universal 100× result.",
         "id": "performance-becomes-cost",
         "steps": 3,
         "states": [
@@ -2454,7 +2454,7 @@ const plans = [
         "title": "Choose the shape",
         "minutes": 1,
         "kind": "recap",
-        "notes": "Ask how the plan saves work: skip unused columns and rows, compress values, and process rows in batches. Lab 8 uses a fixed sample of real 2024 NYC taxi trips to compare SQL and neural-network fare models and investigate test errors; project proposals are due Thursday October 29. Direct setup details to notes or the lab link. Next lecture asks what happens when the column stores an embedding and the query asks for similarity. Quizzes follow the revised schedule; this material also supports optional review. Add one final retrieval question: which stage learns coefficients and which reuses them? Expected: training aggregates learn them; inference applies the saved model without fitting again.",
+        "notes": "Ask how the plan saves work: skip unused columns and rows, compress values, and process rows in batches. Lab 8 uses a fixed sample of real 2024 NYC taxi trips to compare SQL and neural-network fare models and investigate test errors. Project proposals are due Thursday October 29. Direct setup details to notes or the lab link.\n\nNext lecture asks what happens when the column stores an embedding and the query asks for similarity. Quizzes follow the revised schedule. This material also supports optional review. Add one final retrieval question: which stage learns coefficients and which reuses them?\n\nExpected: training aggregates learn them. Inference applies the saved model without fitting again.",
         "id": "choose-the-shape",
         "steps": 3,
         "states": [
@@ -2476,7 +2476,7 @@ const plans = [
         "states": [
           "Resources for the core Lab 8 investigation"
         ],
-        "notes": "End with clickable resources for students who want to go further. Start with the official DuckDB article: its PyTorch taxi example uses a pretrained linear model through a Python function. Our core Lab 8 investigation builds on that integration with a small neural network. DuckDB selects training batches and later calls the trained model; PyTorch learns and applies the network weights in the same local Python process. The ML extension is a separate community project that exposes model training through SQL. The Duck’s Brain is a research paper about expressing neural-network calculations in SQL, with historical benchmarks using DuckDB 0.8.1. These are three different execution arrangements. The lab uses the existing taxi sample and no cloud service. The Lab 8 page supplies the current Problem 1 and Problem 2 deliverables. Ask which component updates the neural-network weights in the lab.",
+        "notes": "End with clickable resources for students who want to go further. Start with the official DuckDB article: its PyTorch taxi example uses a pretrained linear model through a Python function. Our core Lab 8 investigation builds on that integration with a small neural network. DuckDB selects training batches and later calls the trained model.\n\nPyTorch learns and applies the network weights in the same local Python process. The ML extension is a separate community project that exposes model training through SQL. The Duck’s Brain is a research paper about expressing neural-network calculations in SQL, with historical benchmarks using DuckDB 0.8.1. These are three different execution arrangements.\n\nThe lab uses the existing taxi sample and no cloud service. The Lab 8 page supplies the current Problem 1 and Problem 2 deliverables. Ask which component updates the neural-network weights in the lab.",
         "sources": [
           "https://duckdb.org/2023/07/07/python-udf#predicting-taxi-fare-costs-ibis--pyarrow-udf",
           "https://duckdb.org/community_extensions/extensions/ml",

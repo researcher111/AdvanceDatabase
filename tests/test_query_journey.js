@@ -85,7 +85,8 @@ for (const page of ['lectures/lecture-01/anatomy.html', 'lectures/lecture-04/ite
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(new Set(ids).size, ids.length, page + ': duplicate IDs');
   for (const [kind, extension] of [['href', 'css'], ['src', 'js']]) {
-    const asset = `../../labs/_shared/query-journey.${extension}?v=1`;
+    const version = extension === 'js' ? 'ste-20261015' : '1';
+    const asset = `../../labs/_shared/query-journey.${extension}?v=${version}`;
     assert.equal(html.split(`${kind}="${asset}"`).length - 1, 1, page + ': shared asset included once');
     assert(fs.existsSync(path.resolve(repo, path.dirname(page), asset.split('?')[0])));
     assert(html.indexOf(`lab-base.${extension}`) < html.indexOf(asset), 'Shared base loads first');

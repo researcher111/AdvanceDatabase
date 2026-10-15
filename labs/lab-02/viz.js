@@ -23,7 +23,7 @@
     },
     'page-table': {
       title: 'Page table (of a buffer pool)',
-      body: "<p>A lookup table that tells the buffer manager which frame holds a given block. A hash table usually finds the frame without checking every entry. This lab first searches the small pool one frame at a time; an optional extension replaces that search with a dictionary.</p>",
+      body: "<p>A lookup table that tells the buffer manager which frame holds a given block. A hash table usually finds the frame without checking every entry. This lab first searches the small pool one frame at a time. An optional extension replaces that search with a dictionary.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -114,13 +114,13 @@
     }
     misses += 1;
     frames[i] = { block: sel, value: disk[sel], pins: 1, dirty: false, last: tick };
-    msg.innerHTML = `pin(B${sel}) → <strong>MISS</strong>: ${note}; read B${sel} from disk.`;
+    msg.innerHTML = `pin(B${sel}) → <strong>MISS</strong>: ${note}. Read B${sel} from disk.`;
     render({ frame: i, kind: 'miss' });
   }
 
   function unpin() {
     const i = findFrame(sel);
-    if (i < 0) { msg.innerHTML = `unpin(B${sel}) → it isn't in the pool. (In your code this is a caller bug.)`; return; }
+    if (i < 0) { msg.innerHTML = `unpin(B${sel}) → The block is not in the pool. This call is an error in your code.`; return; }
     if (frames[i].pins === 0) {
       msg.innerHTML = `unpin(B${sel}) → <strong>ValueError</strong>: pins is already 0. Each pin must have exactly one matching unpin.`;
       render({ frame: i, kind: 'miss' });

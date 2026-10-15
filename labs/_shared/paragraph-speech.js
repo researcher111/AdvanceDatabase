@@ -216,7 +216,7 @@
     rateSelect.addEventListener('change', savePreferences);
     previewButton.addEventListener('click', () => {
       notice.hidden = true;
-      reader.read(previewButton, 'Let’s follow one batch of taxi rides. DuckDB selects the data, and the neural network predicts a fare for each ride.', pageLang);
+      reader.read(previewButton, 'Follow one batch of taxi rides. DuckDB selects the data, and the neural network predicts a fare for each ride.', pageLang);
     });
     window.speechSynthesis.addEventListener('voiceschanged', updateVoices);
     updateVoices();

@@ -17,7 +17,7 @@
       format: 'Tensor · 2 rows × 1 column', values: ['[3.0]', '[5.0]'],
       labels: ['Tensor row 1', 'Tensor row 2'],
       code: 'x = torch.tensor(\n    distances.to_numpy(), dtype=torch.float32\n).reshape(-1, 1)',
-      note: 'to_numpy() gives [3.0, 5.0]. torch.tensor() copies the values into PyTorch; reshape(-1, 1) makes [[3.0], [5.0]]. The two rides stay in order.'
+      note: 'to_numpy() gives [3.0, 5.0]. torch.tensor() copies the values into PyTorch. reshape(-1, 1) makes [[3.0], [5.0]]. The two rides stay in order.'
     },
     {
       title: 'Use the same distance scale as training', place: 1,
@@ -31,7 +31,7 @@
       format: 'Model output · not dollars yet', values: ['[0.2]', '[0.8]'],
       labels: ['Prediction for position 1', 'Prediction for position 2'],
       code: 'with torch.inference_mode():\n    # Inside the fares expression:\n    model((x - x_mean) / x_std)',
-      note: 'Assume the saved network returns 0.2 and 0.8 for this example. Both rides use the same model. Inference mode skips gradient tracking; no weights are updated.'
+      note: 'Assume the saved network returns 0.2 and 0.8 for this example. Both rides use the same model. Inference mode skips gradient tracking. The weights stay unchanged.'
     },
     {
       title: 'Turn the scaled predictions into dollars', place: 1,
@@ -45,14 +45,14 @@
       format: 'Arrow · 2 values', values: ['22.0', '28.0'],
       labels: ['Returned position 1', 'Returned position 2'],
       code: 'return pa.array(\n    fares.flatten().numpy().astype(np.float64)\n)',
-      note: 'flatten() changes [[22.0], [28.0]] to [22.0, 28.0]. NumPy provides 64-bit values for SQL DOUBLE; pa.array() packages them in Arrow. Return one value for each input, in the same order.'
+      note: 'flatten() changes [[22.0], [28.0]] to [22.0, 28.0]. NumPy provides 64-bit values for SQL DOUBLE. pa.array() packages them in Arrow. Return one value for each input, in the same order.'
     },
     {
       title: 'DuckDB gives each ride its prediction', place: 2,
       format: 'Returned Arrow column', values: ['22.0', '28.0'],
       labels: ['Position 1 → ride A', 'Position 2 → ride B'],
       code: 'predict_fare_nn(distance) AS predicted_fare',
-      note: 'DuckDB matches by position: the first returned fare goes to the first input ride. Python received only distances, so there is no ride ID in the returned column to repair a changed order.'
+      note: 'DuckDB matches by position: the first returned fare goes to the first input ride. Python received only distances. The returned column has no ride ID to restore the original order.'
     }
   ];
   const find = selector => root.querySelector(selector);

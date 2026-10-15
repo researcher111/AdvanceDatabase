@@ -19,11 +19,11 @@
     },
     'os-cache': {
       title: 'OS page cache',
-      body: "<p>The operating system keeps some file data in RAM. It can read from this cache without accessing the storage device, and it can hold new writes here before sending them to storage. A crash can lose writes that are still waiting in the cache. <code>measure_io.py</code> compares writes that can wait in memory with writes that call <code>fsync</code>.</p>",
+      body: "<p>The operating system keeps some file data in RAM. It can read this cached data without accessing the storage device. It can also hold new writes in RAM before sending them to storage. A crash can lose writes that are still waiting in the cache. <code>measure_io.py</code> compares buffered writes with writes that call <code>fsync</code>.</p>",
     },
     'durability': {
       title: 'Durability',
-      body: "<p>Durability means a database keeps committed changes after the failures it promises to handle. The promise depends on the system and its settings. Durability is the D in ACID. Closing and reopening a file checks whether the data can be read again during normal operation; it does not show what would happen in a crash. Lab 7 introduces logging and recovery.</p>",
+      body: "<p>Durability means a database keeps committed changes after the failures it promises to handle. The promise depends on the system and its settings. Durability is the D in ACID. Closing and reopening a file checks whether the data can be read again during normal operation. It does not show what would happen in a crash. Lab 7 introduces logging and recovery.</p>",
     },
     'hexdump': {
       title: 'hexdump',
@@ -148,7 +148,7 @@
     `<span class="fs-track"><span class="fs-bar ${r.cls}" style="width:${(100 * r.v / max).toFixed(1)}%"></span></span>` +
     `<span class="fs-val">${r.v.toLocaleString()} blk/s</span></div>`).join('') +
     `<div class="fs-row"><span></span><span style="font-family:var(--sans);font-size:12px;color:var(--ink-mute)">` +
-    `buffered writes: 15.1× as many blocks/s on this machine; your result may differ</span><span></span></div>`;
+    `buffered writes: 15.1× as many blocks/s on this machine. Your result may differ</span><span></span></div>`;
 })();
 
 /* ---------------- Widget: struct.pack_into ---------------- */
@@ -330,7 +330,7 @@
     s += `<rect class="fp-card" x="${PAGE.x}" y="228" width="${PAGE.w}" height="84" rx="6"/>` +
       t(PAGE.x + 12, 252, 'BlockId · identifies a block', 'fp-card-title') +
       t(PAGE.x + 12, 278, `BlockId('students.tbl', ${sel})`, 'fp-card-code') +
-      t(PAGE.x + 12, 298, 'filename + block number; holds no data', 'fp-page-sub');
+      t(PAGE.x + 12, 298, 'filename + block number. Holds no data', 'fp-page-sub');
 
     /* ---- trip counter ---- */
     s += `<rect class="fp-card" x="${PAGE.x}" y="330" width="${PAGE.w}" height="76" rx="6"/>` +
@@ -346,7 +346,7 @@
       g.addEventListener('click', () => { sel = +g.dataset.blk; glow = {}; freePlay(
         `blk = BlockId('students.tbl', ${sel})`,
         `Selected block ${sel} by creating <code>BlockId('students.tbl', ${sel})</code>. ` +
-        `This identifies the block; it does not read or write any bytes.`);
+        `This identifies the block. It does not read or write bytes.`);
         render(); }));
   }
 
@@ -401,7 +401,7 @@
     if (disk.length >= MAXBLK) {
       return { call: `blk = fm.append('students.tbl')`,
         note: `This widget stops at ${MAXBLK} blocks so the picture still fits. A real ` +
-          `<code>students.tbl</code> can contain many more blocks; the same offset calculation applies.` };
+          `<code>students.tbl</code> can contain many more blocks. The same offset calculation applies.` };
     }
     disk.push({ rows: '', zero: true });
     sel = disk.length - 1;
@@ -439,7 +439,7 @@
   /* ---- the guided story: six calls, replayed deterministically ----
      Back/Next rebuild the state from scratch each time, so free-play detours
      never corrupt the story: pressing Next simply returns to the script. */
-  const SETUP_NOTE = 'Two blocks on disk hold the six example rows from the lecture; the page in ' +
+  const SETUP_NOTE = 'Two blocks on disk hold the six example rows from the lecture. The page in ' +
     'memory is still all zeros. Press <strong>Next step</strong> to run the first call.';
   const STORY = [
     { run: () => { sel = 0; return doRead(); },

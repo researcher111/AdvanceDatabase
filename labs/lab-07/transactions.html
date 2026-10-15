@@ -70,18 +70,18 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
   <p>An unfinished transaction changed a value from 60 to 40, then from 40 to 10. Which old value should recovery restore first? Does a later COMMIT record for a different transaction mean this transaction finished?</p>
-  <details><summary>Check your explanation</summary><p>Restore 40 first, then 60. Completion is tracked by transaction ID; another transaction’s COMMIT does not complete this transaction. Preserve committed work while undoing unfinished work.</p></details>
+  <details><summary>Check your explanation</summary><p>Restore 40 first, then 60. Completion is tracked by transaction ID. Another transaction’s COMMIT does not complete this transaction. Preserve committed work while undoing unfinished work.</p></details>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>: say what you expect the next operation to change, run it, then compare the result with your prediction. Explain any difference before trying another change.</p>
+<p class="keep-in-present">Use <strong>predict, run, explain</strong>. Predict what the next operation will change. Run the operation. Compare the result with your prediction. Explain any difference before making another change.</p>
 
 <h2 id="try-it">Read completion records before earlier changes</h2>
 
-<p>Before coding, trace the decisions <code>recover()</code> must make. Read this sample log from newest to oldest and identify which transactions completed and which changes need undo.</p>
+<p>Before coding, trace the decisions <code>recover()</code> must make. Read this sample log from newest to oldest. Identify the completed transactions. Identify the changes that need undo.</p>
 
 <div class="viz" id="viz-judge">
   <div class="viz-title">Read the log like recovery does · newest first</div>
-  <p class="viz-description">Click each record from the <strong>bottom (newest) upward</strong> to reveal its recovery action. A COMMIT or ROLLBACK marks the transaction complete. A SET needs undo if no later completion record was found. Predict the action before clicking, then compare it with the explanation.</p>
+  <p class="viz-description">Click each record from the <strong>bottom (newest) upward</strong> to reveal its recovery action. A COMMIT or ROLLBACK marks the transaction complete. A SET needs undo if no later completion record was found. Predict the action before clicking. Compare your prediction with the explanation.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="jd-deal">Load a crash scenario</button>
     <button type="button" class="btn" id="jd-auto" hidden>Let recovery finish</button>
@@ -100,7 +100,7 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
     <a class="chat-dl-btn" href="starter/catalog.py" download>catalog.py (ref)</a>
     <a class="chat-dl-btn" href="starter/test_tx.py" download>test_tx.py</a>
   </div>
-  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files, then open this lab’s starter folder:</p>
+  <p class="viz-caption clone-label">Open a terminal in the top-level <code>AdvanceDatabase</code> folder you cloned in Lab 1. Pull the latest files. Then open this lab’s starter folder:</p>
 <pre class="clone-cmd"><span class="cl-line">git pull</span>
 <span class="cl-line">cd labs/lab-07/starter</span></pre>
   <p class="viz-caption">Reading backward encounters a transaction’s completion record before its earlier SET records. Keep a set of completed transaction IDs and skip their changes. Restore the old value for each SET belonging to an unfinished transaction.</p>
@@ -111,7 +111,7 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
 
 <p class="keep-in-present">Before changing an account balance, write down its old value. That is what the undo log does: it keeps the value recovery will need if the transaction fails. The log record must reach storage before the changed data page. The lab’s FORCE/STEAL rules below specify when to write the pages and completion records.</p>
 
-<p class="keep-in-present">The <span class="gloss" data-gloss="undo-log">write-ahead rule</span> is precise: recovery information must reach durable storage before the data it protects. This lab syncs each log append by default, then uses FORCE at commit: flush dirty data pages before syncing COMMIT. JSON lines make the log readable; production formats add checksums and recovery metadata.</p>
+<p class="keep-in-present">The <span class="gloss" data-gloss="undo-log">write-ahead rule</span> is precise: recovery information must reach durable storage before the data it protects. This lab syncs each log append by default, then uses FORCE at commit: flush dirty data pages before syncing COMMIT. JSON lines make the log readable. Production formats add checksums and recovery metadata.</p>
 
 <p class="key-fact keep-in-present"><strong>Commit completes after the required data writes and the COMMIT log record are durable.</strong> This lab performs multiple syncs per transaction.</p>
 
@@ -125,7 +125,7 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
   <p><strong>Worked result:</strong> Reverse undo restores 10 to 40, then 40 to 60. Flush 60 before syncing ROLLBACK. The next recovery returns <code>[]</code>.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
 </div>
-<p><strong>Implementation checkpoints:</strong> restore via the buffer page and call <code>set_modified()</code>. Do not call the transaction setters during undo: they create new SET records. In <code>rollback()</code>, stop at your own START; in startup <code>recover()</code>, continue across all transactions. Release every pin you acquired.</p>
+<p><strong>Implementation checkpoints:</strong> restore via the buffer page and call <code>set_modified()</code>. Do not call the transaction setters during undo: they create new SET records. In <code>rollback()</code>, stop at your own START. In startup <code>recover()</code>, continue across all transactions. Release every pin you acquired.</p>
 
 <!-- ============================================================ -->
 <h2 id="the-api">Implement five transaction operations in the required order</h2>
@@ -133,10 +133,10 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
 <p>The provided <code>LogManager</code> appends records and reads them backward. The <span class="gloss" data-gloss="strict-2pl">LockTable</span> controls access to blocks and holds locks until transaction completion. Read both before implementing the five operations below.</p>
 
 <div class="code-annotated" data-lang="python">
-  <div class="code-step" data-step="si" data-step-name="set_int / set_string" data-explain="Acquire the block’s exclusive lock, read the old value from its buffered page, append and sync that value in a SET record, then write the new value and mark the page modified. The test checks the logged old value and address.">set_int:   xlock · sync OLD value to log · write new · set_modified</div>
-  <div class="code-step" data-step="cm" data-step-name="commit" data-explain="Call bm.flush_all() to make changed data pages durable, append and sync COMMIT, release the locks, and unpin the transaction’s buffers. Reporting completion before the required flushes would break durability.">commit:    flush pages · fsync COMMIT · release · unpin</div>
-  <div class="code-step" data-step="rb" data-step-name="rollback" data-explain="Walk lm.records_backwards(); for records of THIS tx: SET → restore the old value through the buffer (pin if needed); START → stop. Then flush the restored pages, append and sync ROLLBACK, release locks, and unpin. Reverse order matters when the same slot was changed more than once.">rollback:  scan backward · restore old values · flush · sync ROLLBACK · release</div>
-  <div class="code-step" data-step="rc" data-step-name="recover" data-explain="One backward pass over everything: COMMIT/ROLLBACK seen → that tx is finished; SET from an UNfinished tx → restore its old value. Then flush restored pages before appending and syncing ROLLBACK records. A later recovery can safely skip the completed repairs.">recover:   identify completed transactions · undo the others · flush · sync ROLLBACK</div>
+  <div class="code-step" data-step="si" data-step-name="set_int / set_string" data-explain="Acquire the block’s exclusive lock. Read the old value from its buffered page. Append that value in a SET record. Sync the log record. Write the new value. Mark the page modified. The test checks the logged old value and address.">set_int:   xlock · sync OLD value to log · write new · set_modified</div>
+  <div class="code-step" data-step="cm" data-step-name="commit" data-explain="Call bm.flush_all() to make changed data pages durable. Append COMMIT. Sync the log record. Release the locks. Unpin the transaction’s buffers. Reporting completion before the required flushes would break durability.">commit:    flush pages · fsync COMMIT · release · unpin</div>
+  <div class="code-step" data-step="rb" data-step-name="rollback" data-explain="Walk lm.records_backwards(). Process only this transaction’s records. For SET, restore the old value through the buffer. Pin the block if needed. Stop at this transaction’s START. Flush the restored pages. Append ROLLBACK. Sync the log record. Release the locks. Unpin the buffers. Reverse order matters when the same slot was changed more than once.">rollback:  scan backward · restore old values · flush · sync ROLLBACK · release</div>
+  <div class="code-step" data-step="rc" data-step-name="recover" data-explain="One backward pass over everything: COMMIT/ROLLBACK seen → that tx is finished. SET from an UNfinished tx → restore its old value. Then flush restored pages before appending and syncing ROLLBACK records. A later recovery can safely skip the completed repairs.">recover:   identify completed transactions · undo the others · flush · sync ROLLBACK</div>
   <div class="code-explain-panel">Hover or tap a line to see the required read, write, and flush order.</div>
 </div>
 
@@ -157,10 +157,10 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
 
 <div class="callout note">
   <span class="label">Common implementation mistakes</span>
-  <p>Read the old value from the <em>buffer's page</em>, not from disk; the current value may
+  <p>Read the old value from the <em>buffer's page</em>, not from disk. The current value may
   never have been flushed. In <code>rollback</code>, stop at <em>your own</em> START record,
   not the first START you meet (other transactions' records interleave). And in
-  <code>recover</code>, the ROLLBACK records must be written <em>after</em> the undo flush; otherwise a later recovery could skip a repair that never became durable.</p>
+  <code>recover</code>, the ROLLBACK records must be written <em>after</em> the undo flush. Otherwise a later recovery could skip a repair that never became durable.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -223,11 +223,8 @@ after recover():        A=$60  B=$90   <- tx[2] undone; the committed transfer s
 
 CONSISTENT. Your database survives kill -9.</code></pre>
 
-<p class="keep-in-present"><strong>Change the experiment.</strong> Delete the <code>bm.flush_all()</code> line inside
-the <code>CRASH</code> string in <code>crash_demo.py</code>, the one that steals tx2's dirty page
-to disk, and rerun. Report the "reopening the wreckage" line and the "after recover()" line, then
-explain why <code>recover()</code> still lists tx2 as undone even though the disk already held the
-right balances; say what your undo wrote and why it was harmless.</p>
+<p class="keep-in-present"><strong>Change the experiment.</strong> Find the <code>bm.flush_all()</code> line inside the <code>CRASH</code> string in <code>crash_demo.py</code>. This line writes tx2’s dirty page to disk. Delete that line. Run the script again.</p>
+<p class="keep-in-present">Report the "reopening the wreckage" line and the "after recover()" line. Explain why <code>recover()</code> still lists tx2 as undone when the disk already held the correct balances. State what undo wrote. Explain why that write was harmless.</p>
 
 <p class="keep-in-present">The log lets recovery restore A to $60 while preserving the committed transfer. You have now built the core database components. Integrating the SQL front end, index, and transaction API is an optional next step.</p>
 
@@ -236,12 +233,12 @@ right balances; say what your undo wrote and why it was harmless.</p>
 <p>Your lab uses physical undo. PostgreSQL instead replays WAL and uses transaction visibility to keep aborted row versions out of query results. Both protect a transaction’s all-or-nothing outcome, but their recovery algorithms differ. A retryable pipeline also needs <span class="gloss" data-gloss="idempotent-recall">idempotency</span>: an earlier attempt may have committed before the client lost its connection. <a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL’s WAL introduction</a> explains its redo design.</p>
 
 <table>
-  <thead><tr><th>Where you'll meet it</th><th>Required behavior</th></tr></thead>
+  <thead><tr><th>Where you will meet it</th><th>Required behavior</th></tr></thead>
   <tbody>
     <tr><td>A pipeline dies halfway through writing its output</td><td>in-place file writes may leave partial output. A database transaction makes the output atomic: either the commit succeeds or unfinished changes are excluded after recovery</td></tr>
     <tr><td>An Airflow task is retried after a crash</td><td>requires idempotency or deduplication if the earlier attempt may already have committed</td></tr>
-    <tr><td>A loop commits one row at a time</td><td>many small transactions incur repeated commit overhead. Bulk loading with <code>COPY</code> or grouping inserts into a transaction can amortize that cost; logging and data writes are still required</td></tr>
-    <tr><td>Two notebooks write the same table</td><td>uncoordinated file writes can overwrite each other. In microdb, conflicting exclusive-lock requests raise <code>LockAbortError</code>; production engines may wait or abort</td></tr>
+    <tr><td>A loop commits one row at a time</td><td>many small transactions incur repeated commit overhead. Bulk loading with <code>COPY</code> or grouping inserts into a transaction can amortize that cost. Logging and data writes are still required</td></tr>
+    <tr><td>Two notebooks write the same table</td><td>uncoordinated file writes can overwrite each other. In microdb, conflicting exclusive-lock requests raise <code>LockAbortError</code>. Production engines may wait or abort</td></tr>
   </tbody>
 </table>
 
@@ -266,18 +263,18 @@ right balances; say what your undo wrote and why it was harmless.</p>
 <ul>
   <li>☐ <code>transaction.py</code>: all nine local tests pass (<code>9/9</code>).</li>
 </ul>
-<p>Keep your implementation and measurements for your own practice; no submission is required.</p>
+<p>Keep your implementation and measurements for your own practice. No submission is required.</p>
 
 <h3>Discussion prompts (not graded)</h3>
-<p>Use these questions to explain the measurements and recovery behavior. They are not submitted or graded; bring your results and reasoning to class for discussion.</p>
+<p>Use these questions to explain the measurements and recovery behavior. They are not submitted or graded. Bring your results and reasoning to class for discussion.</p>
 <ul>
   <li>The crash demo's three balance lines plus its two
-  questions (which flushes made the commit durable; why flushing the uncommitted page was recoverable).</li>
+  questions (which flushes made the commit durable. Why flushing the uncommitted page was recoverable).</li>
   <li>Reflection (3–5 sentences): (1)&nbsp;Why does <code>rollback</code> record that undo completed even though the transaction did not commit? (2)&nbsp;microdb pays a full <code>flush_all</code> per
-  commit; name what ARIES changes so it doesn't, and what additional recovery work it requires.</li>
+  commit. Name what ARIES changes so it does not, and what additional recovery work it requires.</li>
 </ul>
 
-<h3>What's provided vs what you write</h3>
+<h3>Provided code and required work</h3>
 <table>
   <thead><tr><th>File</th><th>Provided</th><th>You write</th></tr></thead>
   <tbody>
@@ -305,18 +302,18 @@ right balances; say what your undo wrote and why it was harmless.</p>
 
 <h3 class="keep-in-present">Why does the RECOVER test fail before recovery begins?</h3>
 <p class="keep-in-present">The test first asserts A=$0 <em>is</em> on disk pre-recovery,
-proving the steal happened. If that assert fails, your <code>set_int</code> isn't calling
+proving the steal happened. If that assert fails, your <code>set_int</code> is not calling
 <code>set_modified()</code>, so the "dirty" page was never really dirty and flush_all wrote
 nothing. The bug is in the write path, not the recovery.</p>
 
 <h3 class="keep-in-present">Why JSON for log records? Real WALs are binary.</h3>
-<p class="keep-in-present">JSON keeps log records easy to inspect. Use <code>cat microdb.log</code> to check transaction IDs, record locations, old values, and completion records while debugging. This format favors readability for the lab; production formats use additional metadata and integrity checks. ARIES records also support redo and restartable undo.</p>
+<p class="keep-in-present">JSON keeps log records easy to inspect. Use <code>cat microdb.log</code> to check transaction IDs, record locations, old values, and completion records while debugging. This format favors readability for the lab. Production formats use additional metadata and integrity checks. ARIES records also support redo and restartable undo.</p>
 
 <h3 class="keep-in-present">Could two transactions deadlock in microdb?</h3>
 <p class="keep-in-present">No lock-wait deadlock can form because the lab raises an error immediately on a conflicting request. The caller must roll back that transaction. This simplifies a single-threaded implementation but can abort work that a waiting system could eventually complete. Lecture 8 explains deadlock handling in engines that wait.</p>
 
 <h3 class="keep-in-present">Which database components have I implemented?</h3>
-<p class="keep-in-present">You have implemented or used file storage, buffering, records, a catalog, query operators, SQL parsing and planning, an index, and transaction recovery. These are core database components. Some integrations remain optional, and the lab omits many production features, but you can now trace how a database operation reaches storage and survives an interrupted transaction.</p>
+<p class="keep-in-present">You have implemented or used file storage, buffering, records, and a catalog. You have also used query operators, SQL parsing and planning, an index, and transaction recovery. These are core database components. Some integrations remain optional, and the lab omits many production features. You can now trace how a database operation reaches storage and how recovery handles an interrupted transaction.</p>
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -327,8 +324,8 @@ nothing. The bug is in the write path, not the recovery.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=2"></script>
-<script src="../_shared/teaching-traces.js?v=4"></script>
+<script src="viz.js?v=ste-20261015"></script>
+<script src="../_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

@@ -19,7 +19,7 @@
     "lecture-01-scene-02": {
       "idea": "SQL becomes a plan that operators can execute.",
       "question": "Which part still needs to understand the spelling of the SQL statement?",
-      "answer": "The front end reads SQL; the operators execute the resulting plan.",
+      "answer": "The front end reads SQL. The operators execute the resulting plan.",
       "builds": [
         "Read the SQL as a sequence of characters.",
         "Group characters into tokens. Distinguish token recognition from parsing the grammar.",
@@ -86,7 +86,7 @@
     "lecture-01-scene-08": {
       "idea": "SQL specifies the result while the planner chooses how to find it.",
       "question": "Why might the planner choose an index rather than a full scan?",
-      "answer": "For a selective lookup, the example index path makes far fewer storage trips; broad queries may still favor a scan.",
+      "answer": "For a selective lookup, the example index path needs fewer storage reads. A scan can be faster for broad queries.",
       "builds": [
         "Establish that both paths must produce the same result.",
         "Count the scan's 500 modeled block reads.",
@@ -97,7 +97,7 @@
     "lecture-01-scene-09": {
       "idea": "The engine turns SQL into requests for rows, pages, and file blocks.",
       "question": "Which layers understand field names, and which work with pages or offsets?",
-      "answer": "Operators and records interpret rows and fields; buffers and files handle pages and blocks.",
+      "answer": "The operator and record layers interpret rows and fields. The buffer and file layers handle pages and blocks.",
       "builds": [
         "Follow SQL into an executable plan at the front end.",
         "Show operators requesting and processing rows.",
@@ -141,7 +141,7 @@
     "lecture-01-scene-13": {
       "idea": "The labs build the engine upward through stable interfaces.",
       "question": "Which lab supplies files, and which first lets a typed SQL query run?",
-      "answer": "Lab 1 supplies the file manager; Lab 5 adds the SQL front end.",
+      "answer": "Lab 1 supplies the file manager. Lab 5 adds the SQL front end.",
       "builds": [
         "Connect block transfers to the file-manager lab.",
         "Add the buffer pool, records, and catalog above files.",
@@ -152,7 +152,7 @@
     "lecture-01-scene-14": {
       "idea": "An address locates bytes, and an encoding determines how to interpret them.",
       "question": "Can the same four bytes represent different integers?",
-      "answer": "Yes. Changing the byte order changes their interpretation; microdb uses signed little-endian 32-bit integers.",
+      "answer": "Yes. Changing the byte order changes their interpretation. microdb uses signed little-endian 32-bit integers.",
       "builds": [
         "Distinguish a block number from a byte offset within the block.",
         "Locate the four bytes that encode the integer.",
@@ -177,7 +177,7 @@
       "answer": "Parsing and planning still happen, and the engine still scans and filters rows.",
       "builds": [
         "Have students reconstruct the engine layers from the diagram.",
-        "Ask three students how SQL becomes a plan, how fields are found in a page, and how a file block reaches memory.",
+        "Ask one student how SQL becomes a plan. Ask another how the engine locates fields in a page. Ask a third how a file block reaches memory.",
         "Return to the warm query and identify the work that remains."
       ]
     }
@@ -217,7 +217,7 @@
     "lecture-02-scene-04": {
       "idea": "A repeated scan can miss every time if each page is evicted before its next use.",
       "question": "Will the second request for block 0 hit in this pool?",
-      "answer": "No. It has already been evicted; this preset has 16 accesses and zero hits.",
+      "answer": "No. It has already been evicted. This preset has 16 accesses and zero hits.",
       "builds": [
         "Load the first three blocks and name the pages now in memory.",
         "Load the next blocks and identify which page each one replaces.",
@@ -233,7 +233,7 @@
         "Predict the hit rate and count the compulsory first misses.",
         "Follow the repeated requests for blocks 0 and 1 before either is evicted.",
         "Request a new block and check whether blocks 0 and 1 remain in memory.",
-        "Count 11 hits and five misses; compare the access order with the previous scan."
+        "Count 11 hits and five misses. Compare this access order with the previous scan."
       ]
     },
     "lecture-02-scene-06": {
@@ -250,7 +250,7 @@
     "lecture-02-scene-07": {
       "idea": "LRU recency must update on hits as well as misses.",
       "question": "Which page should D replace after A is touched again?",
-      "answer": "B. A's successful pin refreshed its recency; stamping only on misses would choose incorrectly.",
+      "answer": "B. A's successful pin refreshed its recency. Stamping only on misses would choose incorrectly.",
       "builds": [
         "Fill the frames with A, B, and C.",
         "Touch A again and update its last-used tick.",
@@ -265,14 +265,14 @@
       "builds": [
         "Mark A as pinned and remove it from the eligible victims.",
         "Load E by replacing C.",
-        "Load B by replacing D; explain how pinning A changed the choice.",
+        "Load B by replacing D. Explain how pinning A changed the choice.",
         "Pin every frame and connect the failure to forgotten unpin calls."
       ]
     },
     "lecture-02-scene-09": {
       "idea": "A page lookup map can replace a linear frame search without changing the pin interface.",
       "question": "Why does a frame scan become expensive as the pool grows?",
-      "answer": "Each lookup examines more frames; a hash mapping provides expected constant-time lookup.",
+      "answer": "Each lookup examines more frames. A hash mapping provides expected constant-time lookup.",
       "builds": [
         "Ask how to locate an already resident block.",
         "Count the work of scanning the frame list.",
@@ -281,7 +281,7 @@
       ]
     },
     "lecture-02-scene-10": {
-      "idea": "Unpin releases a hold; dirty data needs a separate write before frame reuse.",
+      "idea": "Unpin releases a hold. Dirty data needs a separate write before frame reuse.",
       "question": "Does unpin mean save the page?",
       "answer": "No. A dirty page must be flushed before replacement or by an explicit flush policy.",
       "builds": [
@@ -306,7 +306,7 @@
     "lecture-02-scene-12": {
       "idea": "Replacement policy should account for how a workload reuses pages.",
       "question": "Should a one-pass scan get the same protection as frequently reused pages?",
-      "answer": "Often it should not; scan-resistant policies can protect the hot working set.",
+      "answer": "Often it should not. Policies that resist scans can retain frequently used pages.",
       "builds": [
         "Identify the pages repeatedly used by short transactions.",
         "Run a large scan and show how it displaces hot pages.",
@@ -328,7 +328,7 @@
     "lecture-02-scene-14": {
       "idea": "One more frame can let every page in a repeated scan stay in memory until its next use.",
       "question": "What changes when the pool grows from 49 to 50 frames for 50 blocks?",
-      "answer": "Exact LRU misses on the cyclic scan at 49 frames; at 50, later passes hit after the initial fill.",
+      "answer": "Exact LRU misses on the cyclic scan at 49 frames. At 50, later passes hit after the initial fill.",
       "builds": [
         "Set the pool to 49 frames for a 50-block working set.",
         "Give pairs a minute to predict the second pass.",
@@ -350,7 +350,7 @@
     "lecture-02-scene-16": {
       "idea": "Cache performance depends on reuse, while pins protect work that is still active.",
       "question": "Why can the same pool give zero hits on one workload and about 69% on another?",
-      "answer": "In one request order, pages are evicted before reuse; in the other, frequently requested pages remain in memory.",
+      "answer": "In one request order, pages are evicted before reuse. In the other, frequently requested pages remain in memory.",
       "builds": [
         "Keep the number of frames fixed as the comparison begins.",
         "Contrast the cyclic scan with the repeatedly accessed hot blocks.",
@@ -416,7 +416,7 @@
     "lecture-03-scene-06": {
       "idea": "String capacity is measured in encoded bytes, which may differ from character count.",
       "question": "Do eight visible characters always fit in eight bytes?",
-      "answer": "No. UTF-8 characters can use multiple bytes; oversized writes must fail before changing the page.",
+      "answer": "No. UTF-8 characters can use multiple bytes. Oversized writes must fail before changing the page.",
       "builds": [
         "Mark the eight-byte storage reservation.",
         "Fit an ASCII example and count its encoded bytes.",
@@ -427,7 +427,7 @@
     "lecture-03-scene-07": {
       "idea": "Microdb deletion frees a slot by clearing its in-use flag.",
       "question": "Does deletion erase all the old field bytes?",
-      "answer": "No. It clears the four-byte flag; a later insertion must populate every field.",
+      "answer": "No. It clears the four-byte flag. A later insertion must populate every field.",
       "builds": [
         "Locate the live slot and its in-use flag.",
         "Set the flag to zero.",
@@ -453,7 +453,7 @@
       "builds": [
         "Treat zero as a valid stored number.",
         "Treat an empty string as a valid string value.",
-        "Show that a missing value differs from zero and empty text; microdb currently has no NULL.",
+        "Show that a missing value differs from zero and empty text. microdb currently has no NULL.",
         "Use the conceptual bitmap to distinguish absence from stored values."
       ]
     },
@@ -471,7 +471,7 @@
     "lecture-03-scene-11": {
       "idea": "An out-of-line value need only be fetched when the query requires it.",
       "question": "Does selecting name necessarily fetch the student's essay?",
-      "answer": "In this example it does not; selecting the essay follows the reference to its chunks.",
+      "answer": "In this example it does not. Selecting the essay follows the reference to its chunks.",
       "builds": [
         "Locate the essay's separate storage and its reference in the row.",
         "Read name and identify the pages used.",
@@ -577,7 +577,7 @@
         "Return ada after examining one row.",
         "Examine ben and cyd before returning cyd.",
         "Examine dee and eli before returning eli.",
-        "Examine fay and return false; total six examined and three returned."
+        "Examine fay. Return false. The scan examines six rows and returns three."
       ]
     },
     "lecture-04-scene-05": {
@@ -639,7 +639,7 @@
     "lecture-04-scene-10": {
       "idea": "A filter can return fewer rows while ProductScan still creates every candidate pair.",
       "question": "What changes if the predicate rejects every pair?",
-      "answer": "Only surviving results drop to zero; the product still enumerates all 18 candidate pairs.",
+      "answer": "Only surviving results drop to zero. The product still enumerates all 18 candidate pairs.",
       "builds": [
         "Predict left deliveries, right deliveries, candidates, and surviving pairs.",
         "Enumerate six students times three majors.",
@@ -661,7 +661,7 @@
     "lecture-04-scene-12": {
       "idea": "Closing the root must release resources throughout both branches of a product.",
       "question": "How many pins remain if only one of the two active scan branches closes?",
-      "answer": "One pin remains; Product must close both children.",
+      "answer": "One pin remains. Product must close both children.",
       "builds": [
         "Identify the page pin held by each TableScan.",
         "Send close to the root.",
@@ -695,18 +695,18 @@
     "lecture-04-scene-15": {
       "idea": "A join compares related fields in a combined row before projecting the requested output.",
       "question": "Does the name mid2 mean the value must be 2?",
-      "answer": "No. It distinguishes the majors field from students.mid; ada's matching pair has value 1 in both.",
+      "answer": "No. It distinguishes the majors field from students.mid. Ada's matching pair has value 1 in both.",
       "builds": [
         "Identify students.mid and majors.mid2 as major IDs.",
         "Combine ada and ds so both fields are accessible.",
-        "Compare 1 with 1 and keep the pair; contrast stat's value of 2.",
+        "Compare 1 with 1 and keep the pair. Contrast stat's value of 2.",
         "Project the result (ada, ds) after the required comparisons."
       ]
     },
     "lecture-04-scene-16": {
       "idea": "Trace next() calls, count candidate rows, and follow close() to explain a plan’s work.",
       "question": "What can filter pushdown improve while preserving the query's answer?",
-      "answer": "It can reduce input sizes and candidate work; close must still release every descendant's resources.",
+      "answer": "It can reduce input sizes and candidate work. close must still release every descendant's resources.",
       "builds": [
         "Recall the scan interface shared by every operator.",
         "Trace next() calls down to TableScan, then show the caller reading the accepted row’s fields.",
@@ -747,7 +747,7 @@
     "four-storage-choices": {
       "idea": "Compare lookup, range, and update work when choosing a heap, sorted file, hash table, or B+ tree.",
       "question": "Which structure directly supports sorted ranges while accommodating updates?",
-      "answer": "A B+ tree balances ordered access with updates; hashing does not preserve range order.",
+      "answer": "A B+ tree balances ordered access with updates. Hashing does not preserve range order.",
       "builds": [
         "Compare equality lookup across the four structures.",
         "Discuss the movement needed to insert into a sorted file.",
@@ -755,9 +755,9 @@
       ]
     },
     "first-four-keys": {
-      "idea": "ORDER = 4 permits four keys in a node; only the fifth creates overflow.",
+      "idea": "ORDER = 4 permits four keys in a node. Only the fifth creates overflow.",
       "question": "Is a full four-key leaf already invalid?",
-      "answer": "No. Four keys are legal; a fifth key requires a split.",
+      "answer": "No. Four keys are legal. A fifth key requires a split.",
       "builds": [
         "Place 39 in the root, which is also the only leaf.",
         "Insert 31 in sorted order.",
@@ -768,7 +768,7 @@
     "b-tree": {
       "idea": "Internal nodes route searches, while linked equal-depth leaves hold the actual index entries.",
       "question": "Where are the actual entries in this secondary-index tree?",
-      "answer": "In the leaves, together with RIDs; internal keys route to children.",
+      "answer": "Leaves contain the keys and their RIDs. Internal keys select child nodes.",
       "builds": [
         "Separate internal routing keys from leaf entries.",
         "Follow the leaf links and check that every leaf has the same depth.",
@@ -788,7 +788,7 @@
     "a-root-splits": {
       "idea": "Splitting the root adds one level to every leaf path.",
       "question": "How does an internal split differ from copying a leaf separator?",
-      "answer": "The internal routing separator moves upward; its actual data entry still remains in a leaf.",
+      "answer": "The internal routing separator moves upward. Its actual data entry still remains in a leaf.",
       "builds": [
         "Show the full but legal internal root.",
         "Add the fifth separator and identify the overflow.",
@@ -818,7 +818,7 @@
     "the-write-bill": {
       "idea": "Inserting, updating, or deleting a row can also require changes to its indexes.",
       "question": "What changes when a table has indexes on UID, name, and GPA?",
-      "answer": "Inserts maintain all three; updates affect relevant entries, and deletes must remove stale entries.",
+      "answer": "Inserts maintain all three. Updates affect relevant entries, and deletes must remove stale entries.",
       "builds": [
         "Trace an insertion into the heap and one index.",
         "Add a second index and identify its maintenance work.",
@@ -828,7 +828,7 @@
     "when-scanning-wins": {
       "idea": "An index can lose its advantage when the query needs most of the heap.",
       "question": "Should a query matching 99% of rows automatically use the index?",
-      "answer": "No. A sequential scan may avoid many scattered heap visits; caching and covering can change the choice.",
+      "answer": "No. A sequential scan may avoid many scattered heap visits. Caching and covering can change the choice.",
       "builds": [
         "Follow a selective lookup to a few heap rows.",
         "Increase matches and count the growing heap visits.",
@@ -838,7 +838,7 @@
     "build-and-test": {
       "idea": "Range and structural checks catch different B+ tree mistakes.",
       "question": "Which test catches a separator accidentally removed from the leaf?",
-      "answer": "A range query that includes that key; occupancy and height checks catch separate structural problems.",
+      "answer": "A range query that includes that key. Occupancy and height checks catch separate structural problems.",
       "builds": [
         "Inspect the tree with a missing leaf entry.",
         "Walk a range through the gap and identify the missing key.",
@@ -848,7 +848,7 @@
     "exit-trace": {
       "idea": "After an insertion or split, searches and range walks must still reach every key and its complete RID list.",
       "question": "What changes for every leaf when the root splits?",
-      "answer": "Every leaf gains one level of depth; equal depth is preserved.",
+      "answer": "Every leaf gains one level of depth. All leaves remain at the same depth.",
       "builds": [
         "Start at the full leaf and locate the insertion position.",
         "Explain the split and any growth toward the root.",
@@ -860,7 +860,7 @@
     "money-disappears": {
       "idea": "Individually valid writes can leave a transfer only partly applied after a crash.",
       "question": "Where did the missing fifty go in this picture?",
-      "answer": "Only the debit reached durable storage; A lost $50 while B received nothing.",
+      "answer": "Only the debit reached durable storage. A lost $50 while B received nothing.",
       "builds": [
         "Establish the original total of 150.",
         "Apply only the debit and distinguish memory from durable storage.",
@@ -949,9 +949,9 @@
       ]
     },
     "two-policy-decisions": {
-      "idea": "Eviction policy controls whether uncommitted pages may reach disk; commit policy controls whether changed pages must already be there.",
+      "idea": "Eviction policy controls whether uncommitted pages may reach disk. Commit policy controls whether changed pages must already be there.",
       "question": "Which policy creates a need for undo, and which creates a need for redo?",
-      "answer": "STEAL permits uncommitted data on disk; NO-FORCE permits committed changes whose data pages are not durable.",
+      "answer": "STEAL permits uncommitted data on disk. NO-FORCE permits committed changes whose data pages are not durable.",
       "builds": [
         "Ask two separate questions: may an uncommitted page be written, and must changed pages be saved before commit?",
         "With STEAL, an uncommitted page can reach disk. Explain why recovery may need to undo it.",
@@ -992,7 +992,7 @@
     "place-the-crash": {
       "idea": "The crash location determines what recovery must preserve or restore.",
       "question": "Does a missing commit reply prove the transaction failed?",
-      "answer": "No. The durable commit may already exist; the application needs a safe way to resolve or retry the outcome.",
+      "answer": "No. The durable commit may already exist. The application needs a safe way to resolve or retry the outcome.",
       "builds": [
         "Predict the outcome of a crash before durable logging.",
         "Crash after the log is durable and identify the available repair information.",
@@ -1015,7 +1015,7 @@
     "concurrency-mvcc": {
       "idea": "Correct individual transactions can interfere when they share mutable state.",
       "question": "What balance should two deposits of ten produce from 100?",
-      "answer": "120 under a serial execution; an unsafe interleaving can instead leave 110.",
+      "answer": "120 under a serial execution. An unsafe interleaving can instead leave 110.",
       "builds": [
         "Introduce the two clients and their shared account.",
         "Predict the intended result, then reveal the possibility of a lost update."
@@ -1034,7 +1034,7 @@
     "schedule-the-failure": {
       "idea": "A lost update occurs when two transactions overwrite from the same stale starting value.",
       "question": "Can WAL infer and restore the missing intended deposit?",
-      "answer": "No. Recovery preserves committed actions; it cannot infer application intent from an incorrect schedule.",
+      "answer": "No. Recovery preserves committed actions. It cannot infer application intent from an incorrect schedule.",
       "builds": [
         "Have both clients read 100.",
         "Let each compute its own value of 110.",
@@ -1055,7 +1055,7 @@
     "anomaly-gallery": {
       "idea": "Compare reading an uncommitted value, seeing a row change, and seeing a query return a different set of rows.",
       "question": "How does a phantom differ from a non-repeatable read?",
-      "answer": "A phantom changes which rows satisfy a predicate; a non-repeatable read changes an existing row's observed value.",
+      "answer": "A phantom changes which rows satisfy a predicate. A non-repeatable read changes an existing row's observed value.",
       "builds": [
         "Follow the read of an uncommitted value, then introduce the term dirty read.",
         "Compare the two reads of the same row and point to the changed value.",
@@ -1063,7 +1063,7 @@
       ]
     },
     "shared-and-exclusive": {
-      "idea": "Shared locks permit compatible readers; exclusive locks conflict with other holders.",
+      "idea": "Shared locks permit compatible readers. Exclusive locks conflict with other holders.",
       "question": "Can two shared-lock holders both upgrade immediately to exclusive access?",
       "answer": "No. Each upgrade conflicts with the other shared holder.",
       "builds": [
@@ -1094,7 +1094,7 @@
     "deadlock": {
       "idea": "A deadlock cycle cannot resolve merely by waiting longer.",
       "question": "What can break the cycle safely?",
-      "answer": "Abort a participant and retry its transaction; a consistent acquisition order can prevent this two-resource cycle.",
+      "answer": "Abort a participant and retry its transaction. A consistent acquisition order can prevent this two-resource cycle.",
       "builds": [
         "Give each transaction one resource.",
         "Have each request the other's resource and trace the cycle.",
@@ -1125,7 +1125,7 @@
     "versions-instead-of-waiting": {
       "idea": "MVCC lets readers and writers use different versions of a row.",
       "question": "What extra storage and bookkeeping does MVCC need to let readers use older versions?",
-      "answer": "Version storage, visibility bookkeeping, and cleanup; writers can still conflict.",
+      "answer": "The system must store versions, track visibility, and remove obsolete versions. Writers can still conflict.",
       "builds": [
         "Identify the original version.",
         "Create another version for the update.",
@@ -1165,7 +1165,7 @@
     "three-mechanisms-three-jobs": {
       "idea": "Pins, latches, and transaction locks protect different things.",
       "question": "Does pinning a page stop another transaction from changing its rows?",
-      "answer": "No. A pin prevents eviction; transaction access requires a separate concurrency protocol.",
+      "answer": "No. A pin prevents eviction. Transaction access requires a separate concurrency protocol.",
       "builds": [
         "Use a pin to protect a frame from eviction.",
         "Use a latch to protect a short shared-memory operation.",
@@ -1187,7 +1187,7 @@
     "same-answer-different-work": {
       "idea": "Equivalent plans can produce the same rows with very different intermediate work.",
       "question": "Do the pushed plan's 60 candidate pairs mean 60 final rows?",
-      "answer": "No. The join still filters them; both plans return the same twenty rows.",
+      "answer": "No. The join still filters them. Both plans return the same twenty rows.",
       "builds": [
         "Identify the predicates in both plans.",
         "Compare the candidate work before the final join checks.",
@@ -1211,7 +1211,7 @@
       "builds": [
         "Read the left input and its row estimate.",
         "Read the right input and compare estimated with actual rows.",
-        "Follow the join's inputs and output; treat cost units separately from milliseconds."
+        "Follow the join's inputs and output. Treat cost units separately from milliseconds."
       ]
     },
     "selectivity": {
@@ -1296,7 +1296,7 @@
     "review-storage-and-memory": {
       "idea": "Explain when writes reach durable storage and whether requested pages remain in memory.",
       "question": "Why can a repeated 50-page loop miss in a 49-frame LRU pool?",
-      "answer": "Each page is evicted before its next use; one additional frame lets later passes hit.",
+      "answer": "Each page is evicted before its next use. One additional frame lets later passes hit.",
       "builds": [
         "Recall why a buffered write can return before a write followed by fsync.",
         "Trace the repeated loop through 49 frames.",
@@ -1314,9 +1314,9 @@
       ]
     },
     "review-recovery-and-isolation": {
-      "idea": "Recovery restores the required state after a crash; isolation controls how concurrent transactions interact.",
+      "idea": "Recovery restores the required state after a crash. Isolation controls how concurrent transactions interact.",
       "question": "Can recovery infer the intended deposit lost by a bad concurrent schedule?",
-      "answer": "No. Logging and recovery preserve recorded actions; isolation must prevent the invalid schedule.",
+      "answer": "No. Logging and recovery preserve recorded actions. Isolation must prevent the invalid schedule.",
       "builds": [
         "Place durable log information before changed data and the FORCE COMMIT log record.",
         "Retell the lost-update schedule.",
@@ -1338,13 +1338,13 @@
     "the-analytics-stack": {
       "idea": "The same taxi rides can be stored by row or by column. An average-fare query needs only the fares.",
       "question": "What is the average fare, and which fields can this query skip?",
-      "answer": "The average is (36 + 24 + 30) / 3 = $30. Pickup and payment do not contribute; column storage keeps the fares together so the query can skip those other fields.",
+      "answer": "The average is (36 + 24 + 30) / 3 = $30. Pickup and payment do not contribute. Column storage keeps the fares together so the query can skip those other fields.",
       "builds": [
         "Introduce three made-up rides. Read Ride 1 aloud: JFK, card, $36. Point out that its values also appear in the column layout, under the Ride 1 labels.",
         "Follow the orange strip across Ride 1. Its pickup, payment, and fare sit together. The next strip contains Ride 2.",
         "Follow the blue outlines on the right. Each strip now holds one field across all three rides. The Ride 1, Ride 2, and Ride 3 labels preserve which values belong together.",
         "Find the six green cells: the same three fares shown once in each layout. Ask students to add 36, 24, and 30 and divide by three before advancing.",
-        "Reveal $30 and compare the grouping. The result stays the same; the fare column lets the engine skip pickup and payment. Explain that these strips show groups of values, while real reads operate on pages or chunks."
+        "Reveal $30 and compare the grouping. The result stays the same. The fare column lets the engine skip pickup and payment. Explain that these strips show groups of values, while real reads operate on pages or chunks."
       ]
     },
     "the-workload-rotates": {
@@ -1354,18 +1354,18 @@
       "builds": [
         "Use the same three rides as the opening slide. On the left, slots 0, 1, and 2 are in a toy row page. On the right, a row group holds the same rows as three separate column chunks. Define a row group as a batch of rows represented across the columns.",
         "Highlight slot 1 in block 7. RID (7, 1) identifies Ride 2, whose fields are stored together. This is the fixed-slot model from Lab 3, with status flags and headers omitted.",
-        "Find position 1 in the pickup chunk. LGA enters the reconstructed row; payment and fare are still unknown. The dashed guide marks the shared logical position.",
-        "Stay at position 1 and read the payment chunk. Add card. Each chunk follows the same row order; sorting the columns independently would break that correspondence.",
-        "Read $24 from position 1 in the fare chunk. The rebuilt ride matches the left-hand slot. A chunk can contain several encoded pages, and page boundaries need not align across columns. Position 1 may require decoding; it is not necessarily a fixed-width physical slot."
+        "Find position 1 in the pickup chunk. LGA enters the reconstructed row. Payment and fare are still unknown. The dashed guide marks the shared logical position.",
+        "Stay at position 1 and read the payment chunk. Add card. Each chunk follows the same row order. Sorting the columns independently would break that correspondence.",
+        "Read $24 from position 1 in the fare chunk. The rebuilt ride matches the left-hand slot. A chunk can contain several encoded pages, and page boundaries need not align across columns. Position 1 may require decoding. It is not necessarily a fixed-width physical slot."
       ]
     },
     "read-a-row-layout": {
-      "idea": "An average-fare query needs three fares; row storage keeps them beside other ride fields.",
+      "idea": "An average-fare query needs three fares. Row storage keeps each fare beside the other fields of that ride.",
       "question": "Which values contribute to the average? What else is stored beside them?",
       "answer": "Only $36, $24, and $30 contribute. Pickup and payment values are stored beside the fares. The average is $30.",
       "builds": [
         "Use the same rides as the opening. Ask students to select the fields before advancing.",
-        "Follow the three green fare cells. Orange marks unrelated neighboring fields; it does not count measured disk reads.",
+        "Follow the three green fare cells. Orange marks unrelated neighboring fields. It does not count measured disk reads.",
         "Reveal $30. Row pages can bring along unrelated fields when a scan reaches the fares. Keep the query and data fixed for the next slide."
       ]
     },
@@ -1374,19 +1374,19 @@
       "question": "Did we change the answer, the required fares, or the unrelated data accessed?",
       "answer": "The answer is still $30 and the same three fares contribute. The layout lets the query avoid the pickup and payment chunks.",
       "builds": [
-        "Point out that only grouping has changed; all nine values are unchanged.",
+        "Point out that only grouping has changed. All nine values are unchanged.",
         "Read the three green fares. Pickup and payment chunks stay gray because neither is needed by this query.",
         "Reveal the same $30 result. Emphasize less unrelated data, not an exact disk-read count or speed multiplier."
       ]
     },
     "the-point-lookup-reverses-it": {
-      "idea": "Choose storage for the queries you run: row layouts group a record; column layouts group a field across records.",
+      "idea": "Choose storage for the queries you run: row layouts group a record. Column layouts group a field across records.",
       "question": "Why does neither layout win for every query?",
       "answer": "A complete-ride lookup benefits from fields stored together. A fare-only aggregate benefits from skipping other fields. Both layouts can answer both queries, and actual performance depends on execution.",
       "builds": [
         "Define workload as the mix of queries the database runs. Highlight only Ride 2: LGA, card, and $24. These are the fields the first request needs.",
         "Highlight fares for every ride. The second request needs many rows but only one field. The tables depict needed values, not physical page layouts.",
-        "Show both highlighted patterns together. Nothing needs to rotate when a query runs. Storage design should fit the query mix; some systems keep both row and column copies."
+        "Show both highlighted patterns together. Nothing needs to rotate when a query runs. Storage design should fit the query mix. Some systems keep both row and column copies."
       ]
     },
     "parquet-is-a-file-format": {
@@ -1394,9 +1394,9 @@
       "question": "In this example, which part stores the rides, and which part calculates the average fare?",
       "answer": "rides.parquet stores the data. DuckDB is the query engine: it reads the fare values and calculates (36 + 24 + 30) / 3 = $30. The file format describes how the values are stored.",
       "builds": [
-        "Start from the same three rides. Explain that a file format defines how values are stored in a file, just as a CSV format has rules for rows and separators. Parquet uses a binary column-oriented layout.",
+        "Start from the same three rides. Explain that a file format defines how a file stores values. Compare this with CSV rules for rows and separators. Parquet uses a binary column-oriented layout.",
         "Open the file conceptually. One row group holds these three rides as three column chunks. Read the pickup chunk, then payment, then fare. Values retain the same ride order. Metadata describes the types and where the chunks are.",
-        "Introduce DuckDB as the program running AVG(fare). Highlight the fare chunk. DuckDB uses the metadata to locate the needed values; pickup and payment chunks can be skipped.",
+        "Introduce DuckDB as the program running AVG(fare). Highlight the fare chunk. DuckDB uses the metadata to locate the needed values. Pickup and payment chunks can be skipped.",
         "Reveal $30. The file holds data and the engine computes the result. Connect the column chunks to the next slides: their values can be encoded and compressed without changing the answer."
       ]
     },
@@ -1421,9 +1421,9 @@
       ]
     },
     "dictionary-and-deltas": {
-      "idea": "Dictionary encoding replaces repeated values with codes; delta encoding stores differences between numbers.",
+      "idea": "Dictionary encoding replaces repeated values with codes. Delta encoding stores differences between numbers.",
       "question": "Which pattern favors a dictionary, and which favors deltas?",
-      "answer": "A small set of repeated strings suits a dictionary; a number sequence with small differences suits delta encoding.",
+      "answer": "A small set of repeated strings suits a dictionary. A number sequence with small differences suits delta encoding.",
       "builds": [
         "Identify the two repeated string values.",
         "Replace them with codes and recover one value through the dictionary.",
@@ -1433,14 +1433,14 @@
     "batches-through-the-pipeline": {
       "idea": "Batching passes several values between operators at once while keeping the scan, filter, and projection tasks familiar from microdb.",
       "question": "If we pass the three fares as one batch, do we still test all three against fare > 25? What work can batching reduce?",
-      "answer": "Yes: 36 passes, 24 fails, and 30 passes. The same two fare values are returned. Batching reduces repeated calls between operators; it does not remove the predicate checks or imply one disk read per row.",
+      "answer": "Yes: 36 passes, 24 fails, and 30 passes. The same two fare values are returned. Batching reduces repeated calls between operators. It does not remove the predicate checks or imply one disk read per row.",
       "builds": [
-        "Recall Labs 4 and 5: plan = ProjectScan(SelectScan(TableScan(...), predicate), fields). The caller invokes plan.next(), then plan.get_val(\"fare\"). next() returns a Boolean, not a row object. Green arrows show conceptual value flow; the request chain runs inward from ProjectScan.",
+        "Recall Labs 4 and 5: plan = ProjectScan(SelectScan(TableScan(...), predicate), fields). The caller invokes plan.next(), then plan.get_val(\"fare\"). next() returns a Boolean, not a row object. Green arrows show conceptual value flow. The request chain runs inward from ProjectScan.",
         "Walk the first successful next() through ProjectScan, SelectScan, and TableScan. Fare 36 satisfies fare > 25. get_val(\"fare\") delegates down to the current row and returns 36.",
-        "The second SelectScan.next() first examines 24 and rejects it, then advances the child again to find 30. One successful call exposes one match even when several input rows are inspected. A later next() returns False at exhaustion; that final call is omitted.",
-        "Introduce a hypothetical batch interface using only three rows so every value is visible. These are execution batches in memory, not disk pages or Parquet row groups. Microdb already buffers pages; its scan API is still row-at-a-time.",
+        "The second SelectScan.next() first examines 24 and rejects it, then advances the child again to find 30. One successful call exposes one match even when several input rows are inspected. A later next() returns False at exhaustion. That final call is omitted.",
+        "Introduce a hypothetical batch interface using only three rows so every value is visible. These are execution batches in memory, not disk pages or Parquet row groups. Microdb already buffers pages. Its scan API is still row-at-a-time.",
         "Apply the same condition to all three fare values. A real vectorized engine can track matching positions with a selection vector. The drawing shows a keep/drop mask, not three parallel workers.",
-        "Pass the matching fares together. The answer stays 36 and 30, and the predicate still runs for each input value; the repeated per-row operator-call overhead is shared. DuckDB uses column vectors grouped in DataChunks, with a default standard vector size of 2048; this toy batch is deliberately small."
+        "Pass the matching fares together. The answer stays 36 and 30, and the predicate still runs for each input value. The repeated per-row operator-call overhead is shared. DuckDB uses column vectors grouped in DataChunks, with a default standard vector size of 2048. This toy batch is deliberately small."
       ]
     },
     "skip-a-row-group": {
@@ -1458,15 +1458,15 @@
       "question": "Are a partition, a folder, and a Parquet file the same thing?",
       "answer": "A partition is a group of rows, such as all December rides. Here, the month=12 folder holds that group in Parquet files. A partition can have several files. Other database systems can manage partitions without exposing folders.",
       "builds": [
-        "Define the group first: rides with the same month. Then point to its folder and the Parquet file inside. This is one year of toy data. A folder may contain several files; we draw just one.",
+        "Define the group first: rides with the same month. Then point to its folder and the Parquet file inside. This is one year of toy data. A folder may contain several files. We draw just one.",
         "Read the folder label month=12. It tells the engine which files contain December rides, so files in the other eleven folders can be skipped. Call this partition pruning after explaining the action.",
-        "Within December, read only fare chunks from the Parquet files. The month filter comes from the folder name. We have now removed unneeded months and unneeded columns; the next slide counts those two savings."
+        "Within December, read only fare chunks from the Parquet files. The month filter comes from the folder name. We have now removed unneeded months and unneeded columns. The next slide counts those two savings."
       ]
     },
     "predict-the-byte-ratio": {
       "idea": "Selecting the fare column skips other fields, and selecting December skips rides from other months.",
       "question": "The full table fills 144 equal-size squares. December fares occupy one square. What fraction of the value data do we need?",
-      "answer": "One of 144 squares: 1/144 of the full value data. Each square is 5,000 values × 8 bytes = 40 KB. All 144 squares are 5.76 MB. Keeping fare divides the data by 12; keeping December divides it by 12 again. This compares value bytes before metadata, encoding, and compression, not query speed.",
+      "answer": "One of 144 squares: 1/144 of the full value data. Each square is 5,000 values × 8 bytes = 40 KB. All 144 squares are 5.76 MB. Keeping fare divides the data by 12. Keeping December divides it by 12 again. This compares value bytes before metadata, encoding, and compression, not query speed.",
       "builds": [
         "Define every axis before calculating. The grid has twelve columns and twelve months. The toy year has 60,000 rides, exactly 5,000 per month. Every field value is eight bytes. A square represents one month of one column, not a disk page.",
         "Highlight all 144 squares as the full-table baseline. Multiply 60,000 rows × 12 columns × 8 bytes = 5,760,000 bytes, or 5.76 MB. This counts value data, not measured I/O.",
@@ -1499,7 +1499,7 @@
     "a-table-over-files": {
       "idea": "Transactional metadata identifies the files belonging to a consistent table snapshot.",
       "question": "Why should a reader not discover a commit by simply listing a folder?",
-      "answer": "It could see partially written changes; a commit protocol must publish a consistent snapshot.",
+      "answer": "It could see partially written changes. A commit protocol must publish a consistent snapshot.",
       "builds": [
         "Read the files belonging to snapshot A.",
         "Write new files for B while A remains readable.",
@@ -1509,25 +1509,25 @@
     "train-inside-the-query-engine": {
       "idea": "A SQL aggregate query learns the intercept and slope, then saves them in a model table.",
       "question": "Why does regr_intercept need both fare and distance? Which rides may influence its result?",
-      "answer": "The function fits a line relating distance to fare, so it needs the paired values from the training rides. fare is the outcome (y), and distance is the input (x). regr_intercept returns one number: the fitted fare at distance zero. Here, the learned slope is 2, average distance is 2.5, and average fare is 8, so intercept = 8 - 2 × 2.5 = 3. WHERE split = train keeps the two rides reserved for checking the model out of the fit.",
+      "answer": "The function fits a line relating distance to fare, so it needs the paired values from the training rides. fare is the outcome (y), and distance is the input (x). regr_intercept returns one number: the fitted fare at distance zero. The learned slope is 2. Average distance is 2.5, and average fare is 8. Thus, intercept = 8 - 2 × 2.5 = 3. WHERE split = train keeps the two rides reserved for checking the model out of the fit.",
       "builds": [
-        "Name the input table before reading the SQL. fare_features is a prepared view of six made-up rides, with positive distances and nonnegative fares. distance is the feature; fare is the label. Define a test ride as a taxi-trip record reserved before training for checking the model afterward. Four rides teach the model; two rides check predictions on data it did not learn from. The setup is in the reading and runnable script.",
-        "Follow the highlighted FROM and WHERE lines. Orange rows have split = train and enter the aggregates; the two test rows stay outside fitting. Explain this logical data flow without claiming the engine must execute clauses in their written order.",
-        "Read regr_intercept(fare, distance) as: use the training rides' paired fares and distances to find the intercept of the fitted line. The arguments supply outcome y first and input x second. The aggregate uses all four pairs selected by WHERE. Both regr_intercept and regr_slope describe the same least-squares line; each returns one number from that fit. The intercept depends on how fare changes with distance, so fares alone cannot determine it. count(*) records how many training rows contributed.",
+        "Name the input table before reading the SQL. fare_features is a prepared view of six made-up rides, with positive distances and nonnegative fares. distance is the feature. fare is the label. Define a test ride as a taxi-trip record reserved before training for checking the model afterward. Four rides teach the model. Two rides check predictions on data it did not learn from. The setup is in the reading and runnable script.",
+        "Follow the highlighted FROM and WHERE lines. Orange rows have split = train and enter the aggregates. The two test rows stay outside fitting. Explain this logical data flow without claiming the engine must execute clauses in their written order.",
+        "regr_intercept(fare, distance) uses paired fares and distances from training rides. It calculates the intercept of the fitted line. The arguments supply outcome y first and input x second. The aggregate uses all four pairs selected by WHERE.\n\nBoth regr_intercept and regr_slope describe the same least-squares line. Each returns one number from that fit. The intercept depends on how fare changes with distance, so fares alone cannot determine it. count(*) records how many training rows contributed.",
         "Highlight CREATE TABLE and read the saved row: intercept 3, slope 2, training_rows 4. SELECT * FROM fare_model lets students inspect what training produced.",
-        "Turn the saved coefficients into predicted fare = 3 + 2 × distance. The intercept is the fitted value at zero miles and the slope adds two dollars per mile in this toy model. To explain why the intercept needs both columns, use intercept = average fare - slope × average distance. The four training rides have average fare 8 and average distance 2.5, giving 8 - 2 × 2.5 = 3. No training ride has distance zero; the model estimates that crossing. The fitted intercept does not establish an actual taxi base fare."
+        "Turn the saved coefficients into predicted fare = 3 + 2 × distance. The intercept is the fitted value at zero miles and the slope adds two dollars per mile in this toy model. To explain why the intercept needs both columns, use intercept = average fare - slope × average distance. The four training rides have average fare 8 and average distance 2.5, giving 8 - 2 × 2.5 = 3.\n\nNo training ride has distance zero. The model estimates that crossing. The fitted intercept does not establish an actual taxi base fare."
       ]
     },
     "evaluate-and-apply-the-model": {
       "idea": "SQL can apply the saved model, compare predictions with actual fares, and score a new ride.",
       "question": "Why do the test query and the new-ride query both use fare_model, but only the test needs actual fares?",
-      "answer": "A test ride is a recorded trip reserved for checking the model after training. Both queries reuse the learned intercept and slope. For the 2.5-mile test ride, the model predicts $8; the recorded fare is $9, so the prediction misses by $1. The other test ride predicts $12 against $11, giving a $1 mean absolute error across both. Their actual fares did not influence training. A new 3.5-mile ride needs only distance and the saved model to predict $10; its actual fare is needed later to measure error.",
+      "answer": "A test ride is a recorded trip reserved for checking the model after training. Both queries reuse the learned intercept and slope. For the 2.5-mile test ride, the model predicts $8. The recorded fare is $9, so the prediction misses by $1.\n\nThe other test ride predicts $12 against $11, giving a $1 mean absolute error across both. Their actual fares did not influence training. A new 3.5-mile ride needs only distance and the saved model to predict $10. Its actual fare is needed later to measure error.",
       "builds": [
         "Say 'rides reserved for checking the model' before using the shorthand 'test rides.' These are recorded trips with known distances and fares, set aside before training. Read WHERE r.split = test and find those two rows. Their fares did not help learn the coefficients. We now use each distance to predict a fare, then compare with its recorded fare. Keep the saved model fixed and leave the predictions as question marks until the class has tried the calculation.",
         "Read CROSS JOIN as pairing each test ride with the single model row. Substitute 3 and 2 into the prediction expression, and ask for the two predictions before advancing.",
         "Reveal 8 and 12. CREATE VIEW names this query held_out_predictions so the next query can use its results. A normal view stores the query definition rather than materializing a new table.",
-        "Read the new SQL query: subtract prediction from actual fare, take abs so both misses count positively, then average. Both absolute errors are $1, giving a $1 MAE. The query also reports test_rows = 2 and RMSE = $1; RMSE takes the square root of the mean squared errors. Two made-up test rides cannot establish real-world accuracy.",
-        "Read VALUES (7, 3.5) as one new ride with ID 7 and distance 3.5. The ID labels the result; only distance contributes to prediction. CROSS JOIN retrieves the same saved model coefficients. Ask for the new prediction before advancing.",
+        "Read the new SQL query: subtract prediction from actual fare, take abs so both misses count positively, then average. Both absolute errors are $1, giving a $1 MAE. The query also reports test_rows = 2 and RMSE = $1. RMSE takes the square root of the mean squared errors. Two made-up test rides cannot establish real-world accuracy.",
+        "Read VALUES (7, 3.5) as one new ride with ID 7 and distance 3.5. The ID labels the result. Only distance contributes to prediction. CROSS JOIN retrieves the same saved model coefficients. Ask for the new prediction before advancing.",
         "Reveal 3 + 2 × 3.5 = $10. This SELECT applies the model without calling a regression aggregate or changing fare_model. The complete runnable demo also keeps ride IDs and reports RMSE."
       ]
     },
@@ -1544,7 +1544,7 @@
     "choose-the-shape": {
       "idea": "Choose a storage layout and execution plan that suit the queries you expect to run.",
       "question": "Which stage learns model coefficients, and which reuses them?",
-      "answer": "Training aggregates learn the coefficients; inference applies the saved model without fitting it again.",
+      "answer": "Training aggregates learn the coefficients. Inference applies the saved model without fitting it again.",
       "builds": [
         "Choose a layout for a complete-record point lookup.",
         "Explain projection, encoding, and batching for a whole-table aggregate.",
@@ -1560,7 +1560,7 @@
       ]
     },
     "duckdb-pytorch-fare-model": {
-      "idea": "DuckDB supplies the data and calls a prediction function; PyTorch trains and runs the neural network.",
+      "idea": "DuckDB supplies the data and calls a prediction function. PyTorch trains and runs the neural network.",
       "question": "Does SELECT predict_fare_nn(distance) train a new model for each ride? When do we use the recorded test fares?",
       "answer": "No. The SQL function calls the trained PyTorch model with fixed weights. It receives only distances. We compare its predictions with the recorded test fares afterward to measure error. Those fares never helped fit the network or its scaling.",
       "checks": [
@@ -1598,7 +1598,7 @@
         },
         {
           "question": "If the input distances are [3, 5], may the callback return fares [28, 22]?",
-          "answer": "Not for these illustrative predictions. Position 0 belongs to the 3-mile ride and must return 22; position 1 belongs to the 5-mile ride and must return 28. Return the same number of values in matching positions, or the fares would be attached to the wrong rides."
+          "answer": "Not for these illustrative predictions. Position 0 belongs to the 3-mile ride and must return 22. Position 1 belongs to the 5-mile ride and must return 28. Return the same number of values in matching positions, or the fares would be attached to the wrong rides."
         },
         {
           "question": "Do these recorded test fares enter the prediction function?",
@@ -1610,17 +1610,17 @@
         }
       ],
       "builds": [
-        "Introduce the real taxi sample, replacing the earlier six made-up rides. The month filter keeps 50,000 January–October rides for training. DuckDB selects distance and fare before sending Arrow batches of up to 1,024 rows to Python. Define Apache Arrow as a format for column data in memory that these tools can exchange. Define a tensor as a numeric array. Distances become x and fares become y. November–December rides remain reserved for testing. ORDER BY hash(ride_id) mixes the training rides so batches do not follow the file’s date order. The hash maps each ride ID to a scrambled numeric value, and sorting those values gives a repeatable mixed order within this run. Mixing is helpful for batch training but is not required by DuckDB or PyTorch. This example repeats the same mixed order on every pass. Many training pipelines reshuffle on each pass. The WHERE filter still keeps test rides out.",
-        "Trace the nodes from left to right: one distance input connects to all 16 hidden nodes, and all 16 hidden nodes connect to the one fare output. Match the blue connections to nn.Linear(1, 16) and the green connections to nn.Linear(16, 1). Each line represents a learned weight. Each hidden node combines its weighted input with a learned bias, then applies ReLU. The output combines the 16 hidden values with another learned bias. The diagram omits biases and scaling for readability. The code standardizes distance and fare using training statistics, and the prediction callback converts the output back to dollars. ReLU keeps positive values and sets negative ones to zero, letting the fitted relationship bend. The network is created once. Within each batch, predict, measure error, clear old gradients, calculate new gradients with backward, and update weights with optimizer.step. PyTorch performs this learning. The excerpt omits setup and loops, which are in the lab script. x_mean, x_std, y_mean, and y_std come only from training rows.",
-        "Pause at the first line. x is a batch of recorded distances, one per ride. x_mean and x_std are the average and population standard deviation of all training distances, calculated once before training. Standard deviation measures spread. Subtracting the mean centers the values; dividing by std expresses them in units of that spread. In this invented example, assume the full training set gave mean 3 miles and std 2 miles. A 3-mile ride becomes 0, and a 5-mile ride becomes 1. The displayed batch does not determine those statistics. Scaling often helps optimization by keeping typical values near zero. It does not add information or guarantee better predictions. The same training statistics are reused for later rides.",
-        "Now follow both lines. model receives only the scaled distances and returns one scaled fare prediction per ride using its current weights. y contains the recorded training fares. The second line scales y using the fare mean and fare std so prediction and target have matching units. Distance and fare have separate means and standard deviations. Assume fare mean 20 dollars and std 10 dollars: recorded fares 20 and 30 become targets 0 and 1. For illustration, suppose the network outputs 0.2 and 0.8. These outputs are made up, not results from fitting the two shown rides. They are not dollar amounts. Negative scaled values are also valid: they mean below the training average. Actual fares serve as training targets; they are not inputs to model.",
-        "In the script, loss_fn is nn.MSELoss with its default mean reduction. For each ride, subtract the scaled target from the prediction and square that difference. The errors are 0.2 and minus 0.2. Squaring gives 0.04 for each, and their average is 0.04. This one number scores the whole batch in squared standardized-fare units. A lower value means closer predictions on this batch. It is different from the MAE in dollars shown later. The prediction and loss lines do not change weights. optimizer.zero_grad clears previous gradients, loss.backward calculates how each weight and bias affects loss, and optimizer.step uses those gradients to update the parameters.",
-        "Undo the fare scaling when returning predictions to SQL. Multiply the network output by the saved training fare std, then add the saved training fare mean. Here 0.2 times 10 plus 20 gives 22 dollars, and 0.8 times 10 plus 20 gives 28 dollars. The recorded fares were 20 and 30, so each toy prediction has a 2-dollar absolute error and their MAE is 2 dollars. The scaled training loss was 0.04, not 0.04 dollars. This conversion only needs the prediction and saved training statistics. It does not need the actual fare of a new ride. The real predict_fare callback applies this conversion to every returned batch.",
-        "Define Apache Arrow as a format for column data in memory. An Arrow Python UDF is a function we provide to DuckDB that receives and returns batches in that format. UDF means user-defined function. Read the registration arguments: predict_fare_nn is the SQL name, predict_fare is the Python function itself, [DOUBLE] declares one numeric SQL input, and DOUBLE declares one numeric result per row. type=arrow selects the batch interface. The callback converts distances to tensors, applies the trained model, and returns Arrow values. The function exists on this local DuckDB connection.",
-        "Follow the input table into predict_fare(distances). DuckDB gathers a batch of distance values and supplies it as a PyArrow ChunkedArray, an Arrow column that can contain multiple chunks. The drawing shows just two values from the earlier invented example. Python receives the batch in one call, rather than a separate call for every scalar distance. This reduces Python call overhead and lets the model process tensors in batches. DuckDB chooses the UDF batch sizes. The earlier to_arrow_reader(batch_size=1024) controls the training-data reader, not these SQL prediction calls. Arrow carries the values; PyTorch computes the predictions.",
-        "Follow the full callback: convert Arrow values to a tensor, scale the distances, run the fixed model, restore dollar units, and package the results with pa.array. pa is the pyarrow module imported by the lab script. Reveal the illustrative outputs 22 and 28 from the previous example. Each output must occupy the same batch position as its corresponding input, and the array lengths must match. Sorting the outputs inside the callback would misassign the fares. These positional requirements do not promise any overall SQL result order. Our callback uses torch.tensor, which copies data; Arrow alone does not make the whole path free of copying. No weights change during this prediction call.",
-        "Read the filter month >= 11 and the SQL function call. These are 10,000 rides the model did not train on. Read the first two example predictions from the completed lab run: 15.17 versus 20.50 dollars, then 9.50 versus 10.00 dollars. SQL sends distances to PyTorch; the recorded fares are available for comparison but do not enter the prediction function. The network weights remain fixed.",
-        "The lab script saves both models’ outputs in predictions. Read avg(abs(fare - prediction)) as the average size of the dollar error. Compare 3.53 dollars for the straight line with 3.26 dollars for the network on the same reserved rides. This is one measured run, with 30 epochs and seed 6042; more complexity need not improve every distance group. Point to Lab 8 for the plots, then introduce the optional BigQuery ML example as Google’s managed SQL alternative."
+        "Introduce the real taxi sample, replacing the earlier six made-up rides. The month filter keeps 50,000 January–October rides for training. DuckDB selects distance and fare before sending Arrow batches of up to 1,024 rows to Python. Define Apache Arrow as a format for column data in memory that these tools can exchange.\n\nDefine a tensor as a numeric array. Distances become x and fares become y. November–December rides remain reserved for testing. ORDER BY hash(ride_id) mixes the training rides so batches do not follow the file’s date order.\n\nThe hash maps each ride ID to a scrambled numeric value, and sorting those values gives a repeatable mixed order within this run. Mixing is helpful for batch training but is not required by DuckDB or PyTorch. This example repeats the same mixed order on every pass. Many training pipelines reshuffle on each pass.\n\nThe WHERE filter still keeps test rides out.",
+        "Trace the nodes from left to right. One distance input connects to all 16 hidden nodes. All 16 hidden nodes connect to one fare output. Match the blue connections to nn.Linear(1, 16) and the green connections to nn.Linear(16, 1).\n\nEach line represents a learned weight. Each hidden node combines its weighted input with a learned bias, then applies ReLU. The output combines the 16 hidden values with another learned bias. The diagram omits biases and scaling for readability.\n\nThe code standardizes distance and fare using training statistics, and the prediction callback converts the output back to dollars. ReLU keeps positive values and sets negative ones to zero, letting the fitted relationship bend. The network is created once. For each batch, make predictions.\n\nMeasure the error. Clear old gradients. Calculate new gradients with backward. Update weights with optimizer.step.\n\nPyTorch performs this learning. The excerpt omits setup and loops, which are in the lab script. x_mean, x_std, y_mean, and y_std come only from training rows.",
+        "Pause at the first line. x is a batch of recorded distances, one per ride. x_mean and x_std are the average and population standard deviation of all training distances, calculated once before training. Standard deviation measures spread. Subtracting the mean centers the values. Dividing by std expresses them in units of that spread.\n\nIn this invented example, assume the full training set gave mean 3 miles and std 2 miles. A 3-mile ride becomes 0, and a 5-mile ride becomes 1. The displayed batch does not determine those statistics. Scaling often helps optimization by keeping typical values near zero.\n\nIt does not add information or guarantee better predictions. The same training statistics are reused for later rides.",
+        "Now follow both lines. model receives only the scaled distances and returns one scaled fare prediction per ride using its current weights. y contains the recorded training fares. The second line scales y using the fare mean and fare std so prediction and target have matching units. Distance and fare have separate means and standard deviations. Assume fare mean 20 dollars and std 10 dollars: recorded fares 20 and 30 become targets 0 and 1.\n\nFor illustration, suppose the network outputs 0.2 and 0.8. These outputs are made up, not results from fitting the two shown rides. They are not dollar amounts. Negative scaled values are also valid: they mean below the training average.\n\nActual fares serve as training targets. They are not inputs to model.",
+        "In the script, loss_fn is nn.MSELoss with its default mean reduction. For each ride, subtract the scaled target from the prediction and square that difference. The errors are 0.2 and minus 0.2. Squaring gives 0.04 for each, and their average is 0.04.\n\nThis one number scores the whole batch in squared standardized-fare units. A lower value means closer predictions on this batch. It is different from the MAE in dollars shown later. The prediction and loss lines do not change weights. optimizer.zero_grad clears previous gradients. loss.backward calculates how each weight and bias affects loss. optimizer.step uses those gradients to update the parameters.",
+        "Undo the fare scaling when returning predictions to SQL. Multiply the network output by the saved training fare std, then add the saved training fare mean. Here 0.2 times 10 plus 20 gives 22 dollars, and 0.8 times 10 plus 20 gives 28 dollars. The recorded fares were 20 and 30, so each toy prediction has a 2-dollar absolute error and their MAE is 2 dollars.\n\nThe scaled training loss was 0.04, not 0.04 dollars. This conversion only needs the prediction and saved training statistics. It does not need the actual fare of a new ride. The real predict_fare callback applies this conversion to every returned batch.",
+        "Define Apache Arrow as a format for column data in memory. An Arrow Python UDF is a function we provide to DuckDB that receives and returns batches in that format. UDF means user-defined function. Read the registration arguments. predict_fare_nn is the SQL name. predict_fare is the Python function. [DOUBLE] declares one numeric SQL input.\n\nDOUBLE declares one numeric result per row. type=arrow selects the batch interface. The callback converts distances to tensors, applies the trained model, and returns Arrow values. The function exists on this local DuckDB connection.",
+        "Follow the input table into predict_fare(distances). DuckDB gathers a batch of distance values and supplies it as a PyArrow ChunkedArray, an Arrow column that can contain multiple chunks. The drawing shows just two values from the earlier invented example. Python receives the batch in one call, rather than a separate call for every scalar distance.\n\nThis reduces Python call overhead and lets the model process tensors in batches. DuckDB chooses the UDF batch sizes. The earlier to_arrow_reader(batch_size=1024) controls the training-data reader, not these SQL prediction calls. Arrow carries the values.\n\nPyTorch computes the predictions.",
+        "Follow the callback. Convert Arrow values to a tensor. Scale the distances. Run the fixed model.\n\nRestore dollar units. Package the results with pa.array. pa is the pyarrow module imported by the lab script. Reveal the illustrative outputs 22 and 28 from the previous example. Each output must occupy the same batch position as its corresponding input, and the array lengths must match.\n\nSorting the outputs inside the callback would misassign the fares. These positional requirements do not promise any overall SQL result order. Our callback uses torch.tensor, which copies data. Arrow alone does not make the whole path free of copying.\n\nNo weights change during this prediction call.",
+        "Read the filter month >= 11 and the SQL function call. These are 10,000 rides the model did not train on. Read the first two example predictions from the completed lab run: 15.17 versus 20.50 dollars, then 9.50 versus 10.00 dollars. SQL sends distances to PyTorch. The recorded fares are available for comparison but do not enter the prediction function. The network weights remain fixed.",
+        "The lab script saves both models’ outputs in predictions. Read avg(abs(fare - prediction)) as the average size of the dollar error. Compare 3.53 dollars for the straight line with 3.26 dollars for the network on the same reserved rides. This is one measured run, with 30 epochs and seed 6042. More complexity need not improve every distance group. Point to Lab 8 for the plots, then introduce the optional BigQuery ML example as Google’s managed SQL alternative."
       ]
     },
     "managed-model-sql": {
@@ -1628,9 +1628,9 @@
       "question": "Why does CREATE MODEL use NO_SPLIT while ML.EVALUATE still receives separate test rides?",
       "answer": "WHERE split = train already supplies only training rows. NO_SPLIT uses all those supplied rows for fitting. ML.EVALUATE receives the held-out test rows separately, while ML.PREDICT needs only a new distance.",
       "builds": [
-        "Define the name before reading the code: BigQuery is Google’s cloud database for analytics, and ML means machine learning. BigQuery ML lets us train and use supported models through SQL while Google manages the computing infrastructure. This optional GoogleSQL example has demo.ml_rides already loaded in the project identified by YOUR_PROJECT. Read CREATE MODEL, input_label_cols = fare, and the training-only WHERE filter. NO_SPLIT uses the supplied training rows. The other options specify unregularized least squares. BigQuery saves a managed model object.",
-        "Read ML.EVALUATE with the saved model and a SELECT for split = test. Both distance and actual fare are present because evaluation compares predictions with known outcomes. mean_absolute_error has the same meaning as the DuckDB calculation. BigQuery also returns mean_squared_error; its square root corresponds to RMSE.",
-        "Read ML.PREDICT with the same saved model and SELECT 7 AS ride_id, 3.5 AS distance. The result includes predicted_fare. Point to the reading for setup, permissions, billing, and fully qualified project names; the local DuckDB demo requires no cloud account."
+        "Define the name before reading the code: BigQuery is Google’s cloud database for analytics, and ML means machine learning. BigQuery ML lets us train and use supported models through SQL while Google manages the computing infrastructure. This optional GoogleSQL example has demo.ml_rides already loaded in the project identified by YOUR_PROJECT. Read CREATE MODEL, input_label_cols = fare, and the training-only WHERE filter.\n\nNO_SPLIT uses the supplied training rows. The other options specify unregularized least squares. BigQuery saves a managed model object.",
+        "Read ML.EVALUATE with the saved model and a SELECT for split = test. Both distance and actual fare are present because evaluation compares predictions with known outcomes. mean_absolute_error has the same meaning as the DuckDB calculation. BigQuery also returns mean_squared_error. Its square root corresponds to RMSE.",
+        "Read ML.PREDICT with the same saved model and SELECT 7 AS ride_id, 3.5 AS distance. The result includes predicted_fare. Point to the reading for setup, permissions, billing, and fully qualified project names. The local DuckDB demo requires no cloud account."
       ]
     }
   },
@@ -1821,13 +1821,13 @@
     "retrieval-augmented-generation": {
       "idea": "RAG separates document ingestion from retrieval and generation for each question.",
       "question": "Which work reruns when one document changes?",
-      "answer": "Update its affected chunks, embeddings, and index entries; each question separately retrieves and assembles evidence.",
+      "answer": "Update its affected chunks, embeddings, and index entries. Each question separately retrieves and assembles evidence.",
       "builds": [
         "Link the new pipeline to the open-book comparison: selected pages are evidence, page references are source IDs, and the generator writes the answer. Trace ingestion and question time separately. Chunk documents during ingestion.",
         "Embed the chunks in the chosen representation.",
         "Store searchable vectors with source identities.",
         "At question time, retrieve the relevant evidence.",
-        "Assemble context and generate; the lab mocks generation for offline checks."
+        "Assemble context and generate. The lab mocks generation for offline checks."
       ]
     },
     "three-places-for-knowledge": {
@@ -1854,7 +1854,7 @@
     "a-synonym-failure": {
       "idea": "Exact retrieval can still fail when its representation misses a paraphrase.",
       "question": "Is the buffer-pool paraphrase failure caused by ANN approximation?",
-      "answer": "No. The browser searches exactly; its hashed-word representation does not bridge the vocabulary change.",
+      "answer": "No. The browser searches exactly. Its hashed-word representation does not bridge the vocabulary change.",
       "builds": [
         "Maya’s paraphrase misses the source even though result positions map to the correct records. Ask whether ANN caused the miss, then reveal that this widget uses exact search. Read the first buffer-pool question and its retrieved source.",
         "Read the paraphrase and compare the result.",
@@ -1874,7 +1874,7 @@
     "presence-in-the-top-results": {
       "idea": "Hit@k asks whether any relevant source appears among the first k results.",
       "question": "Does moving a relevant result from rank three to rank one change hit@3?",
-      "answer": "No. Both are hits; two of the three pictured questions hit, giving 2/3.",
+      "answer": "No. Both are hits. Two of the three pictured questions hit, giving 2/3.",
       "builds": [
         "Read the three ranked lists before showing the formula. Ask whether a relevant source at rank three counts as a hit in the top three.",
         "Mark independently labeled relevant items.",
@@ -1896,7 +1896,7 @@
     "measure-chunking-instead-of-guessing": {
       "idea": "Chunking choices should be compared with the same labeled questions and retrieval setup.",
       "question": "Which supplied chunk sizes tie, and why is that result limited?",
-      "answer": "60 and 90 words tie on this small corpus of already short sources; it does not establish a rule for long documents.",
+      "answer": "60 and 90 words tie on this small corpus of already short sources. It does not establish a rule for long documents.",
       "builds": [
         "Now return to the measured twelve-question fixture. Keep the embedder, cutoff, and questions fixed while comparing the chunk sizes. Read the 10-word result: 67 chunks, hit@3 of 0.75, and MRR@3 about 0.667.",
         "Read the 60-word result: 25 chunks, hit@3 about 0.917, and MRR@3 about 0.778.",
@@ -1916,7 +1916,7 @@
     "two-retrieval-paths": {
       "idea": "Semantic retrieval and exact-token retrieval can contribute complementary candidates.",
       "question": "Why not simply add raw scores from unrelated retrievers?",
-      "answer": "Their scales may differ; fusion needs a justified method and evaluation.",
+      "answer": "Their scales may differ. Fusion needs a justified method and evaluation.",
       "builds": [
         "The next question includes an exact error code. Predict where keyword search might help before proposing fusion or reranking. Use semantic retrieval to connect paraphrases.",
         "Use exact-token retrieval for a distinctive error code.",
@@ -1935,9 +1935,9 @@
       ]
     },
     "a-changed-source-invalidates-copies": {
-      "idea": "Changing a document can make its chunks and vectors stale; changing the embedding model requires compatible replacement vectors.",
+      "idea": "Changing a document can make its chunks and vectors stale. Changing the embedding model requires compatible replacement vectors.",
       "question": "What must change when the embedding model changes?",
-      "answer": "Every stored vector must be regenerated compatibly; record model revision and preprocessing as well as its name.",
+      "answer": "Every stored vector must be regenerated compatibly. Record model revision and preprocessing as well as its name.",
       "builds": [
         "Maya edits D7. Find the chunks and vectors still based on its old text. Identify their source and model versions, then ask how changing the embedding model would affect the rest of the index.",
         "Change a document and locate its stale chunks.",
@@ -1963,7 +1963,7 @@
         "Return to the recovery question. Show the selected chunks and their source IDs so students can trace each passage back to its document.",
         "Retrieve evidence for one question.",
         "Evaluate retrieval and answer quality on held-out questions.",
-        "Repeat the same open-book model at the end. Have a student explain selected pages, references, and checked claims in ordinary language, then connect that explanation back to records and metrics."
+        "Repeat the same open-book model at the end. Ask a student to explain selected pages, references, and checked claims. Connect the explanation to records and metrics."
       ]
     }
   },
@@ -2023,9 +2023,9 @@
     "salt-and-combine": {
       "idea": "Salting can divide a hot aggregation when partial results combine correctly.",
       "question": "Can partial averages always be averaged directly?",
-      "answer": "No. Preserve sum and count, then combine them; unequal bucket sizes make unweighted averages wrong.",
+      "answer": "No. Preserve sum and count, then combine them. Unequal bucket sizes make unweighted averages wrong.",
       "builds": [
-        "Noor proposes splitting the hot group. Ask which partial information an operator must retain to combine correctly; use sum and count for an average. Identify the overloaded key.",
+        "Noor proposes splitting the hot group. Ask which partial information an operator must retain to combine correctly. Use sum and count for an average. Identify the overloaded key.",
         "Split it into salted subkeys.",
         "Compute the four partial counts of twenty-five.",
         "Combine them under the original key to obtain one hundred."
@@ -2034,7 +2034,7 @@
     "map-is-local-computation": {
       "idea": "A mapper can emit zero or more key-value pairs from each input record.",
       "question": "Why does the mapper emit the word the twice?",
-      "answer": "It emits one pair per occurrence; repeated words remain separate occurrences at this stage.",
+      "answer": "It emits one pair per occurrence. Repeated words remain separate occurrences at this stage.",
       "builds": [
         "Count occurrences on paper before mapping. Ask why repeated words must remain repeated outputs rather than a set of distinct tokens. Read the four-word input document.",
         "Split it into word occurrences.",
@@ -2062,11 +2062,11 @@
       ]
     },
     "a-lazy-spark-plan": {
-      "idea": "Spark transformations describe dependencies; an action triggers their execution.",
+      "idea": "Spark transformations describe dependencies. An action triggers their execution.",
       "question": "When does this lazy word-count chain need to process the data?",
       "answer": "When an action such as collect requests the result.",
       "builds": [
-        "Trace the Spark plan for grouping and counting equal words. Start with the input, then build each transformation without executing it; an action will request the result.",
+        "Trace the Spark plan for grouping and counting equal words. Start with the input, then build each transformation without executing it. An action will request the result.",
         "Describe flatMap turning lines into words.",
         "Describe map turning words into (word, 1) pairs.",
         "Add the grouping dependency for reduceByKey.",
@@ -2087,7 +2087,7 @@
     "lineage-rebuilds-lost-partitions": {
       "idea": "Lineage records how to rebuild lost outputs from available dependencies.",
       "question": "Is lineage a durable transaction log for external side effects?",
-      "answer": "No. It is a recomputation recipe; replayable transformations and accessible dependencies are required.",
+      "answer": "No. It is a recomputation recipe. Replayable transformations and accessible dependencies are required.",
       "builds": [
         "A worker loses an output partition. Follow the recorded transformations back to the inputs needed to recompute it. Ask whether those inputs remain available and explain how this recipe differs from a transaction log.",
         "Lose one worker's output partition.",
@@ -2119,9 +2119,9 @@
     "place-move-recover": {
       "idea": "A distributed job must place data, group it, execute dependencies, and recover lost work.",
       "question": "What stays the same when the two-record word count changes from two partitions to seven?",
-      "answer": "The word totals stay the same. Placement and schedule may change; repeated occurrences and complete grouping must remain correct.",
+      "answer": "The word totals stay the same. Placement and schedule may change. Repeated occurrences and complete grouping must remain correct.",
       "builds": [
-        "Return to the small word count. Identify which worker owns each key, then ask how an uneven input could leave one worker with most of the work.",
+        "Return to the small word count. Identify which worker owns each key. Ask how unequal key frequencies could give one worker most of the work.",
         "Explain the movement needed to group equal keys.",
         "Explain the execution plan and when work starts.",
         "Repeat assign, group, execute, recover on the original small count. Ask what changes with seven partitions and which result must stay unchanged."
@@ -2144,7 +2144,7 @@
       "question": "Why reverse a domain name in an ordered row key?",
       "answer": "Related domains then share a prefix, helping prefix-local scans.",
       "builds": [
-        "Identify a cell by its row key before asking where it is stored. Connect the sorted keys to familiar B+ tree ranges; the key names the row but does not specify a physical file location.",
+        "Identify a cell by its row key before asking where it is stored. Connect the sorted keys to familiar B+ tree ranges. The key names the row but does not specify a physical file location.",
         "Separate declared column families from qualifiers.",
         "Add the version timestamp and qualify its difference from a cross-row transaction snapshot."
       ]
@@ -2162,7 +2162,7 @@
     "tablets-separate-placement-from-storage": {
       "idea": "Tablet placement and durable storage ownership are separate parts of the architecture.",
       "question": "Why can a tablet server fail without losing the stored data?",
-      "answer": "In the original architecture, replicated GFS holds the logs and SSTables; reassignment and replay can rebuild service.",
+      "answer": "In the original architecture, replicated GFS holds the logs and SSTables. Reassignment and replay can rebuild service.",
       "builds": [
         "Link tablets to assigned intervals in an ordered key space. Ask why the serving owner can change while replicated durable files remain available. Divide the ordered keys into contiguous tablet ranges.",
         "Assign those ranges to tablet servers.",
@@ -2227,7 +2227,7 @@
     "deletion-must-hide-older-values": {
       "idea": "A deletion marker prevents older stored values from reappearing.",
       "question": "Why not simply remove the newest k2 entry?",
-      "answer": "A read could then discover the older k2 value; a tombstone must hide it until safe reclamation.",
+      "answer": "A read could then discover the older k2 value. A tombstone must hide it until safe reclamation.",
       "builds": [
         "Return explicitly to the opening old file. Ask why removing a marker could expose bytes that were never edited. Locate the old value in an earlier file.",
         "Write a tombstone as the newer record.",
@@ -2238,7 +2238,7 @@
     "a-one-sided-membership-test": {
       "idea": "A Bloom filter can prove absence, while a possible match still requires checking data.",
       "question": "What does a zero among the query's required bits prove?",
-      "answer": "Definite absence under correct insertion and supported operations; all set bits indicate only possible presence.",
+      "answer": "A missing bit establishes absence if insertion was correct and operations are supported. All set bits indicate only possible presence.",
       "builds": [
         "Before naming the filter, ask what a one-sided answer can prove. Distinguish definite absence from the work of checking a possible match. Begin with empty bits.",
         "Insert k1 through k6 using the three deterministic hashes.",
@@ -2261,7 +2261,7 @@
     "the-read-write-space-budget": {
       "idea": "Compare read work, write work, storage space, and durability requirements for the expected workload.",
       "question": "Why is fast log append alone insufficient for sustained LSM write performance?",
-      "answer": "Compaction must keep up with incoming writes; otherwise files accumulate and writes may have to slow down.",
+      "answer": "Compaction must keep up with incoming writes. Otherwise files accumulate and writes may have to slow down.",
       "builds": [
         "Noor asks what other work the fast write path creates. Compare reads, writes, space, and durability, including background maintenance. Begin with how B+ trees organize pages and can batch writes.",
         "Identify sorted LSM memory and files.",
@@ -2274,7 +2274,7 @@
       "question": "What can replica 2 infer about v2 from silence alone?",
       "answer": "Silence does not tell replica 2 whether v2 was written. To preserve linearizability, the system may need to refuse the isolated read.",
       "builds": [
-        "Now cut the link between replicas. Ask what the isolated replica can know before naming guarantees; explain the concrete choice at the request. Begin with agreeing replicas.",
+        "Now cut the link between replicas. Ask what the isolated replica can know before naming guarantees. Explain the concrete choice at the request. Begin with agreeing replicas.",
         "Write v2 at replica 1 and interrupt communication.",
         "Consider waiting or refusing the isolated request.",
         "Consider serving v1 and state the consistency consequence.",
@@ -2289,7 +2289,7 @@
         "Return to key k. Identify the durable log record that would let the engine rebuild its write after a crash.",
         "Place the write in ordered memory.",
         "Flush it into a sorted file and account for later compaction.",
-        "Repeat log, buffer, flush, resolve on k. Ask a student why the old file may remain while the current read is absent, then name the safety condition for compaction."
+        "Repeat log, buffer, flush, resolve on k. Ask why the old file can remain while the current read returns no value. State the safety condition for compaction."
       ]
     }
   },
@@ -2297,7 +2297,7 @@
     "the-path-is-the-answer": {
       "idea": "A graph query can ask for the path connecting records.",
       "question": "If two routes end at Dee, does a query for distinct reachable people need two copies of Dee?",
-      "answer": "No. A query for distinct people returns Dee once; a query for routes can return both paths. Decide which result is required first.",
+      "answer": "No. A query for distinct people returns Dee once. A query for routes can return both paths. Decide which result is required first.",
       "builds": [
         "Calibrate with the src/dst join students know. Introduce Maya’s whiteboard: two routes can end at Dee. Ask whether the result requires routes or distinct people before tracing a route to Fay. Identify the familiar student records as nodes.",
         "Add directed follows relationships and ask a one-hop question.",
@@ -2317,7 +2317,7 @@
     "store-adjacency-at-write-time": {
       "idea": "Maintained adjacency makes later neighbor expansion direct.",
       "question": "How would a relational edge table find ada's neighbors?",
-      "answer": "Match src using an index or scan; stored adjacency maintains the neighbor relationship for later reads.",
+      "answer": "Match src using an index or scan. Stored adjacency maintains the neighbor relationship for later reads.",
       "builds": [
         "Find ada’s outgoing edges by matching src in the relational edge table. Then compare how a stored adjacency list can point directly to the same neighbors.",
         "Resolve endpoints while creating a relationship.",
@@ -2327,7 +2327,7 @@
     "one-hop": {
       "idea": "A one-hop query follows edges in the direction specified by the query.",
       "question": "Who does ada follow, and who follows ada?",
-      "answer": "Ada follows ben and cyd; ben and fay follow ada.",
+      "answer": "Ada follows ben and cyd. Ben and fay follow ada.",
       "builds": [
         "Keep the first query to one outgoing hop. Ask how reversing direction would change the result before returning the endpoints. Start at ada and predict the outgoing neighbors.",
         "Expand the outgoing edges.",
@@ -2379,7 +2379,7 @@
     "a-supernode-is-skew-again": {
       "idea": "A high-degree node can dominate traversal work even with direct adjacency access.",
       "question": "Does cheap neighbor lookup make millions of neighbors cheap to expand?",
-      "answer": "No. The number of neighbors still dominates; limiting expansion changes semantics and recall.",
+      "answer": "No. The number of neighbors still dominates. Limiting expansion changes semantics and recall.",
       "builds": [
         "Link this high-degree hub back to Lecture 13’s hot key. Direct lookup does not remove the cost of inspecting a large neighbor set. Expand an ordinary-degree node.",
         "Increase degree and compare the volume of work.",
@@ -2387,7 +2387,7 @@
       ]
     },
     "choose-a-graph-workload": {
-      "idea": "Choose a graph tool based on how far queries traverse and whether they work on a few paths or the whole graph.",
+      "idea": "Identify the traversal depth. Determine whether queries inspect a few paths or the complete graph. Choose a tool for that workload.",
       "question": "Does a graph engine automatically outperform relational execution on every relationship query?",
       "answer": "No. Compare equivalent semantics and include the cost of maintaining the relationships.",
       "builds": [
@@ -2420,9 +2420,9 @@
     "five-mechanisms-recur": {
       "idea": "Caches, indexes, logs, plans, and partitions recur across systems, but their guarantees differ.",
       "question": "Is Spark lineage the same mechanism as a write-ahead log?",
-      "answer": "No. Lineage records a recomputation recipe; WAL records information for transaction durability and recovery.",
+      "answer": "No. Lineage records a recomputation recipe. WAL records information for transaction durability and recovery.",
       "builds": [
-        "Use earlier examples to ask what each mechanism guarantees: a cache reuses bytes, an index narrows search, and a log supports recovery. Identify caches in buffer pools and SSTable block reads.",
+        "Ask what each earlier mechanism guarantees. A cache reuses bytes. An index narrows search. A log supports recovery. Identify caches in buffer pools and SSTable block reads.",
         "Identify indexes in B+ trees, IVF, and adjacency.",
         "Identify durable logs and contrast them with lineage.",
         "Identify plans in iterators, Spark, and graph queries.",
@@ -2474,11 +2474,11 @@
       story: 'At a lab desk, Maya asks the database to list students with a GPA above 3.5. Both runs return ada, cyd, and eli. Noor points to the Disk reads counter: two on the first run, zero on the second. Maya asks why it did not read the file again. The first run kept the student data in memory, so the second can check the same rows there. This is a fictional classroom investigation.',
       calibrate: 'Does SELECT name with a GPA condition request matching names, or prescribe which stored blocks the engine must read?',
       answer: 'It requests matching names. The engine chooses a plan, and that plan determines which blocks it reads.',
-      opening: 'Read the query as asking for students with a GPA above 3.5. Explain that the slides store GPA in tenths, so 35 represents 3.5. Keep ada, cyd, and eli visible, and ask whether a second run must read their data from disk again before following either path.',
-      analogy: ['lecture-01-scene-09','Use a workshop order to map responsibilities: SQL states the request, the plan supplies work instructions, operators request rows, and lower layers obtain their bytes. The actual interfaces determine what each station can do.'],
+      opening: 'Read the query as asking for students with a GPA above 3.5. Explain that the slides store GPA in tenths, so 35 represents 3.5. Keep ada, cyd, and eli visible. Before following either path, ask whether a second run must read their data from disk.',
+      analogy: ['lecture-01-scene-09','Compare the query with a workshop order. SQL states the request. The plan specifies operations. Operators request rows. Lower layers obtain the bytes. The actual interfaces determine what each station can do.'],
       closing: 'Follow the same query from SQL through its plan to the rows and pages it reads. Then change a row while its page stays in memory and ask how the next result should change.',
       question: 'If a table changes between two runs while its pages stay cached, can zero new storage reads justify returning the old answer?',
-      expected: 'No. Cached pages are inputs to execution, not a saved answer. Reevaluate the query against the current buffered data; distinguish examined rows, returned rows, and storage reads.',
+      expected: 'No. Cached pages are inputs to execution, not a saved answer. Reevaluate the query against the current buffered data. Distinguish examined rows, returned rows, and storage reads.',
       idea: 'A query’s answer and the work needed to produce it are separate properties.'
     },
     2: {
@@ -2490,14 +2490,14 @@
       closing: 'Follow a request for B7: find or load it, pin it, read it, and unpin it. Explain when its frame can be replaced. Keep the pool size fixed and change the request order to explain a different hit rate.',
       question: 'The oldest frame is pinned and a newer one is unpinned and dirty. Which may be reused, and can correct replacement still produce zero scan hits?',
       expected: 'The unpinned frame can be reused after its dirty page is written. A scan larger than the pool can still miss every time because each block is evicted before reuse. Correct replacement does not guarantee cache hits.',
-      idea: 'Pins and dirty writes make frame reuse safe; access order determines how useful that reuse is.'
+      idea: 'Pins and dirty writes make frame reuse safe. Access order determines how useful that reuse is.'
     },
     3: {
-      story: 'Maya saves cyd’s byte address and renames ben to benjamin in a packed page. Noor asks whether the shifted bytes still leave that address pointing to cyd. This is a fictional classroom investigation; the next scene makes the movement visible.',
+      story: 'Maya saves cyd’s byte address and renames ben to benjamin in a packed page. Noor asks whether the shifted bytes still leave that address pointing to cyd. This is a fictional classroom investigation. The next scene makes the movement visible.',
       calibrate: 'What do Page and Buffer already know, and what additional rules are needed to interpret one student’s fields?',
       answer: 'They manage bytes and blocks. A schema and layout supply field meanings, boundaries, and offsets.',
-      opening: 'Point to the anonymous byte grid before naming its fields. Ask students to identify the missing interpretation rule; use the saved-address failure to motivate slots.',
-      analogy: ['lecture-03-scene-04','Map equal tray compartments to slots and positions within each compartment to field offsets. Count bytes, including string prefixes and reserved content capacity; characters can take different numbers of UTF-8 bytes.'],
+      opening: 'Point to the anonymous byte grid before naming its fields. Ask students to identify the missing interpretation rule. Use the saved-address failure to motivate slots.',
+      analogy: ['lecture-03-scene-04','Map equal tray compartments to slots and positions within each compartment to field offsets. Count bytes, including string prefixes and reserved content capacity. Characters can take different numbers of UTF-8 bytes.'],
       closing: 'Use the saved address to find the slot, then use the layout to find its fields. Explain how the page pin and catalog support that read. Delete the row, reuse its slot, and ask which row the same address now identifies.',
       question: 'Can a reused RID still be the same physical address while naming a different row? Which rules let a new process interpret its fields?',
       expected: 'Yes. A RID is a block and slot address, not a permanent identity. The saved schema and layout specify how to interpret the new occupant’s bytes.',
@@ -2506,27 +2506,27 @@
     4: {
       story: 'Maya runs the query for students with gpa > 35. After ada, she expects ben, but the filter skips ben’s GPA of 31 and returns cyd. Noor asks how many rows that one result required the scan to visit. This is a fictional classroom investigation using the six-row example.',
       calibrate: 'When TableScan.next() returns True, does it provide a whole result table or position the scan at one current row?',
-      answer: 'It positions the scan at one row. The caller can read that row’s fields; another next call advances again.',
+      answer: 'It positions the scan at one row. The caller can read that row’s fields. Another next call advances again.',
       opening: 'Start with the operator tree before any next() call. Have the class trace the first next() request down to TableScan before revealing a returned row.',
       analogy: ['lecture-04-scene-05','Link the interface to nested Python generators: asking for the next item resumes work and a wrapper can skip items. Rewind, field routing, and close remain explicit scan contracts. Blocking operators later qualify the streaming model.'],
       closing: 'Return to one requested name. Trace next() calls, skipped input rows, the caller’s field read, and close() calls on every input. Then compare equivalent plans with different candidate counts.',
       question: 'What work can a filter save by running before ProductScan, and what must stay correct?',
       expected: 'It can reduce candidate pairs while returning the same rows and duplicates. The filter must use only fields from its input, and close must still release every underlying scan. Measure runtime separately from pair counts.',
-      idea: 'One successful result request can cause many input visits; the plan determines that work.'
+      idea: 'One successful result request can cause many input visits. The plan determines that work.'
     },
     5: {
-      story: 'At the prompt, Maya points to FROM and to “from” inside quotes. Noor asks why the lexer gives those same letters different token kinds. This fictional classroom puzzle returns in the quotes scene; first follow a simple SELECT through the front end.',
+      story: 'At the prompt, Maya points to FROM and to “from” inside quotes. Noor asks why the lexer gives those same letters different token kinds. This fictional classroom puzzle returns in the quotes scene. First follow a simple SELECT through the front end.',
       calibrate: 'Has constructing a query description already executed the scan? Does a quoted string with keyword letters have to be a keyword token?',
-      answer: 'No to both. Parsing records a request before execution; the lexer distinguishes a quoted string value from a keyword.',
-      opening: 'Follow the visible SELECT through tokens, QueryData, and scan operators. Name each representation before moving to the next; reserve actual row reads for execution.',
+      answer: 'No to both. Parsing records a request before execution. The lexer distinguishes a quoted string value from a keyword.',
+      opening: 'Follow the visible SELECT through tokens, QueryData, and scan operators. Name each representation before moving to the next. Reserve actual row reads for execution.',
       analogy: ['lecture-05-scene-06','Link tokens and grammar to words and sentence structure. Recognizing words does not establish legal arrangement, schema validity, or a way to execute the request. Connect each grammar rule to its consuming parser method.'],
-      closing: 'Return to the typed query and trace tokens, QueryData, scan objects, and execution. Explain that TableScan visits 300 students while SelectScan accepts sixty; parsing only records the condition.',
+      closing: 'Return to the typed query and trace tokens, QueryData, scan objects, and execution. Explain that TableScan visits 300 students while SelectScan accepts sixty. Parsing only records the condition.',
       question: 'If WHERE returns one fifth as many names, what work can remain unchanged and which observations are still needed before claiming a speedup?',
-      expected: 'The scan still visits all 300 students. Selection adds checks and reduces output work. Compare the operator counters and repeated timings; parsing and planning remain separate from row execution.',
+      expected: 'The scan still visits all 300 students. Selection adds checks and reduces output work. Compare the operator counters and repeated timings. Parsing and planning remain separate from row execution.',
       idea: 'Tokens describe text, QueryData describes the request, and scans execute it.'
     },
     6: {
-      story: 'Maya stops at the root separator 36 and asks whether she has found eli. Noor points to the right leaf and then RID (0, 4): the root’s 36 selects the right child, the leaf’s 36 supplies the RID, and the heap fetch returns the row. This is a fictional classroom investigation using the existing toy tree.',
+      story: 'Maya stops at the root separator 36 and asks whether she has found eli. Noor points to the right leaf and then RID (0, 4). The root’s 36 selects the right child. The leaf’s 36 supplies the RID. The heap fetch returns the row. This is a fictional classroom investigation using the existing toy tree.',
       calibrate: 'What does a RID identify, and must two rows with the same search key share one RID?',
       answer: 'A RID identifies one heap block and slot. Duplicate search keys can lead to multiple RIDs in a leaf entry.',
       opening: 'Ask students to distinguish a GPA value, a routing separator, and a row address. Follow the existing drawing through the leaf to the actual heap row.',
@@ -2537,11 +2537,11 @@
       idea: 'The index locates each key’s RID list, and those addresses lead to the rows in the heap.'
     },
     7: {
-      story: 'Maya tries to transfer $50 from A, which holds $60, to B, which holds $90. A’s new $10 balance reaches disk, but a power failure interrupts the credit to B. After restarting, the saved total is $100 instead of $150. Noor opens the transaction log and asks how it can help restore the missing $50. This is a fictional classroom investigation; the displayed balances illustrate the recovery rule.',
+      story: 'Maya tries to transfer $50 from A, which holds $60, to B, which holds $90. A’s new $10 balance reaches disk, but a power failure interrupts the credit to B. After restarting, the saved total is $100 instead of $150. Noor opens the transaction log and asks how it can help restore the missing $50. This is a fictional classroom investigation. The displayed balances illustrate the recovery rule.',
       calibrate: 'Does a dirty page in memory prove that a transaction committed durably? What distinction did fsync introduce in Lab 1?',
-      answer: 'No. A dirty page may exist only in memory, or it may have reached disk before commit. Check the durable log and completion records; the required write order depends on the engine’s policy.',
+      answer: 'No. A dirty page may exist only in memory, or it may have reached disk before commit. Check the durable log and completion records. The required write order depends on the engine’s policy.',
       opening: 'Let students establish the original account total before applying a debit. Identify the incomplete transfer and the durable evidence available after interruption.',
-      analogy: ['write-ahead-logging','Link WAL to preserving repair information before changing an item. The old value supplies physical undo in this lab; a note in RAM is insufficient. Required log information must reach durable storage before protected data.'],
+      analogy: ['write-ahead-logging','Link WAL to preserving repair information before changing an item. The old value supplies physical undo in this lab. A note in RAM is insufficient. Required log information must reach durable storage before protected data.'],
       closing: 'Return to the transfer under FORCE/STEAL. Explain when its log records, changed pages, and COMMIT record reach storage. Then interrupt recovery and ask what the next restart must repair.',
       question: 'Undo repaired the buffer. Why must its flush precede a durable ROLLBACK record?',
       expected: 'Otherwise another crash could leave damaged data beside a completion record that makes the next recovery skip the repair. Recovery must make its own changes durable before declaring completion.',
@@ -2550,29 +2550,29 @@
     8: {
       story: 'Maya and Noor each deposit $10 into an account holding $100. Both read $100 and write $110. Maya asks why the balance is not $120 even though both deposits completed. This is a fictional classroom schedule that the later animation traces.',
       calibrate: 'What balance would serial deposits produce, and can durable writes alone establish that result under concurrency?',
-      answer: 'Serial deposits produce 120. Durability can preserve an incorrect 110; isolation must constrain the interleaving.',
+      answer: 'Serial deposits produce 120. Durability can preserve an incorrect 110. Isolation must constrain the interleaving.',
       opening: 'Ask for the intended serial result before running the conflicting schedule. Distinguish this ordering problem from the earlier crash-recovery promise.',
-      analogy: ['shared-and-exclusive','Link locks to compatible or exclusive reservations on an item. A buffer pin protects a frame from reuse; a transaction lock constrains conflicting data access. These protections have different lifetimes and jobs.'],
+      analogy: ['shared-and-exclusive','Link locks to compatible or exclusive reservations on an item. A buffer pin protects a frame from reuse. A transaction lock constrains conflicting data access. These protections have different lifetimes and jobs.'],
       closing: 'Return to the deposits, identify the first incompatible lock upgrade, and then explain the separate reader/writer snapshot example. Change the second read from a statement snapshot to a transaction snapshot.',
-      question: 'After a writer commits 120, what can a reader’s second ordinary PostgreSQL SELECT see at Read Committed and Repeatable Read, and what does snapshot isolation still leave possible?',
+      question: 'A writer commits 120. What can a reader’s second ordinary PostgreSQL SELECT see at Read Committed and Repeatable Read? What does snapshot isolation still permit?',
       expected: 'It can see 120 with a new statement snapshot at Read Committed and retains 100 with the existing transaction snapshot at Repeatable Read. A new transaction can see 120. Snapshot isolation can still permit write skew.',
       idea: 'Locks control conflicting access, while snapshots determine which row versions a reader sees.'
     },
     9: {
-      story: 'Maya wants students with a GPA above 3.5 in one selected department. One plan pairs all 300 students with three majors before filtering; another pairs the 60 students above that GPA cutoff with one selected major. Both return twenty rows, from 900 versus sixty pairs. Noor asks which rows can be ruled out before making pairs. This is a fictional classroom investigation using the course’s join fixture.',
+      story: 'Maya wants students with a GPA above 3.5 in one selected department. One plan pairs all 300 students with three majors before filtering. Another pairs the 60 students above that GPA cutoff with one selected major. Both return twenty rows, from 900 versus sixty pairs. Noor asks which rows can be ruled out before making pairs. This is a fictional classroom investigation using the course’s join fixture.',
       calibrate: 'Does sixty candidate pairs mean sixty result rows? What must agree before comparing two plans?',
       answer: 'No. The join still checks candidates. Plans must return the same required rows, including duplicates, before their work is comparable.',
       opening: 'State the request: return students with a GPA above 3.5 in one selected department. The fixture stores GPA in tenths, so the SQL tests gpa > 35. Explain that each candidate pairs a student row with a major row. Point to the input-only filters and predict how many pairs each plan forms before discussing elapsed time.',
-      analogy: ['optimizer','Compare choosing a query plan to choosing a route from a map: statistics summarize rows and value distributions, the cost model estimates operator work, and plan search compares combinations. Check the estimates against measured counts.'],
+      analogy: ['optimizer','Compare choosing a query plan to choosing a route from a map. Statistics summarize rows and value distributions. The cost model estimates operator work. Plan search compares combinations. Check the estimates against measured counts.'],
       closing: 'Return to the twenty-row answer. Estimate candidate work, compare costs in common units, and check execution. Name one incorrect assumption that could make the other plan cheaper.',
-      question: 'With a scan cost of 1,000 page accesses and an index cost of 3 plus the match count, which choice follows at 100 and 2,000 matches? What assumptions could change it?',
+      question: 'A scan costs 1,000 page accesses. An index costs 3 accesses plus the match count. Which costs less at 100 and 2,000 matches? What assumptions could change the choice?',
       expected: 'The model gives 103 and 2,003 accesses: index for 100, scan for 2,000. Cache hits, shared heap pages, clustering, CPU costs, and inaccurate counts can change a real comparison.',
       idea: 'Compare plans that return the same rows, estimate their work, then check those estimates by running them.'
     },
     10: {
-      story: 'Maya groups the same three toy rides by ride and by field. Noor first asks for average fare, then every detail of Ride 2. This is a fictional classroom investigation; $36, $24, and $30 are illustrative fares, separate from the real taxi sample.',
+      story: 'Maya groups the same three toy rides by ride and by field. Noor first asks for average fare, then every detail of Ride 2. This is a fictional classroom investigation. $36, $24, and $30 are illustrative fares, separate from the real taxi sample.',
       calibrate: 'Which fields contribute to average fare, and which are needed for a complete ride? Must either layout change the stored facts?',
-      answer: 'The average needs fares across rides; a complete ride needs its fields. Both layouts preserve the same facts and can answer both queries.',
+      answer: 'The average needs fares across rides. A complete ride needs its fields. Both layouts preserve the same facts and can answer both queries.',
       opening: 'Read one ride in both layouts. Ask students to identify the values each query needs before revealing the average or discussing file formats.',
       analogy: ['read-a-column-layout','Compare a column to a list of one field from every record, kept in the same row order. Matching positions connect the fields of a row. Pages, chunks, compression, and metadata determine the actual bytes read.'],
       closingId: 'choose-the-shape',
@@ -2590,12 +2590,12 @@
   };
   const beats = {
     1: {'lecture-01-scene-03':'Predict a block read separately from a returned row. Explain why moving a whole block does not yet test its predicate.', 'lecture-01-scene-14':'Predict the bytes for integer 1 and the prefix length of a multibyte string before revealing their storage.'},
-    2: {'lecture-02-scene-08':'Before selecting a victim, remove pinned frames from the eligible set; then predict the oldest remaining frame.', 'lecture-02-scene-13':'Predict whether one expensive miss can dominate several cheap hits before interpreting the average-time model.'},
+    2: {'lecture-02-scene-08':'Before selecting a victim, remove pinned frames from the eligible set. Then predict the oldest remaining frame.', 'lecture-02-scene-13':'Predict whether one expensive miss can dominate several cheap hits before interpreting the average-time model.'},
     3: {'lecture-03-scene-02':'Keep the saved byte address visible while ben becomes benjamin. Predict which later row no longer starts there.', 'lecture-03-scene-05':'Calculate slot number times slot size plus field offset before revealing the highlighted byte.', 'lecture-03-scene-14':'Change the occupant after deletion and explain which address stays the same while row identity changes.'},
     4: {'lecture-04-scene-04':'Predict how many child next calls are required to return the next qualifying name, then count rejected inputs.', 'lecture-04-scene-09':'Predict the first pair after the right input ends. Identify which input advances and which rewinds.', 'lecture-04-scene-13':'Predict 300 × 3 versus 60 × 1 candidates before revealing the counts. Explain why both plans still need the join predicate.'},
     5: {'lecture-05-scene-03':'Return to Maya’s quoted-from puzzle. Ask for token kinds before revealing how identical letters acquire different roles.', 'lecture-05-scene-08':'Predict the returned description and the next unread token before advancing the parser call.', 'lecture-05-scene-12':'Check that both plans return the same rows. Predict their candidate pairs, then compare those counts with results and timings.'},
     6: {'find-37':'Predict the next child from the separator inequality before following its pointer. Keep the key, leaf entry, and heap address separate.', 'walk-a-range':'Predict whether every RID for key 31 contributes and where the inclusive upper bound stops the scan.', 'the-fifth-key':'Pause before overflow is repaired. Keep the whole RID list beside each key and predict the routing copy that appears in the parent.'},
-    7: {'two-writes-reverse-undo':'Predict the buffer after undoing the newest SET before revealing 40; then predict the earlier restoration to 60. Keep the durable page state separate.', 'repair-can-crash-too':'Place a crash before and after the repair flush, then before and after the completion record. State what a second recovery must see.'},
+    7: {'two-writes-reverse-undo':'Predict the buffer after undoing the newest SET before revealing 40. Then predict the earlier restoration to 60. Keep the durable page state separate.', 'repair-can-crash-too':'Place a crash before and after the repair flush, then before and after the completion record. State what a second recovery must see.'},
     8: {'statement-or-transaction-snapshot':'Name the snapshot boundary before predicting the second read. Use the same reader/writer schedule under both isolation levels.', 'write-skew':'Predict both decisions from the original snapshot. Ask why updating different rows can evade a direct write-write conflict.'},
     9: {'price-the-work':'Calculate the toy match count before converting it to page accesses. Use the same cost unit for the full scan and index.', 'when-estimates-fail':'Ask which distribution or independence assumption the visible data violates before changing the cost estimate.'},
     10: {'the-point-lookup-reverses-it':'Return to Noor’s changed request. Predict the values needed for a complete ride versus all fares before comparing their grouping.', 'train-inside-the-query-engine':'Name the training and test rows before fitting. Predict which stage creates coefficients and which later stage only applies them.', 'duckdb-pytorch-fare-model':'Ask for an error pattern before training. Trace SQL selection, Arrow batches, PyTorch weight updates, and the SQL prediction call separately. Compare the same held-out rides and metric.'}

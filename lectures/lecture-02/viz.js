@@ -19,16 +19,11 @@
     },
     'pin-count': {
       title: 'Pin count',
-      body: "<p>The number of active pins on a frame. A successful <code>pin(block)</code> adds one; <code>unpin(buffer)</code> removes one. A positive count makes the frame ineligible for eviction. Multiple callers can pin the same block, so the count reaches zero only after all their pins are released. Leaked pins can leave the pool with no frame available for a miss.</p>",
+      body: "<p>The number of active pins on a frame. A successful <code>pin(block)</code> adds one. <code>unpin(buffer)</code> removes one. A positive count makes the frame ineligible for eviction. Multiple callers can pin the same block, so the count reaches zero only after all their pins are released. Leaked pins can leave the pool with no frame available for a miss.</p>",
     },
     'dirty': {
       title: 'Dirty flag',
-      body: '<p>A per-frame bit that says the page in memory has been written since it was loaded, so it ' +
-        'no longer matches the block on disk. It is set when a caller modifies the page (in microdb, ' +
-        'by calling <code>set_modified()</code> after writing into it) and cleared when the frame is ' +
-        'written back. A clean frame can be evicted by just forgetting it; a dirty frame must be ' +
-        'flushed to disk first or the write is lost. Reads never dirty a page, and unpin does not ' +
-        'write anything: a hot page can stay dirty in memory for a long time, on purpose.</p>',
+      body: "<p>A flag indicating that the cached page contains changes that need a disk write. In microdb, call <code>set_modified()</code> after modifying the page. A successful write-back clears the flag. A clean frame can be reused without a write. A dirty frame must be flushed before reuse to preserve its changes.</p><p>Reads do not mark pages dirty. Unpinning does not write the page. Repeated updates can share a later flush.</p>",
     },
     'commit': {
       title: 'Commit',
@@ -96,7 +91,7 @@
     if (i >= 0) {
       hits += 1;
       frames[i].last = tick;
-      msgEl.innerHTML = `Access B${k} → <strong>HIT</strong> in frame ${i}. No disk. last_used re-stamped to ${tick}.`;
+      msgEl.innerHTML = `Access B${k} → <strong>HIT</strong> in frame ${i}. No disk read is needed. last_used becomes ${tick}.`;
       render({ frame: i, kind: 'hit' });
       return;
     }
@@ -112,7 +107,7 @@
     msgEl.innerHTML = `Access B${k} → <strong>MISS</strong>. ` +
       (evicted === null
         ? `Loaded into empty frame ${i}.`
-        : `Evicted B${evicted} (smallest last_used) from frame ${i}, read B${k} from disk.`);
+        : `The pool evicts B${evicted} from frame ${i} because it has the smallest last_used. It reads B${k} from disk.`);
     render({ frame: i, kind: 'miss' });
   }
 
@@ -137,7 +132,7 @@
   const HOT  = [0,1,0,2,1,0,1,5,0,1,0,3,1,0,1,0];
 
   $('bs-scan').addEventListener('click', () =>
-    runSequence(SCAN, 'Scan done: <strong>{rate} hits</strong>. Every block was evicted exactly one step before its second use. LRU + scan is the perfect anti-pattern.'));
+    runSequence(SCAN, 'Scan done: <strong>{rate} hits</strong>. The pool evicts each block before the next request for it. This repeated scan is larger than the pool.'));
   $('bs-hot').addEventListener('click', () =>
     runSequence(HOT, 'Hot set done: <strong>{rate} hits</strong>. Requests to the small hot set often reuse blocks still in memory.'));
   $('bs-reset').addEventListener('click', reset);

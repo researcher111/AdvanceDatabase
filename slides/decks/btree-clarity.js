@@ -68,7 +68,7 @@
         d.text('rid',1068,515,'36 → (0, 4)',27,P.green);
       }
       if(s===2){d.arrow('fetch',944,548,565,465,P.orange,4);d.text('fetch-label',744,575,'Fetch block 0, slot 4',24,P.orange);}
-      foot(d,s===0?'A search key is a value; a RID is a row’s address.':'Index order and physical row order are separate.');
+      foot(d,s===0?'A search key is a value. A RID is a row’s address.':'Index order and physical row order are separate.');
     },'Does the root’s copy of 36 contain eli’s full row?',
     'No. Descend to the leaf, obtain its RID list, and use each address to fetch a heap row.',
     'Toy heap block with six rows. The later shared fixture adds a second row with key 31 in block 1. Lab 6 tree nodes live in memory.');
@@ -84,7 +84,7 @@
       const counts=[0,147,210,294],n=counts[s];
       for(let i=0;i<42;i++)d.rect('block-'+i,135+(i%14)*73,295+Math.floor(i/14)*64,57,47,i<Math.ceil(n/7)?P.blueLight:P.white,P.line,5,2);
       d.text('grid-label',640,260,'Each tile represents 7 heap blocks',24,P.muted);
-      if(s>=2){d.rect('match-block',135+10*73,295+64,57,47,P.greenLight,P.green,5,3);d.text('match-label',640,537,s===3?'Scan complete: every row has been checked.':'A matching row is here; later blocks still need checking.',24,P.green);}
+      if(s>=2){d.rect('match-block',135+10*73,295+64,57,47,P.greenLight,P.green,5,3);d.text('match-label',640,537,s===3?'Scan complete: every row has been checked.':'A matching row is here. Later blocks still need checking.',24,P.green);}
       d.text('checked',640,595,['0 rows checked','50,000 rows checked','Continue past the match','100,000 rows checked'][s],32,P.ink,'middle',650);
       foot(d,n+' of 294 heap blocks visited · visits are not necessarily physical reads');
     },'When could stopping after the first match be valid?',
@@ -110,11 +110,11 @@
     'Uses the same GPA values and RIDs as the shared B+ tree search and range examples.');
 
   register('first-four-keys','Four keys fit in one leaf',
-    'Insert entries in key order; a full leaf remains legal until another distinct key arrives.',[
-      frame('Insert 3','The only node is both the root and a leaf.','Start with key 3 and RID c. Empty dashed slots represent capacity; they are not entries.'),
+    'Insert entries in key order. A full leaf remains legal until another distinct key arrives.',[
+      frame('Insert 3','The only node is both the root and a leaf.','Start with key 3 and RID c. Empty dashed slots represent capacity. They are not entries.'),
       frame('Insert 1 before 3','Move the existing entry to keep keys sorted.','Insert 1 with RID a before 3. The stable entry for 3 moves right with its RID. Sorting by key does not reorder the heap.'),
       frame('Insert 4 after 3','Three entries use three of the four slots.','Insert 4 with RID d after 3. No parent node or separator is needed while the single leaf has room.'),
-      frame('Insert 2 between 1 and 3','Four keys fill the leaf; no split is needed yet.','Insert 2 with RID b between 1 and 3. Existing entries move to make space. Stop before inserting a fifth key and ask whether full is already invalid.')
+      frame('Insert 2 between 1 and 3','Four keys fill the leaf. No split is needed yet.','Insert 2 with RID b between 1 and 3. Existing entries move to make space. Stop before inserting a fifth key and ask whether full is already invalid.')
     ],(d,s)=>{
       const keys=[[3],[1,3],[1,3,4],[1,2,3,4]][s],newKey=[3,1,4,2][s];
       d.text('capacity',640,224,'Capacity: 4 distinct keys',28,P.muted);
@@ -129,14 +129,14 @@
     'Toy capacity is four distinct keys. The following growth animation replays keys 1–4 and then adds 5–7.');
 
   register('b-tree','Roots route; leaves hold entries',
-    'Internal separators choose children; leaves retain each key and its RID list.',[
-      frame('Name the parts','The root’s 36 divides the two key ranges.','Identify the routing key and two child pointers. The left subtree contains keys below 36; equality takes the right subtree.'),
+    'Internal separators choose children. Leaves retain each key and its RID list.',[
+      frame('Name the parts','The root’s 36 divides the two key ranges.','Identify the routing key and two child pointers. The left subtree contains keys below 36. Equality takes the right subtree.'),
       frame('Inspect the leaf entry','36 also appears in a leaf, with its row address.','Highlight the actual leaf entry for 36. The root copy does not replace it. Point to its RID (0, 4).'),
       frame('Follow the leaf order','The next-leaf link continues through keys in order.','Highlight the sibling link. It is for moving between leaves during a range scan, not for fetching a row from the heap.'),
-      frame('Check duplicate keys and depth','Key 31 has two RIDs; both leaves have the same depth.','Point to the two addresses under 31, then to the two root-to-leaf paths. Count keys, rows, and levels separately: 31 is one key with two rows.')
+      frame('Check duplicate keys and depth','Key 31 has two RIDs. Both leaves have the same depth.','Point to the two addresses under 31, then to the two root-to-leaf paths. Count keys, rows, and levels separately: 31 is one key with two rows.')
     ],(d,s)=>{
       fixture(d,{path:s===1?1:null,active:s===1?36:s===3?31:null,link:s===2});
-      foot(d,['Routing key: choose a child; do not stop at the root.','Actual entry: key 36 → [(0, 4)]','Leaf links follow key order, not heap-page order.','6 distinct keys · 7 matching row addresses · 2 levels'][s]);
+      foot(d,['Routing key: choose a child. Do not stop at the root.','Actual entry: key 36 → [(0, 4)]','Leaf links follow key order, not heap-page order.','6 distinct keys · 7 matching row addresses · 2 levels'][s]);
     },'Why does 36 appear in both the root and a leaf?',
     'The root copy routes the lookup. The leaf entry stores key 36’s RID list, just like every other actual key.',
     'Shared fixture: leaves [28,31,34] and [36,37,39]. Key 31 has RIDs (0,1) and (1,0). All other keys have one RID.');
@@ -146,9 +146,9 @@
       frame('Search for 36','Find key 36, exactly equal to the separator.','Ask whether finding 36 in the root finishes the search. It does not: internal nodes contain routing keys, while leaves contain RID lists.'),
       frame('Equality goes right','36 ≥ 36, so follow the right child.','Highlight the right edge. Equality belongs in the right subtree under this separator convention.'),
       frame('Locate the leaf entry','The right leaf contains 36 at its first position.','Highlight 36 in the leaf. Distinguish the child index at the root from the position of a key within the leaf.'),
-      frame('Return its RID list','search(36) returns [(0, 4)], not a student row.','Read the RID list. Two in-memory tree nodes have been visited; no heap row has been fetched yet.'),
-      frame('Fetch the row','Move to block 0, slot 4; read eli, GPA 36.','The provided index scan follows the RID to the heap. Only now does it read the requested row fields.'),
-      frame('Try an absent key','35 goes left, but the leaf has no 35: return [].','Follow the left route for 35. Arriving at the correct leaf does not guarantee a match; check membership before returning a RID.'),
+      frame('Return its RID list','search(36) returns [(0, 4)], not a student row.','Read the RID list. Two in-memory tree nodes have been visited. No heap row has been fetched yet.'),
+      frame('Fetch the row','Move to block 0, slot 4. Read eli, GPA 36.','The provided index scan follows the RID to the heap. Only now does it read the requested row fields.'),
+      frame('Try an absent key','35 goes left, but the leaf has no 35: return [].','Follow the left route for 35. Arriving at the correct leaf does not guarantee a match. Check membership before returning a RID.'),
       frame('Try a repeated value','31 goes left and returns two row addresses.','Highlight 31 and both RIDs. An equality scan must fetch both matching rows. A single distinct key can produce several results.')
     ],(d,s)=>{
       fixture(d,{path:s>=5?0:s>=1?1:null,active:s===2?36:s===6?31:null,matches:s>=3&&s<=4?[36]:[]});
@@ -159,15 +159,15 @@
       foot(d,s===4?'Heap row fetched: eli, GPA 36':s===6?'Fetch both addresses to return both matching rows.':'Node visits are separate from heap fetches.',P.muted,660);
     },'Can a root separator alone answer search(36)?',
     'No. The leaf provides the RID list. If 36 is missing from that leaf, the tree cannot correctly return its row.',
-    'Visual expansion of the shared btree-search example. Lab 6 nodes are in memory; tree visits are not disk reads.');
+    'Visual expansion of the shared btree-search example. Lab 6 nodes are in memory. Tree visits are not disk reads.');
 
   register('walk-a-range','Walk an inclusive range',
     'Descend once to the lower bound, follow leaf links, and stop at the first key above the upper bound.',[
-      frame('Choose the starting leaf','Find every row with 31 ≤ key ≤ 37.','Descend left because 31 is below separator 36. Both endpoints are included; a range result contains RIDs, not merely distinct keys.'),
+      frame('Choose the starting leaf','Find every row with 31 ≤ key ≤ 37.','Descend left because 31 is below separator 36. Both endpoints are included. A range result contains RIDs, not merely distinct keys.'),
       frame('Skip the low key','28 is below 31, so skip it.','Show the cursor at 28 without adding it to the result. The lower bound need not itself exist in the tree.'),
       frame('Collect key 31','31 contributes both of its row addresses.','Highlight 31 and collect both RIDs. One accepted key adds two matching rows.'),
       frame('Collect key 34','Two accepted keys have produced three RIDs.','Add the RID for 34. Keep the accepted keys and the cumulative RID count distinct.'),
-      frame('Cross the leaf boundary','Follow next leaf; do not restart at the root.','Move the cursor across the sibling link. The root descent happens once, then the scan continues along sorted leaves.'),
+      frame('Cross the leaf boundary','Follow next leaf. Do not restart at the root.','Move the cursor across the sibling link. The root descent happens once, then the scan continues along sorted leaves.'),
       frame('Collect key 36','36 is still within the requested range.','Accept 36 and its RID (0,4). Four RIDs have now been collected.'),
       frame('Include key 37','37 equals the upper bound, so include it.','Accept the upper endpoint and its RID (0,2). Stopping at key greater than or equal to the bound would lose this row.'),
       frame('Stop at key 39','39 > 37, so stop: 4 distinct keys, 5 RIDs.','Stop at 39 without collecting it. Sorted leaves guarantee all later keys are too high. The returned addresses can now be used to fetch five heap rows.')
@@ -186,12 +186,12 @@
     keys.forEach((key,i)=>d.text((leaf?'leaf-key-':'routing-key-')+key,x+(i-(keys.length-1)/2)*Math.min(60,(width-25)/keys.length),y+37,key,keys.length>3?25:29,P.ink));
   }
   register('predict-the-next-split','Predict the next leaf split',
-    'A leaf split adds a separator to its parent; it need not increase tree height.',[
-      frame('A leaf has room','Capacity is 4 keys; the right leaf currently holds 3.','Show the tree with root 3, left leaf [1,2], and right leaf [3,4,5]. Ask where 6 must go.'),
+    'A leaf split adds a separator to its parent. It need not increase tree height.',[
+      frame('A leaf has room','Capacity is 4 keys. The right leaf currently holds 3.','Show the tree with root 3, left leaf [1,2], and right leaf [3,4,5]. Ask where 6 must go.'),
       frame('Insert 6','6 goes right and fills the fourth slot.','Insert 6 in the right leaf. It is full but legal, so nothing splits.'),
       frame('Predict insertion of 7','A fifth distinct key will overflow the right leaf.','Hold 7 above the full right leaf. Ask students to predict the two leaf contents, the copied separator, and whether the tree gets taller.'),
-      frame('Split the right leaf','Split into [3, 4] and [5, 6, 7]; keep their RID lists.','Reveal the split leaves and repaired sibling links. The existing root still needs a new separator and child pointer; this intermediate state is not yet a completed insertion.'),
-      frame('Repair the existing root','Copy 5 into the root; every leaf stays at the same depth.','Add separator 5 and the new child pointer. With two routing keys the root still fits, so no new level is needed.')
+      frame('Split the right leaf','Split into [3, 4] and [5, 6, 7]. Keep their RID lists.','Reveal the split leaves and repaired sibling links. The existing root still needs a new separator and child pointer. This intermediate state is not yet a completed insertion.'),
+      frame('Repair the existing root','Copy 5 into the root. Every leaf stays at the same depth.','Add separator 5 and the new child pointer. With two routing keys the root still fits, so no new level is needed.')
     ],(d,s)=>{
       const groups=s>=3?[[1,2],[3,4],[5,6,7]]:[[1,2],s>=1?[3,4,5,6]:[3,4,5]],xs=s>=3?[260,640,1020]:[350,930];
       d.text('root-label',640,215,'root: '+(s===4?'2 of 4 key slots':'1 of 4 key slots'),24,P.muted);
@@ -204,20 +204,20 @@
       });
       if(s===2){d.box('incoming',1075,263,80,70,'7',P.orangeLight,P.orange,34);d.text('insert-label',1115,240,'insert',23,P.orange);}
       if(s===4)['< 3','3 ≤ key < 5','≥ 5'].forEach((t,i)=>d.text('route-'+i,xs[i],385,t,23,P.green));
-      foot(d,s===3?'Split in progress: install the new parent separator next.':s===4?'A leaf split happened. Tree height is still 2 levels.':'Each displayed key keeps its RID list; lists are omitted here.',s===3?P.orange:P.muted);
+      foot(d,s===3?'Split in progress: install the new parent separator next.':s===4?'A leaf split happened. Tree height is still 2 levels.':'Each displayed key keeps its RID list. Lists are omitted here.',s===3?P.orange:P.muted);
     },'What separator is copied up, and does the tree get taller?',
     'Copy 5, the first key of the new right leaf. The existing root has room, so the tree remains two levels tall.',
-    'Prediction exercise using the final inserts from the earlier growth animation. Capacity four distinct keys per node; RID lists omitted for space.');
+    'Prediction exercise using the final inserts from the earlier growth animation. Capacity four distinct keys per node. RID lists omitted for space.');
 
   register('a-root-splits','An internal split moves a separator',
     'Split an internal node around its middle separator, move that separator up, and preserve every child.',[
-      frame('A full internal root','After inserting 1–12: 4 root keys and 5 child pointers.','Count the four routing keys [3,5,7,9] and five leaf children. The last leaf holds [9,10,11,12]; full is still legal.'),
+      frame('A full internal root','After inserting 1–12: 4 root keys and 5 child pointers.','Count the four routing keys [3,5,7,9] and five leaf children. The last leaf holds [9,10,11,12]. Full is still legal.'),
       frame('Insert 13','13 goes into the last leaf, which is already full.','Predict the local leaf split before discussing the root. A root split is caused by the extra child and separator from below.'),
-      frame('Split the last leaf','The new leaf starts at 11; the parent still needs its pointer.','Split [9,10,11,12,13] into [9,10] and [11,12,13]. Keep all actual entries in leaves and link the new leaf. The parent still needs the new pointer and separator.'),
+      frame('Split the last leaf','The new leaf starts at 11. The parent still needs its pointer.','Split [9,10,11,12,13] into [9,10] and [11,12,13]. Keep all actual entries in leaves and link the new leaf. The parent still needs the new pointer and separator.'),
       frame('The root now overflows','Copy 11 up: 5 root keys now need 6 child pointers.','Add the copied separator 11 and its child. The root exceeds its four-key capacity. Highlight the middle routing key 7.'),
-      frame('Divide the internal node','Move 7 upward; split the other keys and the six children.','Left keeps routing keys [3,5] and its first three children. Right keeps [9,11] and its last three children. The routing copy of 7 leaves this internal level.'),
+      frame('Divide the internal node','Move 7 upward. Split the other keys and the six children.','Left keeps routing keys [3,5] and its first three children. Right keeps [9,11] and its last three children. The routing copy of 7 leaves this internal level.'),
       frame('Install the new root','A new root [7] makes every leaf one level deeper.','Attach the two internal nodes under the new root. Each has two separators and three children. Tree height grows from two levels to three for every leaf together.'),
-      frame('Check the actual entry','The routing 7 moved; the actual key 7 remains in a leaf.','Follow the new root into the right internal subtree and point to the leaf [7,8]. Its key 7 and RID list were never removed by the internal split.')
+      frame('Check the actual entry','The routing 7 moved. The actual key 7 remains in a leaf.','Follow the new root into the right internal subtree and point to the leaf [7,8]. Its key 7 and RID list were never removed by the internal split.')
     ],(d,s)=>{
       const split=s>=4,six=s>=2;
       const groups=six?[[1,2],[3,4],[5,6],[7,8],[9,10],[11,12,13]]:[[1,2],[3,4],[5,6],[7,8],[9,10,11,12]];
@@ -251,11 +251,11 @@
       foot(d,'Leaf split: COPY a key up. Internal split: MOVE a routing key up.',P.muted,667);
     },'What happens to the actual key 7 when the internal separator moves?',
     'Its leaf entry and RID list remain in leaf [7,8]. Only the routing copy moves to a different internal level.',
-    'Toy capacity four keys per node. RID lists are omitted; every leaf entry carries its list unchanged. Intermediate split frames are temporary until parent pointers are repaired.');
+    'Toy capacity four keys per node. RID lists are omitted. Every leaf entry carries its list unchanged. Intermediate split frames are temporary until parent pointers are repaired.');
 
   register('fan-out','More children mean fewer levels',
     'Fan-out is the number of children an internal node can have.',[
-      frame('Compare two children','With only 2 children per node, the tree needs many levels.','Set a fully packed capacity model for 100 million distinct keys. Assume fan-out F and F entries per leaf. With F=2 the minimum required height is 27 levels including root and leaf; the path drawing abbreviates those levels.'),
+      frame('Compare two children','With only 2 children per node, the tree needs many levels.','Set a fully packed capacity model for 100 million distinct keys. Assume fan-out F and F entries per leaf. With F=2 the minimum required height is 27 levels including root and leaf. The path drawing abbreviates those levels.'),
       frame('Increase to twenty','With 20 children per node, the model needs 7 levels.','Reveal the second case. One additional level multiplies possible leaf capacity by the fan-out. Follow one lookup path rather than counting all nodes in the tree.'),
       frame('Increase to two hundred','With 200 children per node, the model needs 4 levels.','Reveal the final case. Explain that actual occupancy and page sizes affect real height. These are capacity estimates for fully packed nodes, not observed lab timings.')
     ],(d,s)=>{
@@ -282,11 +282,11 @@
     'Illustrative full-tree model N=100,000,000, leaf capacity L=F, total capacity L × F^(h−1)=F^h. Minimum h values are 27,7,4 for F=2,20,200. Actual trees may be taller when partly occupied.');
 
   register('index-pages-and-heap-pages','Count visits and disk reads separately',
-    'A visited page may already be cached; fetching the heap row is separate work.',[
-      frame('State the cache assumptions','Example: 3 upper index pages cached; leaf and heap page uncached.','State a disk-based index scenario before counting. The chosen lookup path has four index levels. Assume its upper three index pages are already cached and its leaf and target heap page are not.'),
-      frame('Visit the root','1 index-node visit; 0 new disk reads.','Visit the root in the buffer pool. Reading its separator is a node visit, but it requires no new physical page read.'),
-      frame('Visit the two internal pages','3 index-node visits; still 0 new disk reads.','Follow the selected child through both cached internal pages. Keep the cumulative node visits separate from disk reads.'),
-      frame('Read the leaf','4 index-node visits; 1 new disk read.','Read the uncached leaf page and obtain the matching RID. The first physical read happens here under the stated cache assumptions.'),
+    'A visited page may already be cached. Fetching the heap row is separate work.',[
+      frame('State the cache assumptions','Example: 3 upper index pages cached. Leaf and heap page uncached.','State a disk-based index scenario before counting. The chosen lookup path has four index levels. Assume its upper three index pages are already cached and its leaf and target heap page are not.'),
+      frame('Visit the root','1 index-node visit. 0 new disk reads.','Visit the root in the buffer pool. Reading its separator is a node visit, but it requires no new physical page read.'),
+      frame('Visit the two internal pages','3 index-node visits. 0 new disk reads.','Follow the selected child through both cached internal pages. Keep the cumulative node visits separate from disk reads.'),
+      frame('Read the leaf','4 index-node visits. 1 new disk read.','Read the uncached leaf page and obtain the matching RID. The first physical read happens here under the stated cache assumptions.'),
       frame('Read the heap page','Fetch the row: 1 more page visit and 1 more disk read.','Use the RID to fetch the uncached heap page. Totals are four index-node visits, one heap-page visit, and two physical reads. In Lab 6 the entire B+ tree is in memory instead.')
     ],(d,s)=>{
       const labels=['root','internal','internal','leaf','heap row'],visited=[0,1,3,4,5][s];
@@ -333,7 +333,7 @@
     'Compare the heap work required by an index with visiting the table in page order.',[
       frame('Few matches','One matching RID reaches just one of the six heap pages.','Use twelve toy rows stored two per page. The index returns one RID, so fetching its result touches only one distinct heap page in this illustration.'),
       frame('Many scattered matches','Eight matching RIDs are spread across all six heap pages.','Broaden the predicate. Highlight eight matching rows across all six pages and read the scattered RID order. The index now requires heap access throughout the table.'),
-      frame('Try the sequential scan','Read the heap in page order; test every row as it arrives.','Show the scan halfway through, after three pages and six rows. Four of those six rows match the same broad predicate. It needs no index descent or scattered RID lookup.'),
+      frame('Try the sequential scan','Read the heap in page order. Test every row as it arrives.','Show the scan halfway through, after three pages and six rows. Four of those six rows match the same broad predicate. It needs no index descent or scattered RID lookup.'),
       frame('Compare the complete work','The scan visits six pages and finds the same eight matching rows.','Finish the scan and compare outputs, not just the pictures. A scan may be cheaper when the index also needs most pages. Cached pages, nearby rows, fields stored in the index, and CPU work affect which plan is cheaper.')
     ],(d,s)=>{
       const hits=s===0?[1]:[1,2,3,5,7,9,10,11],pageCount=s===0?1:s===2?3:6;
@@ -354,13 +354,13 @@
       d.text('counts',640,594,s===0?'1 result · 1 distinct heap page':s===1?'8 results · 6 distinct heap pages':s===2?'6 rows checked · 4 matches so far':'12 rows checked · 8 results · 6 heap pages',29,P.ink,'middle',650);
       foot(d,'Page visits are not a prediction of disk reads or elapsed time.',P.muted,661);
     },'Does the same number of distinct heap pages guarantee the same runtime?',
-    'No. The index adds traversal and RID processing; locality, repeated visits, caching, coverage, and row-test costs also matter. Compare the total work using measurements or stated cost estimates.',
+    'No. The index adds traversal and RID processing. Locality, repeated visits, caching, coverage, and row-test costs also matter. Compare the total work using measurements or stated cost estimates.',
     'Toy comparison, not a universal selectivity threshold. Broad-predicate matches are rows 1,2,3,5,7,9,10,11. The illustrated index RID order is rows 1,9,3,11,5,7,2,10, which visits pages 0,4,1,5,2,3,0,4.');
 
   register('build-and-test','A routing key cannot replace a leaf entry',
     'Tests must verify returned entries, not just the shape of the tree.',[
       frame('Predict the range result','Request all keys from 34 through 37, including both endpoints.','Show the broken tree: root separator 36 exists, but the corresponding leaf entry is missing. Ask for the expected keys and let students inspect the actual leaf chain.'),
-      frame('Expose the missing entry','Expected: 34, 36, 37. Broken result: 34, 37.','Highlight 34 and 37 as the entries the broken range walk can return. The root cannot supply the missing RID for 36; it holds only a routing key.'),
+      frame('Expose the missing entry','Expected: 34, 36, 37. Broken result: 34, 37.','Highlight 34 and 37 as the entries the broken range walk can return. The root cannot supply the missing RID for 36. It holds only a routing key.'),
       frame('Restore the entry and RID','Put 36 → [(0, 4)] back in the right leaf.','Restore both the actual key and its RID list. Merely keeping a separator in the parent does not fix the data loss.'),
       frame('Check equality and range','search(36) and range(34, 37) now return the correct addresses.','Verify the repaired result against expected keys and RIDs. Test a separator-equality lookup as well as an inclusive range crossing that separator.')
     ],(d,s)=>{
@@ -372,11 +372,11 @@
     'Deliberately broken version of the shared GPA tree. The correct range(34,37) returns [(0,5),(0,4),(0,2)].');
 
   register('exit-trace','Explain one split and one lookup',
-    'A leaf split preserves every entry; a lookup uses the repaired routes to find its RID list.',[
+    'A leaf split preserves every entry. A lookup uses the repaired routes to find its RID list.',[
       frame('Predict insertion of 5','Capacity is 4 keys. Explain what happens when 5 arrives.','Pause at the full leaf [1,2,3,4]. Ask for the split contents, the routing separator, and what happens to its leaf entry.'),
-      frame('Explain the split','Leaves become [1, 2] and [3, 4, 5]; copy 3 into a new root.','Reveal the repaired two-level tree. Every key keeps its lettered RID list. The actual entry for 3 remains in the right leaf.'),
+      frame('Explain the split','Leaves become [1, 2] and [3, 4, 5]. Copy 3 into a new root.','Reveal the repaired two-level tree. Every key keeps its lettered RID list. The actual entry for 3 remains in the right leaf.'),
       frame('Route a lookup for 4','4 ≥ 3, so the lookup takes the right child.','Trace the right edge from the root. Ask students to distinguish routing to a leaf from fetching a heap row.'),
-      frame('Return the address, then fetch','Find 4 → [d]; use RID d to fetch the matching heap row.','Highlight the key and its RID list. Recap the implementation work: search, insertion, splitting, and inclusive range lookup. The provided index scan uses returned RIDs to fetch rows.')
+      frame('Return the address, then fetch','Find 4 → [d]. Use RID d to fetch the matching heap row.','Highlight the key and its RID list. Recap the implementation work: search, insertion, splitting, and inclusive range lookup. The provided index scan uses returned RIDs to fetch rows.')
     ],(d,s)=>{
       const groups=s?[[1,2],[3,4,5]]:[[1,2,3,4]],xs=s?[350,930]:[640],y=s?389:335;
       if(s){
@@ -395,6 +395,6 @@
       foot(d,s===0?'Keep keys sorted and keep each RID list with its key.':'Lab 6: search · insert · split · inclusive range lookup',P.muted,663);
     },'What must survive every split?',
     'Every actual key and its RID list, sorted leaf order, correct routing, the leaf chain, and equal depth for all leaves.',
-    'Toy capacity four distinct keys. Letters a–e stand for RID lists. Lab 6 nodes are in memory; the provided scan handles heap-row fetches.');
+    'Toy capacity four distinct keys. Letters a–e stand for RID lists. Lab 6 nodes are in memory. The provided scan handles heap-row fetches.');
   window.CourseClearLearning?.(deck);
 })();

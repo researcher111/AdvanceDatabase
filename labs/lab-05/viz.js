@@ -9,7 +9,7 @@
     },
     'recursive-descent': {
       title: 'Recursive descent',
-      body: "<p>A way to parse text with one function for each grammar rule. A function reads the tokens for its part of the statement and calls other functions for smaller parts. The supplied parser uses this approach; the SELECT walkthrough shows how the functions work together.</p>",
+      body: "<p>A way to parse text with one function for each grammar rule. A function reads the tokens for its part of the statement and calls other functions for smaller parts. The supplied parser uses this approach. The SELECT walkthrough shows how the functions work together.</p>",
     },
     'ast': {
       title: 'AST (abstract syntax tree)',
@@ -174,7 +174,7 @@
   function reset() {
     tables = {};
     screen.innerHTML = '';
-    print('note', 'microdb — type SQL, or use the presets. (Browser mirror; the real one persists to ./mydb)');
+    print('note', 'microdb: type SQL or use the presets. This browser example uses memory. The Python version saves data in ./mydb.');
   }
 
   $('rp-p1').addEventListener('click', () => {
