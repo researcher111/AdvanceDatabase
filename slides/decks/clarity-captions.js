@@ -957,9 +957,9 @@ window.CourseClarityCaptions = {
       "Increase ef_search to explore more candidates, then measure the change in recall."
     ],
     "measure-a-miss": [
-      "Maya puts the approximate result beside the saved exact top ten.",
-      "Count seven shared IDs. The shortcut missed three exact neighbors.",
-      "Recall@10 = 7 / 10 = 0.70. This measures neighbor agreement, not passage usefulness."
+      "For the same query, compare the ten IDs from exact search with the ten returned by the shortcut.",
+      "Seven IDs appear in both rows. The shortcut missed exact neighbors 4, 7, and 10.",
+      "The shortcut found 7 of the 10 exact neighbors, so recall@10 is 70%."
     ],
     "choose-an-operating-point": [
       "These Lab 9 measurements put recall beside comparison counts for each probe setting.",

@@ -55,6 +55,32 @@ assert(resourceLinks.some(item=>item.attrs.href==='https://arxiv.org/abs/2312.17
 const draw=(lecture,id,step)=>V.sceneDrawing(decks[lecture].scenes.find(s=>s.id===id),step);
 const text=(items,key)=>{const a=items.find(i=>i.key===key);assert(a,'missing '+key);return a.text;};
 const strings=items=>items.filter(i=>i.tag==='text').map(i=>i.text).join('\n');
+// Recall highlights the actual intersection in BOTH rows, not every exact ID.
+const recallRows=[[1,2,3,4,5,6,7,8,9,10],[1,2,3,5,6,8,9,11,14,20]];
+const sharedIds=[1,2,3,5,6,8,9],recallPositions=new Map();
+for(let step=0;step<3;step++){
+ const items=draw(11,'measure-a-miss',step);
+ for(const [r,ids] of recallRows.entries()){
+  const green=[];
+  ids.forEach((id,i)=>{
+   const key='r'+r+'i'+i,circle=items.find(item=>item.key===key);
+   assert.equal(Number(text(items,key+'t')),id,'result IDs are preserved');
+   const position=[circle.attrs.cx,circle.attrs.cy];
+   if(step===0)recallPositions.set(key,position);
+   else assert.deepEqual(position,recallPositions.get(key),'results stay in place while matches are revealed');
+   if(circle.attrs.fill===V.palette.green)green.push(id);
+   if(step===0)assert.equal(circle.attrs.fill,V.palette.muted,'let students compare before revealing matches');
+   else if(!sharedIds.includes(id))assert.equal(circle.attrs.fill,r===0?V.palette.orange:V.palette.blue,'missed exact IDs and extra returned IDs have distinct meanings');
+  });
+  assert.deepEqual(green,step===0?[]:sharedIds,'only the seven shared IDs are green in each row');
+ }
+ assert.equal(items.some(item=>item.key==='ans'),step===2,'show the fraction after the overlap');
+ if(step>0){
+  assert.equal(text(items,'missing-ids'),'Missed: 4, 7, 10');
+  assert.equal(text(items,'extra-ids'),'Outside exact top 10: 11, 14, 20');
+ }
+}
+assert.equal(text(draw(11,'measure-a-miss',2),'ans'),'Recall@10 = 7 / 10 = 70%');
 // The lecture opens with the reading's taxi example and delays the answer.
 const opening=decks[10].scenes[0];
 assert.equal(opening.id,'the-analytics-stack');

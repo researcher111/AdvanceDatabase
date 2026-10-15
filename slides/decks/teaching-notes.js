@@ -1746,13 +1746,13 @@
       ]
     },
     "measure-a-miss": {
-      "idea": "Recall@k measures overlap with the exact nearest-neighbor results.",
-      "question": "What is recall@10 when seven exact neighbors are returned?",
-      "answer": "0.70; the missing true IDs in this example are 4, 7, and 10.",
+      "idea": "Recall@k is the fraction of the exact top-k IDs that also appear in the shortcut’s result.",
+      "question": "Which exact neighbors did the shortcut miss, and what is recall@10?",
+      "answer": "It missed IDs 4, 7, and 10. Seven of the ten exact neighbors returned, so recall@10 = 7/10 = 0.70 = 70%.",
       "builds": [
-        "Maya opens the saved exact IDs beside the approximate result. Ask students to count before revealing colors.",
-        "Color seven shared IDs and name the missing 4, 7, and 10. In this IVFFlat example, they are in unprobed lists.",
-        "Reveal 7 / 10. Ask what the number cannot tell us about the passage that answers the recovery question."
+        "Maya compares two results for one query. The top row is the exact reference: IDs 1 through 10. The lower row is the shortcut’s result. An ID identifies a stored vector and its passage; it is not a rank. Ask which IDs occur in both rows before revealing colors. These are illustrative result sets, separate from the preceding HNSW route and the earlier IVF fixture.",
+        "Green marks the seven IDs present in both results: 1, 2, 3, 5, 6, 8, and 9. Orange marks exact IDs 4, 7, and 10, which the shortcut did not return. Blue marks 11, 14, and 20, which it returned instead. All ten shortcut slots are filled, but only seven match the exact reference. For IVFFlat, an unprobed list is a list the search skipped. If vectors in searched lists are scored exactly, using the same metric and tie rule as the baseline, a missed exact neighbor must be in a skipped list. The result rows alone do not show which lists were searched.",
+        "Count each matching ID once: seven matches out of ten exact neighbors gives 7/10 = 0.70 = 70%. The three extra IDs do not increase recall because they are outside the exact top ten. Recall measures agreement with exact vector search. Open the passages to check whether they answer the recovery question."
       ]
     },
     "choose-an-operating-point": {
