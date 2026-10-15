@@ -899,93 +899,93 @@ window.CourseClarityCaptions = {
   },
   "11": {
     "meaning-becomes-geometry": [
-      "Maya asks about crash recovery. The passage uses different words, so an exact string search fails.",
-      "Use compatible embedding settings for the question and passage so their vectors can be compared.",
-      "Nearby vectors suggest candidates. Open the passage to check whether it answers the question."
+      "Maya asks about crash recovery. The passage uses different words. An exact string search finds no match.",
+      "Use compatible embedding settings for the question and the passage.",
+      "Nearby vectors identify candidate passages. Read each passage to check whether it answers the question."
     ],
     "embedding": [
-      "Noor turns the stored passage into coordinates using the embedding model.",
-      "These four coordinates illustrate an embedding; they are not a real model output.",
-      "The question must use a compatible model, version, dimension, and preprocessing."
+      "The embedding model converts the passage into a vector.",
+      "These four coordinates illustrate a vector. They are not output from an embedding model.",
+      "Use compatible models, versions, dimensions, and preprocessing for the question and the stored passages."
     ],
     "direction-and-normalization": [
-      "Before scoring, Maya separates a vector’s direction from its length.",
-      "Rotating toward q increases cosine similarity; increasing length alone does not.",
-      "Normalize both vectors to unit length so their dot product equals cosine similarity."
+      "A vector has a direction and a length.",
+      "Rotation toward q increases cosine similarity. An increase in length alone does not change cosine similarity.",
+      "Normalize both vectors to unit length. Their dot product then equals their cosine similarity."
     ],
     "the-exact-baseline": [
-      "Exact search compares Maya’s query with every stored vector.",
-      "Score the first 24 of 72 vectors and retain the best candidates so far.",
-      "Score the next 24; a better neighbor could still be among the unscored vectors.",
-      "After all 72 scores, save the top neighbors as the reference for testing a shortcut."
+      "Exact search compares the query vector with every stored vector.",
+      "The loop scores the first 24 vectors. It keeps the ten highest scores so far.",
+      "The loop scores the next 24 vectors. An unscored vector can still enter the top ten.",
+      "The loop has scored all 72 vectors. Save the ten result IDs as the exact baseline."
     ],
     "price-the-baseline": [
-      "For Lab 9’s 4,000 vectors, one query needs 4,000 × 64 = 256,000 coordinate products.",
-      "At one million vectors with 1,536 coordinates, the same loop needs 1.536 billion products.",
-      "At ten million vectors and 100 queries/s, it needs 1.536 trillion products/s. Measure latency too."
+      "One query over 4,000 vectors with 64 coordinates requires 256,000 coordinate multiplications.",
+      "One query over one million vectors with 1,536 coordinates requires 1.536 billion coordinate multiplications.",
+      "Ten million vectors at 100 queries/s require 1.536 trillion coordinate multiplications/s. Measure elapsed time separately."
     ],
     "skipping-with-a-contract": [
-      "Noor searches one region. A true neighbor in another region can be skipped.",
-      "Search another region and score its vectors using the same similarity measure.",
-      "Searching fewer candidates can miss true neighbors; measure that loss against exact search."
+      "The search examines one region. It can miss a nearer vector in another region.",
+      "The search examines another region. It scores the additional vectors with the same similarity metric.",
+      "Approximate search can miss exact neighbors. Compare the returned IDs with the exact baseline."
     ],
     "build-an-ivf-index": [
-      "Choose a starting center for each group. This center, called a centroid, represents the group.",
-      "Assign each vector to its closest center. Distance determines which group it joins.",
-      "Average each group’s vectors to find its new center. Assign every vector to the nearest new center. Repeat until assignments stop changing or the iteration limit is reached.",
-      "Store each group’s vector IDs in a list. At query time, search selected lists and score the vectors inside them."
+      "Choose an initial center for each group. Each center is a centroid.",
+      "Assign each vector to its nearest centroid.",
+      "Calculate the average vector in each group. Move each centroid to that average. Assign the vectors again.",
+      "Store the vector IDs for each group in a list. A query searches selected lists."
     ],
     "probe-the-lists": [
-      "Maya’s whiteboard has four toy vectors in two lists. Build-time assignment is fixed.",
-      "The query’s highest centroid score is for c0. Predict which vector a one-list search can score.",
-      "Probe 1 returns only v0: two centroid comparisons plus one candidate comparison.",
-      "The skipped v1 scores 0.96, above v0’s 0.80. Recall@2 is only 1 / 2.",
-      "Probe both lists to recover v1, paying six comparisons versus four for exact search."
+      "This example has four stored vectors and two centroid lists. A query does not change list membership.",
+      "The query gives c0 the higher centroid score. Which vectors can a search of only c0 examine?",
+      "One probe returns v0. The search compares the query with two centroids and one stored vector.",
+      "The search misses v1. Its score is 0.96, above the 0.80 score for v0. Recall@2 is 1/2.",
+      "Two probes return v1 and v0. The search uses six comparisons. Exact search uses four comparisons."
     ],
     "count-the-saved-work": [
-      "Maya’s exact baseline evaluates all 4,000 stored vectors.",
-      "IVF still has to compare the query with 20 centroids.",
-      "With balanced lists, four probes evaluate about 4 × 200 = 800 candidate vectors.",
-      "Estimate 20 + 800 = 820 evaluations. The measured lists need not be balanced."
+      "Exact search scores all 4,000 stored vectors.",
+      "IVF first compares the query with all 20 centroids.",
+      "P = 4 means four searched lists. With 200 vectors per list, the search scores 800 candidate vectors.",
+      "The estimate is 20 + 800 = 820 comparisons. Actual lists can have different sizes."
     ],
     "navigate-a-graph": [
-      "Noor tries a graph instead of centroid lists, starting at its upper-layer entry point.",
-      "Follow an upper-layer connection toward the query.",
-      "A long link takes the search closer to the query before it follows shorter links.",
-      "Descend to the denser lower layer.",
-      "Follow nearby links to look for closer vectors.",
-      "Increase ef_search to explore more candidates, then measure the change in recall."
+      "HNSW starts at a node in its highest layer.",
+      "The search follows a link to a node closer to the query.",
+      "A long link moves the search to another region.",
+      "The search continues at the same vector in the next lower layer.",
+      "The search examines linked vectors in the lower layer.",
+      "Increase ef_search to examine more candidates. Measure recall and search work again."
     ],
     "measure-a-miss": [
-      "For the same query, compare the ten IDs from exact search with the ten returned by the shortcut.",
-      "Seven IDs appear in both rows. The shortcut missed exact neighbors 4, 7, and 10.",
-      "The shortcut found 7 of the 10 exact neighbors, so recall@10 is 70%."
+      "Compare the ten IDs from exact search with the ten IDs from approximate search. Both searches use the same query.",
+      "Seven IDs appear in both rows. Approximate search missed exact neighbors 4, 7, and 10.",
+      "Approximate search returned seven of the ten exact neighbors. Recall@10 is 70%."
     ],
     "choose-an-operating-point": [
-      "These Lab 9 measurements put recall beside comparison counts for each probe setting.",
-      "Noor asks for at least 0.90 mean recall. Which settings remain?",
-      "With at most 1,000 average comparisons too, choose P = 4: recall 0.9175, count 924."
+      "These Lab 9 measurements show mean recall and comparison counts for each probe setting.",
+      "The required mean recall is at least 0.90. Which settings meet this requirement?",
+      "The limit is also 1,000 mean comparisons. P = 4 meets both requirements with recall 0.9175 and count 924."
     ],
     "memory-and-update-budgets": [
-      "Count memory for IVF’s centroids, lists, and stored vectors before choosing an index.",
-      "HNSW also needs neighbor links and work to construct them.",
-      "Compression can save memory but can also change neighbor rankings; measure recall again."
+      "IVF stores vectors, centroids, and lists. Include all these items in the memory measurement.",
+      "HNSW stores neighbor links. Measure the memory and construction time for these links.",
+      "Compression can reduce memory use. It can also change the ranking. Measure recall again."
     ],
     "where-the-index-lives": [
-      "Maya asks who updates the index when a source changes. A database can keep it beside rows.",
-      "The application must save an embedded index and update it when source data changes.",
-      "A separate service requires network requests and keeping its index in sync with source records."
+      "Passage 42 has text version 1. Index entry 42 contains the vector for that version.",
+      "Maya changes passage 42 to version 2. The vector still represents version 1.",
+      "The application creates a new embedding for version 2. It updates index entry 42."
     ],
     "diagnose-the-index": [
-      "If ANN misses useful exact neighbors, investigate the search budget.",
-      "Increase probes or graph-search breadth and compare again with exact search.",
-      "If even exact neighbors are unhelpful, inspect chunks, embeddings, metadata, or ranking."
+      "Approximate search can miss useful exact neighbors. Compare the result IDs first.",
+      "Increase the number of probes or graph candidates. Compare the result IDs with exact search again.",
+      "If exact neighbors do not answer the question, inspect the chunks, embeddings, metadata, and ranking."
     ],
     "rebuild-the-retrieval-contract": [
-      "Return to Maya’s question. Establish exact neighbors before taking a shortcut.",
-      "Set the IVF probe count or HNSW search breadth, then measure candidate work.",
-      "Measure missed neighbor IDs across representative questions.",
-      "Compare returned IDs with exact neighbors, then read the passages to check whether they answer the question."
+      "Return to the recovery question. Save the exact result IDs.",
+      "Select an IVF probe count or HNSW search setting. Measure search work.",
+      "Measure recall across representative questions.",
+      "Compare the result IDs with exact search. Read the passages to check whether they answer the question."
     ]
   },
   "12": {

@@ -4,48 +4,48 @@
 (function () {
   const GLOSSARY = {
     'rid': {
-      title: 'RID (record id)',
-      body: "<p>A record id identifies a row by its block number and slot number. The B+ tree index in microdb returns RIDs so the table can fetch matching rows. An IVF extension could use the same pattern to link candidate vectors back to table records.</p>",
+      title: 'RID (record ID)',
+      body: "<p>A record ID identifies a row by its block number and slot number. The B+ tree index in microdb returns RIDs. The table uses these RIDs to read matching rows. An IVF extension could also use RIDs to connect candidate vectors to table records.</p>",
     },
     'k-means': {
       title: 'k-means',
-      body: "<p>A clustering algorithm that alternates between assigning vectors to the nearest centroid and replacing each centroid with the average of its assigned vectors. It stops when a convergence rule or iteration limit is reached. IVF uses the resulting centroids to choose which lists to search. The lab provides k-means so you can focus on scoring, assigning vectors to lists, and probing those lists.</p>",
+      body: "<p>The k-means algorithm assigns each vector to its nearest centroid. It then replaces each centroid with the average of its assigned vectors. It repeats these steps until it meets a convergence rule or reaches an iteration limit. IVF uses the resulting centroids to select lists for search. The lab provides k-means. Your code scores vectors, assigns vectors to lists, and searches selected lists.</p>",
     },
     'rag': {
       title: 'RAG (retrieval-augmented generation)',
-      body: "<p>Retrieval-augmented generation first retrieves relevant evidence, then supplies it to a language model to help answer a question. In vector-based retrieval, documents are split into chunks and both chunks and questions are embedded. Nearest-neighbor search selects candidate evidence. Missing a useful passage can harm the answer, so the pipeline needs evaluation beyond index recall.</p>",
+      body: "<p>Retrieval-augmented generation retrieves evidence and supplies that evidence to a language model. The language model uses the evidence to answer a question. For vector search, the application splits documents into chunks. An embedding model creates vectors for the chunks and the question. Nearest-neighbor search selects candidate evidence.</p><p>A missing passage can affect the answer. Thus, evaluation must check answer quality as well as index recall.</p>",
     },
     'recall': {
       title: 'Recall@k',
-      body: "<p>Recall@k is the fraction of the exact top-k neighbors that approximate search returns. Run both searches, count the overlapping ids, and divide by k. A score of 1.0 means all exact neighbors were returned; 0.75 means one quarter were missed. Use this measurement, together with query cost, to choose settings such as probe or ef_search.</p>",
+      body: "<p>Recall@k is the fraction of the exact top-k neighbors that approximate search returns. Run both searches. Count the shared IDs. Divide that count by k.</p><p>A score of 1.0 means approximate search returned all exact neighbors. A score of 0.75 means approximate search missed one quarter of the exact neighbors. Use recall and query cost to select probe or ef_search.</p>",
     },
     'hnsw': {
       title: 'HNSW (Hierarchical Navigable Small World graph)',
-      body: "<p>HNSW is a layered graph index for nearest-neighbor search. Queries navigate a sparse upper layer before exploring a candidate set in the bottom layer. This can find useful neighbors without comparing every vector, but it does not guarantee an exact result. The ef_search parameter controls the search candidate list. Larger settings usually improve recall and cost more work. Graph links also add storage and build overhead.</p>",
+      body: "<p>HNSW is a layered graph index for nearest-neighbor search. Search follows links in sparse upper layers. It then explores candidates in the base layer. Search can find useful neighbors without comparing every vector. It does not guarantee an exact result.</p><p>The ef_search parameter controls the candidate list during search. Larger settings usually improve recall and increase work. Graph links also require storage and construction work.</p>",
     },
     'ivf': {
       title: 'IVF (inverted file index)',
-      body: "<p>IVF assigns vectors to cluster lists. A query scores the C centroids, selects the P closest lists, and searches the vectors in those lists. For similarly sized lists, the work is about C + P × n/C comparisons. A true neighbor in an unsearched list is missed. Increasing P searches more vectors and can recover those neighbors.</p>",
+      body: "<p>IVF assigns vectors to centroid lists. Search compares the query vector with C centroids. It selects the P nearest centroids and searches their lists. For balanced lists, the work is approximately C + P × n/C comparisons. Search misses an exact neighbor in a list that it does not search. A larger P searches more vectors and can return those missing neighbors.</p>",
     },
     'ann': {
       title: 'ANN (approximate nearest neighbor)',
-      body: "<p>Approximate nearest-neighbor search avoids some comparisons and may miss exact neighbors. Algorithms such as IVF and HNSW expose settings that adjust search effort. Measure recall and query cost to decide whether the resulting tradeoff meets your application’s needs.</p>",
+      body: "<p>Approximate nearest-neighbor search avoids some comparisons and can miss exact neighbors. Algorithms such as IVF and HNSW have settings that control search work. Measure recall. Measure query cost. Use both measurements to select a setting that meets the application requirements.</p>",
     },
     'pgvector': {
       title: 'pgvector',
-      body: "<p>A PostgreSQL extension that adds vector data types, distance operators, and IVF and HNSW indexes. Vectors can be stored with other table columns. SQL joins, filters, and transactions remain available, although approximate search and filtering have specific performance and result-count considerations.</p>",
+      body: "<p>The pgvector extension adds vector data types, distance operators, and IVF and HNSW indexes to PostgreSQL. Tables can store vectors beside other columns. SQL joins, filters, and transactions remain available. Measure performance and result counts when you combine approximate search with filters.</p>",
     },
     'faiss': {
       title: 'FAISS',
-      body: "<p>A library for similarity search and vector clustering, with Python and C++ interfaces. It provides several index and compression methods, with GPU support for selected operations. Your application is responsible for loading, saving, serving, and updating the index. The lab’s IVF implementation demonstrates one of the underlying designs.</p>",
+      body: "<p>FAISS is a library for similarity search and vector clustering. It has Python and C++ interfaces. It provides index and compression methods, with GPU support for some operations. The application loads, saves, serves, and updates the index. The lab implements one IVF design.</p>",
     },
     'embedding-recall': {
       title: 'Embedding',
-      body: "<p>A numeric vector representing content such as text or an image. An embedding model is trained so that some geometric relationships reflect useful relationships between inputs. Similarity depends on the model and metric; nearby vectors are not guaranteed to be relevant evidence for every task.</p>",
+      body: "<p>An embedding is a numeric vector that represents content, such as text or an image. Training adjusts an embedding model so that vector geometry can represent useful relationships between inputs. Similarity depends on the model and metric. Nearby vectors do not guarantee relevant evidence for every task.</p>",
     },
     'quantization': {
       title: 'Quantization (PQ)',
-      body: "<p>Quantization stores a compressed approximation of a vector. Product quantization splits a vector into parts and replaces each part with an entry from a learned codebook. This can reduce storage and distance-computation cost, while introducing approximation error. Measure the effect on search quality.</p>",
+      body: "<p>Quantization stores a compressed approximation of a vector. Product quantization splits a vector into parts. It replaces each part with an entry from a learned codebook. This can reduce storage and the cost of distance calculations. It also introduces approximation error. Measure its effect on search quality.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -145,10 +145,10 @@
       stats.textContent = `mode: ${mode === 'exact' ? 'exact' : 'IVF probe ' + probe}` +
         `    comparisons: ${comparisons}/${N}    recall@10: ${recall.toFixed(2)}`;
       if (mode !== 'exact' && recall < 1) {
-        msg.innerHTML = `Recall ${recall.toFixed(2)} — the <strong>red-ringed points</strong> are true ` +
-          `neighbors in clusters that were not searched. Increase probe to search more clusters.`;
+        msg.innerHTML = `Recall is ${recall.toFixed(2)}. The <strong>points with red rings</strong> are exact ` +
+          `neighbors in lists that search skipped. Increase probe to search more lists.`;
       } else if (mode !== 'exact') {
-        msg.innerHTML = `Recall 1.00 with ${comparisons} of ${N} comparisons — all exact top-10 neighbors were in the searched clusters.`;
+        msg.innerHTML = `Recall is 1.00. Search used ${comparisons} comparisons. Exact search uses ${N} comparisons. All exact top-10 neighbors were in the selected lists.`;
       } else {
         msg.innerHTML = `Exact search compared all ${N} points. Green points are the exact top-10 neighbors.`;
       }
@@ -164,7 +164,7 @@
   $('vs-p1').addEventListener('click', () => { mode = 'ivf'; probe = 1; draw(); });
   $('vs-p2').addEventListener('click', () => { mode = 'ivf'; probe = 2; draw(); });
   $('vs-p4').addEventListener('click', () => { mode = 'ivf'; probe = 4; draw(); });
-  $('vs-reset').addEventListener('click', () => { query = null; stats.textContent = ''; msg.textContent = 'Click in the space below to place a query point.'; draw(); });
+  $('vs-reset').addEventListener('click', () => { query = null; stats.textContent = ''; msg.textContent = 'Click the plot to set the query point.'; draw(); });
   draw();
 })();
 
@@ -199,7 +199,7 @@
   let comparisons = 0;
   (function walk() {
     let cur = ENTRY;
-    STEPS.push({ layer: 1, at: cur, note: `enter the top layer at ${cur} (distance ${dist(cur).toFixed(0)})` });
+    STEPS.push({ layer: 1, at: cur, note: `Start at ${cur} in the upper layer. The query distance is ${dist(cur).toFixed(0)}.` });
     for (const [layer, edges] of [[1, L1.edges], [0, L0EDGES]]) {
       for (;;) {
         const options = nbrs(cur, edges);
@@ -208,14 +208,14 @@
         for (const n of options) if (dist(n) < dist(best)) best = n;
         if (best === cur) break;
         STEPS.push({ layer, at: best, from: cur,
-          note: `hop ${cur} → ${best}: distance ${dist(cur).toFixed(0)} → ${dist(best).toFixed(0)}` });
+          note: `Follow the link ${cur} → ${best}. The query distance changes from ${dist(cur).toFixed(0)} to ${dist(best).toFixed(0)}.` });
         cur = best;
       }
       if (layer === 1) STEPS.push({ layer: 0, at: cur, drop: true,
-        note: `no top-layer neighbor of ${cur} is closer — move to layer 0` });
+        note: `No upper-layer neighbor of ${cur} is closer to the query. Move to layer 0.` });
     }
     STEPS.push({ layer: 0, at: cur, done: true,
-      note: `no layer-0 neighbor is closer — return ${cur} (${comparisons} distance computations vs 12 for brute force)` });
+      note: `No layer-0 neighbor is closer to the query. Return ${cur}. This search used ${comparisons} distance calculations. Exact search uses 12.` });
   })();
 
   let step = 0;
@@ -230,7 +230,7 @@
     const visitedNodes = new Set(visited.map(s => s.layer + ':' + s.at));
 
     let out = `<text x="6" y="20" class="hn-band">upper layer (1)</text>` +
-              `<text x="6" y="158" class="hn-band">bottom layer (0)</text>`;
+              `<text x="6" y="158" class="hn-band">base layer (0)</text>`;
     // layer-1 edges + nodes
     for (const [a, b] of L1.edges) {
       const hot = pathEdges.has('1:' + [a, b].sort().join(''));
@@ -260,7 +260,7 @@
     out += `<text x="${Q[0]}" y="${Q[1] * 0.75 + 16}" class="hn-query">★</text>` +
            `<text x="${Q[0]}" y="${Q[1] * 0.75 + 152}" class="hn-query">★</text>`;
     svg.innerHTML = out;
-    msg.textContent = `step ${step + 1}/${STEPS.length}: ${STEPS[step].note}`;
+    msg.textContent = `Step ${step + 1}/${STEPS.length}: ${STEPS[step].note}`;
     document.getElementById('hn-step').disabled = step === STEPS.length - 1;
   }
   document.getElementById('hn-step').addEventListener('click', () => { if (step < STEPS.length - 1) { step++; render(); } });

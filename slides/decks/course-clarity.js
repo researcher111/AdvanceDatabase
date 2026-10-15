@@ -35,7 +35,8 @@
       };
       // Keep the approachable notes structure and put the visible claim first.
       if(definition)scene.teaching.context=[definition,scene.teaching.context].filter(Boolean).join(' ');
-      scene.teaching.builds=scene.teaching.builds.map((cue,i)=>captions[i]+(cue===captions[i]?'':' '+cue));
+      const cueSeparator=Number(id)===11?'\n\n':' ';
+      scene.teaching.builds=scene.teaching.builds.map((cue,i)=>captions[i]+(cue===captions[i]?'':cueSeparator+cue));
       scene.notes=[scene.teaching.idea,...scene.teaching.builds,'Ask: '+scene.teaching.question,'Expected answer: '+scene.teaching.answer,scene.teaching.context,scene.teaching.reference].filter(Boolean).join('\n\n');
     }
   }

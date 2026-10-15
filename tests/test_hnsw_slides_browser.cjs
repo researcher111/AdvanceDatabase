@@ -37,7 +37,7 @@ const pairKey=([a,b])=>[a,b].sort((x,y)=>x-y).join('-');
    assert.deepEqual(frame.outside,[],`build ${step+1}: labels fit the slide`);assert.deepEqual(frame.overlaps,[],`build ${step+1}: labels do not overlap`);
    assert.equal(await page.locator('#canvas desc').textContent(),scene.states[step]);
    await notes.waitForFunction(({slide,step})=>CoursePlayer.getState().slide===slide&&CoursePlayer.getState().step===step,{slide:scene.index,step});
-   assert.equal(await notes.locator('.teaching-current p').last().innerText(),scene.teaching.builds[step]);
+   assert.equal((await notes.locator('.teaching-current p:not(.build)').allTextContents()).join('\n\n'),scene.teaching.builds[step]);
    assert((await notes.locator('.teaching-question').innerText()).includes(scene.teaching.checks[step].question));
    assert.equal(await notes.locator('.teaching-answer p').textContent(),scene.teaching.checks[step].answer);
    assert.deepEqual(await notes.locator('#presenter-canvas text').allTextContents(),await page.locator('#canvas text').allTextContents());
@@ -110,7 +110,7 @@ const pairKey=([a,b])=>[a,b].sort((x,y)=>x-y).join('-');
    await page.screenshot({path:path.join(output,`viewport-${viewport.width}.png`)});
   }
   const guide=await context.newPage();await guide.goto(url+'?guide=1');const article=guide.locator('article').nth(scene.index),guideText=await article.innerText();
-  for(const cue of scene.teaching.builds)assert(guideText.includes(cue),'guide contains every construction and search cue');
+  for(const cue of scene.teaching.builds)for(const paragraph of cue.split(/\n\s*\n|\n/))assert(guideText.includes(paragraph),'guide contains every construction and search cue paragraph');
   await guide.emulateMedia({media:'print'});assert(await article.locator('svg').isVisible(),'print retains the graph visual');await article.screenshot({path:path.join(output,'guide.png')});
   const gallery=await context.newPage();await gallery.setViewportSize({width:1800,height:1800});await gallery.setContent('<body style="margin:0;padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px;background:#e8ede6;font:18px system-ui">'+frames.map((frame,i)=>'<article><h3>'+(i+1)+' · '+scene.states[i]+'</h3>'+frame.svg.replace('id="canvas"','style="display:block;width:100%;background:#f7f6f2"')+'</article>').join(''));
   await gallery.screenshot({path:path.join(output,'all-builds.png'),fullPage:true});

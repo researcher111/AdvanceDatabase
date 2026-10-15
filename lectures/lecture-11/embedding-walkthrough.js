@@ -26,8 +26,8 @@
       clues: ['database', 'crash'],
       contrast: { text: 'She will recover after the flu.', meaning: 'get well again' },
       meaning: 'restore the database after a failure',
-      connection: '“Flu” points to getting well. In Maya’s question, “database” and “crash” point to restoring a database. Those other words are context clues for “recover.”',
-      transfer: 'Now choose “A paraphrase.” Should different words still bring back the recovery passage?',
+      connection: '“Flu” tells us that “recover” means to get well. “Database” and “crash” tell us that “recover” means to restore a database. These words give context for “recover.”',
+      transfer: 'Select “A paraphrase.” Should the search return the recovery passage when the question uses different words?',
     },
     restart: {
       label: 'A paraphrase',
@@ -38,8 +38,8 @@
       clues: ['help', 'restart'],
       contrast: { text: 'Put another log on the fire.', meaning: 'a piece of wood' },
       meaning: 'a record of database changes',
-      connection: '“Fire” points to a piece of wood. In Maya’s question, “help” and “restart” suggest a record that helps restore a database. Those other words are context clues for “log.”',
-      transfer: 'The paraphrase still ranks the recovery passage first in this example. Try “Query speed” and predict which passage moves up.',
+      connection: '“Fire” tells us that “log” means a piece of wood. “Help” and “restart” suggest a record that helps restore a database. These words give context for “log.”',
+      transfer: 'The paraphrase also ranks the recovery passage first in this example. Predict the first result for “Query speed.” Then select “Query speed.”',
     },
     speed: {
       label: 'Query speed',
@@ -50,8 +50,8 @@
       clues: ['speed', 'query'],
       contrast: { text: 'Use the index at the back of the book.', meaning: 'a list of topics and page numbers' },
       meaning: 'a database structure for finding rows',
-      connection: '“Book” points to a list of topics and page numbers. In Maya’s question, “speed” and “query” point to a database structure. Those other words are context clues for “index.”',
-      transfer: 'The index passage moves to first place. The stored vectors stayed fixed; changing the question changed their ranking.',
+      connection: '“Book” tells us that “index” means a list of topics and page numbers. “Speed” and “query” suggest a database structure. These words give context for “index.”',
+      transfer: 'The index passage ranks first. The chunk vectors did not change. The new question changed the ranking.',
     },
   };
 
@@ -156,16 +156,16 @@
         stageElement.append(node('h4', '', 'Which passage would help Maya?'));
         const cards = node('div', 'ew-passage-pair');
         passages.forEach(passage => cards.append(passageCard(passage)));
-        stageElement.append(cards, paragraph('Predict before continuing: which passage should rank first for this question? The goal is to compare what the sentences describe, even when their words differ.', 'ew-predict'));
+        stageElement.append(cards, paragraph('Predict which passage should rank first. The search compares the meaning of the sentences, even when they use different words.', 'ew-predict'));
       } else if (stage === 1) {
-        stageElement.append(node('h4', '', 'Split text into pieces the model can read'));
+        stageElement.append(node('h4', '', 'Split the text into tokens'));
         const tokens = node('div', 'ew-tokens');
         query.tokens.forEach((token, index) => {
           const chip = node('span', 'ew-token');
           chip.append(node('small', '', String(index + 1)), node('span', '', token));
           tokens.append(chip);
         });
-        stageElement.append(tokens, paragraph('A tokenizer maps text pieces to token IDs. The model looks up a starting vector for each token and accounts for its position. Actual tokenizers may split a word into smaller pieces.'), paragraph(query.tokens.length + ' illustrative tokens → ' + query.tokens.length + ' starting vectors. Next, each token’s vector uses clues from the other words in the sentence.', 'ew-operation'));
+        stageElement.append(tokens, paragraph('A tokenizer converts text pieces to token IDs. The model selects a starting vector for each token. The model also uses token positions. A tokenizer can split one word into smaller pieces.'), paragraph(query.tokens.length + ' illustrative tokens → ' + query.tokens.length + ' starting vectors. The model then updates each token vector with information from the other tokens.', 'ew-operation'));
       } else if (stage === 2) {
         stageElement.append(node('h4', '', 'Context means the other words in the sentence'));
         const examples = node('div', 'ew-context-examples');
@@ -173,7 +173,7 @@
         examples.append(
           contextCard('The same word in another sentence', query.contrast.text, query.contrast.meaning, focus),
           contextCard('The word in Maya’s question', query.text, query.meaning, focus, true));
-        stageElement.append(examples, paragraph(query.connection), paragraph('The model uses these clues by updating each token’s vector with information from the other tokens. The same word can therefore have different vectors in different sentences.', 'ew-context-mechanism'), node('strong', 'ew-context-output', 'After using context: one updated vector per token'));
+        stageElement.append(examples, paragraph(query.connection), paragraph('The model uses information from other tokens to update each token vector. Thus, the same word can have different vectors in different sentences.', 'ew-context-mechanism'), node('strong', 'ew-context-output', 'Result: one updated vector for each token'));
         const grid = node('div', 'ew-context-grid');
         query.tokens.forEach((token, index) => {
           const button = node('button', 'ew-context-token');
@@ -194,32 +194,32 @@
           button.addEventListener('click', () => {
             selectedToken = index;
             grid.querySelectorAll('button').forEach((item, itemIndex) => item.setAttribute('aria-pressed', String(itemIndex === index)));
-            detail.textContent = 'Illustrative vector for “' + token + '” after using this sentence: ' + vectorText(query.context[index], 1) + '. The bars show these three numbers; individual coordinates do not name topics.';
+            detail.textContent = 'Example vector for “' + token + '” in this sentence: ' + vectorText(query.context[index], 1) + '. The bars show these three numbers. Individual coordinates do not name topics.';
           });
           grid.append(button);
         });
         const detail = node('p', 'ew-token-detail');
         detail.id = 'ew-token-detail';
         detail.setAttribute('aria-live', 'polite');
-        detail.textContent = 'Select a token to inspect its vector after using this sentence. “' + query.tokens[selectedToken] + '”: ' + vectorText(query.context[selectedToken], 1) + '. The bars show these illustrative numbers; individual coordinates do not name topics.';
-        stageElement.append(grid, detail, paragraph('A new sentence can change the token vectors. The model uses what it learned during training; it does not train again for each sentence.', 'ew-operation'));
+        detail.textContent = 'Select a token to see its vector for this sentence. “' + query.tokens[selectedToken] + '”: ' + vectorText(query.context[selectedToken], 1) + '. The bars show these example numbers. Individual coordinates do not name topics.';
+        stageElement.append(grid, detail, paragraph('A new sentence can change the token vectors. The model uses fixed parameters from training. The model does not train again for each sentence.', 'ew-operation'));
       } else if (stage === 3) {
-        stageElement.append(node('h4', '', 'Combine the token vectors into one sentence vector'));
+        stageElement.append(node('h4', '', 'Combine the token vectors into one query vector'));
         const calculation = node('div', 'ew-calculation');
         const average = node('div', 'ew-calculation-part');
         average.append(node('strong', '', '1. Average each column'), vector(pooled, 'Mean token vector'));
         const normalized = node('div', 'ew-calculation-part');
-        normalized.append(node('strong', '', '2. Scale to magnitude 1'), vector(embedding, 'Normalized question vector'));
+        normalized.append(node('strong', '', '2. Scale to magnitude 1'), vector(embedding, 'Normalized query vector'));
         calculation.append(average, node('span', 'ew-arrow', '→'), normalized);
         const firstSum = query.context.reduce((sum, row) => sum + row[0], 0);
         stageElement.append(calculation,
-          paragraph('First column: ' + firstSum.toFixed(1) + ' ÷ ' + query.context.length + ' tokens ≈ ' + pooled[0].toFixed(3) + '. Then divide every coordinate by the Euclidean norm (magnitude), ' + norm(pooled).toFixed(3) + '. Displayed numbers are rounded.', 'ew-arithmetic'),
-          paragraph('One sentence now has one fixed-size vector: 3 coordinates in this illustration, however many tokens it contains. Real models commonly return hundreds or thousands of coordinates.'),
-          paragraph('Context layers → pooling → normalization is one common recipe. Here pooling means an average; other models use a selected token or another pooling method.', 'ew-operation'));
+          paragraph('First column: ' + firstSum.toFixed(1) + ' ÷ ' + query.context.length + ' tokens ≈ ' + pooled[0].toFixed(3) + '. Divide each coordinate by the Euclidean norm (magnitude), ' + norm(pooled).toFixed(3) + '. The display rounds the numbers.', 'ew-arithmetic'),
+          paragraph('The query vector has 3 coordinates in this example. Its size does not depend on the number of tokens. Real models often return hundreds or thousands of coordinates.'),
+          paragraph('This example uses context layers, pooling, and normalization. Pooling combines the token vectors. This example uses their average. Other models can use different pooling methods.', 'ew-operation'));
       } else {
         stageElement.append(node('h4', '', 'Compare this question with the saved passages'));
         const queryVector = node('div', 'ew-query-vector');
-        queryVector.append(node('strong', '', 'Question vector'), vector(embedding, 'Question vector'));
+        queryVector.append(node('strong', '', 'Query vector'), vector(embedding, 'Query vector'));
         stageElement.append(queryVector);
         const ranking = node('div', 'ew-ranking');
         rank(queryId).forEach((passage, index) => {
@@ -234,7 +234,7 @@
           row.append(score);
           ranking.append(row);
         });
-        stageElement.append(ranking, paragraph('These passage vectors were prepared once with the same illustrative recipe. Only the question vector changes. Cosine compares their directions; the rounded scores are not probabilities.', 'ew-arithmetic'), paragraph(query.transfer, 'ew-predict'));
+        stageElement.append(ranking, paragraph('This example computes each chunk vector once with the same method. Only the query vector changes. Cosine similarity compares vector directions. These scores are not probabilities.', 'ew-arithmetic'), paragraph(query.transfer, 'ew-predict'));
       }
       if (announce) $('ew-status').textContent = 'Step ' + (stage + 1) + ' of 5: ' + stages[stage] + '. Question: ' + query.label + (stage === 4 ? '. First result: ' + rank(queryId)[0].title + '.' : '.');
     }

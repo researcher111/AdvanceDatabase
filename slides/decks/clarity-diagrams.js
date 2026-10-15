@@ -128,10 +128,10 @@
     label(d,'passage-line-2',955,325,'to restore committed writes.',P.ink,29);
     if(s===0){
       d.line('word-boundary',640,258,640,356,P.line,2);
-      label(d,'no-match',640,492,'Exact string match: no result',P.orange,35);
-      label(d,'first-question',640,554,'The passage is there. The wording differs.',P.ink,28);
+      label(d,'no-match',640,492,'Exact string search: no match',P.orange,35);
+      label(d,'first-question',640,554,'The passage exists. Its wording differs.',P.ink,28);
     }else{
-      label(d,'shared-model',640,402,'Compatible embedding model',P.orange,29);
+      label(d,'shared-model',640,402,'Compatible embedding settings',P.orange,29);
       if(s===1){
         d.arrow('embed-question',330,363,330,468,P.green,3);
         d.arrow('embed-passage',955,363,955,468,P.green,3);
@@ -144,46 +144,46 @@
         d.circle('passage-vector',635,510,17,P.green);
         d.line('nearby',491,510,614,510,P.orange,3,'6 6');
         label(d,'question-vector-label',470,557,'q',P.purple,28);
-        label(d,'passage-vector-label',730,557,'passage candidate',P.green,28);
+        label(d,'passage-vector-label',730,557,'candidate passage',P.green,28);
         [[920,473],[1000,535],[230,515]].forEach(([x,y],i)=>d.circle('other-'+i,x,y,10,P.muted));
       }
     }
-    label(d,'story-label',640,633,'Fictional rehearsal · geometry is illustrative',P.muted,23);
+    label(d,'story-label',640,633,'Teaching example · Positions illustrate vector comparisons',P.muted,23);
   });
 
   use(11,'diagnose-the-index',(d,s)=>{
-    label(d,'diagnostic-question',640,235,'Noor opens the passage: “Does it explain recovery?”',P.ink,29);
-    label(d,'index-heading',340,331,'ANN missed exact-search neighbors',P.orange,27);
+    label(d,'diagnostic-question',640,235,'Does the passage explain crash recovery?',P.ink,29);
+    label(d,'index-heading',340,331,'Approximate search missed exact neighbors',P.orange,24);
     if(s>=1){
       d.arrow('index-test',340,359,340,438,P.orange,3);
-      label(d,'index-fix',340,485,'Increase search breadth',P.ink,29);
-      label(d,'index-check',340,534,'Compare again with exact IDs',P.muted,25);
+      label(d,'index-fix',340,485,'Examine more candidates',P.ink,29);
+      label(d,'index-check',340,534,'Compare with exact result IDs',P.muted,25);
     }
     if(s>=2){
       d.line('branches',640,305,640,570,P.line,2);
-      label(d,'representation-heading',951,331,'Even exact neighbors are unhelpful',P.green,27);
+      label(d,'representation-heading',951,331,'Exact results do not answer',P.green,25);
       d.arrow('representation-test',951,359,951,438,P.green,3);
-      label(d,'representation-fix',951,485,'Inspect chunks and embeddings',P.ink,28);
-      label(d,'representation-check',951,534,'Check metadata and ranking too',P.muted,25);
+      label(d,'representation-fix',951,485,'Check chunks and embeddings',P.ink,28);
+      label(d,'representation-check',951,534,'Check metadata and ranking',P.muted,25);
     }
-    label(d,'diagnostic-foot',640,633,'Matching exact neighbors does not prove the passages answer the question.',P.muted,24);
+    label(d,'diagnostic-foot',640,633,'Recall measures agreement with exact search. Read the passages to check relevance.',P.muted,24);
   });
 
   use(11,'rebuild-the-retrieval-contract',(d,s)=>{
     label(d,'opening-question',640,237,'“How does a database recover after a crash?”',P.ink,32);
-    const names=['Save exact IDs','Search fewer candidates','Compare neighbor IDs','Read the passage'];
+    const names=['Save exact IDs','Search fewer candidates','Compare result IDs','Read the passage'];
     [180,490,800,1110].forEach((x,i)=>{
       if(i>s)return;
       d.circle('decision-'+i,x,400,55,i===3?P.orangeLight:P.greenLight,i===3?P.orange:P.green,3);
       label(d,'decision-number-'+i,x,412,String(i+1),i===3?P.orange:P.green,34);
-      const lines=i===1?['Search fewer','candidates']:i===2?['Compare','neighbor IDs']:[names[i]];
+      const lines=i===1?['Search fewer','candidates']:i===2?['Compare','result IDs']:[names[i]];
       lines.forEach((line,j)=>label(d,'decision-label-'+i+'-'+j,x,505+j*34,line,P.ink,26));
       if(i<s)d.arrow('next-decision-'+i,x+68,400,x+240,400,P.orange,3);
     });
-    if(s===3)label(d,'closing-question',640,618,'Maya can defend the search. She still has to check the evidence.',P.muted,25);
+    if(s===3)label(d,'closing-question',640,618,'Measure recall. Check passage relevance separately.',P.muted,25);
   });
 
-  use(11,'probe-the-lists',(d,s)=>{
+  const probeScene=use(11,'probe-the-lists',(d,s)=>{
     // Exact shared fixture: all four vectors and both centroids have unit length.
     const ox=345,oy=430,scale=166,pos=([x,y])=>[ox+x*scale,oy-y*scale];
     d.line('x-axis',105,oy,585,oy,P.line,2);d.line('y-axis',ox,217,ox,600,P.line,2);
@@ -194,9 +194,57 @@
     label(d,'coords',345,626,'q = (0.8, 0.6) · unit vectors',P.muted,24);
     card(d,'list0',715,235,430,99,'c0 = (1, 0) · score 0.8','list: [v0]',s>=1);
     card(d,'list1',715,360,430,99,'c1 = (0, 1) · score 0.6','list: [v1, v2, v3]',s>=4);
-    if(s>=2)label(d,'result',930,514,s>=4?'Top 2: v1 (0.96), v0 (0.80)':'One probe returns only v0 (0.80)',P.green,25);
+    if(s>=2)label(d,'result',930,514,s>=4?'Two probes: v1 (0.96), v0 (0.80)':'One probe: v0 (0.80)',P.green,25);
     if(s>=3)label(d,'recall',930,558,s>=4?'Recall@2 = 2 / 2 = 1':'Missed v1: Recall@2 = 1 / 2',s>=4?P.green:P.red,25);
     if(s>=2)label(d,'work',930,604,s===4?'Work: 2 centroids + 4 vectors = 6':'Work: 2 centroids + 1 vector = 3',P.orange,24);
+  });
+
+  if(probeScene){
+    probeScene.title='Search selected IVF lists';
+    probeScene.states=['Fixed lists','Select a centroid','Search one list','Identify the miss','Search both lists'];
+    probeScene.teaching={
+      idea:'The nearest centroid can have a list without the nearest stored vector.',
+      question:'Why can a search of the nearest centroid list miss v1?',
+      answer:'v1 belongs to c1. A one-probe search selects c0 and scores only v0. It does not score v1.',
+      builds:[
+        'Identify the four stored vectors. The construction process assigned v0 to c0 and the other three vectors to c1. List membership remains fixed during the query.',
+        'Calculate the centroid scores for q = (0.8, 0.6). The dot product with c0 is 0.8. The dot product with c1 is 0.6. One probe selects c0.',
+        'Score v0 from the selected list. Its score is 0.80. Count two centroid comparisons and one stored-vector comparison. The query requests two results, but this candidate set contains only one vector.',
+        'Compare the result with exact search. Exact search returns v1 and v0. The score for v1 is 0.96. The one-probe search misses v1 because it does not search c1. Recall@2 is 1/2.',
+        'Search both lists. The result now contains v1 and v0. Recall@2 is 1. Count two centroid comparisons and four stored-vector comparisons. This search uses six comparisons. Exact search uses four.'
+      ],
+      context:'These unit vectors form a small numerical example. They do not represent measured passage embeddings. The reading and Lab 9 use the same values.',
+      reference:'Use the same similarity metric and the same rule for tied scores as exact search. IVFFlat scores every candidate in each selected list. More probes add candidates, so recall cannot decrease under these conditions.'
+    };
+  }
+
+  use(11,'where-the-index-lives',(d,s)=>{
+    const textVersion=s===0?1:2,vectorVersion=s===2?2:1,changed=s>0,updated=s===2;
+    const sourceColor=changed?P.orange:P.green,indexColor=s===1?P.orange:P.green;
+    d.rect('source-record',60,260,385,290,P.white,sourceColor,12,3);
+    label(d,'source-title',252,310,'Passage 42',P.ink,31);
+    label(d,'source-version',252,379,'Text version '+textVersion,sourceColor,29);
+    [0,1,2].forEach(i=>d.line('source-text-'+i,110,427+i*24,395-i*24,427+i*24,sourceColor,5));
+    label(d,'source-status',252,513,s===0?'Original text':'Changed text',sourceColor,26);
+
+    d.rect('model',503,340,274,105,updated?P.greenLight:P.white,updated?P.green:P.line,10,2);
+    label(d,'model-title',640,382,'Embedding',updated?P.green:P.muted,28);
+    label(d,'model-label',640,418,'model',updated?P.green:P.muted,28);
+    if(updated){
+      d.arrow('create-vector',457,391,490,391,P.green,3);
+      d.arrow('replace-vector',790,391,823,391,P.green,3);
+      label(d,'update-action',640,496,'Create new vector',P.green,24);
+    }else{
+      label(d,'model-wait',640,496,s===0?'Used for version 1':'Update required',s===1?P.orange:P.muted,24);
+    }
+
+    d.rect('index-record',835,260,385,290,P.white,indexColor,12,3);
+    label(d,'index-title',1027,310,'Index entry 42',P.ink,31);
+    label(d,'vector-version',1027,379,'Vector from text v'+vectorVersion,indexColor,27);
+    [0,1,2,3].forEach(i=>{const h=(updated?[62,35,54,44]:[30,62,44,54])[i];d.rect('vector-coordinate-'+i,930+i*50,476-h,30,h,s===1?P.orangeLight:P.greenLight,indexColor,3,2);});
+    label(d,'vector-status',1027,513,s===1?'Old vector':updated?'Updated vector':'Matching vector',indexColor,26);
+    label(d,'optional-service',640,595,'A separate vector service is optional.',P.ink,27);
+    label(d,'update-responsibility',640,635,'Database storage alone does not create a new embedding.',P.muted,24);
   });
 
   const ragOpening=use(12,'evidence-reaches-the-answer',(d,s)=>{

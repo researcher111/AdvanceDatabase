@@ -255,10 +255,21 @@ assert.equal(text(draw(8,'statement-or-transaction-snapshot',3),'rc-detail'),'12
 assert.equal(text(draw(8,'statement-or-transaction-snapshot',3),'rr-detail'),'100');
 // IVF cannot return an unprobed vector. Exact recall and work are separate.
 assert.equal(models.ivf(1).result.length,1);
-assert.match(text(draw(11,'probe-the-lists',2),'result'),/only v0/);
+assert.equal(text(draw(11,'probe-the-lists',2),'result'),'One probe: v0 (0.80)');
 assert.match(text(draw(11,'probe-the-lists',3),'recall'),/1 \/ 2/);
 assert.match(text(draw(11,'probe-the-lists',4),'result'),/v1 \(0.96\), v0 \(0.80\)/);
 assert.match(text(draw(11,'probe-the-lists',4),'work'),/2 centroids \+ 4 vectors = 6/);
+// A source edit leaves the old embedding until the application replaces it.
+for(let step=0;step<3;step++){
+ const items=draw(11,'where-the-index-lives',step);
+ assert.equal(text(items,'source-title'),'Passage 42');
+ assert.equal(text(items,'index-title'),'Index entry 42');
+ assert.equal(text(items,'source-version'),'Text version '+(step===0?1:2));
+ assert.equal(text(items,'vector-version'),'Vector from text v'+(step===2?2:1));
+ assert.equal(text(items,'vector-status'),['Matching vector','Old vector','Updated vector'][step]);
+ assert.equal(items.some(item=>item.key==='create-vector'),step===2,'re-embedding follows the source edit');
+ assert.equal(items.some(item=>item.key==='replace-vector'),step===2,'the application explicitly updates the index');
+}
 fixtures.chunks.forEach((c,i)=>assert.equal(text(draw(12,'keep-the-source-identity',4),'chunk-body-'+i),c.text));
 assert.match(strings(draw(12,'keep-the-source-identity',3)),/\[wal, blocks, wal\]/);
 const counts={};fixtures.mapped.forEach(([word,value])=>counts[word]=(counts[word]||0)+value);

@@ -15,13 +15,13 @@
   const fills = [P.orangeLight, P.greenLight, P.blueLight];
   const labels = ['Predict the passage', 'Split into tokens', 'Use the other words', 'Make one vector', 'Rank recovery passages', 'Try a paraphrase', 'Change the question'];
   const captions = [
-    'Maya asks about crash recovery. Which stored passage should the search put first?',
-    'The tokenizer splits the sentence into pieces. Token IDs select starting vectors; positions matter too.',
-    'Context means the other words in the sentence. They help us decide what “recover” means here.',
-    'This example averages the token vectors, then divides the mean by its magnitude to make one unit vector.',
-    'Compare the question vector with the saved passage vectors. The higher cosine score ranks first.',
-    'Different words can describe the same task. This paraphrase still ranks the recovery passage first.',
-    'The question now asks about query speed. The stored vectors stay fixed, but their ranking changes.',
+    'Maya asks about crash recovery. Which stored passage should rank first?',
+    'The tokenizer splits the sentence into tokens. Token IDs select starting vectors. The model also uses token positions.',
+    'Context means the other words in the sentence. These words help us determine the meaning of “recover.”',
+    'This example averages the token vectors. It divides each mean coordinate by the magnitude to produce one unit vector.',
+    'Compare the query vector with each chunk vector. The chunk with the higher cosine score ranks first.',
+    'Different words can describe the same task. This paraphrase also ranks the recovery passage first.',
+    'The new question asks about query speed. The chunk vectors do not change. Their ranking changes.',
   ];
 
   function text(d, key, x, y, value, size = 24, color = P.ink, anchor = 'middle', weight = 500) {
@@ -39,7 +39,7 @@
   function vectorString(values) { return '[' + values.map(value => value.toFixed(3)).join(', ') + ']'; }
   function base(d, query) {
     text(d, 'ew-query', 640, 215, query.text, 31, P.ink, 'middle', 650);
-    text(d, 'ew-disclaimer', 640, 260, 'Illustrative token splits and vectors · computed scores, not real model outputs', 20, P.muted);
+    text(d, 'ew-disclaimer', 640, 260, 'Example tokens and vectors · computed scores · no model outputs', 20, P.muted);
   }
   function foot(d, value) { text(d, 'ew-foot', 640, 647, value, 22, P.muted); }
   function tokens(d, query) {
@@ -64,7 +64,7 @@
     });
     text(d, 'ew-context-mechanism', 640, 566, 'The model uses the other tokens to update the vector for “recover”.', 25, P.ink);
     text(d, 'ew-context-vector', 640, 606, 'Illustrative vector for “recover” here: ' + vectorString(query.context[query.focus]), 24, P.green);
-    foot(d, 'Same word, different sentence: its vector can change. The trained model stays fixed.');
+    foot(d, 'A different sentence can change the token vector. The trained model stays fixed.');
   }
   function predict(d) {
     api.passages.forEach((passage, index) => {
@@ -73,15 +73,15 @@
       text(d, 'ew-choice-' + passage.id + '-title', x + 25, 362, passage.title, 26, P.green, 'start', 650);
       wrap(passage.text, 37).forEach((line, lineIndex) => text(d, 'ew-choice-' + passage.id + '-line-' + lineIndex, x + 25, 406 + lineIndex * 33, line, 25, P.ink, 'start'));
     });
-    text(d, 'ew-predict', 640, 578, 'Predict first. Then follow the question through the model.', 28, P.orange);
-    foot(d, 'Same stored passages · a different question can require a different ranking');
+    text(d, 'ew-predict', 640, 578, 'Predict the first result. Then examine each step in the model.', 28, P.orange);
+    foot(d, 'Same stored chunks · a different question can change the ranking');
   }
   function tokenize(d, query) {
     tokens(d, query);
     d.arrow('ew-lookup-arrow', 640, 403, 640, 456, P.orange, 4);
     d.box('ew-lookup', 310, 470, 660, 75, 'Token IDs → starting vectors + position information', P.greenLight, P.green, 26);
     text(d, 'ew-token-count', 640, 587, query.tokens.length + ' token pieces → ' + query.tokens.length + ' starting vectors', 28, P.green);
-    foot(d, 'Real tokenizers may split a word into smaller pieces. These splits are illustrative.');
+    foot(d, 'A tokenizer can split one word into smaller pieces. This example uses manual splits.');
   }
   function pooling(d, query) {
     const average = api.mean(query.context), embedding = api.embed(query);
@@ -103,8 +103,8 @@
     d.arrow('ew-normalize-arrow', 579, 427, 688, 427, P.orange, 4);
     text(d, 'ew-magnitude', 954, 537, 'Euclidean norm of mean ≈ ' + magnitude.toFixed(3), 23, P.muted);
     text(d, 'ew-pool-count', 325, 537, query.tokens.length + ' token vectors → 1 mean vector', 23, P.muted);
-    text(d, 'ew-fixed-size', 640, 588, 'One sentence → 3 coordinates here, however many tokens it contains', 26, P.green);
-    foot(d, 'One common recipe; pooling rules and real dimensions vary. Numbers are rounded.');
+    text(d, 'ew-fixed-size', 640, 588, 'One query vector → 3 coordinates, for any number of tokens', 26, P.green);
+    foot(d, 'Other models can use different pooling methods and dimensions. The display rounds the numbers.');
   }
   function overview(d) {
     const entries = [[65, 220, 'Token pieces'], [350, 240, 'Use other words'], [655, 260, 'Pool + normalize'], [980, 230, 'One vector']];
@@ -128,7 +128,7 @@
       text(d, 'ew-score-' + passage.id, 1060, y + 30, passage.score.toFixed(3), 30, P.green, 'middle', 650);
       text(d, 'ew-stored-' + passage.id, 1055, y + 72, vectorString(passage.vector), 21, P.muted);
     });
-    foot(d, 'Same model + compatible settings → comparable vectors; read the passage to check relevance.');
+    foot(d, 'Use the same model and compatible settings. Read the passage to check relevance.');
   }
 
   Object.assign(scene, {
@@ -149,29 +149,29 @@
       else ranking(d, queryId);
     },
     teaching: {
-      idea: 'An embedding model maps the question and each passage to comparable vectors; a new question changes the similarity ranking of the same saved passages.',
-      question: 'Why does changing Maya’s question change the ranking without changing the stored passage vectors?',
-      answer: 'The same trained model and compatible query/document settings give a new question vector. Cosine compares that vector with each saved passage vector, producing new scores and a new order. Matching dimensions alone does not make unrelated model spaces compatible.',
+      idea: 'An embedding model creates comparable query and chunk vectors. A new query vector can change the ranking of the same stored chunks.',
+      question: 'Why can a new question change the ranking while the chunk vectors stay fixed?',
+      answer: 'The same trained model creates a new query vector with compatible query and document settings. Cosine similarity compares this query vector with each chunk vector. These comparisons produce new scores and a new ranking. Equal dimensions alone do not make vectors from unrelated models compatible.',
       builds: [
-        'Calibrate with the familiar task: read Maya’s recovery question and both passages. Ask which passage should rank first before revealing vectors or scores. An exact string search can miss useful text with different wording. These are fictional classroom passages.',
-        'Trace text pieces into token IDs, then starting vectors and position information. The visible token splits are hand-authored teaching examples; an actual tokenizer can split words into subwords and handle punctuation differently.',
-        'Read the illness sentence first: recover means get well because flu supplies a clue. Then read Maya’s question: database and crash make recover mean restoring database state. These other words are the context. Connect that familiar act of reading to the model: it uses information from the other tokens to update each token vector, so the same word can have a different vector in a different sentence. Inspect the three illustrative numbers for recover in Maya’s question; no vector is shown or measured for the illness sentence. A transformer uses attention and further layers for these updates. The numbers are hand-authored examples, not learned outputs or attention measurements. The trained model stays fixed during search.',
-        'Average each coordinate across all nine contextual token vectors. The sums, means, Euclidean norm, and normalized coordinates are computed from the same data as the reading widget. Values shown are rounded. This is one common transformer recipe; other models use different pooling, including a selected final token. Three dimensions keep the arithmetic visible; real output dimensions commonly number in the hundreds or thousands.',
-        'Compare the unit question vector with the two saved unit passage vectors. Scores are computed cosine similarities, not probabilities or measured retrieval quality. In a real system the passages are embedded when stored, then reused for many questions. Read the top passage to check that it answers the question.',
-        'Ask for a prediction, then show the restart/log paraphrase. Its different question vector still ranks the recovery passage first in this illustrative example. This demonstrates the intended behavior, not a guarantee that every paraphrase will work in every model.',
-        'Ask which passage should move up when Maya wants a faster query. Reveal the new ranking while keeping both saved passage vectors unchanged. Return to the whole sentence → tokens → context → vector → comparison sequence. Ask a student to explain why switching to an incompatible question model would break the comparison.',
+        'Read the recovery question. Read both passages. Ask which passage should rank first. Then show the vectors and scores. Exact string search can miss useful text with different words. These passages are classroom examples.',
+        'Show the token IDs for the text pieces. Then show the starting vectors and position information. This example uses manual token splits. A tokenizer can split words into smaller pieces. It can also handle punctuation differently.',
+        'Compare the meaning of recover in the two sentences. Flu gives context about health, while database and crash give context about database state. The model uses context from other tokens to update each token vector. A transformer uses attention and additional layers for these updates, while its trained parameters stay fixed. This example supplies three manual coordinates for recover in the query, with no vector for the illness sentence. These coordinates are not model outputs or attention measurements.',
+        'Average each coordinate across the nine token vectors. Divide each mean coordinate by the Euclidean norm. The reading widget uses the same data for these calculations. The display rounds the numbers. Other models can use different pooling methods, such as a selected final token. This example uses three dimensions, while real models often use hundreds or thousands.',
+        'Compare the unit query vector with each unit chunk vector. The computed cosine scores are not probabilities or measurements of retrieval quality. An application usually computes chunk vectors before search and reuses them for many questions. Read the first passage to check whether it answers the question.',
+        'Ask students to predict the first result for the paraphrase. Then show the question about log and restart. Its query vector also ranks the recovery passage first in this example. This result does not guarantee that a real model will handle every paraphrase correctly.',
+        'Ask which passage should rank first for the question about query speed. Show the new ranking. Both chunk vectors stay fixed. Review the sequence: sentence → tokens → context → query vector → comparison. Ask why an incompatible query model would invalidate the comparison.',
       ],
       checks: [
-        { question: 'Which passage should help with Maya’s crash-recovery question?', answer: 'Passage 7 explains replaying the durable log to restore committed changes. Predict that passage before seeing the scores, then read it to check its usefulness.' },
-        { question: 'Does one word always become exactly one token?', answer: 'No. A real tokenizer may split a word into smaller pieces and treat punctuation separately. The displayed splits are illustrative.' },
-        { question: 'Which words change what recover means in the two sentences?', answer: 'Flu makes recover mean get well. Database and crash make it mean restoring database state. Those other words are the context. The model uses information from other tokens to update the vector for recover, so the same word can have different vectors in different sentences. The trained model stays fixed during search.' },
-        { question: 'What do we divide by to normalize the averaged vector?', answer: 'Divide every coordinate of the mean vector by that mean vector’s Euclidean norm. This produces magnitude one. Averaging and normalization are one common recipe; models can use other pooling methods.' },
-        { question: 'Do these cosine scores evaluate a current embedding model?', answer: 'No. They are computed from hand-authored example vectors, not real model outputs. A cosine score is not a probability that a passage answers the question.' },
-        { question: 'Does the paraphrase’s successful match guarantee that all paraphrases work?', answer: 'No. It demonstrates the intended behavior using illustrative numbers. Test a real model with representative questions, paraphrases, and relevance judgments.' },
-        { question: 'What changed when the index passage moved to first place?', answer: 'The question and its vector changed. The saved passage vectors stayed fixed. Comparisons require the same model and compatible settings; matching dimensions alone is insufficient.' },
+        { question: 'Which passage should help answer the crash-recovery question?', answer: 'Passage 7 explains how to replay the durable log to restore committed changes. Predict the first result before the scores appear. Then read the passage to check its relevance.' },
+        { question: 'Does one word always become exactly one token?', answer: 'No. A tokenizer can split a word into smaller pieces and treat punctuation separately. This example uses manual splits.' },
+        { question: 'Which words change what recover means in the two sentences?', answer: 'Flu gives recover the meaning get well. Database and crash give recover the meaning restore database state. These words supply context. The model uses information from other tokens to update the vector for recover. The same word can have different vectors in different sentences. The trained model stays fixed during search.' },
+        { question: 'What do we divide by to normalize the averaged vector?', answer: 'Divide each mean coordinate by the Euclidean norm of the mean vector. The result has magnitude one. Other models can use different pooling methods.' },
+        { question: 'Do these cosine scores evaluate a current embedding model?', answer: 'No. The scores come from manual example vectors. They are not measurements of model outputs. A cosine score is not the probability that a passage answers the question.' },
+        { question: 'Does this result guarantee correct matches for all paraphrases?', answer: 'No. This example shows the intended behavior with manual numbers. Test a real model with representative questions and paraphrases. Check the relevance of its results.' },
+        { question: 'What changed when the index passage ranked first?', answer: 'The question and its query vector changed. The chunk vectors stayed fixed. Comparisons require the same model and compatible settings. Equal dimensions alone are not sufficient.' },
       ],
-      context: 'Three coordinates keep every value visible in this hand-authored example. Real models commonly return hundreds or thousands of coordinates, and their tokenizer, pooling, query/document formatting, normalization, and metric requirements can differ. Current model examples and official references are in the reading’s embedding-models section. Evaluate retrieval quality on representative questions and relevant passages.',
-      reference: 'Reading: lectures/lecture-11/vectors.html#embedding-walkthrough-title and #embedding-models. Mechanism references: Hugging Face tokenizer summary; Sentence Transformers custom model documentation (Transformer, Pooling, Normalize).',
+      context: 'This manual example uses three coordinates so students can inspect every value. Real models often return hundreds or thousands of coordinates. Models can require different tokenizers, pooling methods, query and document formats, normalization, and metrics. The reading lists model examples and official references in the embedding-models section. Evaluate retrieval quality with representative questions and relevant passages.',
+      reference: 'Reading: lectures/lecture-11/vectors.html#embedding-walkthrough-title and #embedding-models. Mechanism references: Hugging Face tokenizer summary. Sentence Transformers custom model documentation (Transformer, Pooling, Normalize).',
     },
   });
   delete scene.term;

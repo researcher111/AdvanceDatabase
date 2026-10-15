@@ -43,7 +43,7 @@ fs.mkdirSync(output,{recursive:true});
     if(result.outside.length||result.overlaps.length)problems.push({id,slide:i+1,step:step+1,title:scene.title,outside:result.outside,overlaps:result.overlaps});
     snapshots.push({id,slide:i+1,step:step+1,title:scene.title,steps:scene.steps,...result});
     await notes.waitForFunction(({i,step})=>CoursePlayer.getState().slide===i&&CoursePlayer.getState().step===step,{i,step});
-    assert.equal(await notes.locator('.teaching-current p').last().innerText(),result.instruction);
+    assert.equal((await notes.locator('.teaching-current p:not(.build)').allTextContents()).join('\n\n'),result.instruction);
     assert((await notes.locator('.teaching-question').innerText()).includes(result.question));
     assert.equal(await notes.locator('.teaching-answer p').textContent(),result.answer);
    }
@@ -53,7 +53,7 @@ fs.mkdirSync(output,{recursive:true});
    await gallery.goto(url+'?guide=1');
    assert.equal(await gallery.locator('article').count(),scenes.length);
    const guideText=await gallery.locator('body').textContent();
-   for(const snap of snapshots.filter(x=>x.id===id))assert(guideText.includes(snap.instruction),'guide contains each build cue');
+   for(const snap of snapshots.filter(x=>x.id===id))for(const paragraph of snap.instruction.split(/\n\s*\n|\n/))assert(guideText.includes(paragraph),'guide contains each build cue paragraph');
    if(id===13){
     const i=scenes.findIndex(s=>s.id==='reduce-sees-the-complete-group');
     await page.emulateMedia({reducedMotion:'no-preference'});await go(i,1);

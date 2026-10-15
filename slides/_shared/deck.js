@@ -93,7 +93,7 @@
     else{
       const current=el('div','teaching-current');
       current.append(el('p','build',`Step ${step+1} of ${sc.steps}: ${sc.states[step]}`));
-      current.append(el('p','',t.builds[step]));target.append(current);
+      notesParagraphs(current,t.builds[step]);target.append(current);
     }
     const check=step===null?t:t.checks?.[step]||t;
     paragraph(target,step===null&&t.checks?'Recap question:':'Ask the class:',check.question,'teaching-question');
