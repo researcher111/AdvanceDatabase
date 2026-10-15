@@ -6,14 +6,16 @@ const load=file=>vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),co
 ['slides/_shared/visuals.js','labs/_shared/rag-measurements.js','labs/_shared/teaching-traces.js','slides/_shared/trace-scenes.js','slides/decks/lectures-01-05.js','slides/decks/lectures-06-10.js','slides/decks/lectures-11-15.js','slides/decks/teaching-notes.js','slides/decks/storage-choices.js','slides/decks/btree-growth.js','slides/decks/btree-clarity.js'].forEach(load);
 const {COURSE_DECKS:decks,DeckViz:V,CourseTraces:{fixtures,models}}=context.window;
 const before=Object.values(decks).map(d=>[d.id,d.scenes.map(s=>[s.id,s.steps,s.minutes])]);
-// The expanded embedding example keeps its scene and timing but now has seven builds.
+// The expanded examples keep their scenes and timing while adding explanatory builds.
 before.find(([id])=>id===11)[1].find(([id])=>id==='embedding')[1]=7;
+before.find(([id])=>id===11)[1].find(([id])=>id==='navigate-a-graph')[1]=10;
 const original6=JSON.stringify(decks[6].scenes.map(s=>Array.from({length:s.steps},(_,i)=>V.sceneDrawing(s,i))));
 ['clarity-captions','clarity-layout','clarity-diagrams'].forEach(f=>load('slides/decks/'+f+'.js'));
 load('lectures/lecture-11/embedding-walkthrough.js');
 load('slides/decks/embedding-walkthrough.js');
+load('slides/decks/hnsw-walkthrough.js');
 load('slides/decks/course-clarity.js');
-assert.equal(JSON.stringify(Object.values(decks).map(d=>[d.id,d.scenes.map(s=>[s.id,s.steps,s.minutes])])),JSON.stringify(before),'stable scene IDs and pacing, with the expanded embedding example');
+assert.equal(JSON.stringify(Object.values(decks).map(d=>[d.id,d.scenes.map(s=>[s.id,s.steps,s.minutes])])),JSON.stringify(before),'stable scene IDs and pacing, with expanded embedding and HNSW examples');
 assert.equal(JSON.stringify(decks[6].scenes.map(s=>Array.from({length:s.steps},(_,i)=>V.sceneDrawing(s,i)))),original6,'approved Lecture 6 stays unchanged');
 let slides=0,builds=0;
 for(const deck of Object.values(decks)){
@@ -41,7 +43,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,234);assert.equal(builds,870);
+assert.equal(slides,234);assert.equal(builds,874);
 const resources=decks[10].scenes.at(-1);
 assert.equal(resources.id,'more-models-with-duckdb');
 const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');
