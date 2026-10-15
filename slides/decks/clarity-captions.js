@@ -930,10 +930,10 @@ window.CourseClarityCaptions = {
       "Searching fewer candidates can miss true neighbors; measure that loss against exact search."
     ],
     "build-an-ivf-index": [
-      "A centroid acts like a shelf label. Choose initial centers for the groups.",
-      "Assign each vector to its nearest centroid, like filing a book on a shelf.",
-      "Update the centers and repeat assignment. The real groups follow vector geometry.",
-      "These lists are the shelves. Search a few lists, then score the vectors inside them."
+      "Choose a starting center for each group. This center, called a centroid, represents the group.",
+      "Assign each vector to its closest center. Distance determines which group it joins.",
+      "Average each group’s vectors to find its new center. Assign every vector to the nearest new center. Repeat until assignments stop changing or the iteration limit is reached.",
+      "Store each group’s vector IDs in a list. At query time, search selected lists and score the vectors inside them."
     ],
     "probe-the-lists": [
       "Maya’s whiteboard has four toy vectors in two lists. Build-time assignment is fixed.",

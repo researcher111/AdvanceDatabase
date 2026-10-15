@@ -1711,13 +1711,13 @@
       ]
     },
     "build-an-ivf-index": {
-      "idea": "IVF is like choosing shelves from their labels, then checking the contents of only those shelves.",
-      "question": "What are the shelf, shelf label, and book in the IVF mechanism?",
-      "answer": "The list is the shelf, the centroid represents its label, and the stored vector is a book. Distances determine real membership and query selection; a label does not guarantee that the best vector is on its shelf.",
+      "idea": "IVF groups vectors around centers, then saves each group in a list so a query can search selected groups.",
+      "question": "After assigning vectors to groups, how do we move the centers and update the groups?",
+      "answer": "Average each coordinate of the vectors in a group to find its new center. Then assign every vector to its closest updated center. Repeat until assignments stop changing or the iteration limit is reached. The stored vectors stay in place; the centers and group memberships can change.",
       "builds": [
         "Link the unfamiliar mechanism to shelves of books. Map centroid to shelf label, list to shelf, and vector to book. Initial centroids are chosen during construction, before queries.",
         "Assign each vector to its closest center. Ask whether this assignment depends on a future query. It does not.",
-        "Recompute centers and repeat. Name the analogy’s limit: vector geometry, rather than human subject categories, determines the actual groups. k-means is supplied in Lab 9.",
+        "Point to an old center and follow its arrow to the new center. Average each coordinate across the vectors assigned to the group: for example, (2, 4) and (6, 8) have average (4, 6). This numerical example explains the calculation; it is separate from the plotted groups. Assign every vector to its nearest updated center, then repeat averaging and assignment until assignments stop changing or the iteration limit is reached. The vectors themselves do not move. Distances to the centers determine group membership. k-means is supplied in Lab 9.",
         "Look at the completed lists. “Choose promising shelf labels, then check their contents.” Ask what can happen to a good book on a shelf you skip. Keep IDs so returned vectors can lead back to source rows."
       ]
     },

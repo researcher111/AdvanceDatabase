@@ -20,6 +20,60 @@ function paper(d,k,x,y,color=P.white,w=90,h=115){d.rect(k,x,y,w,h,color,P.line,5
 function axis(d,k,x,y,w,h,xLabel,yLabel){d.line(k+'x',x,y,x+w,y,P.muted,2);d.line(k+'y',x,y,x,y-h,P.muted,2);d.text(k+'xl',x+w/2,y+48,xLabel,25,P.muted);d.text(k+'yl',x+40,y-h-25,yLabel,25,P.muted,'start');}
 function miniTree(d,k,x,y,color=P.green){d.circle(k+'r',x,y,14,color);[[-65,70],[65,70]].forEach(([dx,dy],i)=>{d.line(k+'e'+i,x,y,x+dx,y+dy,color,4);d.circle(k+'n'+i,x+dx,y+dy,13,color);[-24,24].forEach((a,j)=>{d.line(k+'q'+i+j,x+dx,y+dy,x+dx+a,y+dy+52,color,3);d.rect(k+'l'+i+j,x+dx+a-15,y+dy+40,30,26,P.greenLight,color,4);});});}
 const VPTS=Array.from({length:72},(_,i)=>{const c=i%6,j=Math.floor(i/6),cx=[230,390,580,750,930,1040][c],cy=[325,470,310,500,315,465][c];return {x:cx+Math.cos(j*2.37+c)*45+(j%3)*8,y:cy+Math.sin(j*2.37+c)*55,c};});
+// A small, computed k-means example for the IVF build slide. Stored vectors stay fixed.
+const IVF_INITIAL_CENTERS=[[175,370],[445,420],[530,365],[805,450],[875,365],[1095,410]].map(([x,y])=>({x,y}));
+function ivfAssignments(centers){
+  return VPTS.map(p=>centers.reduce((best,c,i)=>Math.hypot(p.x-c.x,p.y-c.y)<Math.hypot(p.x-centers[best].x,p.y-centers[best].y)?i:best,0));
+}
+function ivfAverages(centers,assignments){
+  return centers.map((center,c)=>{
+    const members=VPTS.filter((_,i)=>assignments[i]===c);
+    return members.length?{x:members.reduce((sum,p)=>sum+p.x,0)/members.length,y:members.reduce((sum,p)=>sum+p.y,0)/members.length}:center;
+  });
+}
+const IVF_FIRST_ASSIGNMENTS=ivfAssignments(IVF_INITIAL_CENTERS);
+const IVF_FIRST_AVERAGES=ivfAverages(IVF_INITIAL_CENTERS,IVF_FIRST_ASSIGNMENTS);
+const IVF_LISTS=(()=>{
+  let centers=IVF_INITIAL_CENTERS,assignments=IVF_FIRST_ASSIGNMENTS;
+  for(let iteration=0;iteration<20;iteration++){
+    centers=ivfAverages(centers,assignments);
+    const next=ivfAssignments(centers),stable=next.every((c,i)=>c===assignments[i]);
+    assignments=next;
+    if(stable)break;
+  }
+  return centers.map((_,c)=>VPTS.map((p,i)=>i).filter(i=>assignments[i]===c));
+})();
+function buildIVF(d,step){
+  if(step===3){
+    IVF_LISTS.forEach((ids,c)=>{
+      const x=155+c*190;
+      d.text('center-label'+c,x,260,'Center '+(c+1),24,P.orange);
+      d.circle('centroid'+c,x,290,15,P.orange);
+      d.arrow('a'+c,x,315,x,350,P.orange);
+      ids.slice(0,4).forEach((id,j)=>d.box('list'+c+j,x-55,365+j*53,110,42,'v'+id,P.greenLight,P.green,23));
+      d.text('list-count'+c,x,590,Math.min(ids.length,4)+' of '+ids.length+' shown',23,P.muted);
+    });
+    return;
+  }
+  if(step>0)VPTS.forEach((p,i)=>{
+    const center=IVF_INITIAL_CENTERS[IVF_FIRST_ASSIGNMENTS[i]];
+    d.line('assign'+i,p.x,p.y,center.x,center.y,P.line,1.5);
+  });
+  VPTS.forEach((p,i)=>d.circle('point'+i,p.x,p.y,5,P.green));
+  IVF_INITIAL_CENTERS.forEach((center,c)=>{
+    d.circle('old-center'+c,center.x,center.y,13,P.white,P.orange,3);
+    if(step===2){
+      const average=IVF_FIRST_AVERAGES[c],angle=Math.atan2(average.y-center.y,average.x-center.x);
+      d.arrow('center-move'+c,center.x+17*Math.cos(angle),center.y+17*Math.sin(angle),average.x-17*Math.cos(angle),average.y-17*Math.sin(angle),P.orange,4);
+      d.circle('mean-center'+c,average.x,average.y,13,P.green,P.white,2);
+    }
+  });
+  d.text('ivf-action',640,590,[
+    'Dots are stored vectors. Hollow circles are starting centers (centroids).',
+    'Assign each vector to its closest center.',
+    'Hollow circle = old center · large green dot = average · assign again.'
+  ][step],25,step===2?P.ink:P.muted);
+}
 function vectorCloud(d,step,mode='query'){
   const q={x:495,y:390}, probe=mode==='probe'?Math.min(3,step+1):0;
   [0,1,2,3,4,5].forEach(c=>{if(probe&&[2,1,0].slice(0,probe).includes(c))d.circle('region'+c,[230,390,580,750,930,1040][c],[325,470,310,500,315,465][c],70,P.orangeLight);});
@@ -42,7 +96,7 @@ scene('Direction and normalization',['Different direction','Closer direction','E
 scene('The exact baseline',['Query','First 24','Next 24','All 72'],(d,s)=>vectorCloud(d,s,'exact'),'Pause before the sweep and ask which vectors exact search may safely skip without another bound or index. Expected: none in this baseline. Advance through all 72 dots, retaining the ten nearest. Explain n dot products, d coordinates each, plus top-k selection. Exact search is simple to parallelize and gives us the neighbor IDs needed to check ANN results. Brute-force is a reasonable production choice for small corpora; an index is useful when measurements show that it improves this workload.',{title:"Save the neighbors before taking a shortcut",demo:'viz-space'}),
 scene('Price the baseline',['Small corpus','Large corpus','Repeated queries'],(d,s)=>{const n=[4000,1000000,10000000][s],dim=[64,1536,1536][s];for(let i=0;i<12;i++)d.rect('matrix'+i,130+(i%4)*38,290+Math.floor(i/4)*66,26,54,P.greenLight,P.green,2);d.text('n',320,535,n.toLocaleString(),36);d.text('dim',660,375,'× '+dim,55,P.orange);d.text('out',1000,370,s===0?'256k':s===1?'1.536B':'15.36B',48,P.green);d.text('unit',1000,435,'multiplies/query',25);if(s===2)d.text('qps',660,585,'× 100/s → 1.536T/s',42,P.orange);},'Have the class calculate 4,000×64 before revealing 256,000 multiplications. Move to larger n and d, then add queries per second. These are operation counts, not measured latencies or claims about hardware limits. Memory bandwidth, batching, accelerators, top-k selection, and concurrency also matter. Ask what should be measured alongside throughput. Expected: latency distribution, memory, build/update cost, and quality. Next, ask whether an index can score fewer vectors.',{title:"What happens when the corpus grows"}),
 scene('Skipping with a contract',['One candidate list','More candidates','Broader search'],(d,s)=>vectorCloud(d,s,'probe'),'Explain that ANN can search fewer vectors at the cost of missing some neighbors. Point out that the missing neighbor remains geometrically near the query; it was never evaluated. Ask whether the index itself knows all of its misses while answering a request. Expected: no; we run exact search separately to find the neighbors ANN missed. Reserve a held-out query set and retain the exact baseline. The displayed regions are a toy illustration, not measured high-dimensional performance.',{title:"The shortcut can leave a neighbor behind",kind:'definition',term:'Approximate nearest neighbor',definition:'A search method that may miss true neighbors to reduce search work.'}),
-scene('Build an IVF index',['Initial centroids','Assign','Move centroids','Lists'],(d,s)=>{if(s<3){vectorCloud(d,s,'cluster');if(s>0)VPTS.filter((_,i)=>i%5===0).forEach((p,i)=>d.line('assign'+i,p.x,p.y,[230,390,580,750,930,1040][p.c],[325,470,310,500,315,465][p.c],P.orange,1));}else{for(let c=0;c<6;c++){d.circle('centroid'+c,155+c*190,290,15,P.orange);d.arrow('a'+c,155+c*190,315,155+c*190,350,P.orange);for(let j=0;j<4;j++)d.box('list'+c+j,100+c*190,365+j*53,110,42,'v'+(c+j*6),P.greenLight,P.green,23);}}},'Describe the build separately from query execution: choose centroids, assign vectors, recompute centroids, repeat, then file each vector in its nearest centroid list. Ask what the list stores in a database. Expected: a vector and its ID or row address; the source document can stay elsewhere. k-means is supplied in Lab 9. The diagram uses six visual groups to explain the loop; actual embedding clusters can be uneven and overlap in projected views.',{title:"File each vector under a centroid"}),
+scene('Build an IVF index',['Initial centroids','Assign','Average and reassign','Lists'],buildIVF,'Describe the build separately from query execution: choose centroids, assign vectors, recompute centroids, repeat, then file each vector in its nearest centroid list. Ask what the list stores in a database. Expected: a vector and its ID or row address; the source document can stay elsewhere. k-means is supplied in Lab 9. The diagram uses six visual groups to explain the loop; actual embedding clusters can be uneven and overlap in projected views.',{title:"File each vector under a centroid"}),
 scene('Probe the lists',['One list','Two lists','Three lists'],(d,s)=>vectorCloud(d,s,'probe'),'Ask the room to predict whether another list increases work, recall, or both. Reveal lists in nearest-centroid order. With exact scoring inside nested candidate sets and a consistent tie rule, recall cannot decrease as more lists are probed. This guarantee belongs to this IVFFlat experiment, not every approximate pipeline. Presenter demo: the existing widget at canvas coordinate (100,80) yields recall .70 with 46 comparisons at probe 1, then 1.00 with 83 at probe 2. Those counts describe that deterministic 2-D widget only.',{demo:'viz-space'}),
 scene('Count the saved work',['Whole corpus','Centroids','Probed lists','Total'],(d,s)=>{d.text('n',230,275,'n = 4,000',36);d.rect('all',160,320,960,48,P.line,'none');if(s>0){d.rect('cent',160,410,20,60,P.orange,'none');d.text('C',225,450,'20',31,P.orange);}if(s>1){for(let i=0;i<4;i++)d.rect('probe'+i,360+i*158,410,150,60,P.greenLight,P.green,4);d.text('lists',680,535,'4 × 200',34,P.green);}if(s>2)d.text('cost',640,620,'20 + 4 × 200 = 820',45);},'Give pairs one minute to compute the expected candidate work for n=4,000, C=20, P=4 under balanced lists. Reveal 820 distance evaluations including centroids, versus 4,000 exact. Real lists have different sizes, so the measured lab counts differ from this estimate. Ask what multiplying both counts by d does to the ratio. Expected: it cancels in this simplified work model.',{title:"Count the work the shortcut still does"}),
 scene('Navigate a graph',['Entry','Upper hop','Long-range hop','Descend','Local hop','More candidates'],hnsw,'Trace the entry node, the upper-layer route, descent, and local refinement. Ask why a few long links help compared with walking only tiny local steps. Expected: long links reach a promising region before the search follows local neighbors. Reveal multiple candidate rings and name ef_search as a search-breadth setting. This is a teaching sketch: full HNSW maintains candidate sets, and greedy progress does not halve distance on every step or guarantee logarithmic worst-case time. More graph links and build work also cost memory.',{title:"Try a route through the graph",demo:'viz-hnsw'}),
