@@ -19,51 +19,32 @@
 <style>
 /* The review has no side navigation to reserve space for. */
 main .qw:not(:fullscreen) { width: 100%; margin-inline: 0; }
-#query-walkthrough, #btree-growth { scroll-margin-top: 75px; }
+main > section, #query-walkthrough, #statement-walkthrough, #join-walkthrough, #btree-growth { scroll-margin-top: 75px; }
 </style>
 </head><body><main>
-<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a><a href="#query-walkthrough">SQL front end</a><a href="#statement-walkthrough">Statement walkthrough</a><a href="#join-walkthrough">Join walkthrough</a><a href="#btree-growth">B+ tree growth</a></nav>
+<nav aria-label="Review sections"><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a><a href="#query-walkthrough">1 · Parsing and planning</a><a href="#scans">2 · Scans</a><a href="#statement-walkthrough">3 · Statements</a><a href="#join-walkthrough">4 · Joins</a><a href="#records">5 · Records</a><a href="#buffers">6 · Buffers</a><a href="#trees">7 · B+ trees</a></nav>
 <header><p class="eyebrow">Tuesday October 20, 2026 · Full-class review</p><h1>Trace a query through microdb</h1>
 <p class="lede">Explain the next state before revealing it.</p>
 <p>Follow a request from SQL text to the bytes of a row. Name the data structure at each step. Predict the next change. Distinguish the result from the work needed to produce it.</p>
-<p class="notice"><strong>Midterm: Thursday October 22.</strong> Review Lectures 1–6 and Labs 1–6: storage, buffers, records, scans, the SQL front end, and B+ trees. Analytics, vectors, and the optional transaction/concurrency/optimizer material are outside this exam’s scope. These are practice examples, not an additional graded assignment.</p>
-<div class="flow" aria-label="SQL becomes a plan; scans request pages; pages contain rows"><span>SQL → plan</span><span>Plan → scans</span><span>Scans → pages</span><span>Pages → rows</span></div>
+<p class="notice"><strong>Midterm: Thursday October 22.</strong> Review Lectures 1–6 and Labs 1–6: the SQL front end, scans, records, buffers, storage, and B+ trees. Analytics, vectors, and the optional transaction/concurrency/optimizer material are outside this exam’s scope. These are practice examples, not an additional graded assignment.</p>
+<p><strong>Review order:</strong> start with parsing and planning. Follow execution down to records and buffers. Finish with B+ trees.</p>
+<div class="flow" aria-label="Review order"><span>1 · Parsing and planning</span><span>2–4 · Scans, statements, and joins</span><span>5–6 · Records and buffers</span><span>7 · B+ trees</span></div>
 </header>
 <div class="exercise learning-check"><span class="ex-label">Check the starting point</span><p>Explain what SQL, a plan, a row, a RID, and a page represent. Draw their relationships before opening a worked solution. Mark the first connection you cannot explain. Use that connection as your review question.</p><details><summary>Check the model</summary><p>SQL states a request. A plan specifies operators. A row contains field values. A RID identifies a row’s block and slot. A page holds a working copy of block bytes. Tracing one request through these representations connects the six required topics.</p></details></div>
 <section id="agenda"><h2>Use the whole session</h2>
 <ol class="beats">
 <li><b>0–5 · Draw the engine.</b> Put parser, planner, scan, record page, buffer, and file manager in a request path. Collect questions to return to.</li>
-<li><b>5–20 · Blocks and buffers.</b> Trace a hit. Trace a miss. Trace a dirty eviction. Distinguish pin counts from recency.</li>
-<li><b>20–35 · Records and addresses.</b> Calculate an offset. Delete a row. Explain what a RID identifies.</li>
-<li><b>35–50 · SQL and iterators.</b> Draw the scan tree. Explain one call to <code>next()</code>.</li>
+<li><b>5–15 · Parsing and planning.</b> Follow SQL through tokens and query parts to a scan plan.</li>
+<li><b>15–35 · Scans, statements, and joins.</b> Explain one call to <code>next()</code>. Trace statement execution. Compare candidate pairs with returned rows.</li>
+<li><b>35–42 · Records and addresses.</b> Calculate an offset. Delete a row. Explain what a RID identifies.</li>
+<li><b>42–50 · Blocks and buffers.</b> Trace a hit. Trace a miss. Trace a dirty eviction. Distinguish pin counts from recency.</li>
 <li><b>50–70 · B+ trees.</b> Route an equality query. Scan a range. Repair a split with the existing diagrams.</li>
 <li><b>70–75 · Questions and exit check.</b> Revisit the opening questions. Each student explains one complete lookup and names one topic to review before Thursday.</li>
 </ol>
 <p>Predict each result individually. Compare predictions with a partner. Reveal the explanation. Bring a lab diagram or trace for discussion.</p>
 </section>
-<section id="buffers"><h2>1. Which buffer frame can be reused?</h2>
-<p>A two-frame buffer pool contains block A (pin count 1, clean) and block B (pin count 0, dirty). Block C exists on disk but is not cached. A caller requests C. Assume ordinary page reads and write-back on dirty eviction.</p>
-<p><strong>Predict:</strong> which frame can be reused? How many disk reads and writes does this request need? What changes if B is also pinned?</p>
-<details><summary>Reveal the explanation</summary><p>B is the only unpinned candidate. The buffer writes B’s dirty contents once, reads C once, and pins C for the caller. A remains in place even if it is older. If both frames are pinned, neither can be replaced. The request cannot complete until a frame becomes available. A cache hit requires no additional disk read.</p><p>A pin count tracks active users. A dirty flag identifies a modified page. The eviction policy selects among eligible frames. It cannot select a pinned frame.</p></details>
-<p><a href="../lecture-02/bufferpool.html#pool">Revisit frames and pins</a> · <a href="../lecture-02/bufferpool.html#dirty">Trace dirty-page writes</a> · <a href="../../labs/lab-01/filemanager.html">Lab 1: blocks and files</a></p>
-</section>
-<section id="records"><h2>2. Where are the bytes?</h2>
-<p>Use 128-byte blocks and 24-byte fixed-size slots. Each slot contains a four-byte flag, four-byte ID, name field, and four-byte GPA. The name field reserves four length bytes and eight content bytes. Slot numbers start at zero.</p>
-<p><strong>Predict:</strong> how many complete slots fit? Where does slot 3’s GPA begin? Does deleting slot 1 move slot 3? Does a RID permanently identify a student?</p>
-<details><summary>Reveal the explanation</summary><p>Five complete slots fit, leaving eight unused bytes. GPA starts at offset 20 within a slot. Slot 3’s GPA therefore starts at <code>3 × 24 + 20 = 92</code>. Deletion changes the slot’s in-use flag without moving other slots.</p><p>A RID is <code>(block number, slot number)</code>. Reusing a deleted slot gives the address to a different row. A RID is not a permanent student ID. Deletion must also maintain index entries that refer to the deleted row.</p></details>
-<p><a href="../lecture-03/records.html#try-it">Use the record-page visual</a> · <a href="../lecture-03/records.html#layout">Revisit field offsets and layout</a></p>
-</section>
-<section id="scans"><h2>3. What does one call to next() do?</h2>
-<p>The heap scan visits <code>(ada, 31)</code>, <code>(ben, 34)</code>, then <code>(eli, 36)</code>. Use the Lab 5 scan-based plan for:</p>
-<pre><code>SELECT name FROM students WHERE gpa &gt; 35;</code></pre>
-<p><strong>Predict:</strong> draw the operators. What happens when the caller asks the root for its first result? Which stage recognizes tokens, and which stage constructs scans?</p>
-<details><summary>Reveal the explanation</summary><p>The scan tree is <code>ProjectScan(name) → SelectScan(gpa &gt; 35) → TableScan(students)</code>. Selection advances past ada and ben, then accepts eli. Projection exposes the name field. The first successful root call returns <code>eli</code> after inspecting three input rows.</p><p>The lexer identifies tokens. The parser creates a statement representation. The planner constructs the scan tree. Parsing does not read result rows.</p></details>
-<p><strong>Follow-up:</strong> a complete nested-loop product has three outer rows and two inner rows, with no early termination. How many candidate pairs are considered?</p>
-<details><summary>Reveal the work count</summary><p>The product forms six candidate pairs. A predicate can reject pairs, so the output count can be smaller. Six comparisons do not imply six disk reads. Pages can be cached, and multiple rows can share one page.</p></details>
-<p><a href="../lecture-04/iterators.html#try-it">Trace the iterator animation</a> · <a href="../lecture-05/parsing.html#planner">Revisit the supplied planner</a></p>
-</section>
 <section aria-labelledby="query-walkthrough">
-<h2 id="query-walkthrough">Follow SQL from text to a scan plan</h2>
+<h2 id="query-walkthrough">1. Parse SQL and build a scan plan</h2>
 <p>The lexer turns characters into tokens. The parser collects fields, tables, and conditions in a <code>QueryData</code> object. The planner uses that object to build a scan tree.</p>
 <p><strong>Predict:</strong> which operators will this query need? Trace each stage. Compare the highlighted Python line with the tokens, query parts, or plan beside it.</p>
 <div class="viz qw" id="viz-query-walkthrough">
@@ -105,9 +86,19 @@ FROM students, majors
 WHERE mid = mid2 AND gpa &gt; 35;</code></pre>
 <p>The built-in <strong>Join two tables</strong> example also requires <code>dept = 'ds'</code>. Omit that extra condition for the plan shown below. Editing this query does not change the other walkthroughs.</p>
 </section>
+<section id="scans"><h2>2. What does one call to next() do?</h2>
+<p>The planner has built the scan tree. The caller now requests rows from that tree.</p>
+<p>In this separate three-row example, the heap scan visits <code>(ada, 31)</code>, <code>(ben, 34)</code>, then <code>(eli, 36)</code>. Use the Lab 5 scan-based plan for:</p>
+<pre><code>SELECT name FROM students WHERE gpa &gt; 35;</code></pre>
+<p><strong>Predict:</strong> draw the operators. What happens when the caller asks the root for its first result? Which stage recognizes tokens, and which stage constructs scans?</p>
+<details><summary>Reveal the explanation</summary><p>The scan tree is <code>ProjectScan(name) → SelectScan(gpa &gt; 35) → TableScan(students)</code>. Selection advances past ada and ben, then accepts eli. Projection exposes the name field. The first successful root call returns <code>eli</code> after inspecting three input rows.</p><p>The lexer identifies tokens. The parser creates a statement representation. The planner constructs the scan tree. Parsing does not read result rows.</p></details>
+<p><strong>Follow-up:</strong> a complete nested-loop product has three outer rows and two inner rows, with no early termination. How many candidate pairs are considered?</p>
+<details><summary>Reveal the work count</summary><p>The product forms six candidate pairs. A predicate can reject pairs, so the output count can be smaller. Six comparisons do not imply six disk reads. Pages can be cached, and multiple rows can share one page.</p></details>
+<p><a href="../lecture-04/iterators.html#try-it">Trace the iterator animation</a> · <a href="../lecture-05/parsing.html#planner">Revisit the supplied planner</a></p>
+</section>
 <section aria-labelledby="statement-walkthrough">
-<h2 id="statement-walkthrough">Watch each statement change the database</h2>
-<p>Connect the scan calls to buffer frames, record slots, and file bytes. This walkthrough uses Lab 4’s sample rows and schema. The extra <code>mid</code> field makes each student slot 28 bytes.</p>
+<h2 id="statement-walkthrough">3. Watch each statement change the database</h2>
+<p>Connect the scan calls to buffer frames, record slots, and file bytes. This walkthrough uses Lab 4’s sample rows and schema. Each student slot contains <code>sid</code>, <code>name</code>, <code>gpa</code>, and <code>mid</code>. These fields and the slot flag occupy 28 bytes.</p>
 <p><strong>Predict before stepping:</strong> which value, flag, or file will change next?</p>
 <ul>
 <li><a href="#statement-walkthrough" data-statement-stage="create">CREATE: where does the database store a schema?</a></li>
@@ -184,7 +175,7 @@ WHERE mid = mid2 AND gpa &gt; 35;</code></pre>
 <p><strong>Explain the result:</strong> choose one highlighted line. Name the buffer frame, slot, or file that the line reads or changes.</p>
 </section>
 <section aria-labelledby="join-walkthrough">
-<h2 id="join-walkthrough">Follow a join from its plan to record slots</h2>
+<h2 id="join-walkthrough">4. Follow a join from its plan to record slots</h2>
 <p>This join uses the student and major tables after DELETE in the previous walkthrough. You can start the join without finishing that walkthrough. Each walkthrough has its own controls.</p>
 <p>The query returns each qualifying student’s name and department. It matches <code>mid</code> with <code>mid2</code> and requires <code>gpa &gt; 35</code>.</p>
 <pre><code class="language-sql">SELECT name, dept
@@ -300,7 +291,22 @@ finally:
 <p>The deleted student slot is skipped because its flag is EMPTY. Its old field bytes remain visible in the inspector. The counters track calls, pairs, output rows, and right-input rewinds. They do not count disk reads.</p>
 </details>
 </section>
-<section id="trees"><h2>4. Follow the tree all the way to a row</h2>
+<section id="records"><h2>5. Where are the bytes?</h2>
+<p>The walkthroughs located fields within record slots. This separate exercise uses a student schema without the <code>mid</code> field.</p>
+<p>Use 128-byte blocks and 24-byte fixed-size slots. Each slot contains a four-byte flag, four-byte ID, name field, and four-byte GPA. The name field reserves four length bytes and eight content bytes. Slot numbers start at zero.</p>
+<p><strong>Predict:</strong> how many complete slots fit? Where does slot 3’s GPA begin? Does deleting slot 1 move slot 3? Does a RID permanently identify a student?</p>
+<details><summary>Reveal the explanation</summary><p>Five complete slots fit, leaving eight unused bytes. GPA starts at offset 20 within a slot. Slot 3’s GPA therefore starts at <code>3 × 24 + 20 = 92</code>. Deletion changes the slot’s in-use flag without moving other slots.</p><p>A RID is <code>(block number, slot number)</code>. Reusing a deleted slot gives the address to a different row. A RID is not a permanent student ID. Deletion must also maintain index entries that refer to the deleted row.</p></details>
+<p><a href="../lecture-03/records.html#try-it">Use the record-page visual</a> · <a href="../lecture-03/records.html#layout">Revisit field offsets and layout</a></p>
+</section>
+<section id="buffers"><h2>6. Which buffer frame can be reused?</h2>
+<p>Record operations read and change page bytes in memory. The buffer manager loads pages and controls which frames can be reused. This separate exercise uses two buffer frames.</p>
+<p>A two-frame buffer pool contains block A (pin count 1, clean) and block B (pin count 0, dirty). Block C exists on disk but is not cached. A caller requests C. Assume ordinary page reads and write-back on dirty eviction.</p>
+<p><strong>Predict:</strong> which frame can be reused? How many disk reads and writes does this request need? What changes if B is also pinned?</p>
+<details><summary>Reveal the explanation</summary><p>B is the only unpinned candidate. The buffer writes B’s dirty contents once, reads C once, and pins C for the caller. A remains in place even if it is older. If both frames are pinned, neither can be replaced. The request cannot complete until a frame becomes available. A cache hit requires no additional disk read.</p><p>A pin count tracks active users. A dirty flag identifies a modified page. The eviction policy selects among eligible frames. It cannot select a pinned frame.</p></details>
+<p><a href="../lecture-02/bufferpool.html#pool">Revisit frames and pins</a> · <a href="../lecture-02/bufferpool.html#dirty">Trace dirty-page writes</a> · <a href="../../labs/lab-01/filemanager.html">Lab 1: blocks and files</a></p>
+</section>
+<section id="trees"><h2>7. Follow a B+ tree all the way to a row</h2>
+<p>A table scan can inspect every row. A B+ tree finds matching keys and provides their row addresses. Use those addresses to locate the records.</p>
 <figure><img src="../lecture-06/diagrams/b-tree.svg?v=ste-20261015" alt="A root separator of 36 routes smaller keys to leaf 28, 31, 34 and equality or larger keys to leaf 36, 37, 39. Leaves store RID lists and link in order."><figcaption>Use the same tree as Lecture 6. Name the comparison before following each arrow.</figcaption></figure>
 <p><strong>Predict:</strong> which child receives key 36? For the inclusive range 31–37, where do we start and stop? What extra work follows a matching leaf entry?</p>
 <details><summary>Reveal the lookup and range</summary><p>Equality with separator 36 goes right. The separator is a routing boundary. The leaf entry supplies the RID list. Those addresses locate heap rows.</p><p>For 31–37, descend to the left leaf. Start at 31. Follow the next-leaf link. Accept keys 31, 34, 36, and 37. Stop at 39, which exceeds the inclusive upper bound. Each RID for a matching key can contribute a row.</p><p>The matching-key count can therefore differ from the returned-row count.</p><p>Count tree-node visits separately from heap-page access and physical disk reads. A visited page can already be in the buffer pool.</p></details>
