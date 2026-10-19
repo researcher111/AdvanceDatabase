@@ -8,6 +8,7 @@
   const stageButtons = [...root.querySelectorAll('[data-qw-stage]')];
   const stageNames = { lex: 'Lexing', parse: 'Parsing', plan: 'Planning' };
   let trace, index = 0, timer = null, playing = false, dirty = false, codeMethod = null, dataStage = null;
+  let wasFullscreen = false;
   const inFullscreen = () => document.fullscreenElement === root;
   const make = (tag, text, cls) => {
     const node = document.createElement(tag);
@@ -186,6 +187,9 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
   function fullscreenChanged() {
     const on = inFullscreen();
+    // Other walkthroughs can also enter fullscreen on the same page.
+    if (!on && !wasFullscreen) return;
+    wasFullscreen = on;
     $('fullscreen').setAttribute('aria-pressed', String(on));
     $('fullscreen').textContent = on ? 'Exit full screen' : 'Full screen';
     $('fullscreen').title = on ? 'Exit fullscreen (Esc)' : 'Open the walkthrough in fullscreen';
@@ -193,7 +197,8 @@
       root.scrollTop = 0;
       root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'SQL query walkthrough');
     } else {
-      root.removeAttribute('role'); root.removeAttribute('aria-modal'); root.removeAttribute('aria-label'); $('fullscreen').focus();
+      root.removeAttribute('role'); root.removeAttribute('aria-modal'); root.removeAttribute('aria-label');
+      if (!document.fullscreenElement) $('fullscreen').focus();
     }
     render();
   }

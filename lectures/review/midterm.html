@@ -8,13 +8,19 @@
 <style>.flow{display:flex;flex-wrap:wrap;gap:12px;font:600 16px var(--sans);color:#30785b}.flow span{background:#e8f0e9;border:1px solid #cbd8ce;border-radius:6px;padding:12px}figure{margin:24px 0}figure img{width:100%;height:auto}figcaption{font:14px/1.6 var(--sans);color:#596a61}code{overflow-wrap:anywhere}details p:last-child{margin-bottom:0}</style>
 <style>
 /* Keep the review page's section spacing and answer boxes outside the widgets. */
-:where(.sw, .jw) section, :where(.sw, .jw) details { margin: 0; }
-:where(.sw, .jw) details { border: 0; border-radius: 0; padding: 0; background: transparent; }
+:where(.sw, .jw, .qw) section, :where(.sw, .jw, .qw) details { margin: 0; }
+:where(.sw, .jw, .qw) details { border: 0; border-radius: 0; padding: 0; background: transparent; }
 </style>
 <link rel="stylesheet" href="../../labs/lab-04/styles.css?v=2">
 <link rel="stylesheet" href="../../labs/lab-04/statement-walkthrough.css?v=1">
+<link rel="stylesheet" href="../../labs/lab-05/query-walkthrough.css?v=2">
+<style>
+/* The review has no side navigation to reserve space for. */
+main .qw:not(:fullscreen) { width: 100%; margin-inline: 0; }
+#query-walkthrough { scroll-margin-top: 75px; }
+</style>
 </head><body><main>
-<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a><a href="#statement-walkthrough">Statement walkthrough</a><a href="#join-walkthrough">Join walkthrough</a></nav>
+<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a><a href="#query-walkthrough">SQL front end</a><a href="#statement-walkthrough">Statement walkthrough</a><a href="#join-walkthrough">Join walkthrough</a></nav>
 <header><p class="eyebrow">Tuesday October 20, 2026 · Full-class review</p><h1>Trace a query through microdb</h1>
 <p class="lede">Explain the next state before revealing it.</p>
 <p>Follow a request from SQL text to the bytes of a row. Name the data structure at each step. Predict the next change. Distinguish the result from the work needed to produce it.</p>
@@ -53,6 +59,49 @@
 <p><strong>Follow-up:</strong> a complete nested-loop product has three outer rows and two inner rows, with no early termination. How many candidate pairs are considered?</p>
 <details><summary>Reveal the work count</summary><p>The product forms six candidate pairs. A predicate can reject pairs, so the output count can be smaller. Six comparisons do not imply six disk reads. Pages can be cached, and multiple rows can share one page.</p></details>
 <p><a href="../lecture-04/iterators.html#try-it">Trace the iterator animation</a> · <a href="../lecture-05/parsing.html#planner">Revisit the supplied planner</a></p>
+</section>
+<section aria-labelledby="query-walkthrough">
+<h2 id="query-walkthrough">Follow SQL from text to a scan plan</h2>
+<p>The lexer turns characters into tokens. The parser collects fields, tables, and conditions in a <code>QueryData</code> object. The planner uses that object to build a scan tree.</p>
+<p><strong>Predict:</strong> which operators will this query need? Trace each stage. Compare the highlighted Python line with the tokens, query parts, or plan beside it.</p>
+<div class="viz qw" id="viz-query-walkthrough">
+  <div class="qw-heading"><div class="viz-title">Inside the SQL front end</div><button type="button" class="btn" id="qw-fullscreen" aria-pressed="false" title="Open the walkthrough in fullscreen">Full screen</button></div>
+  <p class="viz-description">Use <code>students(sid, name, gpa, mid)</code> and <code>majors(mid2, dept)</code>. This walkthrough builds SELECT plans. <a href="../../labs/lab-05/sqlfrontend.html#try-it">Use the Lab 5 SQL terminal to execute your own query.</a></p>
+  <p id="qw-view-status" class="qw-validation" role="status" hidden></p>
+  <form id="qw-form">
+    <label for="qw-query">Your SQL query</label>
+    <textarea id="qw-query" rows="2" maxlength="2000" spellcheck="false" autocomplete="off" aria-describedby="qw-query-help">SELECT name FROM students WHERE gpa &gt; 35</textarea>
+    <div class="qw-query-actions"><button type="submit" class="btn primary">Trace query</button><label for="qw-example">Try an example</label><select id="qw-example"><option value="custom">Custom query</option></select></div>
+  </form>
+  <p class="qw-hint" id="qw-query-help">Ctrl/⌘ + Enter traces your query. Supports *, comma-separated fields and tables, and WHERE comparisons joined by AND. Step back freely to compare states.</p>
+  <p id="qw-validation" class="qw-validation" role="status" hidden></p>
+  <nav class="qw-stages" aria-label="Query stages"><button type="button" class="btn" data-qw-stage="lex">1 · Lexing</button><button type="button" class="btn" data-qw-stage="parse">2 · Parsing</button><button type="button" class="btn" data-qw-stage="plan">3 · Planning</button></nav>
+  <div class="qw-controls"><button type="button" class="btn" id="qw-restart">Restart</button><button type="button" class="btn" id="qw-back">Back</button><button type="button" class="btn primary" id="qw-next">Step</button><button type="button" class="btn" id="qw-play" aria-pressed="false">Play</button><button type="button" class="btn" id="qw-finish">Jump to end</button><label for="qw-speed">Pace</label><select id="qw-speed"><option value="1800">Slow</option><option value="1000" selected>Normal</option><option value="450">Fast</option></select><span id="qw-progress"></span></div>
+  <label class="qw-scrub-label" for="qw-scrub">Trace position</label><input id="qw-scrub" type="range" min="0" max="1" value="0">
+  <div class="qw-message" aria-live="polite" aria-atomic="true"><strong id="qw-action"></strong><p id="qw-note"></p></div>
+  <div class="qw-workspace" id="qw-workspace">
+    <section class="qw-code-panel" aria-label="Highlighted Python source">
+      <div class="qw-panel-heading"><h4 id="qw-method"></h4><a href="../../labs/lab-05/starter/sql_frontend.py" target="_blank" rel="noopener">Full source</a></div>
+      <p class="qw-hint" id="qw-stack"></p>
+      <ol id="qw-code" class="qw-code" aria-label="Python code with current lines highlighted"></ol>
+      <p class="qw-hint">Line numbers refer to <code>sql_frontend.py</code>. Docstrings are omitted. State shows the effect of the highlighted line. Each lexer-helper call is one step.</p>
+      <details class="qw-helper"><summary id="qw-helper-title">Token-recognition pattern</summary><pre id="qw-helper-code"></pre></details>
+    </section>
+    <section class="qw-visual-panel" aria-label="Query state">
+      <div id="qw-characters"><h4>Characters being recognized</h4><pre id="qw-sql-span"></pre></div>
+      <div id="qw-token-section"><h4 id="qw-token-title">Tokens produced so far</h4><p class="qw-hint" id="qw-cursor"></p><div id="qw-tokens" class="qw-tokens"></div></div>
+      <details id="qw-data-section" hidden open><summary id="qw-data-title">Query parts collected so far</summary><dl id="qw-data" class="qw-data"></dl><p id="qw-term" class="qw-current-term"></p></details>
+      <div id="qw-plan-section" hidden><h4 id="qw-plan-title">Scan plan under construction</h4><div id="qw-plan" class="qw-plan"></div><p class="qw-hint">Highlighted node = scan just created or selected as the root. Child scans provide input to their parent. Building this tree does not pull rows.</p></div>
+    </section>
+  </div>
+  <p class="viz-caption">The browser trace mirrors the supplied Python SELECT parser and simple planner. It uses the two schemas above and does not execute rows. Lexer internals are optional: choose <strong>2 · Parsing</strong> to start with tokens.</p>
+  <noscript><p>Enable JavaScript to edit and step through a query. For <code>SELECT name FROM students WHERE gpa &gt; 35</code>, the plan is ProjectScan[name] over SelectScan[gpa &gt; 35] over TableScan(students). <a href="../../labs/lab-05/starter/sql_frontend.py">Read the supplied Python implementation.</a></p></noscript>
+</div>
+<p><strong>Connect the plan to execution:</strong> this parser uses comma-separated tables instead of <code>JOIN … ON</code>. Enter this query to build the plan used in the join walkthrough below:</p>
+<pre><code>SELECT name, dept
+FROM students, majors
+WHERE mid = mid2 AND gpa &gt; 35;</code></pre>
+<p>The built-in <strong>Join two tables</strong> example also requires <code>dept = 'ds'</code>. Omit that extra condition for the plan shown below. Editing this query does not change the other walkthroughs.</p>
 </section>
 <section aria-labelledby="statement-walkthrough">
 <h2 id="statement-walkthrough">Watch each statement change the database</h2>
@@ -269,4 +318,7 @@ finally:
 <script src="../../labs/lab-04/statement-walkthrough.js?v=ste-20261015"></script>
 <script src="../../labs/lab-04/join-walkthrough-model.js?v=ste-20261015"></script>
 <script src="../../labs/lab-04/join-walkthrough.js?v=ste-20261015"></script>
+<script src="../../labs/lab-05/query-trace-source.js?v=1"></script>
+<script src="../../labs/lab-05/query-trace.js?v=1"></script>
+<script src="../../labs/lab-05/query-walkthrough.js?v=3"></script>
 </body></html>
