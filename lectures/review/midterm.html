@@ -6,8 +6,14 @@
 <link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="../discovery/story.css">
 <style>.flow{display:flex;flex-wrap:wrap;gap:12px;font:600 16px var(--sans);color:#30785b}.flow span{background:#e8f0e9;border:1px solid #cbd8ce;border-radius:6px;padding:12px}figure{margin:24px 0}figure img{width:100%;height:auto}figcaption{font:14px/1.6 var(--sans);color:#596a61}code{overflow-wrap:anywhere}details p:last-child{margin-bottom:0}</style>
+<style>
+/* Keep the review page's section spacing and answer boxes outside the widget. */
+:where(.sw) section, :where(.sw) details { margin: 0; }
+:where(.sw) details { border: 0; border-radius: 0; padding: 0; background: transparent; }
+</style>
+<link rel="stylesheet" href="../../labs/lab-04/statement-walkthrough.css?v=1">
 </head><body><main>
-<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a></nav>
+<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a><a href="#statement-walkthrough">Statement walkthrough</a></nav>
 <header><p class="eyebrow">Tuesday October 20, 2026 · Full-class review</p><h1>Trace a query through microdb</h1>
 <p class="lede">Explain the next state before revealing it.</p>
 <p>Follow a request from SQL text to the bytes of a row. Name the data structure at each step. Predict the next change. Distinguish the result from the work needed to produce it.</p>
@@ -47,6 +53,84 @@
 <details><summary>Reveal the work count</summary><p>The product forms six candidate pairs. A predicate can reject pairs, so the output count can be smaller. Six comparisons do not imply six disk reads. Pages can be cached, and multiple rows can share one page.</p></details>
 <p><a href="../lecture-04/iterators.html#try-it">Trace the iterator animation</a> · <a href="../lecture-05/parsing.html#planner">Revisit the supplied planner</a></p>
 </section>
+<section aria-labelledby="statement-walkthrough">
+<h2 id="statement-walkthrough">Watch each statement change the database</h2>
+<p>Connect the scan calls to buffer frames, record slots, and file bytes. This walkthrough uses Lab 4’s sample rows and schema. The extra <code>mid</code> field makes each student slot 28 bytes.</p>
+<p><strong>Predict before stepping:</strong> which value, flag, or file will change next?</p>
+<ul>
+<li><a href="#statement-walkthrough" data-statement-stage="create">CREATE: where does the database store a schema?</a></li>
+<li><a href="#statement-walkthrough" data-statement-stage="insert">INSERT: when do new field values reach the file?</a></li>
+<li><a href="#statement-walkthrough" data-statement-stage="delete">DELETE: which bytes change when a row is removed?</a></li>
+<li><a href="#statement-walkthrough" data-statement-stage="select">SELECT: which rows does the scan inspect before returning a name?</a></li>
+</ul>
+<div class="viz sw" id="viz-statements" role="region" aria-label="Line-by-line database statements">
+  <div class="viz-title">One database, four statements, every storage change</div>
+  <p class="viz-description">Choose a statement. <strong>Step</strong> enters its storage calls. <strong>Next line</strong> finishes the next Python line. The highlighted line and its explanation distinguish work inside a call from a completed line.</p>
+  <div class="sw-stages" role="group" aria-label="Choose a statement">
+    <button type="button" class="btn" data-stage="create" aria-pressed="true">1 · CREATE</button>
+    <button type="button" class="btn" data-stage="insert" aria-pressed="false">2 · INSERT</button>
+    <button type="button" class="btn" data-stage="delete" aria-pressed="false">3 · DELETE</button>
+    <button type="button" class="btn" data-stage="select" aria-pressed="false">4 · SELECT</button>
+  </div>
+  <p class="sw-context" id="sw-context"></p>
+  <details class="sw-sql"><summary>SQL request represented by this code</summary><pre><code id="sw-sql"></code></pre></details>
+  <div class="sw-controls" role="group" aria-label="Statement execution controls">
+    <button type="button" class="btn" id="sw-back">← Back</button>
+    <button type="button" class="btn primary" id="sw-step">Step →</button>
+    <button type="button" class="btn" id="sw-line">Next line</button>
+    <button type="button" class="btn" id="sw-change">Next storage change</button>
+    <button type="button" class="btn" id="sw-play" aria-pressed="false">Play</button>
+    <button type="button" class="btn" id="sw-finish">Finish</button>
+    <button type="button" class="btn" id="sw-reset">Reset statement</button>
+    <button type="button" class="btn" id="sw-expand">Full screen</button>
+  </div>
+  <div class="sw-message" role="status" aria-live="polite" aria-atomic="true">
+    <div class="sw-message-head"><strong id="sw-phase"></strong><span id="sw-progress"></span></div>
+    <span id="sw-message">Loading the recorded execution…</span>
+  </div>
+  <div class="sw-workspace">
+    <section class="sw-code-panel" aria-label="Executing Python code">
+      <div class="sw-panel-title">Python · highlighted line is active</div>
+      <ol class="sw-code" id="sw-code" aria-label="Statement source lines"></ol>
+      <details class="sw-helper"><summary id="sw-helper-title">Inside this call</summary><pre><code id="sw-helper-code"></code></pre></details>
+      <div class="sw-locals" id="sw-locals" aria-label="Current Python values"></div>
+      <div class="sw-result"><div class="sw-panel-title">Caller output</div><div id="sw-output"></div></div>
+    </section>
+    <section class="sw-state-panel" aria-label="Buffer pool and database files">
+      <div class="sw-panel-title">RAM · 8 buffer frames</div>
+      <div class="sw-buffers" id="sw-buffers"></div>
+      <p class="sw-state-note">A pin protects a frame from replacement. <strong>Dirty</strong> means its page needs writing. Unpinning leaves the page resident.</p>
+      <div class="sw-transfer" id="sw-transfer">Files → pin reads a block · flush writes a dirty page → files</div>
+      <div class="sw-panel-title">Database files · current file contents</div>
+      <div class="sw-files" id="sw-files"></div>
+      <div class="sw-counts" id="sw-counts"></div>
+    </section>
+  </div>
+  <section class="sw-inspector" aria-labelledby="sw-block-title">
+    <div class="sw-inspector-head"><strong id="sw-block-title">Block inspector</strong><button type="button" class="btn" id="sw-follow">Follow execution</button></div>
+    <p id="sw-inspector-note"></p>
+    <div class="sw-cursors" id="sw-cursors" aria-label="Open scan cursors"></div>
+    <div class="sw-copies">
+      <div><div class="sw-panel-title">Buffered copy · current reads and writes</div><div id="sw-ram-slots"></div></div>
+      <div><div class="sw-panel-title">File copy · last written contents</div><div id="sw-file-slots"></div></div>
+    </div>
+    <div class="sw-slot-detail">
+      <div class="sw-panel-title" id="sw-slot-title">Slot fields</div>
+      <div class="sw-table-scroll"><table class="sw-fields"><thead><tr><th>Field</th><th>Slot offset</th><th>Size</th><th>RAM</th><th>File</th></tr></thead><tbody id="sw-fields"></tbody></table></div>
+      <p class="sw-address" id="sw-address"></p>
+      <details class="sw-bytes-detail"><summary>Compare every byte in this slot</summary>
+        <p>Each cell shows a block-relative offset and the RAM / file bytes in hexadecimal. Highlighted differences have not yet reached the file.</p>
+        <div class="sw-bytes" id="sw-bytes"></div>
+      </details>
+    </div>
+  </section>
+  <details class="sw-layout-detail"><summary id="sw-layout-title">Layout computed by the catalog</summary><div class="sw-layout" id="sw-layout"></div></details>
+  <p class="viz-caption">The stages continue from the previous stage’s final state. Reset rewinds only this demonstration. Snapshots are recorded from the lab’s Python storage code and completed reference scan operators. The browser replays them. Explicit <code>bm.flush_all()</code> checkpoints after CREATE, INSERT, and DELETE make file writes visible. A flush is not a transaction commit.</p>
+<p class="viz-caption">With a diagram button focused, use ← / → to step, Home to reset, and End to finish.</p>
+  <noscript><p>Enable JavaScript to inspect the execution. <a href="../../labs/lab-04/scans.html#sql-walkthrough">Read the Lab 4 code examples.</a></p></noscript>
+</div>
+<p><strong>Explain the result:</strong> choose one highlighted line. Name the buffer frame, slot, or file that the line reads or changes.</p>
+</section>
 <section id="trees"><h2>4. Follow the tree all the way to a row</h2>
 <figure><img src="../lecture-06/diagrams/b-tree.svg?v=ste-20261015" alt="A root separator of 36 routes smaller keys to leaf 28, 31, 34 and equality or larger keys to leaf 36, 37, 39. Leaves store RID lists and link in order."><figcaption>Use the same tree as Lecture 6. Name the comparison before following each arrow.</figcaption></figure>
 <p><strong>Predict:</strong> which child receives key 36? For the inclusive range 31–37, where do we start and stop? What extra work follows a matching leaf entry?</p>
@@ -62,4 +146,7 @@
 <p><strong>Before Thursday:</strong> Review the public lecture diagrams and Labs 1–6. Practice drawing intermediate states. Bring remaining questions to the usual course help channels. Follow the instructor’s separate exam instructions.</p>
 </section>
 <footer>DS 6XXX · Advanced Databases for Data Science · <a href="../../schedule.html#midterm-scope">Midterm scope and schedule</a></footer>
-</main></body></html>
+</main>
+<script src="../../labs/lab-04/statement-traces.js?v=1"></script>
+<script src="../../labs/lab-04/statement-walkthrough.js?v=ste-20261015"></script>
+</body></html>
