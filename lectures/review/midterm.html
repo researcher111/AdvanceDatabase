@@ -10,17 +10,19 @@
 /* Keep the review page's section spacing and answer boxes outside the widgets. */
 :where(.sw, .jw, .qw) section, :where(.sw, .jw, .qw) details { margin: 0; }
 :where(.sw, .jw, .qw) details { border: 0; border-radius: 0; padding: 0; background: transparent; }
+:where(.bt-reading, .bt-reading-dialog) details { margin: 0; border: 0; border-radius: 0; padding: 0; background: transparent; }
 </style>
 <link rel="stylesheet" href="../../labs/lab-04/styles.css?v=2">
 <link rel="stylesheet" href="../../labs/lab-04/statement-walkthrough.css?v=1">
 <link rel="stylesheet" href="../../labs/lab-05/query-walkthrough.css?v=2">
+<link rel="stylesheet" href="../lecture-06/tree-widgets.css?v=1">
 <style>
 /* The review has no side navigation to reserve space for. */
 main .qw:not(:fullscreen) { width: 100%; margin-inline: 0; }
-#query-walkthrough { scroll-margin-top: 75px; }
+#query-walkthrough, #btree-growth { scroll-margin-top: 75px; }
 </style>
 </head><body><main>
-<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a><a href="#query-walkthrough">SQL front end</a><a href="#statement-walkthrough">Statement walkthrough</a><a href="#join-walkthrough">Join walkthrough</a></nav>
+<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a><a href="#query-walkthrough">SQL front end</a><a href="#statement-walkthrough">Statement walkthrough</a><a href="#join-walkthrough">Join walkthrough</a><a href="#btree-growth">B+ tree growth</a></nav>
 <header><p class="eyebrow">Tuesday October 20, 2026 · Full-class review</p><h1>Trace a query through microdb</h1>
 <p class="lede">Explain the next state before revealing it.</p>
 <p>Follow a request from SQL text to the bytes of a row. Name the data structure at each step. Predict the next change. Distinguish the result from the work needed to produce it.</p>
@@ -304,7 +306,43 @@ finally:
 <details><summary>Reveal the lookup and range</summary><p>Equality with separator 36 goes right. The separator is a routing boundary. The leaf entry supplies the RID list. Those addresses locate heap rows.</p><p>For 31–37, descend to the left leaf. Start at 31. Follow the next-leaf link. Accept keys 31, 34, 36, and 37. Stop at 39, which exceeds the inclusive upper bound. Each RID for a matching key can contribute a row.</p><p>The matching-key count can therefore differ from the returned-row count.</p><p>Count tree-node visits separately from heap-page access and physical disk reads. A visited page can already be in the buffer pool.</p></details>
 <p><strong>Split practice:</strong> Start a separate tree with one full leaf <code>[1, 2, 3, 4]</code> and capacity four distinct keys. Insert 5 with the lecture’s middle-split rule. Draw the temporary overflow. Draw both resulting leaves, their link, and the new root.</p>
 <details><summary>Reveal the split</summary><p>The temporary leaf is <code>[1, 2, 3, 4, 5]</code>. Split it into <code>[1, 2]</code> and <code>[3, 4, 5]</code>. Link the left leaf to the right. Create root separator <code>[3]</code>. Key 3 retains its RID list in the right leaf, while the root holds a routing copy. The tree now has two levels.</p><p>Another RID for an existing key extends that key’s RID list in this model. It does not consume a distinct-key slot. An internal-node split moves a separator upward. A leaf split copies its boundary key upward.</p></details>
-<p><a href="../lecture-06/btrees.html#worked-example">Replay the code and tree traces</a> · <a href="../lecture-06/btrees.html#split">Replay tree building and splitting</a> · <a href="../lecture-06/btrees.html#try-it">Try your own insertions</a></p>
+<h3 id="btree-growth">Watch a B+ tree grow and split</h3>
+<p>Start with one empty leaf. In this lab, <code>ORDER = 4</code> means each node holds at most four distinct keys. A fifth distinct key causes an overflow. A split divides the node and updates its parent.</p>
+<p>Select <strong>Next</strong> to see one change at a time. Stop at each prediction before revealing the answer. Letters such as <code>a</code> represent row addresses. A list such as <code>[a]</code> belongs to a leaf key. The temporary overflow and repair steps show an insertion in progress.</p>
+<figure class="bt-reading" data-btree-scene="the-fifth-key">
+  <img class="bt-reading-static" src="../lecture-06/diagrams/the-fifth-key.svg" alt="Keys 1–5 split into leaves [1, 2] and [3, 4, 5] under root [3]. After 6 and 7, root [3, 5] points to three linked leaves. Every key retains its RID list." loading="lazy" width="1280" height="720">
+  <figcaption>Follow keys 1–7. A leaf split copies the right leaf’s first key into the parent. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<h3>What happens when the parent is full?</h3>
+<p>Continue inserting keys in order through 12. The root now contains <code>[3, 5, 7, 9]</code> and points to five leaves. Insert 13. The last leaf splits and sends separator 11 to the full root.</p>
+<p><strong>Predict:</strong> how can the tree keep all six child pointers? Step through the root split. Watch routing key 7 move into a new root.</p>
+<figure class="bt-reading" data-btree-scene="a-root-splits">
+  <img class="bt-reading-static" src="../lecture-06/diagrams/a-root-splits.svg?v=ste-20261015" alt="The overfull internal root [3, 5, 7, 9, 11] splits into [3, 5] and [9, 11] under new root [7]. Six linked leaves retain every key from 1 through 13." loading="lazy" width="1280" height="720">
+  <figcaption>An internal split moves a routing key upward. The leaf entry for key 7 stays in its leaf. <a href="../../slides/lecture-06.html" class="bt-slide-link">Open the visual deck ↗</a></figcaption>
+</figure>
+<p><strong>Keep this idea:</strong> a split can continue upward when the parent overflows. Only a root split adds a level. Every leaf remains at the same depth.</p>
+<h3>Insert your own keys</h3>
+<p>This widget shows the tree after each completed insertion. Select <strong>Insert 1–20</strong> to watch repeated splits. Select <strong>Reset</strong> to start again. You can also enter one key at a time.</p>
+<div class="viz" id="viz-btree">
+  <div class="viz-title">Four distinct keys fit in each node</div>
+  <p class="viz-description"><span class="hexlegend hit">Leaves</span> contain the keys. <span class="hexlegend miss">Internal nodes</span> guide the search. Green arrows link the leaves in order. This view hides the RID lists.</p>
+  <div class="qj-controls">
+    <button type="button" class="btn primary" id="bt-many">▶ Insert 1–20</button>
+    <button type="button" class="btn" id="bt-script">▶ Insert the six GPAs</button>
+    <label class="bt-inline">Key to insert <input type="number" id="bt-key" value="5" style="width:64px"></label>
+    <button type="button" class="btn" id="bt-one">Insert key</button>
+    <label class="bt-inline">Key to find <input type="number" id="bt-skey" value="7" style="width:64px"></label>
+    <button type="button" class="btn" id="bt-search">Search</button>
+    <button type="button" class="btn" id="bt-reset">Reset</button>
+  </div>
+  <div class="qj-msg" id="bt-msg" aria-live="polite">Insert keys until the root splits. Compare the tree’s height before and after the split.</div>
+  <div class="bt-canvas" id="bt-canvas"></div>
+  <div class="bs-stats" id="bt-stats"></div>
+  <p class="viz-caption">The GPA sequence is 39, 31, 37, 28, 36, 34. It builds the lookup tree above. Reset stops an animation. Manual insertion or search also stops the animation.</p>
+  <noscript><p>Enable JavaScript to insert keys. The two diagrams above show completed leaf and root splits.</p></noscript>
+</div>
+<p><strong>Check your understanding:</strong> insert a key that is already present. Does the shape change? In the lab tree, another RID joins that key’s RID list. This widget shows each distinct key once.</p>
+<p><a href="../lecture-06/btrees.html#worked-example">Connect the tree to Python code</a> · <a href="../lecture-06/btrees.html#split">Read the full split explanation</a></p>
 </section>
 <section id="exit"><h2>Finish with one complete explanation</h2>
 <p>For a lookup whose plan uses an index, complete this explanation: “The query is parsed into ____. The plan requests rows through ____. The tree locates ____. The RID leads to ____. The buffer decides whether ____. The caller receives ____.”</p>
@@ -321,4 +359,12 @@ finally:
 <script src="../../labs/lab-05/query-trace-source.js?v=1"></script>
 <script src="../../labs/lab-05/query-trace.js?v=1"></script>
 <script src="../../labs/lab-05/query-walkthrough.js?v=3"></script>
+<script src="../../slides/_shared/visuals.js"></script>
+<script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
+<script src="../../slides/_shared/trace-scenes.js?v=3"></script>
+<script src="../../slides/decks/lectures-06-10.js?v=ste-20261015"></script>
+<script src="../../slides/decks/btree-growth.js?v=ste-20261015"></script>
+<script src="../../slides/decks/btree-clarity.js?v=ste-20261015"></script>
+<script src="../lecture-06/reading-diagrams.js?v=1"></script>
+<script src="../lecture-06/viz.js?v=ste-20261015"></script>
 </body></html>
