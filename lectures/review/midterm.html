@@ -7,13 +7,14 @@
 <link rel="stylesheet" href="../discovery/story.css">
 <style>.flow{display:flex;flex-wrap:wrap;gap:12px;font:600 16px var(--sans);color:#30785b}.flow span{background:#e8f0e9;border:1px solid #cbd8ce;border-radius:6px;padding:12px}figure{margin:24px 0}figure img{width:100%;height:auto}figcaption{font:14px/1.6 var(--sans);color:#596a61}code{overflow-wrap:anywhere}details p:last-child{margin-bottom:0}</style>
 <style>
-/* Keep the review page's section spacing and answer boxes outside the widget. */
-:where(.sw) section, :where(.sw) details { margin: 0; }
-:where(.sw) details { border: 0; border-radius: 0; padding: 0; background: transparent; }
+/* Keep the review page's section spacing and answer boxes outside the widgets. */
+:where(.sw, .jw) section, :where(.sw, .jw) details { margin: 0; }
+:where(.sw, .jw) details { border: 0; border-radius: 0; padding: 0; background: transparent; }
 </style>
+<link rel="stylesheet" href="../../labs/lab-04/styles.css?v=2">
 <link rel="stylesheet" href="../../labs/lab-04/statement-walkthrough.css?v=1">
 </head><body><main>
-<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a><a href="#statement-walkthrough">Statement walkthrough</a></nav>
+<nav><a href="../../schedule.html">Course schedule</a><a href="../../slides/index.html">Lecture slides</a><a href="#agenda">75-minute plan</a><a href="#statement-walkthrough">Statement walkthrough</a><a href="#join-walkthrough">Join walkthrough</a></nav>
 <header><p class="eyebrow">Tuesday October 20, 2026 · Full-class review</p><h1>Trace a query through microdb</h1>
 <p class="lede">Explain the next state before revealing it.</p>
 <p>Follow a request from SQL text to the bytes of a row. Name the data structure at each step. Predict the next change. Distinguish the result from the work needed to produce it.</p>
@@ -131,6 +132,123 @@
 </div>
 <p><strong>Explain the result:</strong> choose one highlighted line. Name the buffer frame, slot, or file that the line reads or changes.</p>
 </section>
+<section aria-labelledby="join-walkthrough">
+<h2 id="join-walkthrough">Follow a join from its plan to record slots</h2>
+<p>This join uses the student and major tables after DELETE in the previous walkthrough. You can start the join without finishing that walkthrough. Each walkthrough has its own controls.</p>
+<p>The query returns each qualifying student’s name and department. It matches <code>mid</code> with <code>mid2</code> and requires <code>gpa &gt; 35</code>.</p>
+<pre><code class="language-sql">SELECT name, dept
+FROM students JOIN majors ON mid = mid2
+WHERE gpa &gt; 35;</code></pre>
+
+<pre><code class="language-python">students = TableScan(bm, fm, "students", students_layout)
+majors = TableScan(bm, fm, "majors", majors_layout)
+pairs = ProductScan(students, majors)
+matched = SelectScan(pairs, Predicate(("mid", "=", F("mid2")),
+                                      ("gpa", "&gt;", 35)))
+plan = ProjectScan(matched, ["name", "dept"])
+try:
+    plan.before_first()  # initialize both product cursors
+    while plan.next():
+        print(plan.get_val("name"), plan.get_val("dept"))
+finally:
+    plan.close()         # recursively closes both table scans</code></pre>
+<p><code>F("mid2")</code> reads the right row’s field. Plain <code>"mid2"</code> would compare <code>mid</code> with a string literal. The distinct field names let the product select the correct input.</p>
+<p><strong>Predict:</strong> how many candidate pairs will the plan inspect? Why can one call to <code>next()</code> inspect several pairs before returning a row?</p>
+<div class="viz jw" id="viz-join-slots" role="region" aria-label="Interactive join execution and record slots">
+  <div class="viz-title">One root call, two cursors, actual record layouts</div>
+  <p class="viz-description">Step through the same Python plan above. Requests travel down. Matching rows return up. Click a slot to inspect its fields and bytes. Click an operator to see its job.</p>
+  <noscript><p>Enable JavaScript to step through Project → Select → ProductScan → the two TableScans and their record slots. The Python above executes the same plan.</p></noscript>
+  <div class="jw-controls" role="group" aria-label="Execution controls">
+    <button type="button" class="btn" id="jw-back">← Back</button>
+    <button type="button" class="btn primary" id="jw-step">Step →</button>
+    <button type="button" class="btn" id="jw-pair">Next pair</button>
+    <button type="button" class="btn" id="jw-result">Next result</button>
+    <button type="button" class="btn" id="jw-play" aria-pressed="false">Play</button>
+    <button type="button" class="btn" id="jw-reset">Reset</button>
+  </div>
+  <div class="jw-jump-row">
+    <label for="jw-jump">Jump to</label>
+    <select id="jw-jump">
+      <option value="start">Initialization</option>
+      <option value="first-result">First result: Ada + DS</option>
+      <option value="join-reject">A major ID mismatch</option>
+      <option value="gpa-reject">A GPA rejection</option>
+      <option value="block-change">Cross into students block 1</option>
+      <option value="deleted">Skip the deleted slot</option>
+      <option value="end">Exhaustion and close</option>
+    </select>
+    <span id="jw-progress"></span>
+  </div>
+  <div class="jw-message" role="status" aria-live="polite" aria-atomic="true">
+    <span id="jw-direction" class="jw-direction"></span>
+    <span id="jw-message">Loading the execution trace…</span>
+  </div>
+  <div class="jw-counts" id="jw-counts" aria-label="Execution counters"></div>
+  <div class="jw-plan" aria-label="Query plan connected to physical table blocks">
+    <button type="button" class="jw-node jw-root-node" id="jw-project" data-operator="project" aria-controls="jw-operator-detail">
+      <strong>Project</strong><span>name, dept</span><small id="jw-project-state">Output fields only</small>
+    </button>
+    <div class="jw-link" id="jw-link-project" aria-hidden="true"><span>↓ demand · row ↑</span></div>
+    <button type="button" class="jw-node jw-root-node" id="jw-select" data-operator="select" aria-controls="jw-operator-detail">
+      <strong>Select</strong><span>mid = mid2 AND gpa &gt; 35</span>
+      <small id="jw-predicate">The predicate has not read a pair yet.</small>
+    </button>
+    <div class="jw-link" id="jw-link-select" aria-hidden="true"><span>↓ demand · row ↑</span></div>
+    <button type="button" class="jw-node jw-root-node" id="jw-product" data-operator="product" aria-controls="jw-operator-detail">
+      <strong>ProductScan</strong><span>students × majors</span><small id="jw-pair-state">No current pair</small>
+    </button>
+    <div class="jw-branches">
+      <section class="jw-table-branch" aria-label="Students scan and blocks">
+        <div class="jw-link" id="jw-link-students" aria-hidden="true"><span>↓ next / rewind · row ↑</span></div>
+        <button type="button" class="jw-node" id="jw-students" data-operator="students" aria-controls="jw-operator-detail">
+          <strong>TableScan(students)</strong><small id="jw-students-cursor"></small>
+        </button>
+        <div class="jw-storage-link">↕ RecordPage · slot flags and field bytes</div>
+        <div id="jw-students-blocks"></div>
+      </section>
+      <section class="jw-table-branch" aria-label="Majors scan and blocks">
+        <div class="jw-link" id="jw-link-majors" aria-hidden="true"><span>↓ next / rewind · row ↑</span></div>
+        <button type="button" class="jw-node" id="jw-majors" data-operator="majors" aria-controls="jw-operator-detail">
+          <strong>TableScan(majors)</strong><small id="jw-majors-cursor"></small>
+        </button>
+        <div class="jw-storage-link">↕ RecordPage · slot flags and field bytes</div>
+        <div id="jw-majors-blocks"></div>
+        <div class="jw-output">
+          <div class="jw-label">Rows delivered to the caller</div>
+          <div id="jw-output" aria-live="off">No rows yet.</div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="jw-legend"><span>▶ current cursor</span><span>● pinned block</span><span>Amber: flag or field read</span><span>Blue: inspected slot</span><span>EMPTY: skipped</span></div>
+  <details class="jw-operator" id="jw-operator-detail">
+    <summary id="jw-operator-title">Operator details and the current call stack</summary>
+    <p id="jw-operator-description"></p>
+    <pre><code id="jw-stack"></code></pre>
+  </details>
+  <section class="jw-inspector" aria-labelledby="jw-inspector-title">
+    <div class="jw-inspector-head">
+      <strong id="jw-inspector-title">Slot inspector</strong>
+      <button type="button" class="btn" id="jw-follow">Follow execution</button>
+    </div>
+    <p id="jw-inspector-status"></p>
+    <div class="jw-layout" id="jw-layout" aria-label="Field regions within the inspected slot"></div>
+    <p class="jw-address" id="jw-address"></p>
+    <details class="jw-bytes-detail">
+      <summary>Show every byte in this slot</summary>
+      <p>Offsets are relative to the start of the block. Integers and string lengths use four bytes in little-endian order. Strings use UTF-8. Unused string capacity stays zero in this fresh example.</p>
+      <div class="jw-bytes" id="jw-bytes" aria-label="Slot bytes with block-relative offsets"></div>
+    </details>
+  </section>
+  <p class="viz-caption">128-byte blocks: four 28-byte student slots or six 20-byte major slots. Field offsets come from each table’s catalog layout. This teaching trace shows the completed operators over the data created above. It tracks buffer pins, not cache misses or disk reads. Displaying the three returned rows is a caller action. The product streams one pair at a time.</p>
+<p class="viz-caption">With a diagram button focused, use ← / → to step, Home to reset, or End to finish.</p>
+</div>
+<details><summary>Explain the pairs and returned rows</summary>
+<p>Six active student rows and three major rows produce <strong>18 candidate pairs</strong>. The selection accepts <strong>three pairs</strong>. This scan returns <code>(ada, ds)</code>, <code>(cyd, ds)</code>, and <code>(eli, stat)</code>. SQL without <code>ORDER BY</code> does not promise this order.</p>
+<p>The product keeps one student selected while it visits each major. Selection requests another pair whenever the current pair fails its conditions. The product keeps two cursors and streams one pair at a time. It does not build an intermediate table of 18 rows.</p>
+<p>The deleted student slot is skipped because its flag is EMPTY. Its old field bytes remain visible in the inspector. The counters track calls, pairs, output rows, and right-input rewinds. They do not count disk reads.</p>
+</details>
+</section>
 <section id="trees"><h2>4. Follow the tree all the way to a row</h2>
 <figure><img src="../lecture-06/diagrams/b-tree.svg?v=ste-20261015" alt="A root separator of 36 routes smaller keys to leaf 28, 31, 34 and equality or larger keys to leaf 36, 37, 39. Leaves store RID lists and link in order."><figcaption>Use the same tree as Lecture 6. Name the comparison before following each arrow.</figcaption></figure>
 <p><strong>Predict:</strong> which child receives key 36? For the inclusive range 31–37, where do we start and stop? What extra work follows a matching leaf entry?</p>
@@ -149,4 +267,6 @@
 </main>
 <script src="../../labs/lab-04/statement-traces.js?v=1"></script>
 <script src="../../labs/lab-04/statement-walkthrough.js?v=ste-20261015"></script>
+<script src="../../labs/lab-04/join-walkthrough-model.js?v=ste-20261015"></script>
+<script src="../../labs/lab-04/join-walkthrough.js?v=ste-20261015"></script>
 </body></html>
