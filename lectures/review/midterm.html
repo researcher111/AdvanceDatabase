@@ -7,6 +7,18 @@
 <link rel="stylesheet" href="../discovery/story.css">
 <style>figure{margin:24px 0}figure img{width:100%;height:auto}figcaption{font:14px/1.6 var(--sans);color:#596a61}code{overflow-wrap:anywhere}details p:last-child{margin-bottom:0}.practice-questions>li{margin:20px 0 28px;padding-left:5px}.practice-questions details{margin-top:10px}.practice-questions pre{margin:10px 0}</style>
 <style>
+.practice-questions { list-style: none; padding-left: 0; }
+.practice-question { min-width: 0; margin: 0; padding: 0; border: 0; }
+.practice-question legend { width: 100%; padding: 0; font: inherit; }
+.practice-options { display: grid; gap: 8px; margin: 12px 0; }
+.practice-choice { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid #ccd7ce; border-radius: 6px; background: #fff; cursor: pointer; font: 16px/1.5 var(--sans); }
+.practice-choice input { flex: 0 0 auto; width: 18px; height: 18px; margin: 3px 0 0; accent-color: #285c7b; }
+.practice-choice span { min-width: 0; }
+.practice-choice:hover { border-color: #285c7b; }
+.practice-choice:has(input:checked) { border-color: #285c7b; background: #edf4f7; }
+.practice-choice:focus-within { outline: 3px solid #357392; outline-offset: 2px; }
+</style>
+<style>
 /* Keep the review page's section spacing and answer boxes outside the widgets. */
 :where(.sw, .jw, .qw) section, :where(.sw, .jw, .qw) details { margin: 0; }
 :where(.sw, .jw, .qw) details { border: 0; border-radius: 0; padding: 0; background: transparent; }
@@ -278,72 +290,168 @@ finally:
 </section>
 <section id="practice-questions" aria-labelledby="exit">
 <h2 id="exit">Practice questions</h2>
-<p>Use the diagrams above. Predict each answer before stepping. Open the answer check after comparing your prediction with the diagram.</p>
+<p>Choose one answer per question. Use the diagrams to check your choice. Open <strong>Check answer</strong> to see the correct choice and explanation.</p>
 
 <h3><a href="#query-walkthrough">Parsing and planning</a></h3>
-<ol class="practice-questions">
+<ol role="list" class="practice-questions">
 <li>
-  <p>Select <strong>Filter students</strong>. What does each stage produce: lexing, parsing, and planning? Does planning return any rows?</p>
-  <details><summary>Check answer</summary><p>The lexer produces tokens. The parser records field <code>name</code>, table <code>students</code>, and condition <code>gpa &gt; 35</code>. The planner builds <code>ProjectScan(name) → SelectScan(gpa &gt; 35) → TableScan(students)</code>. Planning builds the scans. Execution requests rows later.</p></details>
+  <fieldset class="practice-question" id="practice-q1">
+    <legend><strong>1.</strong> Select <strong>Filter students</strong>. Which sequence describes the output of each stage?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q1" id="practice-q1-a" value="A"><span><strong>A.</strong> Lexing: tokens. Parsing: scan tree. Planning: query structure. Execution: result rows.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q1" id="practice-q1-b" value="B"><span><strong>B.</strong> Lexing: tokens. Parsing: query structure. Planning: scan tree. Execution: result rows.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q1" id="practice-q1-c" value="C"><span><strong>C.</strong> Lexing: tokens. Parsing: query structure. Planning: result rows. Execution: scan tree.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q1" id="practice-q1-d" value="D"><span><strong>D.</strong> Lexing: query structure. Parsing: tokens. Planning: scan tree. Execution: result rows.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: B.</strong></p><p>The lexer produces tokens. The parser records field <code>name</code>, table <code>students</code>, and condition <code>gpa &gt; 35</code>. The planner builds <code>ProjectScan(name) → SelectScan(gpa &gt; 35) → TableScan(students)</code>. Planning builds the scans. Execution requests rows later.</p></details>
 </li>
 <li>
-  <p>Enter this query. Draw its scan tree. Which operator forms candidate pairs? Which operator rejects pairs?</p>
-  <pre><code>SELECT name, dept
+  <fieldset class="practice-question" id="practice-q2">
+    <legend><strong>2.</strong> Enter this query. Which scan tree and operator roles match? Read each chain from the root down to the operator above the two table scans.</legend>
+    <pre><code>SELECT name, dept
 FROM students, majors
 WHERE mid = mid2 AND gpa &gt; 35;</code></pre>
-  <details><summary>Check answer</summary><p>The root is <code>ProjectScan(name, dept)</code>. Its child is <code>SelectScan(mid = mid2 AND gpa &gt; 35)</code>. Selection reads from <code>ProductScan</code>, whose children scan <code>students</code> and <code>majors</code>. Product forms pairs. Selection rejects pairs that fail either condition.</p><p>This parser uses comma-separated tables. The built-in <strong>Join two tables</strong> example adds <code>dept = 'ds'</code>. The query here matches the join diagram.</p></details>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q2" id="practice-q2-a" value="A"><span><strong>A.</strong> <code>SelectScan → ProjectScan → ProductScan</code>. Product forms pairs. Selection rejects pairs that fail a condition.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q2" id="practice-q2-b" value="B"><span><strong>B.</strong> <code>ProjectScan → SelectScan → ProductScan</code>. Selection forms pairs. Product rejects pairs that fail a condition.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q2" id="practice-q2-c" value="C"><span><strong>C.</strong> <code>ProjectScan → ProductScan → SelectScan</code>. Product forms pairs. Selection rejects pairs that fail a condition.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q2" id="practice-q2-d" value="D"><span><strong>D.</strong> <code>ProjectScan → SelectScan → ProductScan</code>. Product forms pairs. Selection rejects pairs that fail a condition.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: D.</strong></p><p>The root is <code>ProjectScan(name, dept)</code>. Its child is <code>SelectScan(mid = mid2 AND gpa &gt; 35)</code>. Selection reads from <code>ProductScan</code>, whose children scan <code>students</code> and <code>majors</code>. Product forms pairs. Selection rejects pairs that fail either condition.</p><p>This parser uses comma-separated tables. The built-in <strong>Join two tables</strong> example adds <code>dept = 'ds'</code>. The query here matches the join diagram.</p></details>
 </li>
 </ol>
 
 <h3><a href="#statement-walkthrough">Statements and buffers</a></h3>
-<ol class="practice-questions" start="3">
+<ol role="list" class="practice-questions" start="3">
 <li>
-  <p>Finish <strong>CREATE</strong>. Which files store the schemas? Has the walkthrough inserted any student rows?</p>
-  <details><summary>Check answer</summary><p>The schemas are recorded in <code>table_catalog.tbl</code> and <code>field_catalog.tbl</code>. CREATE records table and field metadata. INSERT adds the student rows in the next stage.</p></details>
+  <fieldset class="practice-question" id="practice-q3">
+    <legend><strong>3.</strong> Finish <strong>CREATE</strong>. Which files store the schemas, and have any student rows been inserted?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q3" id="practice-q3-a" value="A"><span><strong>A.</strong> <code>table_catalog.tbl</code> and <code>field_catalog.tbl</code> store the schemas. No student rows have been inserted.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q3" id="practice-q3-b" value="B"><span><strong>B.</strong> <code>students.tbl</code> and <code>majors.tbl</code> store the schemas. No student rows have been inserted.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q3" id="practice-q3-c" value="C"><span><strong>C.</strong> <code>table_catalog.tbl</code> and <code>field_catalog.tbl</code> store the schemas. All example student rows have been inserted.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q3" id="practice-q3-d" value="D"><span><strong>D.</strong> <code>students.tbl</code> and <code>majors.tbl</code> store the schemas. All example student rows have been inserted.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: A.</strong></p><p>The schemas are recorded in <code>table_catalog.tbl</code> and <code>field_catalog.tbl</code>. CREATE records table and field metadata. INSERT adds the student rows in the next stage.</p></details>
 </li>
 <li>
-  <p>Select <strong>DELETE</strong>. Find the slot for <code>sid = 7</code>. What changes in that slot? What stays in place?</p>
-  <details><summary>Check answer</summary><p>The row occupies <code>students.tbl</code>, block 1, slot 2. Its four-byte flag starts at block byte <code>2 × 28 = 56</code>. Deletion changes the flag from USED (1) to EMPTY (0). The field bytes remain. Other slots do not move. Later scans skip the EMPTY slot.</p></details>
+  <fieldset class="practice-question" id="practice-q4">
+    <legend><strong>4.</strong> Select <strong>DELETE</strong>. What happens to the slot for <code>sid = 7</code>?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q4" id="practice-q4-a" value="A"><span><strong>A.</strong> The flag becomes EMPTY. Field bytes are cleared. Later slots stay in place.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q4" id="practice-q4-b" value="B"><span><strong>B.</strong> The flag stays USED. Field bytes are cleared. Later slots stay in place.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q4" id="practice-q4-c" value="C"><span><strong>C.</strong> The flag becomes EMPTY. Field bytes remain. Later slots stay in place.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q4" id="practice-q4-d" value="D"><span><strong>D.</strong> The flag becomes EMPTY. Field bytes remain. Later slots move forward to fill the gap.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: C.</strong></p><p>The row occupies <code>students.tbl</code>, block 1, slot 2. Its four-byte flag starts at block byte <code>2 × 28 = 56</code>. Deletion changes the flag from USED (1) to EMPTY (0). The field bytes remain. Other slots do not move. Later scans skip the EMPTY slot.</p></details>
 </li>
 <li id="buffers">
-  <p>In <strong>DELETE</strong>, compare RAM and file contents before the final flush. Does closing the scan write the changed page?</p>
-  <details><summary>Check answer</summary><p>Closing the scan releases its pin. The changed page can remain dirty in RAM. The file still contains its last written bytes. The explicit <code>bm.flush_all()</code> call writes the dirty page. Unpinning alone does not flush or evict the page. A flush is not a transaction commit.</p></details>
+  <fieldset class="practice-question" id="practice-q5">
+    <legend><strong>5.</strong> In <strong>DELETE</strong>, what happens when the scan closes before the final <code>bm.flush_all()</code> call?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q5" id="practice-q5-a" value="A"><span><strong>A.</strong> Its pin is released. Closing the scan writes the changed page to the file.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q5" id="practice-q5-b" value="B"><span><strong>B.</strong> Its pin is released. The page stays dirty in RAM until the final flush writes it.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q5" id="practice-q5-c" value="C"><span><strong>C.</strong> Its pin stays held. The final flush releases the pin and writes the page.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q5" id="practice-q5-d" value="D"><span><strong>D.</strong> Its pin is released. Closing the scan discards the changed page without writing it.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: B.</strong></p><p>Closing the scan releases its pin. The changed page can remain dirty in RAM. The file still contains its last written bytes. The explicit <code>bm.flush_all()</code> call writes the dirty page. Unpinning alone does not flush or evict the page. A flush is not a transaction commit.</p></details>
 </li>
 </ol>
 
 <h3 id="scans"><a href="#join-walkthrough">Joins and record slots</a></h3>
-<ol class="practice-questions" start="6">
+<ol role="list" class="practice-questions" start="6">
 <li>
-  <p>Run the join to completion. How many candidate pairs does it inspect? Which rows reach the caller?</p>
-  <details><summary>Check answer</summary><p>Six active students and three majors produce <code>6 × 3 = 18</code> candidate pairs. Three pairs pass: <code>(ada, ds)</code>, <code>(cyd, ds)</code>, and <code>(eli, stat)</code>. The deleted student contributes no pair. SQL without <code>ORDER BY</code> does not guarantee the displayed order.</p></details>
+  <fieldset class="practice-question" id="practice-q6">
+    <legend><strong>6.</strong> Run the join to completion. Which candidate count and result rows match the diagram?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q6" id="practice-q6-a" value="A"><span><strong>A.</strong> 18 candidate pairs. Result rows: <code>(ada, ds)</code>, <code>(cyd, ds)</code>, and <code>(eli, stat)</code>.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q6" id="practice-q6-b" value="B"><span><strong>B.</strong> 21 candidate pairs. Result rows: <code>(ada, ds)</code>, <code>(cyd, ds)</code>, and <code>(eli, stat)</code>.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q6" id="practice-q6-c" value="C"><span><strong>C.</strong> 6 candidate pairs. Result rows: <code>(ada, ds)</code>, <code>(cyd, ds)</code>, and <code>(eli, stat)</code>.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q6" id="practice-q6-d" value="D"><span><strong>D.</strong> 18 candidate pairs. Result rows: <code>(ada, ds)</code>, <code>(cyd, ds)</code>, and <code>(temp, ds)</code>.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: A.</strong></p><p>Six active students and three majors produce <code>6 × 3 = 18</code> candidate pairs. Three pairs pass: <code>(ada, ds)</code>, <code>(cyd, ds)</code>, and <code>(eli, stat)</code>. The deleted student contributes no pair. SQL without <code>ORDER BY</code> does not guarantee the displayed order.</p></details>
 </li>
 <li>
-  <p>Why does the join make four root <code>next()</code> calls for three result rows? Does this count measure disk reads?</p>
-  <details><summary>Check answer</summary><p>Three calls return True, one for each result row. The fourth returns False when no matching rows remain. One root call can inspect several candidate pairs. These counters measure scan work. They do not count disk reads.</p></details>
+  <fieldset class="practice-question" id="practice-q7">
+    <legend><strong>7.</strong> Why does the join make four root <code>next()</code> calls for three result rows? What does this count measure?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q7" id="practice-q7-a" value="A"><span><strong>A.</strong> The first call opens the scans. The next three return rows. The count does not measure disk reads.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q7" id="practice-q7-b" value="B"><span><strong>B.</strong> Three calls return rows. The fourth returns False. Four calls mean four disk reads.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q7" id="practice-q7-c" value="C"><span><strong>C.</strong> Each call tests exactly one candidate pair. Three pairs pass. The count does not measure disk reads.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q7" id="practice-q7-d" value="D"><span><strong>D.</strong> Three calls return rows. The fourth returns False. The count does not measure disk reads.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: D.</strong></p><p>Three calls return True, one for each result row. The fourth returns False when no matching rows remain. One root call can inspect several candidate pairs. These counters measure scan work. They do not count disk reads.</p></details>
 </li>
 <li id="records">
-  <p>Inspect <code>dee</code> in student block 0, slot 3. How many student slots fit in one block? Where does this slot’s GPA begin?</p>
-  <details><summary>Check answer</summary><p>Each block holds 128 bytes. Each student slot occupies 28 bytes, including its flag. Four slots fit, leaving <code>128 − 4 × 28 = 16</code> unused bytes. GPA starts 20 bytes into its slot. Slot 3’s GPA starts at block byte <code>3 × 28 + 20 = 104</code>.</p></details>
+  <fieldset class="practice-question" id="practice-q8">
+    <legend><strong>8.</strong> Inspect <code>dee</code> in student block 0, slot 3. How many student slots fit per block, and where does this slot’s GPA begin?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q8" id="practice-q8-a" value="A"><span><strong>A.</strong> Four slots fit per block. The GPA starts at block byte 84.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q8" id="practice-q8-b" value="B"><span><strong>B.</strong> Five slots fit per block. The GPA starts at block byte 92.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q8" id="practice-q8-c" value="C"><span><strong>C.</strong> Four slots fit per block. The GPA starts at block byte 104.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q8" id="practice-q8-d" value="D"><span><strong>D.</strong> Four slots fit per block. The GPA starts at block byte 20.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: C.</strong></p><p>Each block holds 128 bytes. Each student slot occupies 28 bytes, including its flag. Four slots fit, leaving <code>128 − 4 × 28 = 16</code> unused bytes. GPA starts 20 bytes into its slot. Slot 3’s GPA starts at block byte <code>3 × 28 + 20 = 104</code>.</p></details>
 </li>
 </ol>
 
 <h3><a href="#btree-growth">B+ trees</a></h3>
-<ol class="practice-questions" start="9">
+<ol role="list" class="practice-questions" start="9">
 <li>
-  <p>Insert 5 into the full leaf <code>[1, 2, 3, 4]</code>. Draw both leaves, their link, and the new root. Where does key 3 keep its row-address list?</p>
-  <details><summary>Check answer</summary><p>The temporary overflow is <code>[1, 2, 3, 4, 5]</code>. Split it into <code>[1, 2]</code> and <code>[3, 4, 5]</code>. Link the leaves. Copy separator 3 into a new root. Key 3 keeps its row-address list in the right leaf. The tree has two levels.</p></details>
+  <fieldset class="practice-question" id="practice-q9">
+    <legend><strong>9.</strong> Insert 5 into the full leaf <code>[1, 2, 3, 4]</code>. Which result follows the diagram’s split rule?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q9" id="practice-q9-a" value="A"><span><strong>A.</strong> Leaves <code>[1, 2]</code> and <code>[3, 4, 5]</code>, root <code>[2]</code>. Key 3 keeps its row-address list in the right leaf.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q9" id="practice-q9-b" value="B"><span><strong>B.</strong> Leaves <code>[1, 2]</code> and <code>[4, 5]</code>, root <code>[3]</code>. Key 3 moves its row-address list into the root.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q9" id="practice-q9-c" value="C"><span><strong>C.</strong> Leaves <code>[1, 2, 3]</code> and <code>[4, 5]</code>, root <code>[3]</code>. Key 3 keeps its row-address list in the left leaf.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q9" id="practice-q9-d" value="D"><span><strong>D.</strong> Leaves <code>[1, 2]</code> and <code>[3, 4, 5]</code>, root <code>[3]</code>. Key 3 keeps its row-address list in the right leaf.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: D.</strong></p><p>The temporary overflow is <code>[1, 2, 3, 4, 5]</code>. Split it into <code>[1, 2]</code> and <code>[3, 4, 5]</code>. Link the leaves. Copy separator 3 into a new root. Key 3 keeps its row-address list in the right leaf. The tree has two levels.</p></details>
 </li>
 <li>
-  <p>In the second diagram, insert 13 after keys 1–12. Why does the tree gain a level? Which routing key moves upward?</p>
-  <details><summary>Check answer</summary><p>The last leaf splits into <code>[9, 10]</code> and <code>[11, 12, 13]</code>. Copying separator 11 into the full root causes another overflow. Move routing key 7 into a new root. Its internal children contain <code>[3, 5]</code> and <code>[9, 11]</code>. The tree has three levels. The leaf entry for key 7 remains in its leaf.</p></details>
+  <fieldset class="practice-question" id="practice-q10">
+    <legend><strong>10.</strong> In the second diagram, insert 13 after keys 1–12. Which repair adds a level?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q10" id="practice-q10-a" value="A"><span><strong>A.</strong> Split the last leaf. Split its full parent by moving routing key 11 into a new root.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q10" id="practice-q10-b" value="B"><span><strong>B.</strong> Split the last leaf. Split its full parent by moving routing key 7 into a new root.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q10" id="practice-q10-c" value="C"><span><strong>C.</strong> Split the last leaf. Keep all five separators in the existing root and retain two levels.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q10" id="practice-q10-d" value="D"><span><strong>D.</strong> Split the last leaf. Move leaf entry 7 and its row-address list into a new root.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: B.</strong></p><p>The last leaf splits into <code>[9, 10]</code> and <code>[11, 12, 13]</code>. Copying separator 11 into the full root causes another overflow. Move routing key 7 into a new root. Its internal children contain <code>[3, 5]</code> and <code>[9, 11]</code>. The tree has three levels. The leaf entry for key 7 remains in its leaf.</p></details>
 </li>
 <li>
-  <p>Use the completed keys 1–7 tree. Trace the inclusive range 3–6. Which leaf starts the scan? Which key stops it?</p>
-  <details><summary>Check answer</summary><p>Equality with separator 3 routes to leaf <code>[3, 4]</code>. Return 3 and 4. Follow the next-leaf link to <code>[5, 6, 7]</code>. Return 5 and 6. Stop at 7 because it exceeds 6. The matching keys’ row-address lists identify the records to fetch.</p></details>
+  <fieldset class="practice-question" id="practice-q11">
+    <legend><strong>11.</strong> Use the completed keys 1–7 tree. Which path returns the inclusive range 3–6?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q11" id="practice-q11-a" value="A"><span><strong>A.</strong> Start at <code>[1, 2]</code>. Return 1 and 2. Stop before key 3.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q11" id="practice-q11-b" value="B"><span><strong>B.</strong> Start at <code>[3, 4]</code>. Return 3, 4, and 5. Stop before key 6.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q11" id="practice-q11-c" value="C"><span><strong>C.</strong> Start at <code>[3, 4]</code>. Return 3, 4, 5, and 6. Stop before key 7.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q11" id="practice-q11-d" value="D"><span><strong>D.</strong> Start at <code>[5, 6, 7]</code>. Return 5 and 6. Stop before key 7.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: C.</strong></p><p>Equality with separator 3 routes to leaf <code>[3, 4]</code>. Return 3 and 4. Follow the next-leaf link to <code>[5, 6, 7]</code>. Return 5 and 6. Stop at 7 because it exceeds 6. The matching keys’ row-address lists identify the records to fetch.</p></details>
 </li>
 <li>
-  <p>In <strong>Insert your own keys</strong>, enter the same key twice. Does the shape change? What would the lab tree store for another row with that key?</p>
-  <details><summary>Check answer</summary><p>The widget displays each distinct key once, so the shape stays the same. The lab tree adds the new row address to the existing key’s list. That addition uses no extra distinct-key slot. It does not cause a split in this model.</p></details>
+  <fieldset class="practice-question" id="practice-q12">
+    <legend><strong>12.</strong> In <strong>Insert your own keys</strong>, enter the same key twice. Which statement matches the widget and the lab tree?</legend>
+    <div class="practice-options">
+      <label class="practice-choice"><input type="radio" name="practice-q12" id="practice-q12-a" value="A"><span><strong>A.</strong> The widget’s shape stays the same. The lab adds the new row address to the existing key’s list.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q12" id="practice-q12-b" value="B"><span><strong>B.</strong> The widget adds another key entry. The lab stores a separate leaf entry for each row with that key.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q12" id="practice-q12-c" value="C"><span><strong>C.</strong> The widget’s shape stays the same. The lab discards the new row address because the key already exists.</span></label>
+      <label class="practice-choice"><input type="radio" name="practice-q12" id="practice-q12-d" value="D"><span><strong>D.</strong> The widget splits its leaf. The lab moves both row addresses into the parent node.</span></label>
+    </div>
+  </fieldset>
+  <details><summary>Check answer</summary><p><strong>Correct answer: A.</strong></p><p>The widget displays each distinct key once, so the shape stays the same. The lab tree adds the new row address to the existing key’s list. That addition uses no extra distinct-key slot. It does not cause a split in this model.</p></details>
 </li>
 </ol>
 </section>
