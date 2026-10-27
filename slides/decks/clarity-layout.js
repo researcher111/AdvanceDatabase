@@ -182,7 +182,7 @@ window.CourseClarityLayout = {
   "12/measure-chunking-instead-of-guessing": [204,216,1147,629],
   "12/context-has-a-budget": [127,251,1146,649],
   "12/two-retrieval-paths": [123,247,1126,588],
-  "12/filters-change-the-candidate-set": [207,262,1098,613],
+  "12/filters-change-the-candidate-set": [55,175,1225,651],
   "12/a-changed-source-invalidates-copies": [147,297,1168,577],
   "12/failure-diagnosis-workshop": [87,282,1211,608],
   "12/a-measurable-rag-system": [87,282,1211,629],

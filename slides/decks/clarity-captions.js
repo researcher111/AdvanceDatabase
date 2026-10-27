@@ -1053,9 +1053,10 @@ window.CourseClarityCaptions = {
       "Rerank the merged set, then measure whether the extra stage fixes the observed failure."
     ],
     "filters-change-the-candidate-set": [
-      "Some sources are available only to certain users.",
-      "Search only the sources this user is allowed to read.",
-      "Find the top-k results within the allowed set. An unrestricted ranking does not check authorization."
+      "Two teams share a database. Maya needs passages that her team has permission to read.",
+      "Keep the passages marked Team A. This smaller group is the allowed candidate set.",
+      "Rank the three allowed passages by similarity. Return the two highest scores.",
+      "Taking two results before checking permission can leave only one allowed result."
     ],
     "a-changed-source-invalidates-copies": [
       "D7’s source text, chunks, and vectors all start at version 1.",

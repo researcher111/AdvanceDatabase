@@ -1915,13 +1915,14 @@
       ]
     },
     "filters-change-the-candidate-set": {
-      "idea": "Authorization must constrain which chunks can become evidence.",
-      "question": "Can access control rely on asking the model to ignore forbidden passages?",
-      "answer": "No. The system must enforce authorization before unauthorized content becomes evidence.",
+      "idea": "Permission decides which passages may become evidence. Similarity helps order the allowed passages.",
+      "question": "Why does taking the unrestricted top two leave Maya with only one allowed result?",
+      "answer": "B1 is forbidden and removed. The two-result limit excluded A2, although Maya may read it.",
       "builds": [
-        "Before any candidate becomes evidence, ask whether the current user is allowed to receive it. Authorization is a constraint, not a relevance score. Identify all stored chunks and their access metadata.",
-        "Restrict candidates to the authorized subset.",
-        "Retrieve top-k within the supported filtered plan and check its recall behavior."
+        "Use the familiar example of private team folders. Maya belongs to Team A and asks why her model fails on new data. Six passages have team labels stored beside their text. These labels are metadata. Define a candidate as a passage eligible for consideration and a filter as a rule that excludes passages. Ask which passages Maya may read.",
+        "Keep A1, A2, and A3 for Maya. Exclude B1, B2, and B3 from her search, without deleting them. The folder analogy explains permission boundaries, not the index's physical layout. The system must enforce permissions before text becomes evidence for the language model. Date or file-type filters can be optional preferences. Permission rules remain mandatory.",
+        "Label the scores as invented examples. Rank A1 at 0.90, A2 at 0.80, and A3 at 0.70. Explain that k = 2 requests two results. Ask for the two highest-scoring allowed passages, then reveal A1 and A2. A high similarity score cannot grant permission.",
+        "Compare A1 and A2 with taking unrestricted results B1 at 0.95 and A1 at 0.90, then removing B1. Only A1 remains. A2 was outside that initial limit. Engine strategies vary, and extra candidates or continued searching can fill the result list. Do not imply one execution order for every index. With approximate search, check allowed-result count, recall, and work under the engine's filtering strategy."
       ]
     },
     "a-changed-source-invalidates-copies": {

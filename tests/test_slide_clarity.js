@@ -16,7 +16,7 @@ load('slides/decks/embedding-walkthrough.js');
 load('slides/decks/hnsw-walkthrough.js');
 load('slides/decks/course-clarity.js');
 load('slides/decks/lecture-12-script.js');
-assert.equal(decks[12].scenes.reduce((n,s)=>n+s.readAloud.length,0),55,'spoken script covers every Lecture 12 build');
+assert.equal(decks[12].scenes.reduce((n,s)=>n+s.readAloud.length,0),56,'spoken script covers every Lecture 12 build');
 for(const scene of decks[12].scenes)assert.equal(scene.readAloud.length,scene.steps,'script follows the slide builds');
 assert(Object.values(decks).filter(deck=>deck.id!==12).every(deck=>deck.scenes.every(scene=>!scene.readAloud)),'other decks retain their existing notes');
 assert.equal(JSON.stringify(Object.values(decks).map(d=>[d.id,d.scenes.map(s=>[s.id,s.steps,s.minutes])])),JSON.stringify(before),'stable scene IDs and pacing, with expanded embedding and HNSW examples');
@@ -47,7 +47,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,233);assert.equal(builds,871);
+assert.equal(slides,233);assert.equal(builds,872);
 const resources=decks[10].scenes.at(-1);
 assert.equal(resources.id,'more-models-with-duckdb');
 const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');

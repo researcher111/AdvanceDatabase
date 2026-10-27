@@ -138,6 +138,73 @@ scene('Rebuild the retrieval contract',['Exact baseline','Approximate search','R
 function ragPipeline(d,s){const names=['Chunk','Embed','Index','Retrieve','Generate'];for(let i=0;i<5;i++){card(d,'stage'+i,90+i*232,365,names[i],i===s?P.orangeLight:P.white,190,105);if(i<4)d.arrow('link'+i,287+i*232,415,320+i*232,415,P.line);if(i<=s)token(d,'packet'+i,185+i*232,300,undefined,i===s?P.orange:P.green,15);}if(s>2){paper(d,'evidence',840,520,P.greenLight,60,75);d.arrow('evidencelink',920,550,1110,480,P.green);} }
 function chunkPage(d,s){d.rect('doc',160,265,890,300,P.white,P.line,10);for(let i=0;i<12;i++){const y=285+i*21;d.line('text'+i,185,y,1020-(i%3)*80,y,i<4?P.green:i<8?P.blue:P.orange,8);}const cuts=s===0?[]:s===1?[348,432]:[326,390,454,518];cuts.forEach((y,i)=>d.line('cut'+i,130,y,1080,y,P.red,3,'8 6'));if(s===3){d.rect('overlap',155,361,900,46,P.orangeLight,P.orange,6);d.line('overlapline',190,381,1010,381,P.orange,8);} }
 function ranking(d,s,kind='mrr'){const x0=335;for(let q=0;q<3;q++){d.text('qid'+q,210,310+q*115,'q'+(q+1),29);for(let rank=0;rank<4;rank++){const good=rank===[0,2,9][q],color=good&&s>0?P.greenLight:P.white;d.box('rank'+q+rank,x0+rank*160,265+q*115,130,80,String(rank+1),color,good&&s>0?P.green:P.line,31);}if(s>1)d.text('score'+q,1100,315+q*115,kind==='mrr'?['1','⅓','0'][q]:['1','1','0'][q],40,q===2?P.red:P.green);}if(s>2)d.text('mean',640,630,kind==='mrr'?'(1 + ⅓ + 0) / 3 = 0.44':'2 / 3 = 0.67',36,P.green);}
+// Fictional team permissions and illustrative scores, not measured retrieval results.
+const FILTER_PASSAGES=[
+  {id:'A1',team:'A',topic:'Overfitting',score:0.90},
+  {id:'A2',team:'A',topic:'Testing models',score:0.80},
+  {id:'A3',team:'A',topic:'CSV files',score:0.70},
+  {id:'B1',team:'B',topic:'Model error',score:0.95},
+  {id:'B2',team:'B',topic:'Training tips',score:0.85},
+  {id:'B3',team:'B',topic:'Data types',score:0.60}
+];
+function filterRetrieval(d,s){
+  const rank=rows=>[...rows].sort((a,b)=>b.score-a.score);
+  const allowed=rank(FILTER_PASSAGES.filter(p=>p.team==='A')),best=allowed.slice(0,2);
+  d.text('filter-question',640,188,'Maya asks: “Why does my model fail on new data?”',27,P.ink);
+  d.text('filter-user',640,228,'Maya belongs to Team A. Each team can read only its own passages.',23,P.blue);
+  if(s<3){
+    d.text('filter-library',415,272,'Six stored passages · one passage per card',23,P.muted);
+    FILTER_PASSAGES.forEach((p,i)=>{
+      const x=70+(i%3)*240,y=303+Math.floor(i/3)*135;
+      const excluded=s>0&&p.team!=='A',selected=s===2&&best.includes(p);
+      const fill=excluded?P.bg:selected?P.orangeLight:p.team==='A'?P.blueLight:P.white;
+      const border=excluded?P.line:selected?P.orange:p.team==='A'?P.blue:P.line;
+      d.rect('filter-passage-'+p.id,x,y,210,110,fill,border,9,selected?3:2);
+      d.text('filter-id-'+p.id,x+105,y+24,p.id+(s===2&&p.team==='A'?' · '+p.score.toFixed(2):''),26,excluded?P.muted:P.ink);
+      d.text('filter-topic-'+p.id,x+105,y+56,p.topic,21,excluded?P.muted:P.ink);
+      d.text('filter-access-'+p.id,x+105,y+88,excluded?'Excluded from this search':'Team '+p.team+' only',excluded?17:21,excluded?P.muted:p.team==='A'?P.blue:P.ink);
+    });
+    d.rect('filter-explanation',830,303,385,245,P.white,P.line,10);
+    if(s===0){
+      d.text('filter-side-title',1022,335,'Think of shared folders',26,P.ink);
+      d.text('filter-side-1',1022,387,'The team tag says who may read.',21,P.ink);
+      d.text('filter-side-2',1022,424,'The tag is stored with the passage.',21,P.ink);
+      d.text('filter-side-3',1022,484,'Which cards may Maya use?',24,P.blue);
+    }else if(s===1){
+      d.text('filter-side-title',1022,335,'Filter rule: team = A',27,P.blue);
+      d.text('filter-side-1',1022,389,'Keep A1, A2, and A3.',26,P.ink);
+      d.text('filter-side-2',1022,434,'These are the allowed candidates:',20,P.ink);
+      d.text('filter-side-3',1022,469,'passages the search can return.',22,P.ink);
+      d.text('filter-side-4',1022,513,'The B passages stay stored.',22,P.muted);
+    }else{
+      d.text('filter-side-title',1022,335,'Return two results (k = 2)',26,P.ink);
+      best.forEach((p,i)=>d.text('filter-result-'+i,1022,394+i*45,'Rank '+(i+1)+': '+p.id+' · score '+p.score.toFixed(2),26,P.orange));
+      d.text('filter-side-3',1022,500,'A3 is allowed, but ranks third.',22,P.muted);
+    }
+    const summary=[
+      'A filter is a rule that excludes passages from a search.',
+      '6 stored passages → 3 allowed candidates',
+      '3 allowed candidates → rank by similarity → return A1 and A2'
+    ][s];
+    d.text('filter-summary',640,594,summary,27,P.green);
+    d.text('filter-limit',640,639,s===2?'Example scores: higher means a closer match. A score does not grant permission.':'Fictional example · team tags are metadata: information stored about each passage.',21,P.muted);
+  }else{
+    const limited=rank(FILTER_PASSAGES).slice(0,2),remaining=limited.filter(p=>p.team==='A');
+    d.rect('filter-correct',55,285,555,307,P.greenLight,P.green,12);
+    d.rect('filter-late',650,285,575,307,P.white,P.orange,12);
+    d.text('filter-correct-title',332,321,'Choose from allowed passages',27,P.green);
+    d.text('filter-correct-pool',332,374,'A1: 0.90     A2: 0.80     A3: 0.70',25,P.ink);
+    d.arrow('filter-correct-arrow',332,400,332,446,P.green,3);
+    d.text('filter-correct-results',332,480,'Return '+best.map(p=>p.id).join(' and '),31,P.green);
+    d.text('filter-correct-count',332,549,best.length+' results · both allowed',24,P.green);
+    d.text('filter-late-title',937,321,'Take two first, then check permission',25,P.orange);
+    d.text('filter-late-pool',937,374,limited.map(p=>p.id+': '+p.score.toFixed(2)).join('     '),27,P.ink);
+    d.arrow('filter-late-arrow',937,400,937,446,P.orange,3);
+    d.text('filter-late-results',937,480,'Remove B1 → only '+remaining.map(p=>p.id).join(', ')+' remains',28,P.orange);
+    d.text('filter-late-count',937,549,'1 result · A2 was below the cutoff',23,P.orange);
+    d.text('filter-summary',640,629,'The permission rule decides who may enter. Similarity decides the order.',27,P.green);
+  }
+}
 register(12,'RAG as a systems problem','2026-10-27','lectures/lecture-12/rag.html',[
 scene('Evidence reaches the answer',['Corpus','Retrieved evidence','Answer'],(d,s)=>{d.text('title',640,150,'RAG systems',61);for(let i=0;i<8;i++)paper(d,'source'+i,110+(i%4)*90,300+Math.floor(i/4)*140,i<2&&s>0?P.greenLight:P.white,65,100);d.arrow('retrieve',505,415,735,415,P.green);paper(d,'best',s>0?755:160,s>0?340:300,P.greenLight,110,150);if(s>1){d.arrow('generate',890,415,985,415,P.orange);d.rect('answer',1000,325,175,185,P.orangeLight,P.orange,14);d.text('cite',1085,435,'[doc_7]',28,P.orange);}},'Return to Maya’s fictional question from Lecture 11: Why does my model fail on new data? Her course notes say that overfitting can cause low training error but high test error. Ask what the language model needs to use this passage. Expected: the question, the passage, and its source ID. Show these together in the prompt.\n\nRead the proposed answer and citation. The passage supports overfitting as one possible explanation. It does not diagnose Maya’s prediction model. Compare the answer with the cited text. This is a fictional illustration, not a measured search or model output.',{title:"Carry a retrieved passage into the answer",kind:'title'}),
 scene('Retrieval augmented generation',['Chunk','Embed','Index','Retrieve','Generate'],ragPipeline,'Introduce the definition, then trace document ingestion separately from question time. Ask which stages rerun when one document changes and which run for every question. Expected: when a source changes, update its chunks, vectors, and index entries. For each question, embed it, retrieve chunks, build the prompt, and generate an answer. Reusing an index keeps the whole corpus out of every prompt. The lab mocks generation so retrieval and assembly can be tested offline.',{kind:'definition',term:'Retrieval-augmented generation',definition:'Answering with a language model supplied with evidence retrieved from an external collection.',demo:'viz-pipe'}),
@@ -150,7 +217,7 @@ scene('Rank changes the score',['Ranking','Relevant items','Reciprocals','Mean']
 scene('Measure chunking instead of guessing',['10 words','60 words','90 words'],(d,s)=>{const row=window.CourseRagMeasurements.chunking.find(r=>r.max_words===[10,60,90][s]);const dat=[row.chunks,row.hit3,row.mrr3];d.text('w',640,250,[10,60,90][s]+' words',42);['hit@3','MRR@3'].forEach((label,i)=>{d.text('label'+i,260,380+i*110,label,29);d.rect('track'+i,390,348+i*110,650,47,P.line,'none');d.rect('fill'+i,390,348+i*110,650*dat[i+1],47,i?P.blue:P.green,'none');d.text('metric'+i,1110,383+i*110,dat[i+1].toFixed(2),32);});d.text('chunks',640,610,dat[0]+' chunks',35,P.muted);},'Recomputed from the current 24-document lab corpus, the supplied chunker/embedder, BruteForceIndex, and 12 labeled questions: 10 words produces 67 chunks with hit@3=.75 and MRR=.6667. 60 words produces 25 chunks with .9167/.7778. 90 words produces 24 chunks with the same scores. Ask which settings tie and why: 60 and 90 words, because the sources are already short and mostly single-topic. This does not mean whole long documents always work. The chunk target is soft at sentence boundaries. The reading, lab, and slides use the same regenerated measurements. Here MRR is truncated at three retrieved chunks, so report MRR@3.',{demo:'viz-chunk'}),
 scene('Context has a budget',['All candidates','Reranked subset','Evidence placed first'],(d,s)=>{for(let i=0;i<9;i++){const chosen=[2,5,7].includes(i),order=s===2?[7,2,5]:[2,5,7],x=s===0?130+i*116:chosen?250+order.indexOf(i)*300:130+i*116,y=s===0?335:chosen?330:560;paper(d,'c'+i,x,y,chosen?P.greenLight:P.white,s===0?85:chosen?165:55,s===0?150:chosen?190:65);if(chosen)d.text('sourceid'+i,x+(s===0?42:82),y+(s===0?133:172),'D'+i,25,P.green);}if(s>0)d.line('window',160,295,1140,295,P.orange,4);if(s>1){d.arrow('reorder',860,260,350,260,P.green);d.text('cite',325,565,'[D7]',31,P.green);}},'Ask why sending every retrieved chunk can reduce usefulness. Expected: more tokens, longer waits, repeated or conflicting passages, and useful evidence buried in a long prompt. Reranking reassesses how well the retrieved passages answer the question. Sorting the same scores again is not a fix. Then assemble evidence with source IDs and deliberate ordering. Lost-in-the-middle is an observed phenomenon under studied conditions, not a guarantee for every model or prompt.',{title:"Choose what belongs in the evidence packet"}),
 scene('Two retrieval paths',['Semantic','Exact token','Merged candidates','Reranked evidence'],(d,s)=>{d.text('query',175,420,'E104',42,P.ink);d.arrow('semantic',250,400,500,295,P.green);d.arrow('lexical',250,435,500,535,P.blue);card(d,'vec',510,250,'vector',P.greenLight,180,95);card(d,'lex',510,490,'keyword',P.blueLight,180,95);if(s>0){['A','B','C'].forEach((x,i)=>token(d,'v'+i,755+i*75,300,x,P.green));['C','D','E'].forEach((x,i)=>token(d,'l'+i,755+i*75,535,x,P.blue));}if(s>1){d.arrow('merge1',950,300,1080,400,P.green);d.arrow('merge2',950,535,1080,445,P.blue);['C','A','D'].forEach((x,i)=>token(d,'merged'+i,1100,365+i*68,x,s===3&&i===0?P.orange:P.green));}},'Use an error code as the motivating query: exact tokens may be distinctive while learned vectors can help with paraphrases. Ask why raw scores from unrelated retrievers should not simply be added. Expected: their numbers mean different things. Choose a method for combining the rankings and test its results. Reveal a merged candidate list, then a reranker that reads question and passage together. Explain that hybrid search and reranking address different stages and incur different costs.'),
-scene('Filters change the candidate set',['All chunks','Authorized subset','Top-k within subset'],(d,s)=>{for(let i=0;i<20;i++){const allowed=i%3===0,x=240+(i%5)*165,y=300+Math.floor(i/5)*76;d.rect('chunk'+i,x,y,115,52,s>0&&!allowed?P.bg:allowed?P.blueLight:P.greenLight,s>0&&!allowed?P.bg:P.line,7);if(s===2&&allowed&&i<10)d.circle('select'+i,x+98,y+10,12,P.orange);if(s===0||allowed)d.text('tenant'+i,x+57,y+34,allowed?'A':'B',25,allowed?P.blue:P.green);}if(s>0)d.rect('boundary',210,265,885,345,'none',P.blue,15);},'Ask students to locate metadata filtering in the retrieval plan. For team A, only authorized A chunks may become evidence. Expected: access control must be enforced by the system, not by asking the language model to ignore forbidden passages. Search/filter ordering changes recall and work, especially with an ANN index, so verify the engine’s supported plan. Distinguish authorization from optional relevance filters such as date or document type.'),
+scene('Filters change the candidate set',['Shared team folders','Apply the permission rule','Rank the allowed passages','Why the cutoff matters'],filterRetrieval,'Maya belongs to Team A and asks why her model fails on new data. Use six fictional passages to separate permission from similarity. A filter is a rule that excludes passages from a search. Team metadata records who may read each passage. Keep A1, A2, and A3, then rank these allowed candidates and return A1 and A2.\n\nCompare this with taking only two unrestricted results before checking permission. Removing B1 leaves only A1. A2 was never included. This illustrates a fixed cutoff without refilling. Actual engines can use different filtering plans, extra candidates, or another search. The system must enforce access rules before passages become evidence. A high similarity score cannot grant permission.',{title:'Filter by who can read each passage',clarityNative:true}),
 scene('A changed source invalidates copies',['Version one','Document changes','Re-embed','Atomic switch'],(d,s)=>{paper(d,'source',150,300,s>0?P.orangeLight:P.greenLight,155,210);d.text('dv',225,560,s?'D7:v2':'D7:v1',30);d.arrow('embed',325,410,540,410,s>1?P.orange:P.line);d.table('emb',565,310,[170,175],[['model','source'],[s>1?'E2':'E1',s>1?'D7:v2':'D7:v1']],{rowHeight:85,fontSize:26,highlightRows:s>1?[1]:[]});d.arrow('switch',940,410,1050,410,s===3?P.green:P.line);d.circle('live',1115,410,50,s===3?P.green:P.muted);},'Ask what becomes stale when a source changes, then when the embedding model changes. Expected: changed-source chunks and vectors in the first case. Every stored vector in the second. Show a replacement index/version built alongside the old one, then a controlled switch. A model name alone is insufficient if its revision or preprocessing changed. Evaluation and citations should record the version they used so results remain reproducible.',{title:"Update the source and its stored derivatives"}),
 scene('Failure diagnosis workshop',['Missing evidence','Wrong ranking','Unsupported claim'],(d,s)=>{ragPipeline(d,[3,3,4][s]);d.circle('failure',s<2?880:1110,415,70,'none',P.red,5);d.text('signal',640,585,['hit@3 = 0','hit@3 = 1 · RR = ⅓','citation ≠ support'][s],40,P.red);},'Give three short cases in sequence and ask partners to name the earliest failing stage and a useful next experiment. Missing evidence: inspect labels, chunking, representation, index recall and filters. Wrong rank: inspect retrieval scores or reranking. Unsupported answer despite the right evidence: inspect assembly and generation/citation support. Expected conclusion: a polished answer alone cannot identify the broken stage. Ask students to name what they would inspect, such as a missing chunk, a result ID, or the assembled prompt.',{title:"Find the first failing pipeline stage",kind:'activity'}),
 scene('A measurable RAG system',['Record','Retrieve','Evaluate','Cite'],(d,s)=>{ragPipeline(d,Math.min(4,s+1));if(s>1){d.text('eval',640,610,'hit@k · MRR · support',34,P.green);}if(s>2)d.text('citation',1110,545,'[D7]',31,P.orange);},'Return to Maya’s question about poor predictions on new data. Follow the overfitting passage through its source ID, prompt, and citation. The passage supports a possible explanation, not a diagnosis. At each step, ask what would show that it worked.\n\nExplain the lab handoff: chunking and embedding are supplied. Students implement retrieval and context assembly, then run the 12-question reference evaluation. The project must also assess answer quality and held-out questions. Close with a choice every team can make next: one labeled failure, one configuration change, and one measured comparison.',{title:"Return to Maya’s model-performance question",kind:'recap',demo:'viz-pipe'})

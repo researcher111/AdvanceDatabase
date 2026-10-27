@@ -70,7 +70,7 @@ fs.mkdirSync(output,{recursive:true});
     assert(await gallery.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'guide links fit a narrow window');
     await gallery.goto(url+'?script=1');
     assert.equal(await gallery.locator('article').count(),15);
-    assert.equal(await gallery.locator('.read-aloud-step').count(),55);
+    assert.equal(await gallery.locator('.read-aloud-step').count(),56);
     const scripts=snapshots.filter(x=>x.id===id),sections=gallery.locator('.read-aloud-step');
     for(const [i,snap]of scripts.entries())assert.equal((await sections.nth(i).locator('p:not(.script-advance)').allTextContents()).join('\n\n'),snap.readAloud);
     await gallery.selectOption('#script-jump','slide-5');
