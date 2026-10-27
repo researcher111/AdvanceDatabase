@@ -245,35 +245,40 @@
   });
 
   const ragOpening=use(12,'evidence-reaches-the-answer',(d,s)=>{
-    label(d,'opening-question',640,235,'How does a database recover after a crash?',P.ink,31);
-    label(d,'source-heading',210,314,'Source record',P.green,29);
-    label(d,'source-position',210,372,'position 2',P.ink,28);
-    label(d,'source-id',210,414,'source: wal',P.green,28);
-    label(d,'source-text',210,459,'Undo restores old values.',P.ink,24);
+    label(d,'opening-question',640,214,'Why does my model fail on new data?',P.ink,31);
+    d.rect('source-record',40,275,370,320,P.white,P.green,12,2);
+    label(d,'source-heading',225,315,'Retrieved passage',P.green,29);
+    label(d,'source-id',225,365,'Source ID: ml-notes',P.green,25);
+    ['Overfitting can cause','low training error but','high test error.'].forEach((line,i)=>label(d,'source-text-'+i,225,417+i*33,line,P.ink,25));
+    label(d,'source-origin',225,553,'From Maya’s course notes',P.muted,23);
     if(s>=1){
-      d.arrow('select-evidence',391,409,466,409,P.orange,3);
-      label(d,'evidence-heading',640,314,'Selected evidence',P.green,29);
-      label(d,'evidence-score',640,372,'score 0.9 → position 2',P.ink,25);
-      label(d,'evidence-id',640,414,'cite: [wal]',P.green,28);
-      label(d,'evidence-text',640,459,'Keep text beside its source ID',P.ink,24);
+      d.arrow('select-evidence',419,435,446,435,P.orange,3);
+      d.rect('model-prompt',455,275,370,320,P.greenLight,P.green,12,2);
+      label(d,'evidence-heading',640,315,'Language model input',P.green,27);
+      label(d,'prompt-question-1',640,358,'Why does my model fail',P.ink,24);
+      label(d,'prompt-question-2',640,390,'on new data?',P.ink,24);
+      label(d,'evidence-id',640,439,'[ml-notes]',P.green,25);
+      ['Overfitting can cause','low training error but','high test error.'].forEach((line,i)=>label(d,'evidence-text-'+i,640,479+i*32,line,P.ink,25));
     }
     if(s>=2){
-      d.arrow('check-evidence',814,409,894,409,P.orange,3);
-      label(d,'support-heading',1060,314,'Claim check',P.orange,29);
-      label(d,'support-source',1060,372,'[wal] identifies the source',P.ink,24);
-      label(d,'support-question',1060,414,'Does its text support',P.orange,27);
-      label(d,'support-claim',1060,456,'the actual claim?',P.orange,27);
+      d.arrow('check-evidence',834,435,861,435,P.orange,3);
+      d.rect('proposed-answer',870,275,370,320,P.orangeLight,P.orange,12,2);
+      label(d,'support-heading',1055,315,'Proposed answer',P.orange,29);
+      label(d,'support-claim-1',1055,417,'Overfitting is one',P.ink,26);
+      label(d,'support-claim-2',1055,450,'possible explanation.',P.ink,26);
+      label(d,'support-source',1055,492,'[ml-notes]',P.orange,25);
+      label(d,'support-action',1055,553,'Check this claim in the source.',P.ink,23);
     }
-    foot(d,'Toy record and score · a source reference makes a claim checkable, not automatically correct');
+    foot(d,s===2?'The passage suggests a possibility. It does not diagnose Maya’s model.':'Fictional example · What should the language model receive?');
   });
   if(ragOpening){
-    ragOpening.states=['Identify the source','Keep the source ID with the text','Check the claim against the source'];
+    ragOpening.states=['Read the passage','Build the prompt','Check the proposed answer'];
     ragOpening.teaching.builds=[
-      'Ask how a chunk’s list position differs from its source ID. Introduce the fictional recovery-question rehearsal. Read the toy source record before asking what the model will see.',
-      'Use the open-book comparison: a selected page needs its reference beside the text. Trace position 2 to source wal. This fixed score illustrates the interface, not a measured semantic ranking.',
-      'Noor asks: “Which sentence supports the answer?” A valid citation identifies where to look. It does not prove support. The lab’s echo mode exposes this context before a model call.'
+      'Return to Maya’s fictional model-performance question from Lecture 11. Her prediction model performs well on training data but poorly on new data. Read the passage. Ask what the language model needs to receive before it can use this evidence. The source ID ml-notes identifies the course document.',
+      'Reveal the prompt: the question, the passage, and its source ID. Context means the text supplied to the language model for this request. Compare an open-book answer with its page reference. A similarity score alone supplies neither the passage nor its source. Ask what claim the passage supports before revealing the answer.',
+      'Read the proposed answer and its citation. Noor asks: “Does this passage prove that Maya’s model is overfitting?” No. It supports a possible explanation. The model and data need further checks before diagnosis.\n\nThe answer is written for this example, not produced by a model call. The lab’s echo mode exposes the assembled context before generation.'
     ];
-    ragOpening.teaching.reference='Trace a source record into selected evidence, then check the claim against the source text. The two later evaluation metrics measure retrieval, while claim support needs a separate check. Keep the mock record distinct from the course’s measured corpus.';
+    ragOpening.teaching.reference='Trace the same passage from Lecture 11 into the prompt, with source ID ml-notes. Then compare the proposed claim with the passage. This fictional example is separate from the later wal and blocks trace fixtures. Retrieval metrics measure source presence and rank. Claim support needs a separate check.';
   }
 
   const lsmOpening=use(14,'organize-writes-differently',(d,s)=>{
@@ -310,10 +315,10 @@
     });
   }
   use(12,'a-measurable-rag-system',(d,s)=>{
-    repeatModel(d,s,'How does a database recover after a crash?',[
+    repeatModel(d,s,'Why does my model fail on new data?',[
       ['Record source','identity'],['Select evidence'],['Measure presence','and rank'],['Check each claim']
     ]);
-    if(s===3)foot(d,'Select evidence · carry its identity · check what the passage actually supports');
+    if(s===3)foot(d,'The passage supports a possible explanation. Check the answer against that limit.');
   });
   use(13,'place-move-recover',(d,s)=>{
     repeatModel(d,s,'“WAL, wal!” + “Page wal.” must keep the same word totals',[
@@ -328,14 +333,51 @@
     if(s===3)foot(d,'A current read returns absent. Old bytes may remain until safe compaction');
   });
 
-  use(12,'keep-the-source-identity',(d,s)=>{
-    label(d,'hits-title',260,223,'Ranked search hits');label(d,'chunks-title',915,223,'Original chunk records');
-    const hits=window.CourseTraces.fixtures.hits,chunks=window.CourseTraces.fixtures.chunks.map(c=>[c.doc,c.text]);
-    hits.forEach(([score,pos],i)=>card(d,'hit-'+i,95,263+i*108,330,86,'rank '+(i+1)+' · score '+score,'vector position '+pos,i===0&&s>=1));
-    chunks.forEach(([source,text],i)=>{d.rect('chunk-'+i,715,263+i*108,475,86,i===2&&s>=1?P.greenLight:P.white,i===2&&s>=1?P.green:P.line,8,2);label(d,'chunk-heading-'+i,952,285+i*108,'position '+i+' · source '+source,P.ink,25);label(d,'chunk-body-'+i,952,321+i*108,text,P.muted,22);});
-    if(s>=1)d.arrow('resolve',441,304,699,522,P.orange,4);
-    if(s>=2){d.box('copy',420,603,665,47,s===2?'Copy chunk 2 + score 0.9. Keep stored chunk unchanged':s===3?'Ranked source IDs: [wal, blocks, wal] · citation [wal]':'First relevant rank = 1 → Hit@3 = 1, RR@3 = 1',P.greenLight,P.green,23);}
+  const sourceIdentity=use(12,'keep-the-source-identity',(d,s)=>{
+    // The shared example labels wal relevant before examining the ranking.
+    const relevantSource='wal',hits=window.CourseTraces.fixtures.hits,chunks=window.CourseTraces.fixtures.chunks;
+    label(d,'relevance-label',640,197,'Relevant source for this question: '+relevantSource,P.green,24);
+    label(d,'hits-title',260,237,'Top 3 search results');label(d,'chunks-title',952,237,'Original chunk records');
+    hits.forEach(([score,pos],i)=>{
+      const y=270+i*100,source=chunks[pos].doc,relevant=s===4&&source===relevantSource,selected=i===0&&s>=1&&s<4;
+      d.rect('hit-'+i,70,y,380,86,relevant?P.greenLight:selected?P.orangeLight:P.white,relevant?P.green:selected?P.orange:P.line,9,2);
+      label(d,'hit-'+i+'-title',260,y+29,'rank '+(i+1)+' · score '+score,P.ink,26);
+      label(d,'hit-'+i+'-detail',260,y+61,s===4?'position '+pos+' · source '+source:'vector position '+pos,relevant?P.green:selected?P.orange:P.muted,23);
+    });
+    chunks.forEach((chunk,i)=>{
+      const y=270+i*100,active=s===4?chunk.doc===relevantSource:i===2&&s>=1;
+      d.rect('chunk-'+i,715,y,475,86,active?P.greenLight:P.white,active?P.green:P.line,8,2);
+      label(d,'chunk-heading-'+i,952,y+26,'position '+i+' · source '+chunk.doc,P.ink,25);
+      label(d,'chunk-body-'+i,952,y+62,chunk.text,P.muted,22);
+    });
+    if(s>=1)d.arrow('resolve',466,313,699,513,P.orange,4);
+    if(s===2||s===3)d.box('copy',305,603,880,47,s===2?'Copy chunk 2 + score 0.9. Keep stored chunk unchanged':'Ranked source IDs: [wal, blocks, wal] · citation [wal]',P.greenLight,P.green,23);
+    if(s===4){
+      const relevantRanks=hits.map(([,pos],i)=>chunks[pos].doc===relevantSource?i+1:0).filter(Boolean);
+      const first=relevantRanks[0],hit=first?1:0;
+      d.rect('hit-explanation',70,584,650,76,P.greenLight,P.green,9,2);
+      label(d,'hit-result',395,608,'Hit@3 = '+hit+': '+relevantSource+' appears in the top 3',P.green,26);
+      label(d,'hit-count',395,642,'Two relevant results still give this question one hit.',P.ink,23);
+      d.rect('rank-explanation',740,584,450,76,P.white,P.line,9,2);
+      label(d,'first-relevant',965,608,'First relevant rank = '+first,P.ink,25);
+      label(d,'reciprocal-rank',965,642,'Reciprocal rank = 1/'+first+' = '+(1/first),P.muted,23);
+    }
   });
+  if(sourceIdentity){
+    sourceIdentity.states=['Keep positions aligned','Resolve the first result','Copy the chunk','Preserve source IDs','Score this question'];
+    Object.assign(sourceIdentity.teaching,{
+      idea:'A search result is one returned chunk. A hit means at least one returned source matches a relevance label for the question.',
+      question:'Two results have source ID wal. Why does this question get one hit rather than two?',
+      answer:'Hit@3 is a yes-or-no score for one question. At least one relevant source appears in its first three results, so the score is 1.',
+      builds:[
+        'The evaluation labels source wal as relevant before examining the search results. The ID wal names the write-ahead logging document. The source blocks is not labeled relevant for this question. Each left-hand box is one search result, not an evaluation hit. Predict which chunk vector position 2 selects.',
+        'Follow vector position 2 to chunk position 2. Read source ID wal from that record. A rank identifies a position in the returned list. A vector position identifies a stored chunk. Neither number is the source ID.',
+        'Copy chunk 2 and attach score 0.9 to the copy. Keep the original record unchanged. A later query can assign another similarity score to the same chunk. The similarity score does not define relevance.',
+        'Read the ranked source IDs: wal, blocks, wal. Two chunks come from the same source. Preserve both selected chunks for context and cite their source ID. The evaluation checks the supplied source labels. It does not prove that every chunk from wal answers the question.',
+        'The 3 in Hit@3 limits the check to the first three results. A hit means at least one result has a relevant source ID. Score this question 1 if that happens, or 0 otherwise. Here wal appears at ranks 1 and 3, so the score is 1. Two relevant chunks do not earn two hits.\n\nReciprocal rank measures where the first relevant result appears. Here its rank is 1, so reciprocal rank is 1/1 = 1. If wal first appeared at rank 3, Hit@3 would remain 1 and reciprocal rank would become 1/3. Average the binary scores across questions to get hit rate. Average reciprocal ranks to get mean reciprocal rank. Read passages separately to check answer support.'
+      ]
+    });
+  }
 
   use(13,'reduce-sees-the-complete-group',(d,s)=>{
     label(d,'mappers',230,219,'Map each document');label(d,'shuffle',685,219,'Group by key');label(d,'reduce',1090,219,'Reduce');
@@ -479,7 +521,7 @@
   ]);
   // Keep the shared worked examples, adding a prediction before their first reveal.
   const tracePredictions=[
-    [12,'keep-the-source-identity','Predict which source the integer position selects before following the hit.'],
+    [12,'keep-the-source-identity','Predict which source the integer position selects before following the result.'],
     [13,'reduce-sees-the-complete-group','Predict how many occurrences must survive and which values share a key group.'],
     [14,'read-the-newest-visible-value','State the read snapshot, then predict the visible record before resolving versions.'],
     [15,'paths-are-not-unique-vertices','State whether the question asks for walks or distinct people before counting.']

@@ -990,9 +990,9 @@ window.CourseClarityCaptions = {
   },
   "12": {
     "evidence-reaches-the-answer": [
-      "Maya has found a recovery passage. First identify its stored record and source.",
-      "Carry the selected passage and its source ID into the context supplied for this question.",
-      "A source ID makes a claim checkable. Read the passage to decide whether it supports the claim."
+      "Maya found a passage about overfitting. What must she send to the language model so it can use this evidence?",
+      "Send the question, the passage, and its source ID to the language model. The prompt keeps the text and reference together.",
+      "The answer names overfitting as one possible explanation. Check the cited passage before accepting the claim."
     ],
     "retrieval-augmented-generation": [
       "Keep each chunk as a retrievable record with its source identity.",
@@ -1013,11 +1013,11 @@ window.CourseClarityCaptions = {
       "Overlapping chunks keep some surrounding text, but repeat it in the index and prompt."
     ],
     "keep-the-source-identity": [
-      "The toy hit contains position 2, not the source ID wal. Predict which record it selects.",
-      "Resolve position 2 to its original WAL chunk before building a citation.",
+      "The first search result contains position 2, not a source ID. Predict which stored chunk it selects.",
+      "Resolve position 2 to its stored chunk. Its source ID is wal, which identifies the write-ahead logging document.",
       "Attach score 0.9 to a copy. Keep the stored record unchanged for the next question.",
       "Carry the ranked chunks’ source IDs into the prompt, including repeated IDs.",
-      "Count one hit per question and use the first relevant rank for its reciprocal score."
+      "Hit@3 = 1 if a relevant source appears in the first three results. Otherwise, Hit@3 = 0."
     ],
     "a-synonym-failure": [
       "The first wording retrieves the intended buffer-pool source.",
@@ -1031,9 +1031,9 @@ window.CourseClarityCaptions = {
     ],
     "presence-in-the-top-results": [
       "Three toy questions use a top-three cutoff. Reveal their relevant sources before scoring.",
-      "Marked boxes show the relevant sources. Which questions have a hit in their first three?",
+      "A hit means at least one relevant source appears in the first three results. Which questions meet that condition?",
       "Score each question once: 1, 1, 0. Repeated chunks from one source do not create extra hits.",
-      "Two of three questions hit: hit@3 = 2 / 3. Moving rank 3 to rank 1 does not change it."
+      "Two of three questions have a hit, so the hit rate@3 is 2 / 3. Moving rank 3 to rank 1 keeps that rate unchanged."
     ],
     "rank-changes-the-score": [
       "Use the same three questions and top-three cutoff to measure how early the evidence returns.",
@@ -1074,7 +1074,7 @@ window.CourseClarityCaptions = {
       "Unsupported claim: open the actual context and citation. An existing source ID is not proof."
     ],
     "a-measurable-rag-system": [
-      "Return to Maya’s question: record the source identity and version.",
+      "Return to Maya’s question about poor predictions on new data. Record the passage’s source ID and version.",
       "Select the evidence and keep its ranking visible.",
       "Check whether the expected sources appear and how high they rank.",
       "Select passages, keep their source IDs, and check each answer claim against the cited text."

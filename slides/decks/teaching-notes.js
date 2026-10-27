@@ -1810,12 +1810,12 @@
   "12": {
     "evidence-reaches-the-answer": {
       "idea": "Keep each retrieved passage with its source ID, then check whether it supports the answer’s claims.",
-      "question": "Does a retrieved passage’s score identify its source or prove an answer is supported?",
-      "answer": "No. Use the result’s stored position to look up its source record, then read the passage to check the claim.",
+      "question": "Does this passage prove that Maya’s model is overfitting?",
+      "answer": "No. The passage describes a possible explanation. Check the model and data before deciding the cause.",
       "builds": [
-        "Calibrate: ask what an index position identifies and what geometric recall does not prove. Then enter Maya and Noor’s fictional recovery-question rehearsal. Show the source record before discussing the answer. Start with the changed source in the corpus.",
-        "Retrieve the relevant subset with its source identifier.",
-        "Generate an answer and check whether the evidence supports its claims."
+        "Return to Maya’s fictional model-performance question from Lecture 11. Read the retrieved passage about overfitting. Ask what the language model must receive to use it.",
+        "Show the question, passage, and source ID together in the prompt. Context means text supplied to the language model for this request.",
+        "Read the proposed answer. Its citation identifies the source. The passage supports a possible explanation, not a diagnosis."
       ]
     },
     "retrieval-augmented-generation": {
@@ -1872,14 +1872,14 @@
       ]
     },
     "presence-in-the-top-results": {
-      "idea": "Hit@k asks whether any relevant source appears among the first k results.",
+      "idea": "For each question, Hit@k is 1 if any relevant source appears in the first k results. Otherwise, it is 0.",
       "question": "Does moving a relevant result from rank three to rank one change hit@3?",
-      "answer": "No. Both are hits. Two of the three pictured questions hit, giving 2/3.",
+      "answer": "No. Both give the question a score of 1. Two of these three questions have a hit, so their hit rate is 2/3.",
       "builds": [
-        "Read the three ranked lists before showing the formula. Ask whether a relevant source at rank three counts as a hit in the top three.",
+        "Read the three ranked lists before showing the formula. A hit means at least one relevant source occurs in the first three results. Ask whether a relevant source at rank three meets that rule.",
         "Mark independently labeled relevant items.",
-        "Score whether each question hits within the first three results.",
-        "Average the two hits and one miss to obtain about 0.67."
+        "Give each question 1 if it has a relevant source in the first three results. Otherwise, give it 0.",
+        "Average the binary scores: (1 + 1 + 0) / 3. The hit rate is about 0.67, or 67% of questions."
       ]
     },
     "rank-changes-the-score": {
@@ -1960,10 +1960,10 @@
       "question": "A relevant source is in the prompt, but the answer makes an unsupported claim. Which artifact would you inspect next?",
       "answer": "Open the exact prompt and cited passage, then compare the claim with the evidence. Retrieval presence alone does not prove support.",
       "builds": [
-        "Return to the recovery question. Show the selected chunks and their source IDs so students can trace each passage back to its document.",
+        "Return to Maya’s question about poor predictions on new data. Trace the overfitting passage back to source ml-notes.",
         "Retrieve evidence for one question.",
         "Evaluate retrieval and answer quality on held-out questions.",
-        "Repeat the same open-book model at the end. Ask a student to explain selected pages, references, and checked claims. Connect the explanation to records and metrics."
+        "Repeat the same open-book model at the end. Ask a student to explain selected pages, references, and checked claims. Ask why the overfitting passage cannot establish the cause of Maya’s poor predictions."
       ]
     }
   },
