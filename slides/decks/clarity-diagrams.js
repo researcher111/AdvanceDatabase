@@ -278,7 +278,7 @@
       'Reveal the prompt: the question, the passage, and its source ID. Context means the text supplied to the language model for this request. Compare an open-book answer with its page reference. A similarity score alone supplies neither the passage nor its source. Ask what claim the passage supports before revealing the answer.',
       'Read the proposed answer and its citation. Noor asks: “Does this passage prove that Maya’s model is overfitting?” No. It supports a possible explanation. The model and data need further checks before diagnosis.\n\nThe answer is written for this example, not produced by a model call. The lab’s echo mode exposes the assembled context before generation.'
     ];
-    ragOpening.teaching.reference='Trace the same passage from Lecture 11 into the prompt, with source ID ml-notes. Then compare the proposed claim with the passage. This fictional example is separate from the later wal and blocks trace fixtures. Retrieval metrics measure source presence and rank. Claim support needs a separate check.';
+    ragOpening.teaching.reference='Trace the same passage from Lecture 11 into the prompt, with source ID ml-notes. Then compare the proposed claim with the passage. The later source-mapping slide continues this fictional example. The reading and lab use a separate database-recovery fixture. Retrieval metrics measure source presence and rank. Claim support needs a separate check.';
   }
 
   const lsmOpening=use(14,'organize-writes-differently',(d,s)=>{
@@ -333,48 +333,62 @@
     if(s===3)foot(d,'A current read returns absent. Old bytes may remain until safe compaction');
   });
 
+  // Slide-only passages continue Maya’s example without changing the lab corpus.
+  const sourceExample={
+    question:'Why does my model fail on new data?',
+    relevantSource:'ml-notes',
+    hits:[[0.9,2],[0.8,0],[0.7,1]],
+    chunks:[
+      {doc:'csv-guide',lines:['A CSV file stores table rows','as comma-separated values.']},
+      {doc:'ml-notes',lines:['A model can learn random patterns in training data.','These patterns may not hold in new data.']},
+      {doc:'ml-notes',lines:['Overfitting can cause low training error','but high test error.']}
+    ]
+  };
   const sourceIdentity=use(12,'keep-the-source-identity',(d,s)=>{
-    // The shared example labels wal relevant before examining the ranking.
-    const relevantSource='wal',hits=window.CourseTraces.fixtures.hits,chunks=window.CourseTraces.fixtures.chunks;
-    label(d,'relevance-label',640,197,'Relevant source for this question: '+relevantSource,P.green,24);
-    label(d,'hits-title',260,237,'Top 3 search results');label(d,'chunks-title',952,237,'Original chunk records');
+    const {question,relevantSource,hits,chunks}=sourceExample;
+    label(d,'example-question',640,188,question,P.ink,28);
+    label(d,'relevance-label',640,220,'Labeled relevant: ml-notes · Course notes on overfitting',P.green,23);
+    label(d,'hits-title',260,258,'Top 3 results · example scores',P.muted,23);
+    label(d,'chunks-title',937,258,'Original chunk records');
     hits.forEach(([score,pos],i)=>{
-      const y=270+i*100,source=chunks[pos].doc,relevant=s===4&&source===relevantSource,selected=i===0&&s>=1&&s<4;
-      d.rect('hit-'+i,70,y,380,86,relevant?P.greenLight:selected?P.orangeLight:P.white,relevant?P.green:selected?P.orange:P.line,9,2);
-      label(d,'hit-'+i+'-title',260,y+29,'rank '+(i+1)+' · score '+score,P.ink,26);
-      label(d,'hit-'+i+'-detail',260,y+61,s===4?'position '+pos+' · source '+source:'vector position '+pos,relevant?P.green:selected?P.orange:P.muted,23);
+      const y=282+i*97,source=chunks[pos].doc,relevant=s===4&&source===relevantSource,selected=i===0&&s>=1&&s<4;
+      d.rect('hit-'+i,70,y,380,88,relevant?P.greenLight:selected?P.orangeLight:P.white,relevant?P.green:selected?P.orange:P.line,9,2);
+      label(d,'hit-'+i+'-title',260,y+30,'rank '+(i+1)+' · score '+score,P.ink,26);
+      label(d,'hit-'+i+'-detail',260,y+64,s===4?'position '+pos+' · source '+source:'vector position '+pos,relevant?P.green:selected?P.orange:P.muted,23);
     });
     chunks.forEach((chunk,i)=>{
-      const y=270+i*100,active=s===4?chunk.doc===relevantSource:i===2&&s>=1;
-      d.rect('chunk-'+i,715,y,475,86,active?P.greenLight:P.white,active?P.green:P.line,8,2);
-      label(d,'chunk-heading-'+i,952,y+26,'position '+i+' · source '+chunk.doc,P.ink,25);
-      label(d,'chunk-body-'+i,952,y+62,chunk.text,P.muted,22);
+      const y=282+i*97,active=s===4?chunk.doc===relevantSource:i===2&&s>=1;
+      d.rect('chunk-'+i,650,y,575,88,active?P.greenLight:P.white,active?P.green:P.line,8,2);
+      label(d,'chunk-heading-'+i,937,y+25,'position '+i+' · source '+chunk.doc,P.ink,25);
+      chunk.lines.forEach((line,j)=>label(d,'chunk-body-'+i+'-'+j,937,y+51+j*26,line,P.muted,22));
     });
-    if(s>=1)d.arrow('resolve',466,313,699,513,P.orange,4);
-    if(s===2||s===3)d.box('copy',305,603,880,47,s===2?'Copy chunk 2 + score 0.9. Keep stored chunk unchanged':'Ranked source IDs: [wal, blocks, wal] · citation [wal]',P.greenLight,P.green,23);
+    if(s>=1)d.arrow('resolve',466,326,634,520,P.orange,4);
+    if(s===2||s===3)d.box('copy',70,603,1155,47,s===2?'Copy chunk 2 + score 0.9. Keep stored chunk unchanged':'Ranked source IDs: [ml-notes, csv-guide, ml-notes] · cite [ml-notes]',P.greenLight,P.green,23);
     if(s===4){
       const relevantRanks=hits.map(([,pos],i)=>chunks[pos].doc===relevantSource?i+1:0).filter(Boolean);
       const first=relevantRanks[0],hit=first?1:0;
       d.rect('hit-explanation',70,584,650,76,P.greenLight,P.green,9,2);
       label(d,'hit-result',395,608,'Hit@3 = '+hit+': '+relevantSource+' appears in the top 3',P.green,26);
       label(d,'hit-count',395,642,'Two relevant results still give this question one hit.',P.ink,23);
-      d.rect('rank-explanation',740,584,450,76,P.white,P.line,9,2);
-      label(d,'first-relevant',965,608,'First relevant rank = '+first,P.ink,25);
-      label(d,'reciprocal-rank',965,642,'Reciprocal rank = 1/'+first+' = '+(1/first),P.muted,23);
+      d.rect('rank-explanation',740,584,485,76,P.white,P.line,9,2);
+      label(d,'first-relevant',982,608,'First relevant rank = '+first,P.ink,25);
+      label(d,'reciprocal-rank',982,642,'Reciprocal rank = 1/'+first+' = '+(1/first),P.muted,23);
     }
   });
   if(sourceIdentity){
     sourceIdentity.states=['Keep positions aligned','Resolve the first result','Copy the chunk','Preserve source IDs','Score this question'];
     Object.assign(sourceIdentity.teaching,{
       idea:'A search result is one returned chunk. A hit means at least one returned source matches a relevance label for the question.',
-      question:'Two results have source ID wal. Why does this question get one hit rather than two?',
+      question:'Two results have source ID ml-notes. Why does this question get one hit rather than two?',
       answer:'Hit@3 is a yes-or-no score for one question. At least one relevant source appears in its first three results, so the score is 1.',
+      context:'This fictional example continues Maya’s question from the opening. The scores illustrate a ranking and were not measured with an embedding model. The reading and lab use different passages to demonstrate the same mapping.',
+      reference:'The question asks about poor predictions on new data. Both ml-notes passages explain how overfitting can produce this pattern. The csv-guide passage describes a file format and does not explain the pattern. Label the relevant source before scoring the search results.',
       builds:[
-        'The evaluation labels source wal as relevant before examining the search results. The ID wal names the write-ahead logging document. The source blocks is not labeled relevant for this question. Each left-hand box is one search result, not an evaluation hit. Predict which chunk vector position 2 selects.',
-        'Follow vector position 2 to chunk position 2. Read source ID wal from that record. A rank identifies a position in the returned list. A vector position identifies a stored chunk. Neither number is the source ID.',
+        'Read Maya’s question and all three passages. The course notes on overfitting have source ID ml-notes. The evaluation labels this source as relevant before examining the ranking. The CSV guide is not relevant to this question. Each left-hand box is one search result, not an evaluation hit.',
+        'Follow vector position 2 to chunk position 2. Read source ID ml-notes from that record. Its passage describes low training error with high test error. A rank identifies a position in the returned list. A vector position identifies a stored chunk. Neither number is the source ID.',
         'Copy chunk 2 and attach score 0.9 to the copy. Keep the original record unchanged. A later query can assign another similarity score to the same chunk. The similarity score does not define relevance.',
-        'Read the ranked source IDs: wal, blocks, wal. Two chunks come from the same source. Preserve both selected chunks for context and cite their source ID. The evaluation checks the supplied source labels. It does not prove that every chunk from wal answers the question.',
-        'The 3 in Hit@3 limits the check to the first three results. A hit means at least one result has a relevant source ID. Score this question 1 if that happens, or 0 otherwise. Here wal appears at ranks 1 and 3, so the score is 1. Two relevant chunks do not earn two hits.\n\nReciprocal rank measures where the first relevant result appears. Here its rank is 1, so reciprocal rank is 1/1 = 1. If wal first appeared at rank 3, Hit@3 would remain 1 and reciprocal rank would become 1/3. Average the binary scores across questions to get hit rate. Average reciprocal ranks to get mean reciprocal rank. Read passages separately to check answer support.'
+        'Read the ranked source IDs: ml-notes, csv-guide, ml-notes. Two chunks come from the same document. One describes the error pattern. The other describes learning random patterns that may not hold in new data. Preserve both selected passages and cite their source ID. A source label does not prove that every passage from that document answers the question.',
+        'The 3 in Hit@3 limits the check to the first three results. A hit means at least one result has a relevant source ID. Score this question 1 if that happens, or 0 otherwise. Here ml-notes appears at ranks 1 and 3, so the score is 1. Two relevant chunks do not earn two hits.\n\nReciprocal rank measures where the first relevant result appears. Here its rank is 1, so reciprocal rank is 1/1 = 1. If ml-notes first appeared at rank 3, Hit@3 would remain 1 and reciprocal rank would become 1/3. Average the binary scores across questions to get hit rate. Average reciprocal ranks to get mean reciprocal rank. Read passages separately to check answer support.'
       ]
     });
   }
@@ -519,7 +533,7 @@
     'Add the values within each key group. The final totals sum to four, preserving all mapped occurrences.',
     'The word totals must stay the same even if partition numbers or output order change. The toy owner labels are illustrative. Python hash bucket numbers can vary.'
   ]);
-  // Keep the shared worked examples, adding a prediction before their first reveal.
+  // Add a prediction before each worked example’s first reveal.
   const tracePredictions=[
     [12,'keep-the-source-identity','Predict which source the integer position selects before following the result.'],
     [13,'reduce-sees-the-complete-group','Predict how many occurrences must survive and which values share a key group.'],

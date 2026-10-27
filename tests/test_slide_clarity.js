@@ -15,6 +15,10 @@ load('lectures/lecture-11/embedding-walkthrough.js');
 load('slides/decks/embedding-walkthrough.js');
 load('slides/decks/hnsw-walkthrough.js');
 load('slides/decks/course-clarity.js');
+load('slides/decks/lecture-12-script.js');
+assert.equal(decks[12].scenes.reduce((n,s)=>n+s.readAloud.length,0),58,'spoken script covers every Lecture 12 build');
+for(const scene of decks[12].scenes)assert.equal(scene.readAloud.length,scene.steps,'script follows the slide builds');
+assert(Object.values(decks).filter(deck=>deck.id!==12).every(deck=>deck.scenes.every(scene=>!scene.readAloud)),'other decks retain their existing notes');
 assert.equal(JSON.stringify(Object.values(decks).map(d=>[d.id,d.scenes.map(s=>[s.id,s.steps,s.minutes])])),JSON.stringify(before),'stable scene IDs and pacing, with expanded embedding and HNSW examples');
 assert.equal(JSON.stringify(decks[6].scenes.map(s=>Array.from({length:s.steps},(_,i)=>V.sceneDrawing(s,i)))),original6,'approved Lecture 6 stays unchanged');
 let slides=0,builds=0;
@@ -270,8 +274,18 @@ for(let step=0;step<3;step++){
  assert.equal(items.some(item=>item.key==='create-vector'),step===2,'re-embedding follows the source edit');
  assert.equal(items.some(item=>item.key==='replace-vector'),step===2,'the application explicitly updates the index');
 }
-fixtures.chunks.forEach((c,i)=>assert.equal(text(draw(12,'keep-the-source-identity',4),'chunk-body-'+i),c.text));
-assert.match(strings(draw(12,'keep-the-source-identity',3)),/\[wal, blocks, wal\]/);
+// The slide continues the model-performance example; the shared lab corpus stays intact.
+const sourcePassages=[
+ 'A CSV file stores table rows as comma-separated values.',
+ 'A model can learn random patterns in training data. These patterns may not hold in new data.',
+ 'Overfitting can cause low training error but high test error.'
+];
+sourcePassages.forEach((passage,i)=>{
+ const items=draw(12,'keep-the-source-identity',4);
+ assert.equal([0,1].map(j=>text(items,'chunk-body-'+i+'-'+j)).join(' '),passage);
+});
+assert.match(strings(draw(12,'keep-the-source-identity',3)),/\[ml-notes, csv-guide, ml-notes\]/);
+assert.deepEqual(Array.from(fixtures.hits,([,i])=>fixtures.chunks[i].doc),['wal','blocks','wal']);
 const counts={};fixtures.mapped.forEach(([word,value])=>counts[word]=(counts[word]||0)+value);
 for(const [word,total]of Object.entries(counts))assert.equal(text(draw(13,'reduce-sees-the-complete-group',3),word+'-total-label'),word+' = '+total);
 // Stable keys move word occurrences intact across the shuffle.

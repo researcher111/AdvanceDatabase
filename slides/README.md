@@ -52,6 +52,12 @@ view open and use the teaching guide on another device or as a printout.
 Each deck's presenter view links to a printable full teaching guide. It can
 also be opened by adding `?guide=1` to the deck address.
 
+Lecture 12 also has a [read-aloud script](lecture-12.html?script=1) for every
+slide and build. Presenter view shows the current script above the teaching
+notes. Read the plain paragraphs aloud. Bracketed cues mark pauses and slide
+advances. The full script includes a slide selector and a **Print script**
+button. Its text is stored in `decks/lecture-12-script.js`.
+
 ## Controls
 
 | Key | Action |

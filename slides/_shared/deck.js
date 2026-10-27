@@ -3,7 +3,7 @@
   'use strict';
   const id=Number(document.body.dataset.lecture),deck=window.COURSE_DECKS[id],V=window.DeckViz;
   if(!deck){document.body.textContent='This lecture deck could not load. Open it from the slides index.';return;}
-  const params=new URLSearchParams(location.search),role=params.has('presenter')?'presenter':params.has('guide')?'guide':'audience';
+  const params=new URLSearchParams(location.search),role=params.has('presenter')?'presenter':params.has('script')?'script':params.has('guide')?'guide':'audience';
   const $=id=>document.getElementById(id),el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
   const svg=()=>{const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('viewBox','0 0 1280 720');return s;};
   const total=deck.scenes.reduce((sum,s)=>sum+s.minutes,0),starts=deck.scenes.map((s,i)=>deck.scenes.slice(0,i).reduce((n,p)=>n+p.minutes,0));
@@ -73,9 +73,26 @@
   function notesParagraphs(target,text){
     String(text).split(/\n\s*\n|\n/).filter(Boolean).forEach(p=>target.append(el('p','',p)));
   }
+  function readAloud(target,sc,step){
+    if(!sc.readAloud?.[step])return;
+    const section=el('section','read-aloud-step');
+    section.append(el('h3','script-label',`Read aloud · Build ${step+1} of ${sc.steps}: ${sc.states[step]}`));
+    sc.readAloud[step].split(/\n\s*\n|\n/).filter(Boolean).forEach(p=>{
+      section.append(el('p',/^\[.*\]$/.test(p)?'script-cue':'script-spoken',p));
+    });
+    const slide=deck.scenes.indexOf(sc);
+    const cue=step<sc.steps-1?'[Advance once for the next build.]':slide<deck.scenes.length-1?`[Advance once to slide ${slide+2}.]`:'[End of lecture.]';
+    section.append(el('p','script-cue script-advance',cue));target.append(section);
+  }
+  function scriptLink(target){
+    if(!deck.scenes.some(sc=>sc.readAloud))return;
+    const link=el('a','script-link','Read-aloud script');
+    link.href=location.pathname.split('/').pop()+'?script=1';link.target='_blank';link.rel='noopener';target.append(link);
+  }
   function teachingNotes(target,sc,step=null){
     if(!sc.teaching){notesParagraphs(target,sc.notes);return;}
     const t=sc.teaching;
+    if(step!==null)readAloud(target,sc,step);
     const paragraph=(parent,label,value,cls='')=>{
       const p=el('p',cls);p.append(el('strong','',label+' '),document.createTextNode(value));parent.append(p);
     };
@@ -117,6 +134,7 @@
     [['←','Previous build','back'],['→','Next build','next'],['↺','Replay scene','replay'],['▷','Play or pause animation','play'],['▸▸','Next slide','next-slide'],['◼','Blank audience screen','blackout']].forEach(([t,l,c])=>$('speaker-tools').append(button(t,l,()=>command(c))));
     $('clock-button').onclick=()=>command('clock');$('reset-clock').title='Reset lecture clock';$('reset-clock').onclick=()=>command('reset-clock');
     $('guide-link').href=location.pathname.split('/').pop()+'?guide=1';
+    scriptLink($('guide-link').parentElement);
     deck.scenes.forEach((sc,i)=>{const o=el('option','',`${pad(i+1)} · ${sc.title}`);o.value=i;$('jump').append(o);});$('jump').onchange=()=>command('jump',Number($('jump').value));
     $('connection').textContent=window.opener||channel?'Connecting to audience window…':'Open the lecture deck first, then press N to connect this presenter view.';
     const receive=e=>{if(e.data?.scope!=='course-visual-deck'||e.data.id!==id)return;if(e.data.type==='ink'){window.dispatchEvent(new CustomEvent('deck-ink-remote',{detail:e.data.detail}));return;}if(e.data.type!=='state')return;const changed=e.data.state.slide!==state.slide||e.data.state.step!==state.step;Object.assign(state,e.data.state);clockStart=Date.now();$('connection').textContent='Connected to audience window';drawPresenter(changed);};
@@ -134,7 +152,34 @@
   }
   function guide(){
     document.body.className='guide';const tools=el('div','guide-tools');const a=el('a','','← Lecture deck');a.href=location.pathname.split('/').pop();tools.append(a,button('Print teaching guide','Print teaching guide',()=>window.print()));document.body.append(tools,el('h1','',deck.title));document.body.append(el('p','intro',`${deck.bonus?'Optional bonus · self-paced':deck.date} · ${deck.scenes.length} scenes · ${total} teaching minutes. Scheduled quizzes are separate. Advance each animation with the right arrow or Space. Pause at the prediction prompts before revealing the next build.`));
+    scriptLink(tools);
     deck.scenes.forEach((sc,i)=>{const article=el('article');article.append(el('div','meta',`${pad(i+1)} · ${starts[i]}–${starts[i]+sc.minutes} min · ${sc.steps} builds`),el('h2','',sc.title));const row=el('div','guide-row'),preview=svg(),notes=el('div');render(preview,sc,sc.steps-1);row.append(preview,notes);if(sc.definition)notes.append(el('p','',`${sc.term}: ${sc.definition}`));teachingNotes(notes,sc);if(sc.states&&!sc.teaching)notes.append(el('p','meta','Builds: '+sc.states.join(' / ')));const sources=el('p','sources');sourceList(sc,sources);notes.append(sources);article.append(row);document.body.append(article);});
+  }
+  function scriptGuide(){
+    document.body.className='script-guide';
+    document.title=`Lecture ${id} · Read-aloud script`;
+    const tools=el('nav','script-tools'),back=el('a','','← Lecture deck');back.href=location.pathname.split('/').pop();
+    tools.setAttribute('aria-label','Script controls');
+    tools.append(back,button('Print script','Print script',()=>window.print()));
+    const jump=el('select');jump.id='script-jump';
+    const jumpLabel=el('label','','Jump to slide');jumpLabel.htmlFor=jump.id;tools.append(jumpLabel,jump);
+    document.body.append(tools,el('h1','',`Lecture ${id} · Read-aloud script`),el('p','script-intro','Read the plain paragraphs aloud. Bracketed cues are directions for you. Pause at a prediction cue. At an advance cue, press Right Arrow or Space once in the slide window.'));
+    if(!deck.scenes.some(sc=>sc.readAloud)){
+      document.body.append(el('p','','This deck does not yet have a read-aloud script.'));return;
+    }
+    const contents=el('main');document.body.append(contents);
+    deck.scenes.forEach((sc,i)=>{
+      const option=el('option','',`${i+1}. ${sc.title}`);option.value='slide-'+(i+1);jump.append(option);
+      const article=el('article');article.id=option.value;
+      article.append(el('p','script-meta',`Slide ${i+1} of ${deck.scenes.length} · ${sc.steps} builds`),el('h2','',sc.title));
+      if(sc.readAloud)sc.readAloud.forEach((_,step)=>readAloud(article,sc,step));
+      else article.append(el('p','','No read-aloud script for this slide.'));
+      contents.append(article);
+    });
+    jump.onchange=()=>{location.hash=jump.value;};
+    if(/^#slide-\d+$/.test(location.hash)){
+      const selected=$(location.hash.slice(1));if(selected){jump.value=selected.id;selected.scrollIntoView();}
+    }
   }
   function openPresenter(){if(channel){$('presenter').click();return;}if(presenterWindow&&!presenterWindow.closed){presenterWindow.focus();publish();return;}const url=location.pathname.split('/').pop()+'?presenter=1&session='+encodeURIComponent(session);presenterWindow=window.open(url,'course-presenter-'+id,'popup,width=1300,height=850');if(!presenterWindow)announce('Allow pop-ups to open presenter view.');}
   function fullscreen(){if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});else if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(()=>announce('Use your browser’s full-screen command.'));else announce('Use your browser’s full-screen command.');}
@@ -167,7 +212,7 @@
     window.addEventListener('hashchange',()=>{if(!hashWrite){stopAuto();readHash();update(false);}});window.addEventListener('pointermove',wake);window.addEventListener('pointerdown',wake);
     let start=null;$('stage').addEventListener('touchcancel',()=>{start=null;},{passive:true});$('stage').addEventListener('touchstart',e=>{if(e.touches.length!==1){start=null;return;}if(document.body.dataset.inkMode&&document.body.dataset.inkMode!=='none')return;if(e.touches.length===1)start={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});$('stage').addEventListener('touchend',e=>{if(!start)return;const dx=e.changedTouches[0].clientX-start.x,dy=e.changedTouches[0].clientY-start.y;if(Math.abs(dx)>65&&Math.abs(dx)>Math.abs(dy)*1.5)command(dx<0?'next':'back');start=null;},{passive:true});
   }
-  if(role==='guide'){guide();return;}if(role==='presenter')presenter();else audience();
+  if(role==='script'){scriptGuide();return;}if(role==='guide'){guide();return;}if(role==='presenter')presenter();else audience();
   window.addEventListener('keydown',e=>{
     if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&e.key!=='Escape')return;
     if(/^(BUTTON|A|SUMMARY)$/.test(e.target.tagName)&&[' ','Enter'].includes(e.key))return;

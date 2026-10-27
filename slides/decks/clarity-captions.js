@@ -1014,7 +1014,7 @@ window.CourseClarityCaptions = {
     ],
     "keep-the-source-identity": [
       "The first search result contains position 2, not a source ID. Predict which stored chunk it selects.",
-      "Resolve position 2 to its stored chunk. Its source ID is wal, which identifies the write-ahead logging document.",
+      "Resolve position 2 to its stored chunk. Its source ID, ml-notes, identifies the course notes on overfitting.",
       "Attach score 0.9 to a copy. Keep the stored record unchanged for the next question.",
       "Carry the ranked chunks’ source IDs into the prompt, including repeated IDs.",
       "Hit@3 = 1 if a relevant source appears in the first three results. Otherwise, Hit@3 = 0."
