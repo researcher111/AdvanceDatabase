@@ -1945,17 +1945,6 @@
         "For wrong ranking, inspect scores and a possible reranking experiment.",
         "For an unsupported claim, inspect assembled context and citation support."
       ]
-    },
-    "a-measurable-rag-system": {
-      "idea": "Keep source IDs with retrieved passages and evaluate retrieval and answer quality separately.",
-      "question": "A relevant source is in the prompt, but the answer makes an unsupported claim. Which artifact would you inspect next?",
-      "answer": "Open the exact prompt and cited passage, then compare the claim with the evidence. Retrieval presence alone does not prove support.",
-      "builds": [
-        "Return to Maya’s question about poor predictions on new data. Trace the overfitting passage back to source ml-notes.",
-        "Retrieve evidence for one question.",
-        "Evaluate retrieval and answer quality on held-out questions.",
-        "Repeat the same open-book model at the end. Ask a student to explain selected pages, references, and checked claims. Ask why the overfitting passage cannot establish the cause of Maya’s poor predictions."
-      ]
     }
   },
   "13": {

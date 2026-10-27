@@ -1068,12 +1068,6 @@ window.CourseClarityCaptions = {
       "Missing evidence: inspect the corpus and retrieved source IDs first.",
       "Evidence at rank 3: inspect ranking, then measure a proposed change.",
       "Unsupported claim: open the actual context and citation. An existing source ID is not proof."
-    ],
-    "a-measurable-rag-system": [
-      "Return to Maya’s question about poor predictions on new data. Record the passage’s source ID and version.",
-      "Select the evidence and keep its ranking visible.",
-      "Check whether the expected sources appear and how high they rank.",
-      "Select passages, keep their source IDs, and check each answer claim against the cited text."
     ]
   },
   "13": {

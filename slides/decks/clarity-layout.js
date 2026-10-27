@@ -185,7 +185,6 @@ window.CourseClarityLayout = {
   "12/filters-change-the-candidate-set": [55,175,1225,651],
   "12/a-changed-source-invalidates-copies": [147,297,1168,577],
   "12/failure-diagnosis-workshop": [87,282,1211,608],
-  "12/a-measurable-rag-system": [87,282,1211,629],
   "13/one-job-many-machines": [187,228,1143,654],
   "13/partitioning": [102,236,1167,637],
   "13/hash-routing": [102,236,1167,637],

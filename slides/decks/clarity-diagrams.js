@@ -314,12 +314,6 @@
       if(i<s)d.arrow('repeat-next-'+i,x+67,401,x+243,401,P.orange,3);
     });
   }
-  use(12,'a-measurable-rag-system',(d,s)=>{
-    repeatModel(d,s,'Why does my model fail on new data?',[
-      ['Record source','identity'],['Select evidence'],['Measure presence','and rank'],['Check each claim']
-    ]);
-    if(s===3)foot(d,'The passage supports a possible explanation. Check the answer against that limit.');
-  });
   use(13,'place-move-recover',(d,s)=>{
     repeatModel(d,s,'“WAL, wal!” + “Page wal.” must keep the same word totals',[
       ['Assign owners'],['Group equal keys'],['Run each stage','when ready'],['Recover lost work']
