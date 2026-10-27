@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="hashed-bow.css?v=1">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
 <body>
@@ -19,6 +20,7 @@
   <ul>
     <li><a href="#plan">The question we will trace</a></li>
     <li><a href="#why">How to give a model access to your data</a></li>
+    <li><a href="#hashed-bow-title">Build a vector with hashed words</a></li>
     <li><a href="#try-it">Inspect the evidence supplied to the model</a></li>
     <li><a href="#pipeline">The five stages of this RAG pipeline</a></li>
     <li><a href="#chunking">Choose chunks that preserve useful context</a></li>
@@ -105,9 +107,50 @@
 <p class="keep-in-present">Retrieval lets you update source documents and their index without retraining the model. Each question sends only selected passages to the generator. Retaining source identifiers also gives the answer a citation trail that can be checked.</p>
 
 <!-- ============================================================ -->
+<h2 id="hashed-bow-title">Build a vector with hashed words</h2>
+
+<p>Lecture 11 introduced models that use surrounding words to create embeddings. Lab 10 uses a simpler method: <strong>hashed bag-of-words</strong>. It counts words without keeping their order. A hash function maps each word to a repeatable number. The remainder after division by the vector width selects a position, called a <strong>bucket</strong>.</p>
+<p>Think of the vector as a row of numbered boxes. Each word’s hash chooses a box for its contribution. Different words can choose the same box. This is a <strong>hash collision</strong>, and it can make unrelated texts appear similar.</p>
+<p>Predict whether the two texts will have similar vectors. Then try the collision and synonym examples. This demonstration uses the lab’s actual hash, word filtering, weighting, and normalization rules. Eight buckets make the mechanism visible. The lab uses 2,048 buckets.</p>
+
+<div class="viz" id="hashed-bow-shell">
+  <div class="viz-title">Words → counts → hash buckets → normalized vector → comparison</div>
+  <div id="hashed-bow" role="region" aria-labelledby="hashed-bow-title"></div>
+  <div id="hb-fallback" class="hb-fallback">
+    <p><strong>Worked example:</strong> compare <code>database log</code> with <code>database log replay</code> using eight buckets.</p>
+    <div class="hb-table-scroll" role="region" aria-label="Word buckets in the worked example" tabindex="0">
+    <table>
+      <thead><tr><th>Word</th><th>Hash remainder modulo 8</th><th>Count in each text where it occurs</th><th>Contribution</th></tr></thead>
+      <tbody>
+        <tr><td>database</td><td>4</td><td>1</td><td>1</td></tr>
+        <tr><td>log</td><td>7</td><td>1</td><td>1</td></tr>
+        <tr><td>replay</td><td>3</td><td>1</td><td>1</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>The query puts 1 in buckets 4 and 7. The passage also puts 1 in bucket 3. Normalize each vector by dividing every coordinate by its magnitude. Their dot product is approximately <strong>0.816</strong>.</p>
+    <p>The lab uses <code>1 / (1 + ln(count))</code> once per distinct word. Here, <code>ln</code> is the natural logarithm. A word that occurs twice contributes about 0.591, not 2. Contributions from different words add when their hashes select the same bucket.</p>
+    <p>With eight buckets, <code>car</code> and <code>banana</code> both select bucket 1. Their one-word vectors have similarity 1 despite their different meanings. With sixteen buckets, they select buckets 9 and 1, so similarity becomes 0.</p>
+    <p>Enable JavaScript to edit the texts and step through each calculation.</p>
+  </div>
+  <div id="hb-print" class="hb-print">
+    <p><strong>Eight-bucket example:</strong> <code>database log</code> gives weights of 1 in buckets 4 and 7. The normalized values are approximately 0.707 each. <code>database log replay</code> gives weights of 1 in buckets 3, 4, and 7. Its normalized values are approximately 0.577 each. The dot product is approximately 0.816.</p>
+    <p><strong>Collision:</strong> <code>car</code> and <code>banana</code> both hash to bucket 1 with eight buckets. Their similarity is 1. With sixteen buckets, their positions differ and similarity is 0. More buckets can separate collisions. They do not teach the system that <code>car</code> and <code>automobile</code> are synonyms.</p>
+    <p><strong>Lab rule:</strong> lowercase the text, keep ASCII letter sequences, and remove the supplied stop words. Count each retained word. Add <code>1 / (1 + ln(count))</code> to the bucket selected by <code>MD5(word) % DIM</code>. Normalize a nonzero vector. Empty input produces a zero vector.</p>
+  </div>
+  <p class="viz-caption"><strong>Keep this idea:</strong> hashing groups words by a numeric rule, not by meaning. More buckets can reduce collisions, but they do not resolve different words with the same meaning.</p>
+</div>
+
+<div class="exercise">
+  <span class="ex-label">Predict a new input</span>
+  <p>Reorder the same words without changing their counts. Will the vector change? Then replace <code>car</code> with <code>automobile</code>. Does the hash rule recognize their related meanings?</p>
+  <details><summary>Check your explanation</summary><p>Word order does not change this vector. The counts and hash buckets stay the same. The method does not learn that <code>car</code> and <code>automobile</code> are related. Those words select different buckets at all three widths in this diagram.</p></details>
+</div>
+
+<!-- ============================================================ -->
 <h2 id="try-it">Inspect the evidence supplied to the model</h2>
 
-<p>This browser example retrieves passages from 24 course-summary documents. It uses the <span class="gloss" data-gloss="hashed-bag-of-words">hashed bag-of-words</span> embedding method from Lab 10’s <code>micro_rag.py</code>. Ask a question to inspect the retrieved chunks. Compare them with the displayed prompt for the language model.</p>
+<p>Now use the same <span class="gloss" data-gloss="hashed-bag-of-words">hashed bag-of-words</span> method to search 24 course-summary documents. This search uses the lab’s 2,048 dimensions. Ask a question to inspect the retrieved chunks. Compare them with the displayed prompt for the language model.</p>
 
 <div class="viz" id="viz-ask">
   <div class="viz-title">micro-rag · retrieval over 24 course-summary documents</div>
@@ -228,7 +271,7 @@ question ──embed──▶ query vector ──────retrieve (top-k)─
 
 <h3 class="new-slide" data-kicker="Retrieval is measurable">Embedding width changed hit@3 from 0.50 to 0.92</h3>
 
-<p class="keep-in-present">Lab 10’s hashed bag-of-words embedder maps each word to one of <code>DIM</code> vector positions. It increments that position. Fewer positions cause more collisions between unrelated words. These collisions can make unrelated texts appear similar. The <span class="gloss" data-gloss="eval-set">evaluation set</span> measures their effect on retrieval.<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup></p>
+<p class="keep-in-present">The <a href="#hashed-bow-title">hashing diagram</a> shows how the lab maps each retained word to one of <code>DIM</code> vector positions. It adds the word’s weight to that position, then normalizes the completed vector. Fewer positions can cause more collisions between unrelated words. These collisions can make unrelated texts appear similar. The <span class="gloss" data-gloss="eval-set">evaluation set</span> measures their effect on retrieval.<sup class="src"><a href="#src-9" title="scikit-learn: HashingVectorizer">9</a></sup></p>
 
 <table>
   <thead><tr><th>Embedding width (DIM)</th><th>hit@3</th><th>MRR@3</th></tr></thead>
@@ -396,7 +439,8 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
-<script src="viz.js?v=ste-20261015"></script>
+<script src="viz.js?v=hashed-bow-20261027"></script>
+<script src="hashed-bow.js?v=1"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>

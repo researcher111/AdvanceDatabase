@@ -148,7 +148,7 @@
         [[920,473],[1000,535],[230,515]].forEach(([x,y],i)=>d.circle('other-'+i,x,y,10,P.muted));
       }
     }
-    label(d,'story-label',640,633,'Teaching example · Positions illustrate vector comparisons',P.muted,23);
+    label(d,'story-label',640,633,'Fictional classroom example · Positions illustrate vector comparisons',P.muted,23);
   });
 
   use(11,'diagnose-the-index',(d,s)=>{
@@ -203,18 +203,18 @@
     probeScene.title='Search selected IVF lists';
     probeScene.states=['Fixed lists','Select a centroid','Search one list','Identify the miss','Search both lists'];
     probeScene.teaching={
-      idea:'The nearest centroid can have a list without the nearest stored vector.',
+      idea:'A nearby group center does not guarantee that its list contains the nearest stored vector.',
       question:'Why can a search of the nearest centroid list miss v1?',
       answer:'v1 belongs to c1. A one-probe search selects c0 and scores only v0. It does not score v1.',
       builds:[
-        'Identify the four stored vectors. The construction process assigned v0 to c0 and the other three vectors to c1. List membership remains fixed during the query.',
+        'Identify the four stored vectors and two supplied centroids. This teaching fixture fixes the centroids rather than learning them with k-means. Nearest-centroid assignment puts v0 in c0 and the other three vectors in c1. The query requests two neighbors. Predict which list one probe will select.',
         'Calculate the centroid scores for q = (0.8, 0.6). The dot product with c0 is 0.8. The dot product with c1 is 0.6. One probe selects c0.',
         'Score v0 from the selected list. Its score is 0.80. Count two centroid comparisons and one stored-vector comparison. The query requests two results, but this candidate set contains only one vector.',
-        'Compare the result with exact search. Exact search returns v1 and v0. The score for v1 is 0.96. The one-probe search misses v1 because it does not search c1. Recall@2 is 1/2.',
-        'Search both lists. The result now contains v1 and v0. Recall@2 is 1. Count two centroid comparisons and four stored-vector comparisons. This search uses six comparisons. Exact search uses four.'
+        'Compare the result with exact search, which returns v1 and v0. Vector v1 scores 0.96, higher than v0 at 0.80. The one-probe search misses v1 because it skips list c1. It returns one of the two exact neighbors, so recall@2 is 1/2.',
+        'Before the reveal, predict the result and work for two probes. Searching both lists returns v1 and v0, so recall@2 is 1. Count two centroid comparisons and four stored-vector comparisons. Six comparisons exceed the four required by exact search. Searching every list removes this miss but adds centroid work.'
       ],
-      context:'These unit vectors form a small numerical example. They do not represent measured passage embeddings. The reading and Lab 9 use the same values.',
-      reference:'Use the same similarity metric and the same rule for tied scores as exact search. IVFFlat scores every candidate in each selected list. More probes add candidates, so recall cannot decrease under these conditions.'
+      context:'These unit vectors and fixed centroids form a small numerical example. They are not measured passage embeddings or the result of k-means training. The reading and Lab 9 use the same values.',
+      reference:'IVFFlat is IVF with exact scoring inside the selected lists. Use the same similarity metric and tie rule as exact search. More probes add candidates without removing earlier candidates. Under these conditions, recall cannot decrease.'
     };
   }
 

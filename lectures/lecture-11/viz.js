@@ -5,31 +5,31 @@
   const GLOSSARY = {
     'rid': {
       title: 'RID (record ID)',
-      body: "<p>A record ID identifies a row by its block number and slot number. The B+ tree index in microdb returns RIDs. The table uses these RIDs to read matching rows. An IVF extension could also use RIDs to connect candidate vectors to table records.</p>",
+      body: "<p>A record ID identifies a row by its block number and slot number. The B+ tree index in microdb returns RIDs. The table uses these addresses to read the matching rows. An IVF extension could also store a RID with each vector. Search could then return the vector’s table row.</p>",
     },
     'k-means': {
       title: 'k-means',
-      body: "<p>The k-means algorithm assigns each vector to its nearest centroid. It then replaces each centroid with the average of its assigned vectors. It repeats these steps until it meets a convergence rule or reaches an iteration limit. IVF uses the resulting centroids to select lists for search. The lab provides k-means. Your code scores vectors, assigns vectors to lists, and searches selected lists.</p>",
+      body: "<p>The k-means algorithm groups vectors around centers called centroids. It assigns each vector to its nearest centroid. It then moves each centroid to the average position of its assigned vectors. It repeats assignment and averaging until it meets a convergence rule or reaches an iteration limit.</p><p>IVF uses the resulting centroids to select lists for search. The lab provides k-means. Your code scores vectors, assigns vectors to lists, and searches selected lists.</p>",
     },
     'rag': {
       title: 'RAG (retrieval-augmented generation)',
-      body: "<p>Retrieval-augmented generation retrieves evidence and supplies that evidence to a language model. The language model uses the evidence to answer a question. For vector search, the application splits documents into chunks. An embedding model creates vectors for the chunks and the question. Nearest-neighbor search selects candidate evidence.</p><p>A missing passage can affect the answer. Thus, evaluation must check answer quality as well as index recall.</p>",
+      body: "<p>Retrieval-augmented generation supplies source passages to a language model along with a question. The model uses those passages to generate an answer. For vector search, the application splits documents into passages called chunks. An embedding model creates vectors for the chunks and the question. Search selects chunks whose vectors are close to the question vector.</p><p>A nearby vector does not guarantee that its chunk supports the answer. Check the retrieved text and the generated claims as well as index recall.</p>",
     },
     'recall': {
       title: 'Recall@k',
-      body: "<p>Recall@k is the fraction of the exact top-k neighbors that approximate search returns. Run both searches. Count the shared IDs. Divide that count by k.</p><p>A score of 1.0 means approximate search returned all exact neighbors. A score of 0.75 means approximate search missed one quarter of the exact neighbors. Use recall and query cost to select probe or ef_search.</p>",
+      body: "<p>Recall@k is the fraction of the exact top-k neighbors that approximate search returns. Use the same vectors, metric, and tie convention for both searches. Count the shared IDs. Divide that count by k.</p><p>A recall of 1.0 means approximate search returned all exact top-k neighbors. A recall of 0.75 means approximate search missed one quarter of those neighbors. Compare recall with query cost when selecting probe or ef_search.</p>",
     },
     'hnsw': {
       title: 'HNSW (Hierarchical Navigable Small World graph)',
-      body: "<p>HNSW is a layered graph index for nearest-neighbor search. Search follows links in sparse upper layers. It then explores candidates in the base layer. Search can find useful neighbors without comparing every vector. It does not guarantee an exact result.</p><p>The ef_search parameter controls the candidate list during search. Larger settings usually improve recall and increase work. Graph links also require storage and construction work.</p>",
+      body: "<p>HNSW is a layered graph index for nearest-neighbor search. Each node represents a stored vector. Links connect nodes that search can visit next. Search follows links toward the query in upper layers, which contain fewer nodes. It then explores candidates in the base layer, which contains all stored vectors.</p><p>The ef_search parameter controls the candidate list during search. Larger settings usually improve recall and increase work. Search can skip vectors, so the result need not match exact search. The graph also needs storage for its links and work to build them.</p>",
     },
     'ivf': {
       title: 'IVF (inverted file index)',
-      body: "<p>IVF assigns vectors to centroid lists. Search compares the query vector with C centroids. It selects the P nearest centroids and searches their lists. For balanced lists, the work is approximately C + P × n/C comparisons. Search misses an exact neighbor in a list that it does not search. A larger P searches more vectors and can return those missing neighbors.</p>",
+      body: "<p>IVF groups stored vectors into lists. Each list has a center called a centroid. During index construction, each vector joins the list of its nearest centroid.</p><p>Search compares the query vector with C centroids. It selects the P nearest centroids and scores the vectors in their lists. P is the probe count: the number of lists searched. With n vectors and balanced lists, the work is approximately C + P × n/C comparisons.</p><p>A skipped list can contain an exact neighbor. Increasing P searches more lists and can recover that neighbor.</p>",
     },
     'ann': {
       title: 'ANN (approximate nearest neighbor)',
-      body: "<p>Approximate nearest-neighbor search avoids some comparisons and can miss exact neighbors. Algorithms such as IVF and HNSW have settings that control search work. Measure recall. Measure query cost. Use both measurements to select a setting that meets the application requirements.</p>",
+      body: "<p>Approximate nearest-neighbor search avoids some comparisons and can miss neighbors that exact search returns. IVF and HNSW have settings that control how much work search does. Measure recall against exact search. Measure query cost. Use both measurements to choose a setting that meets the application requirements.</p>",
     },
     'pgvector': {
       title: 'pgvector',
@@ -41,11 +41,11 @@
     },
     'embedding-recall': {
       title: 'Embedding',
-      body: "<p>An embedding is a numeric vector that represents content, such as text or an image. Training adjusts an embedding model so that vector geometry can represent useful relationships between inputs. Similarity depends on the model and metric. Nearby vectors do not guarantee relevant evidence for every task.</p>",
+      body: "<p>An embedding is a list of numbers that represents content, such as text or an image. Each number is a coordinate of the vector. Training adjusts the model so that similar inputs can produce nearby vectors. What counts as similar depends on the model and comparison metric. Read the retrieved text to check whether it provides useful evidence.</p>",
     },
     'quantization': {
-      title: 'Quantization (PQ)',
-      body: "<p>Quantization stores a compressed approximation of a vector. Product quantization splits a vector into parts. It replaces each part with an entry from a learned codebook. This can reduce storage and the cost of distance calculations. It also introduces approximation error. Measure its effect on search quality.</p>",
+      title: 'Quantization and product quantization (PQ)',
+      body: "<p>Quantization stores a compressed approximation of a vector. Product quantization splits a vector into parts. A learned codebook holds representative values for each part. The index stores a code that selects a representative instead of storing the original part.</p><p>This can reduce storage and the cost of distance calculations. The representative can differ from the original values. Measure how this approximation changes search quality.</p>",
     },
   };
   if (window.LabBase && LabBase.initGlossary) LabBase.initGlossary(GLOSSARY);
@@ -145,12 +145,12 @@
       stats.textContent = `mode: ${mode === 'exact' ? 'exact' : 'IVF probe ' + probe}` +
         `    comparisons: ${comparisons}/${N}    recall@10: ${recall.toFixed(2)}`;
       if (mode !== 'exact' && recall < 1) {
-        msg.innerHTML = `Recall is ${recall.toFixed(2)}. The <strong>points with red rings</strong> are exact ` +
-          `neighbors in lists that search skipped. Increase probe to search more lists.`;
+        msg.innerHTML = `Recall is ${recall.toFixed(2)}. The <strong>points with red rings</strong> belong to the exact top 10. ` +
+          `IVF missed them because their lists were not searched. Green points are the IVF results. Increase probe to search more lists.`;
       } else if (mode !== 'exact') {
-        msg.innerHTML = `Recall is 1.00. Search used ${comparisons} comparisons. Exact search uses ${N} comparisons. All exact top-10 neighbors were in the selected lists.`;
+        msg.innerHTML = `Recall is 1.00. The selected lists contained all exact top-10 neighbors. IVF used ${comparisons} comparisons, including the ${C} centroid comparisons. Exact search uses ${N} comparisons.`;
       } else {
-        msg.innerHTML = `Exact search compared all ${N} points. Green points are the exact top-10 neighbors.`;
+        msg.innerHTML = `Exact search compared the query with all ${N} points using Euclidean distance. The green points are the 10 nearest neighbors. These IDs are the reference for checking IVF.`;
       }
     }
   }
@@ -199,7 +199,7 @@
   let comparisons = 0;
   (function walk() {
     let cur = ENTRY;
-    STEPS.push({ layer: 1, at: cur, note: `Start at ${cur} in the upper layer. The query distance is ${dist(cur).toFixed(0)}.` });
+    STEPS.push({ layer: 1, at: cur, note: `Start at ${cur} in the upper layer. Its distance to the query is ${dist(cur).toFixed(0)}. Check the nodes linked to ${cur}.` });
     for (const [layer, edges] of [[1, L1.edges], [0, L0EDGES]]) {
       for (;;) {
         const options = nbrs(cur, edges);
@@ -208,14 +208,14 @@
         for (const n of options) if (dist(n) < dist(best)) best = n;
         if (best === cur) break;
         STEPS.push({ layer, at: best, from: cur,
-          note: `Follow the link ${cur} → ${best}. The query distance changes from ${dist(cur).toFixed(0)} to ${dist(best).toFixed(0)}.` });
+          note: `Among the nodes linked to ${cur}, ${best} is closest to the query. Follow ${cur} → ${best}. The distance decreases from ${dist(cur).toFixed(0)} to ${dist(best).toFixed(0)}.` });
         cur = best;
       }
       if (layer === 1) STEPS.push({ layer: 0, at: cur, drop: true,
-        note: `No upper-layer neighbor of ${cur} is closer to the query. Move to layer 0.` });
+        note: `No node linked to ${cur} in this layer is closer to the query. Continue from the same node, ${cur}, in layer 0.` });
     }
     STEPS.push({ layer: 0, at: cur, done: true,
-      note: `No layer-0 neighbor is closer to the query. Return ${cur}. This search used ${comparisons} distance calculations. Exact search uses 12.` });
+      note: `No node linked to ${cur} in layer 0 is closer to the query. Return ${cur}. This greedy trace made ${comparisons} neighbor checks, including repeated visits. Exact search compares all 12 stored vectors.` });
   })();
 
   let step = 0;

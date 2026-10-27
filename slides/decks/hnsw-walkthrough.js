@@ -26,16 +26,16 @@
 
   const labels = ['Plot the vectors', 'Select neighbor links', 'Show the graph links', 'Select upper-layer nodes', 'Start the search', 'Follow an upper-layer link', 'Follow the next link', 'Change layers', 'Follow a base-layer link', 'Search more candidates'];
   const captions = [
-    'The plot shows six vectors. IVF groups vectors by centroid. HNSW stores links between selected vectors.',
-    'To add v4, search the existing graph for candidate neighbors. Select a limited number of neighbor links.',
-    'The lines show the saved links between vectors. Each node stores the IDs of neighbors that search can visit.',
-    'A sparse upper layer contains some of the same vectors. HNSW selects upper-layer membership at random.',
-    'The rows show the same nodes and links by layer. Start at upper-layer v0. Compare v0 with the query vector.',
+    'HNSW (Hierarchical Navigable Small World) connects stored vectors. Each node is a vector, and each link identifies a selected neighbor.',
+    'When adding v4, HNSW searches for candidate neighbors. It saves selected neighbor IDs as links. This example keeps v3 and v5.',
+    'Follow a link to visit a saved neighbor ID. Compare that neighbor’s vector with the query vector.',
+    'HNSW randomly selects vectors for upper layers. Each upper layer contains a subset of the stored vectors below.',
+    'The rows rearrange the same graph to show its layers. Start at upper-layer v0. Row spacing is not vector distance.',
     'Follow the upper-layer link from v0 to v2. Vector v2 is closer to the query vector.',
     'Follow the upper-layer link from v2 to v5. Vector v5 is closer to the query vector.',
     'Move from upper-layer v5 to base-layer v5. The layer changes. The vector stays the same.',
     'Follow the base-layer link from v5 to v4. Vector v4 is closer to the query vector.',
-    'Search can explore several candidates. A larger ef_search can improve recall and increase work. Measure both effects.',
+    'The ef_search setting controls search breadth. Retaining more candidates can improve recall and increase work. Measure both effects.',
   ];
   const t = (d, key, x, y, value, size = 24, color = P.ink, anchor = 'middle', weight = 500) => d.text(key, x, y, value, size, color, anchor, weight);
   const point = node => ({ x: 130 + node.x * 60, y: 590 - node.y * 60 });
@@ -149,20 +149,20 @@
     states: labels, steps: labels.length,
     draw(d, step) { if (step < 4) plot(d, step); else layered(d, step); },
     teaching: {
-      idea: 'HNSW stores links between selected vector neighbors. Search follows sparse upper layers and then explores a denser base layer.',
+      idea: 'HNSW follows saved neighbor links to find vectors near the query. Sparse upper layers guide search toward a region of the base layer.',
       question: 'What does a graph link connect? How does search use the link?',
       answer: 'A link connects two stored vector IDs. Search uses the link to visit a neighbor and compare its vector with the query vector. Centroids are not HNSW nodes. Upper layers contain random subsets of the same stored vectors.',
       builds: [
-        'The circles show six example vectors on axes with equal scales. The diamonds show their group means: c0 = (2, 4/3) and c1 = (22/3, 4). The groups contain v0/v1/v2 and v3/v4/v5. These coordinates differ from the earlier IVF example. HNSW connects stored vectors, not these centroids. Real embeddings usually have more dimensions, and a 2D projection can change their distances.',
-        'HNSW searches the existing graph for candidates before it adds a vector. Construction selects a limited number of links, with nearby candidates and useful directions. Here, distances from v4 to v3, v5, and v2 are sqrt(2), sqrt(8), and sqrt(32). The example selects v3 and v5. These distances use the plotted coordinates, but the links do not record a complete HNSW construction run. Construction can also add reverse links and remove links from existing neighbor lists.',
+        'Expand HNSW as Hierarchical Navigable Small World. A graph has nodes connected by links. Here, circles are stored vectors and diamonds are group centers. HNSW links stored vectors rather than centroids.\n\nThe axes have equal scales. Groups v0/v1/v2 and v3/v4/v5 have means c0 = (2, 4/3) and c1 = (22/3, 4). This example uses different coordinates from the earlier IVF fixture. Real embeddings usually have more dimensions. A 2D projection can change their distances.',
+        'Before adding a vector, HNSW searches the existing graph for candidate neighbors. It selects a limited set using distance and a rule that favors links in different directions. For v4, the example distances to v3, v5, and v2 are sqrt(2), sqrt(8), and sqrt(32). This example keeps v3 and v5.\n\nThe distances come from the plotted coordinates. The links illustrate selected neighbors, not a complete HNSW construction run. Construction can add reverse links and remove links from existing neighbor lists.',
         'Show the saved base-layer links at the same vector positions. Node v4 stores neighbor IDs v3 and v5. Search can use these IDs to load the neighbor vectors and compare them with the query vector. A line shows a selected neighbor relationship. Each link works in both directions in this example. Real neighbor lists can become asymmetric after construction removes some links.',
-        'Highlight v0, v2, and v5 in orange. HNSW assigns a random maximum level to each vector during construction. Each upper layer contains a subset of the vectors in the layer below. Each layer stores its own neighbor lists. Thus, v2–v5 can exist in the upper layer without a corresponding base-layer link. The next step shows the same IDs and links in rows.',
+        'Highlight v0, v2, and v5 in orange. HNSW assigns each vector a random maximum level during construction. Each upper layer contains a subset of the vectors below. Each layer has its own neighbor lists. Therefore, upper-layer link v2–v5 does not require a matching base-layer link. The next step rearranges the same IDs and links into rows.',
         'Nodes v0, v2, and v5 appear in both rows. Solid lines connect neighbors in one layer, while dashed vertical lines connect drawings of the same vector. Curved base-layer links pass around unrelated nodes. Horizontal spacing does not represent vector distance. Start at upper-layer v0. Its distance to q = (7.2, 5.2) is approximately 7.49.',
-        'Follow the saved upper-layer link v0–v2. The distance to q decreases from approximately 7.49 to 5.94. Distance calculations use the original vector coordinates, not the row positions. This greedy step reduces the distance. It does not imply that each step halves the distance.',
-        'Follow the upper-layer link v2–v5. The distance to q decreases to approximately 2.84. This link crosses a larger region of the vector plot. This example path does not guarantee the nearest result. It also does not establish logarithmic worst-case time.',
+        'Ask whether following the saved link to v2 moves search closer to q. Use the original coordinates to compare distances. Reveal the decrease from approximately 7.49 to 5.94. This step chooses a closer neighbor. It does not imply that each step halves the distance.',
+        'Follow upper-layer link v2–v5. The distance to q decreases to approximately 2.84. This link crosses a larger region of the vector plot. The pictured path does not guarantee the nearest result or logarithmic worst-case time.',
         'Move to the base layer at v5. The vector ID, coordinates, and distance to q stay the same. Search now uses the base-layer neighbor list for v5. This list contains v3 and v4. A layer change does not move to a different vector.',
         'Follow the base-layer link v5–v4. The query distance decreases to approximately 0.28. HNSW maintains candidate and retained-result sets during base-layer search. This example path explains how search follows links. It does not show the complete search procedure.',
-        'Highlight candidate nodes v3, v4, and v5. The ef_search setting controls search breadth, not the number of links followed or vectors evaluated. More candidates can improve recall and increase work. Measure comparisons and latency. Compare recall with the exact-search baseline. This diagram does not measure search quality.',
+        'Highlight candidate nodes v3, v4, and v5. The ef_search setting controls how many promising candidates base-layer search retains. It is not a count of followed links or evaluated vectors. More candidates can improve recall and increase work. Compare result IDs with the exact baseline. Measure comparisons and latency separately.',
       ],
       checks: [
         { question: 'Which objects become HNSW nodes: circles or diamonds?', answer: 'The circles become nodes. They represent stored vectors v0 through v5. The diamonds represent IVF centroids.' },
@@ -176,7 +176,7 @@
         { question: 'Does the highlighted path show the complete HNSW search algorithm?', answer: 'No. The path shows how search follows links. Base-layer search maintains and explores candidate sets.' },
         { question: 'Does ef_search specify how many links search follows?', answer: 'No. The setting controls search breadth. Measure the work, latency, and recall for the selected setting.' },
       ],
-      context: 'This example uses six manual 2D vectors and links that work in both directions. Euclidean distance calculations use the plotted coordinates. Real embeddings usually have many dimensions. HNSW construction searches candidate vectors and can remove links, which can produce asymmetric neighbor lists. HNSW uses random layer membership and separate neighbor lists for each layer. IVF uses centroid lists instead.',
+      context: 'This example uses six manual 2D vectors and links that work in both directions. Euclidean distance calculations use the plotted coordinates. Real embeddings usually have many dimensions. HNSW construction can remove links, so real neighbor lists can be asymmetric. Each layer has its own neighbor lists. The diagram explains navigation, not measured search quality.',
       reference: 'Malkov and Yashunin, Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs, sections 3–4 and Algorithms 1, 4, 5. HNSWlib hnswalg.h: getNeighborsByHeuristic2 and mutuallyConnectNewElement.',
     },
   });

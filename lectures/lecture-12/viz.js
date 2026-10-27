@@ -5,7 +5,7 @@
   const GLOSSARY = {
     'hashed-bag-of-words': {
       title: 'Hashed bag-of-words',
-      body: "<p>The lab represents text by counting words in a fixed-width vector. A hash selects the position incremented for each word, then the nonzero vector is normalized. The method needs no training or vocabulary table. It relies on word overlap and can also match unrelated words that hash to the same position. Increasing DIM reduces collisions but does not solve vocabulary mismatch.</p>",
+      body: "<p>The lab counts retained words without keeping their order. A hash chooses a vector position, or bucket, for each word. The lab adds the weight 1 / (1 + ln(count)) once per distinct word. It then normalizes the nonzero vector.</p><p>The method needs no training or vocabulary table. Different words can contribute to the same bucket, creating a collision. More buckets can reduce collisions, but hashing does not learn synonyms. Use the interactive hashing diagram to inspect each step.</p>",
     },
     'lost-in-the-middle': {
       title: 'Lost in the middle',

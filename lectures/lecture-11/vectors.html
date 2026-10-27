@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=clear-20261027">
 <link rel="stylesheet" href="embedding-walkthrough.css?v=2">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
@@ -21,7 +21,7 @@
     <li><a href="#plan">Find chunks that answer a question</a></li>
     <li><a href="#similar">Find a chunk with different words</a></li>
     <li><a href="#embedding-walkthrough-title">Convert a sentence to a vector</a></li>
-    <li><a href="#embedding-models">Compare current embedding models</a></li>
+    <li><a href="#embedding-models">Compare embedding models</a></li>
     <li><a href="#exact">Save the exact search results</a></li>
     <li><a href="#ann">Search fewer vectors</a></li>
     <li><a href="#try-it">Identify a missed neighbor</a></li>
@@ -47,19 +47,18 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 11 · Thursday October 15, 2026</div>
   <h1>Vector Databases</h1>
-  <div class="subtitle">A chunk can answer a question even when the words differ. Vector search compares their embedding vectors.</div>
+  <div class="subtitle">Find passages even when their wording differs from the question. Measure what searching fewer vectors can miss, then check the passages.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
 <div class="story-scene">
   <p class="story-label">Fictional project example</p>
   <p class="lede">Maya and Noor test their project at a lab desk. Maya types: <q>How does a database recover after a crash?</q> Their notes contain a passage about replaying a durable log. An exact string search for the question returns no match.</p>
-  <p>The question and the passage use different words for the same idea. The search must find a passage that answers the question.</p>
-  <p>Maya and Noor will use vector comparison instead of string matching. They will then check whether each result answers the question.</p>
+  <p>The passage describes recovery without repeating the question. Noor asks, <q>Can we find related passages even when the words differ?</q> They will try vector search, then read the results to check whether the passages answer the question.</p>
 </div>
 
-<p>A <strong>chunk</strong> is a passage of text that the system stores for retrieval. The project represents each question and chunk with an <span class="gloss" data-gloss="embedding-recall">embedding vector</span>. The question embedding is the <strong>query vector</strong>. We will compare vectors, reduce search work, and measure missed neighbors.</p>
-<p>An <span class="gloss" data-gloss="ann">approximate nearest-neighbor</span> index searches these vectors. It can miss some exact neighbors. In Lab 9 on October 29, you will build an <span class="gloss" data-gloss="ivf">inverted file (IVF)</span> index. You will measure its search work and missed neighbors.</p>
+<p>A <strong>chunk</strong> is a passage that the system stores as one search item. An embedding model converts text into a fixed-length list of numbers, called an <span class="gloss" data-gloss="embedding-recall">embedding vector</span>. The question’s embedding is the <strong>query vector</strong>. Search compares this vector with the stored chunk vectors.</p>
+<p>The <strong>nearest neighbors</strong> are the stored vectors closest to the query under the chosen comparison rule. Exact search compares the query with every stored vector. An <span class="gloss" data-gloss="ann">approximate nearest-neighbor (ANN)</span> index can compare fewer vectors, but it can miss exact neighbors. In Lab 9 on October 29, you will build an <span class="gloss" data-gloss="ivf">inverted file (IVF)</span> index. You will measure how much work it saves and which neighbors it misses.</p>
 
 <div class="cite">
   Companion reading: pgvector's <a href="https://github.com/pgvector/pgvector">README</a> (index types and search settings) ·
@@ -79,53 +78,53 @@ On a touch screen, tap the term.</p>
 <!-- ============================================================ -->
 <h2 id="plan">Find chunks that answer a question</h2>
 
-<p class="keep-in-present">Given a query vector, return the 10 most similar chunk vectors. Exact search scores every stored vector. An approximate index can reduce this work. We will measure the exact neighbors that the index misses.</p>
+<p class="keep-in-present">Maya wants the ten chunks with the highest similarity scores for her question. We will save the exact result IDs first. Those IDs let us identify neighbors that an approximate search misses.</p>
 
 <div class="exercise">
   <span class="ex-label">Check your knowledge</span>
-  <p>Explain how a B+ tree finds <code>uid = 7</code>. Would the same lookup find a sentence with different words?</p>
-  <p>If you know dot products, calculate <code>(0.8, 0.6) · (0.6, 0.8)</code>. Otherwise, calculate the two products with a partner.</p>
+  <p>Explain how a B+ tree finds <code>uid = 7</code>. Does that key tell you which passage answers a recovery question?</p>
+  <p>Calculate <code>(0.8, 0.6) · (0.6, 0.8)</code>. Multiply the matching coordinates, then add the two products. Work with a partner if this calculation is new.</p>
   <details><summary>Show the answer</summary>
-  <p>A B+ tree finds the requested key in a fixed order. A paraphrase uses different words for the same idea. A paraphrase requires a different comparison. The dot product is <code>0.8 × 0.6 + 0.6 × 0.8 = 0.96</code>. We will use this score to examine a missed neighbor.</p>
+  <p>A B+ tree locates key 7 in a fixed key order. That order does not rank passages by their similarity to a question. The dot product is <code>0.8 × 0.6 + 0.6 × 0.8 = 0.96</code>. We will use this score to explain a missed neighbor.</p>
   </details>
 </div>
 
 <p class="keep-in-present"><strong>Quiz 7</strong> takes the first 10 minutes. It covers columnar storage and the analytics stack. We then examine the vector index for your project.</p>
 
 
-<p class="keep-in-present"><strong>Searching fewer candidate vectors can miss exact neighbors.</strong> Compare approximate results with exact search results. Measure work and recall with queries that represent your application.</p>
-<p class="keep-in-present">First, use exact search to find the nearest vectors. Then use an index to search fewer vectors. Compare the result IDs to identify missed neighbors. Increase the search effort to find more neighbors. Compare the additional neighbors with the additional work.</p>
-<p class="keep-in-present">Finally, read the returned chunks. A similar vector does not guarantee that its chunk answers the question.</p>
+<p class="keep-in-present"><strong>Searching fewer candidate vectors can miss exact neighbors.</strong> A candidate is a stored vector that the search selects for comparison. The index saves work by leaving some vectors unexamined.</p>
+<p class="keep-in-present">We will follow one sequence: save exact IDs, search fewer vectors, and compare the two result lists. Then we will search more vectors and measure the extra work. <strong>Recall</strong> tells us what fraction of the exact neighbors the approximate search found.</p>
+<p class="keep-in-present">Finally, read the returned chunks. A high similarity score does not establish that a chunk answers the question.</p>
 
 <!-- ============================================================ -->
 <h2 id="similar">Find a chunk with different words</h2>
 
 <p class="keep-in-present">A B+ tree on chunk IDs can find chunk 7 or chunks with IDs from 7 to 12. This ID order stays the same for every question.</p>
-<p class="keep-in-present">For the crash-recovery question, Maya wants a chunk about replaying a log. For a question about faster queries, Maya wants a chunk about indexes. The required order of chunks changes with each question.</p>
-<p class="keep-in-present">An embedding model converts each question and chunk to a vector. Search ranks chunk vectors by their similarity to the query vector.</p>
+<p class="keep-in-present">For the crash-recovery question, Maya wants a chunk about replaying a log. For a question about faster queries, she wants a chunk about indexes. The same chunks need a different ranking for each question.</p>
+<p class="keep-in-present">Vector search calculates that ranking from the query vector. It gives each chunk vector a similarity score and returns the highest scores. The embedding model and comparison rule determine what counts as similar.</p>
 
-<p class="keep-in-present">A B+ tree stores a fixed key order. A hash index groups equal keys. In similarity search, the ranking depends on the query vector. A key order for one query generally does not give the nearest neighbors for another query.</p>
+<p class="keep-in-present">A B+ tree supports a fixed key order, and a hash index groups equal keys. Neither lookup directly supplies a ranking that changes with each query vector.</p>
 
 <table>
   <thead><tr><th>Predicate</th><th>Required comparison</th><th>Index</th></tr></thead>
   <tbody>
     <tr><td><code>uid = 7</code></td><td>equality on a key</td><td>hash index or B+ tree</td></tr>
     <tr><td><code>gpa &gt; 35</code></td><td>an ordered range of keys</td><td>B+ tree</td></tr>
-    <tr><td>"the 10 chunks most similar to this question"</td><td>a similarity ranking that changes with each query vector</td><td>a nearest-neighbor index, such as IVF or HNSW</td></tr>
+    <tr><td>"the 10 chunks most similar to this question"</td><td>a similarity ranking that changes with each query vector</td><td>a nearest-neighbor index</td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Similarity search">Convert the question and chunks to comparable vectors</h3>
 
-<p class="keep-in-present">Noor sends the question and each stored chunk through a compatible embedding model. For each input, the model returns an <strong>embedding vector</strong>: a list of numbers with a fixed length. This vector identifies a position in the embedding space. The recovery question and a log-replay chunk can have similar vectors, even when their words differ.</p>
-<p class="keep-in-present">A typical transformer embedding model splits text into <strong>tokens</strong>. A token can be a word or part of a word. The model uses surrounding tokens to update each token vector. It then combines the token vectors into one vector.</p>
-<p class="keep-in-present">The example below uses mean pooling and normalization. Mean pooling calculates the average of the token vectors. Normalization divides the resulting vector by its magnitude. Other models can use different pooling methods.<sup class="src"><a href="#src-11" title="Sentence Transformers: model architecture">11</a></sup><sup class="src"><a href="#src-12" title="Hugging Face: tokenization algorithms">12</a></sup></p>
+<p class="keep-in-present">Noor encodes the chunks when preparing the index and stores their vectors. When a question arrives, she encodes it with the same model and compatible query settings. Each output has the same number of coordinates. These coordinates locate the input in the model’s vector space. The recovery question and a log-replay chunk can have similar vectors even when their words differ.</p>
+<p class="keep-in-present">How does text become a vector? A typical transformer embedding model first splits text into <strong>tokens</strong>, which can be words or parts of words. The model represents each token with a vector. It uses information from other tokens to update that vector. It then combines the token vectors into one vector for the input.</p>
+<p class="keep-in-present">The example below combines token vectors by taking their average. This operation is called <strong>mean pooling</strong>. It then divides the average vector by its magnitude to give it length one. This operation is called <strong>normalization</strong>. Models can use different pooling methods.<sup class="src"><a href="#src-11" title="Sentence Transformers: model architecture">11</a></sup><sup class="src"><a href="#src-12" title="Hugging Face: tokenization algorithms">12</a></sup></p>
 
 <h3 class="new-slide" id="embedding-walkthrough-title" data-kicker="Inside an embedding model">Convert one sentence to a vector</h3>
 
 <div class="viz" id="embedding-walkthrough" role="region" aria-labelledby="embedding-walkthrough-title">
   <div class="viz-title">Sentence → tokens → context → one vector → comparison</div>
-  <p class="ew-disclaimer"><strong>Teaching example.</strong> The token splits and intermediate numbers illustrate the steps. They do not come from a trained model. The example calculates averages and similarity scores from these numbers.</p>
+  <p class="ew-disclaimer"><strong>Teaching example.</strong> We chose the token splits and token vectors to show the steps. They are not outputs from a trained model. The example calculates averages, normalized vectors, and similarity scores from these values.</p>
   <div class="ew-controls" id="ew-controls" hidden>
     <div class="ew-query-control">
       <label for="ew-query">Maya’s question</label>
@@ -155,13 +154,13 @@ On a touch screen, tap the term.</p>
   <div class="ew-fallback ew-static" id="ew-fallback">
     <p><strong>Start with the question:</strong> “How does a database recover after a crash?” Which chunk would help? The first chunk says, “After a crash, replay the durable log to restore committed changes.” The second says, “An index speeds up a query by finding matching rows without scanning the whole table.”</p>
     <p><strong>Context means the other words in the sentence.</strong> In “She will recover after the flu,” the word “flu” indicates that “recover” means getting well. In the database question, “database” and “crash” indicate restoring a database. The model uses information from other tokens to update each token vector. The same word can have different vectors in different sentences.</p>
-    <p><strong>Follow the steps:</strong> question text → tokens → token vectors with context → query vector → comparison with stored chunk vectors. A new sentence changes the token vectors. The trained model parameters stay the same.</p>
-    <p>This transformer example averages the token vectors. It then divides the average vector by its magnitude. Search calculates cosine similarity from the resulting vector. Different models can use different pooling methods. Enable JavaScript. Then examine the calculations or change the question.</p>
+    <p><strong>Follow the steps:</strong> question text → tokens → token vectors with context → query vector → comparison with stored chunk vectors. In a trained model, a new sentence changes the token vectors without changing the learned model parameters. This illustration supplies token vectors chosen for teaching.</p>
+    <p>The example calculates the average of those token vectors. It divides the average by its magnitude to produce a unit vector. Search compares that query vector with stored chunk vectors using cosine similarity. Real models can combine token vectors in other ways. Enable JavaScript to inspect the calculations or change the question.</p>
   </div>
   <div class="ew-print ew-static">
     <p><strong>Start with the question:</strong> “How does a database recover after a crash?” The tokens include “database,” “recover,” and “crash.” The model updates token vectors with context and combines them into one query vector. Search compares this vector with stored chunk vectors.</p>
     <p><strong>Context means the other words in the sentence.</strong> “Recover after the flu” means getting well. In the database question, “database” and “crash” indicate restoring a database. The model uses information from other tokens to update each token vector. The same word can have different vectors in different sentences.</p>
-    <p>This example averages the updated token vectors. It divides the average vector by its magnitude. The result has 3 coordinates, regardless of the token count. This pooling and normalization method is common, but models differ.</p>
+    <p>This illustration supplies token vectors chosen for teaching. It calculates their average, then divides that average by its magnitude. The result has 3 coordinates, regardless of the token count. The calculations show mean pooling and normalization. Real models can combine token vectors in other ways.</p>
     <p><strong>Compare the results.</strong> The recovery question and its restart/log paraphrase rank the recovery chunk first. The query-speed question ranks the index chunk first. The stored chunk vectors and model parameters stay fixed. A different question changes the query vector and the ranking. These illustrative results do not establish the retrieval quality of a real model.</p>
   </div>
   <p class="ew-essential"><strong>Use comparable vectors.</strong> Use the same embedding model with compatible query and document settings. Read each retrieved chunk to check whether it answers the question.</p>
@@ -169,7 +168,7 @@ On a touch screen, tap the term.</p>
 </div>
 
 <h3 class="new-slide" id="embedding-models" data-kicker="Embedding models">Compare embedding models</h3>
-<p class="keep-in-present">The table lists high-performing embedding models checked on <strong>October 15, 2026</strong>. These models use more dimensions than the three-coordinate teaching example. Their published results support comparing them for your project. The best choice depends on your chunks, questions, languages, and computing budget.</p>
+<p class="keep-in-present">The table lists embedding model examples checked on <strong>October 15, 2026</strong>. Each uses more dimensions than our three-coordinate illustration. Use these examples to compare output sizes and deployment choices. Select a model by testing your chunks, questions, and languages within your computing budget.</p>
 <table>
   <thead><tr><th>Model</th><th>Dimensions</th><th>What this example shows</th></tr></thead>
   <tbody>
@@ -178,36 +177,37 @@ On a touch screen, tap the term.</p>
     <tr><td><a href="https://huggingface.co/Qwen/Qwen3-Embedding-8B">Qwen3 Embedding 8B</a><sup class="src"><a href="#src-15" title="Qwen3 Embedding 8B model card">15</a></sup></td><td>Up to 4,096</td><td>This model has open weights under Apache 2.0 and supports multiple languages. Query instructions describe the retrieval task.</td></tr>
   </tbody>
 </table>
-<p class="keep-in-present">Compare relevant retrieval tasks and languages on the <a href="https://huggingface.co/spaces/mteb/leaderboard">MTEB leaderboard</a>. Then test your own question–chunk pairs. A benchmark rank does not identify the best model for your project.<sup class="src"><a href="#src-16" title="MTEB leaderboard">16</a></sup></p>
+<p class="keep-in-present">The <a href="https://huggingface.co/spaces/mteb/leaderboard">Massive Text Embedding Benchmark (MTEB) leaderboard</a> compares models across tasks and languages. Compare tasks that resemble your retrieval problem. Then test your own question–chunk pairs. A benchmark rank does not identify the best model for your project.<sup class="src"><a href="#src-16" title="MTEB leaderboard">16</a></sup></p>
 <p class="keep-in-present"><strong>Keep the vectors comparable.</strong> Use the same model and version, or a model family with documented compatibility. Use matching output dimensions. Follow the model instructions for queries and documents. These instructions can differ. Equal dimensions alone do not make the vector spaces of two models compatible.</p>
 
 <h3 class="new-slide" data-kicker="Similarity search">Compare the vectors with a similarity score</h3>
 
 <div class="math">
-<p>The dataset has <em>n</em> vectors with <em>d</em> dimensions. A query requests the top <em>k</em> vectors by similarity. Use the metric that the model recommends.
-For unit vectors, cosine similarity equals the dot product<sup class="src"><a href="#src-2" title="OpenAI Platform: Vector embeddings guide">2</a></sup>:</p>
+<p>Return to the opening calculation: <code>(0.8, 0.6) · (0.6, 0.8) = 0.96</code>. Both vectors have length one. For these <strong>unit vectors</strong>, cosine similarity equals the dot product. A larger score means a closer match under this metric.<sup class="src"><a href="#src-2" title="OpenAI Platform: Vector embeddings guide">2</a></sup></p>
+<p>Let <em>n</em> be the number of stored vectors and <em>d</em> their number of coordinates, or dimensions. A query requests the top <em>k</em> vectors by similarity. For unit query vector <em>q</em> and stored vector <em>v</em>:</p>
 \[ \text{sim}(q, v) \;=\; q \cdot v \;=\; \sum_{i=1}^{d} q_i\, v_i \]
-<p>Normalize each stored vector once: divide each coordinate by the vector magnitude, or Euclidean norm. Before each search, normalize the query vector. Exact search then calculates <em>n</em> dot products per query:</p>
+<p>To use dot products as cosine scores, normalize each stored vector once. Divide each coordinate by the vector’s magnitude, also called its Euclidean norm. Normalize the query vector before searching. Exact search then calculates <em>n</em> dot products per query:</p>
 \[ \text{exact cost} \;=\; n \cdot d \text{ multiplications} \]
 <p>For one million vectors with 1536 dimensions, each query requires about 1.5 billion multiplications. Additions and result selection require additional work.<sup class="src"><a href="#src-2" title="OpenAI Platform: Vector embeddings guide">2</a></sup></p>
+<p>Use the comparison rule recommended for your embedding model. The dot-product examples in this lecture use normalized vectors.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="exact">Save the exact search results</h2>
 
-<p class="keep-in-present">Maya compares the query vector with every stored chunk vector. She keeps the ten results with the highest scores. Noor saves the result IDs. These IDs identify the <strong>exact search baseline</strong> for the chosen similarity metric. They will compare approximate results with this baseline.</p>
-<p class="keep-in-present">Maya and Noor must still read the returned chunks. An exact neighbor does not necessarily answer the question.</p>
+<p class="keep-in-present">Maya compares the query vector with every stored chunk vector and keeps the ten highest scores. Noor saves the ten result IDs. This result is their <strong>exact search baseline</strong>: the reference list for checking approximate search.</p>
+<p class="keep-in-present">They must use the same vectors, similarity metric, and rule for tied scores when comparing methods. Otherwise, a changed result might come from a changed comparison rule. They must also read the chunks. Exact search identifies the highest scores, but those chunks may still fail to answer the question.</p>
 
-<p class="keep-in-present">Each dot product is independent, so the comparisons can run in parallel. Every query still scores all <em>n</em> stored vectors and uses all <em>d</em> coordinates. More vectors, more dimensions, or more queries per second increase the total work.</p>
+<p class="keep-in-present">The dot products are independent, so the system can calculate several at once. Parallel execution can reduce elapsed time, but each query still uses every coordinate of every stored vector. More vectors, more dimensions, or more queries per second increase the total work.</p>
 
 <h3 class="new-slide" data-kicker="Exact search">Exact search work increases with dataset size and query rate</h3>
 
 <table>
   <thead><tr><th>Scale</th><th>Exact search work</th><th>Assessment</th></tr></thead>
   <tbody>
-    <tr><td>4k × 64-d (Lab 9)</td><td>256k multiplications. Measure elapsed time on your machine.</td><td>Exact search is a useful baseline at this size. Compare its query time with an <strong>inverted file (IVF) index</strong>. IVF groups similar vectors into lists and searches selected lists.</td></tr>
-    <tr><td>100k × 768-d (a project dataset)</td><td>\(7.7 \times 10^{7}\) multiplications</td><td>Measure latency and throughput on the intended hardware. Concurrent queries increase the workload.</td></tr>
-    <tr><td>10M × 1536-d, 100 queries per second (production <span class="gloss" data-gloss="rag">RAG</span>)</td><td>\(1.5 \times 10^{12}\) multiplications per second</td><td>Exact search requires about 1.5 trillion multiplications per second. Batching, hardware, memory bandwidth, and latency targets determine whether this method is practical.</td></tr>
+    <tr><td>4k × 64-d (Lab 9)</td><td>256k multiplications per query</td><td>Measure the time for exact search on your machine. Compare it with an <strong>inverted file (IVF) index</strong>. IVF groups vectors into lists and searches selected lists.</td></tr>
+    <tr><td>100k × 768-d (a project dataset)</td><td>\(7.7 \times 10^{7}\) multiplications per query</td><td>Measure query time and completed queries per second on the intended hardware. Simultaneous queries increase the workload.</td></tr>
+    <tr><td>10M × 1536-d, 100 queries per second (production <span class="gloss" data-gloss="rag">retrieval-augmented generation, or RAG</span>)</td><td>\(1.5 \times 10^{12}\) multiplications per second</td><td>Batching, hardware, memory bandwidth, and the required query time determine whether exact search is practical.</td></tr>
   </tbody>
 </table>
 
@@ -215,20 +215,22 @@ For unit vectors, cosine similarity equals the dot product<sup class="src"><a hr
 
 <h3 class="new-slide" data-kicker="Exact search">Exact search can be sufficient for a small dataset</h3>
 
-<p class="keep-in-present">Exact search, also called brute-force search, scores every stored vector. It can meet your project latency target. The project requires this baseline. Use the baseline to evaluate the benefits and costs of an index. Compare query time, build cost, memory use, and recall loss.</p>
-<p class="keep-in-present">More documents and more users increase the search workload. Before changing the search method, measure elapsed time. Operation counts explain the work. They do not establish query time on your hardware.</p>
+<p class="keep-in-present">Exact search is also called <strong>brute-force search</strong>. For a small dataset, it may already meet the required query time. The project requires this baseline. Use it to evaluate whether an index gives a useful improvement. Compare query time, index construction time, memory use, and missed neighbors.</p>
+<p class="keep-in-present">A count of multiplications describes work, not elapsed time. Measure query time on your hardware before choosing a different search method.</p>
 
 <!-- ============================================================ -->
 <h2 id="ann">Search fewer vectors</h2>
 
-<p class="keep-in-present">Noor groups the stored vectors and searches only some groups. This method reduces comparisons. However, a skipped group can contain a useful chunk. The search can therefore miss an exact neighbor.</p>
+<p class="keep-in-present">Maya’s exact search checks every vector. Noor suggests grouping the vectors and checking only the groups that appear closest to the query. That reduces comparisons, but a skipped group can contain an exact neighbor. We need to measure what the search misses.</p>
 
-<p class="keep-in-present">IVF and HNSW can search without a comparison between the query vector and every stored vector. A <strong>candidate vector</strong> is a stored vector that the search selects for scoring. Each index has a setting that controls search effort. A larger setting usually improves recall and increases query cost.</p>
+<p class="keep-in-present">An <strong>inverted file (IVF)</strong> index uses groups called lists. A <strong>centroid</strong> is the vector used to represent a group. IVF compares the query with the centroids, then searches selected lists. The <strong>probe count</strong>, written <em>P</em>, is the number of lists searched.</p>
+<p class="keep-in-present">Our examples use <strong>IVFFlat</strong>: IVF list selection followed by exact scoring of every vector in the selected lists. The approximation comes from skipping lists, not from changing those scores.</p>
+<p class="keep-in-present"><strong>Hierarchical Navigable Small World (HNSW)</strong> uses a different structure: a graph with stored vectors as nodes. Search follows saved links between nodes to find closer vectors. Both indexes let us change search effort and measure the effect on recall.</p>
 
 <table>
   <thead><tr><th></th><th>IVF</th><th><span class="gloss" data-gloss="hnsw">HNSW</span></th></tr></thead>
   <tbody>
-    <tr><td><strong>Build</strong></td><td>Use k-means to group the vectors. Store one list per cluster.</td><td>Build a graph with multiple layers. Upper layers contain fewer vectors and support longer steps through the graph.</td></tr>
+    <tr><td><strong>Build</strong></td><td>Group vectors with k-means, the clustering method explained below. Store one list per centroid.</td><td>Link selected nearby vectors in a graph with multiple layers. Upper layers contain fewer vectors.</td></tr>
     <tr><td><strong>Search</strong></td><td>Score the centroids. Score each vector in the selected <em>P</em> lists.</td><td>Follow links in the upper layers. Explore candidate vectors in the bottom layer.</td></tr>
     <tr><td><strong>Search setting</strong></td><td>probe count (<em>P</em>)</td><td><code>ef_search</code></td></tr>
     <tr><td><strong>Why a neighbor is missed</strong></td><td>The exact neighbor is in a list that the search skips.</td><td>The graph search stops before it reaches the exact neighbor.</td></tr>
@@ -237,23 +239,20 @@ For unit vectors, cosine similarity equals the dot product<sup class="src"><a hr
 
 <h3 class="new-slide" data-kicker="IVF">Select lists before scoring their vectors</h3>
 
-<p class="keep-in-present">Consider books grouped on shelves. You use shelf labels to select some shelves. You check only the books on those shelves. You can miss a useful book on another shelf.</p>
-<p class="keep-in-present">In IVF, a <strong>centroid</strong> represents a group of vectors. A <strong>list</strong> contains the vectors assigned to that centroid. The <strong>probe count</strong> specifies how many lists to search.</p>
-<p class="keep-in-present">A shelf label helps you select a shelf, but it does not identify every book. Similarly, a centroid helps search select a list. Distances between vectors determine their list assignments and which lists the search selects. The shelf comparison explains grouping. It does not establish which chunks answer the question.</p>
-<p class="keep-in-present"><strong>During index construction,</strong> the system selects centroids and assigns each stored vector to a list. <strong>During search,</strong> the system scores the centroids, selects lists, and scores the vectors in those lists. The next example shows how list selection can miss an exact neighbor.</p>
+<p class="keep-in-present">Imagine books grouped on shelves. You choose promising shelves from their labels, then inspect the books on those shelves. A useful book can be on a shelf you skip.</p>
+<p class="keep-in-present">In this comparison, a centroid acts as a shelf label. Its list is the shelf, and each stored vector is a book. Searching two lists is like inspecting two shelves. In the actual index, vector comparisons determine membership and which lists to search. The shelf comparison does not tell us which passages answer a question.</p>
+<p class="keep-in-present"><strong>During construction,</strong> k-means starts with a set of centroids. It assigns each vector to its nearest centroid. It moves each centroid to the average of its assigned vectors, then repeats the assignment. This process forms the groups before queries arrive.</p>
+<p class="keep-in-present"><strong>During search,</strong> the lists stay fixed. IVF scores the query against each centroid and selects the <em>P</em> closest centroids. It scores the vectors in their lists. A centroid summarizes its group, so the closest centroid need not have the closest stored vector.</p>
 
 <!-- ============================================================ -->
 <h2 id="try-it">Identify a missed neighbor</h2>
 
-<p>This illustration uses two dimensions. Real embedding spaces usually have many more dimensions. A query vector near a cluster boundary can have exact neighbors in different lists.</p>
-<p>Click the plot to place a query vector. Run exact search. Predict whether IVF will find every exact neighbor. Select IVF probe 1. Then select IVF probe 2. Compare the returned neighbors.</p>
+<p>This plot uses ordinary Euclidean distance in two dimensions: a smaller distance means a closer neighbor. The later dot-product example uses a different rule: a larger similarity score means a closer neighbor. Both examples show how selecting lists can miss exact neighbors.</p>
+<p>Click near a cluster boundary to place a query vector. Run exact search. Predict which neighbors IVF probe 1 will miss. Select IVF probe 1, then IVF probe 2. Compare the highlighted results and missed neighbors.</p>
 
 <div class="viz" id="viz-space">
   <div class="viz-title">2-D vector space · 300 points, 8 IVF clusters</div>
-  <p class="viz-description">Click the plot to place a query vector (✕). <span class="hexlegend hit">Green</span> points show the exact top-10 neighbors.
-  <span class="hexlegend miss">Orange</span> shading shows the clusters that IVF searches.
-  Green points outside these regions are missed exact neighbors. These missed neighbors reduce <span class="gloss" data-gloss="recall">recall</span>.
-  </p>
+  <p class="viz-description">The cross (✕) marks the query. <span class="hexlegend hit">Green</span> points are returned neighbors. Red rings mark exact neighbors that IVF missed. <span class="hexlegend miss">Pale orange</span> points are other vectors in the searched lists. Recall counts the exact neighbors found among the returned results.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="vs-exact">exact search</button>
     <button type="button" class="btn primary" id="vs-p1">IVF probe 1</button>
@@ -270,25 +269,25 @@ For unit vectors, cosine similarity equals the dot product<sup class="src"><a hr
 <!-- ============================================================ -->
 <h2 id="worked-example">Calculate the missed neighbor</h2>
 
-<p>The example has four unit vectors and query vector <code>q = (0.8, 0.6)</code>. Centroid <code>c0</code> has the highest score for this query. This centroid has only <code>v0</code> in its list. The dot product of the query vector and v0 is <strong>0.80</strong>.</p>
-<p>Now compare the query vector with <code>v1 = (0.6, 0.8)</code>. Their dot product is <strong>0.96</strong>. This score is higher than the score for v0. However, v1 belongs to the other list.</p>
-<p>What will probe 1 return? What changes at probe 2? During index construction, each stored vector joins the list of its closest centroid. During search, selecting the closest centroid can miss the closest stored vector. These illustrative coordinates are separate from the chunks in the fictional project.</p>
+<p>Now use four unit vectors and query vector <code>q = (0.8, 0.6)</code>. The query requests two neighbors, so <em>k</em> = 2. This example supplies two fixed centroids instead of learning them with k-means. These teaching coordinates do not represent the chunks in Maya’s project.</p>
+<p>The query scores centroid <code>c0</code> highest, so probe 1 searches only that centroid’s list. The list contains only <code>v0</code>, which scores <strong>0.80</strong>. However, <code>v1 = (0.6, 0.8)</code> scores <strong>0.96</strong> and belongs to the other list. Choosing the highest-scoring centroid skips the highest-scoring stored vector.</p>
+<p>Predict the returned IDs at probe 1. Then predict what changes at probe 2. Count centroid comparisons as well as stored-vector comparisons.</p>
 <div data-teaching-trace="ivf">
   <p><strong>Worked result:</strong> At probe 1, the query searches only vector 0. It misses vector 1, whose score is 0.96. Recall@2 is 0.5. At probe 2, the search finds both exact neighbors. It calculates six dot products, compared with four for exact search.</p>
   <p>Enable JavaScript to examine each step and its intermediate state.</p>
 </div>
-<p><strong>Lab connection:</strong> <a href="../../labs/lab-09/microvector.html#worked-example">Lab 9 counts both centroid and candidate dot products</a>. The counter measures work. A timer measures elapsed time. Neither measurement establishes whether a retrieved paper answers the question.</p>
+<p><strong>Lab connection:</strong> <a href="../../labs/lab-09/microvector.html#worked-example">Lab 9 counts both centroid and candidate dot products</a>. Searching every list finds both exact neighbors, but it does more comparisons than exact search. The counter measures work, and a timer measures elapsed time. Neither tells us whether a retrieved paper answers the question.</p>
 
 <!-- ============================================================ -->
 <h2 id="cost">Compare the work for IVF and HNSW</h2>
 
-<p class="keep-in-present">The four-vector example shows that the nearest vector can be in a skipped list. We now estimate work for a larger dataset. IVF scores the centroids first. It then scores the vectors in the selected lists.</p>
+<p class="keep-in-present">The small example shows both parts of IVF’s work: score centroids, then score vectors in selected lists. Use the same two counts to estimate work for a larger dataset.</p>
 
 <h3 class="new-slide" data-kicker="IVF and HNSW">IVF searches selected lists</h3>
 
 <div class="math">
-<p><strong>During index construction,</strong> k-means groups the vectors into <em>C</em> clusters. The system stores each vector in the list of its closest centroid. <strong>For each query,</strong> IVF scores all <em>C</em> centroids. It then searches the <em>P</em> lists with the closest centroids. The list of the closest centroid does not necessarily contain the closest vector.</p>
-<p>If the lists have approximately equal sizes, this formula estimates distance evaluations. The count includes centroid evaluations.<sup class="src"><a href="#src-3" title="pgvector README (IVFFlat index options)">3</a></sup><sup class="src"><a href="#src-4" title="FAISS wiki: Faster search">4</a></sup></p>
+<p>Suppose <em>n</em> = 4,000 vectors are divided among <em>C</em> = 20 equally sized lists. Each list contains 200 vectors. With <em>P</em> = 4 probes, search scores 20 centroids and about 4 × 200 candidate vectors. The estimate is 20 + 800 = <strong>820 comparisons</strong>.</p>
+<p>In general, <em>C</em> is the number of lists and <em>P</em> is the number searched. Approximately equal list sizes give about <em>n</em>/<em>C</em> vectors per list. Add the centroid comparisons to the candidate comparisons:<sup class="src"><a href="#src-3" title="pgvector README (IVFFlat index options)">3</a></sup><sup class="src"><a href="#src-4" title="FAISS wiki: Faster search">4</a></sup></p>
 \[ \text{cost} \;\approx\; C + P \cdot \frac{n}{C} \qquad \text{instead of } n \]
 <table>
   <tbody>
@@ -297,48 +296,52 @@ For unit vectors, cosine similarity equals the dot product<sup class="src"><a hr
   </tbody>
 </table>
 <p>If the search skips a list, it misses any exact neighbors in that list. A larger <em>P</em> adds candidate vectors and increases the work per query.<sup class="src"><a href="#src-4" title="FAISS wiki: Faster search">4</a></sup></p>
-<p>The cluster count is a setting for index construction. A count proportional to √<em>n</em> is a starting estimate. Use measurements to select a count. The estimate above assumes balanced lists. The measured Lab 9 results below come from a separate experiment.</p>
+<p>Choose the list count when constructing the index. A count proportional to √<em>n</em> is a starting estimate, not a universal setting. Measure different choices on your workload. The 820 estimate assumes equally sized lists. The Lab 9 measurements below use actual lists, which can have different sizes.</p>
 </div>
 
 <h3 class="new-slide" data-kicker="IVF and HNSW">HNSW searches through a layered graph</h3>
 
-<p class="keep-in-present">IVF selects lists. HNSW follows links between stored vectors. HNSW means <strong>Hierarchical Navigable Small World</strong>. Search starts in a sparse upper layer and continues in denser lower layers. The search setting controls how many candidate vectors the search can explore.</p>
-<p class="keep-in-present">Compare the result with exact search. Measure the work.</p>
+<p class="keep-in-present">Noor now tries HNSW. Each stored vector becomes a <strong>node</strong> in a graph. During construction, the index selects nearby vectors and saves links between their nodes. These links give search a set of possible next steps. HNSW nodes represent stored vectors, not IVF centroids.</p>
+<p class="keep-in-present">The bottom layer contains every vector. Upper layers contain fewer vectors, with links that help search move across the dataset. A vector shown in two layers keeps the same ID. Moving down a layer means continuing from that same vector among more nodes and links.</p>
+<p class="keep-in-present">Search starts at an entry node in an upper layer. It follows links toward vectors closer to the query, then moves down. At the bottom layer, a full HNSW search keeps multiple candidates to explore. It can still miss a closer vector if it does not reach that node.</p>
 
 <div class="viz" id="viz-hnsw">
   <div class="viz-title">HNSW illustration · sparse upper layer and dense lower layer</div>
-  <p class="viz-description">This illustration has twelve vectors in two layers. The top layer contains some vectors. The bottom layer contains all vectors. The animation moves to the closest neighbor of the current node. When no neighbor is closer to the query ★, the search moves down one layer. A full HNSW search keeps multiple candidates in the bottom layer.<sup class="src"><a href="#src-1" title="Malkov and Yashunin, Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs (arXiv:1603.09320)">1</a></sup></p>
+  <p class="viz-description">This illustration has twelve vectors in two layers. Predict which linked node is closest to the query ★ before each step. The animation follows one path using Euclidean distance. It moves to a closer linked node or moves down when no linked node is closer. At the bottom layer, it stops when no linked node is closer. A full HNSW search explores multiple candidates in that layer.<sup class="src"><a href="#src-1" title="Malkov and Yashunin, Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs (arXiv:1603.09320)">1</a></sup></p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="hn-step">Step ▸</button>
     <button type="button" class="btn" id="hn-reset">Reset</button>
     <span class="hn-msg" id="hn-msg"></span>
   </div>
   <div class="hn-svg-wrap"><svg id="hn-svg" viewBox="0 0 640 250"></svg></div>
-  <p class="viz-caption">In this example, the search finds the nearest neighbor after inspecting only part of the graph. HNSW does not guarantee exact neighbors for every query. The <code>ef_search</code> setting controls the size of the search candidate list. A larger value permits more exploration. This usually improves recall and requires more distance calculations.<sup class="src"><a href="#src-5" title="Aumuller, Bernhardsson, Faithfull: ANN-Benchmarks: A Benchmarking Tool for Approximate Nearest Neighbor Algorithms (arXiv:1807.05614)">5</a></sup></p>
+  <p class="viz-caption">The counter records neighbor checks, including repeated visits. It is not a count of every calculation in a full HNSW search. This path finds the nearest neighbor, but HNSW does not guarantee that result for every query. In a full search, <code>ef_search</code> controls the search candidate list size. Larger values permit more exploration, which usually improves recall and increases work.<sup class="src"><a href="#src-5" title="Aumuller, Bernhardsson, Faithfull: ANN-Benchmarks: A Benchmarking Tool for Approximate Nearest Neighbor Algorithms (arXiv:1807.05614)">5</a></sup></p>
 </div>
 
 <h3 class="new-slide" data-kicker="IVF and HNSW">Compare HNSW memory, build time, and query time</h3>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Search setting</span><span><code>ef_search</code> controls the search candidate list. Larger values permit more exploration before the search returns its result. Measure recall and query time to select a setting.<sup class="src"><a href="#src-3" title="pgvector README (HNSW query options)">3</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Memory and build time</span><span>HNSW stores graph links and vectors. It generally uses more memory and takes longer to build than IVFFlat. The amount of cached index data also affects search performance. Compare memory use, build time, recall, and query time for your workload.<sup class="src"><a href="#src-3" title="pgvector README (HNSW vs IVFFlat)">3</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Search setting</span><span><code>ef_search</code> controls the candidate list size, not a fixed number of node visits. Test several values. Measure recall and query time for each value.<sup class="src"><a href="#src-3" title="pgvector README (HNSW query options)">3</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">Memory and build time</span><span>HNSW stores graph links as well as vectors. It generally uses more memory and takes longer to build than IVFFlat. Whether the index fits in memory also affects query time. Compare memory use, build time, recall, and query time for your workload.<sup class="src"><a href="#src-3" title="pgvector README (HNSW vs IVFFlat)">3</a></sup></span></div>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="recall">Choose a search setting</h2>
 
-<p class="keep-in-present">Compare the IVF result IDs with the saved exact result IDs. Count the IDs that occur in both results. <span class="gloss" data-gloss="recall">Recall</span> measures this overlap. Compare recall with search work to select a setting.</p>
+<p class="keep-in-present">Maya returns to the ten exact result IDs that Noor saved. If an approximate search returns seven of those IDs, recall@10 is 7 / 10 = 0.7. The other three exact neighbors are missing. <span class="gloss" data-gloss="recall">Recall</span> measures the fraction found, regardless of their returned order.</p>
+<p class="keep-in-present">Use the same vectors, metric, and tie rule for both searches. For a request for <em>k</em> neighbors, count the shared IDs and divide by <em>k</em>:</p>
 
 <div class="math">
 \[ \text{recall@}k \;=\; \frac{\bigl|\, \text{approximate top-}k \;\cap\; \text{true top-}k \,\bigr|}{k} \]
-<p>Recall of 1.0 means that the index found all exact neighbors.
-Average recall of 0.75 means that the index missed one quarter of the exact neighbors across the measured query set.<sup class="src"><a href="#src-6" title="ANN-Benchmarks">6</a></sup></p>
+<p>Recall of 1.0 means that the index found all <em>k</em> exact neighbors. At a fixed <em>k</em>, average recall of 0.75 means one quarter of the exact neighbors were missed across the query set.<sup class="src"><a href="#src-6" title="ANN-Benchmarks">6</a></sup></p>
 </div>
 
-<h3 class="new-slide" data-kicker="Recall">A larger probe count searches more vectors</h3>
+<h3 class="new-slide" data-kicker="Recall">Measure what more probes recover</h3>
 
+<p class="keep-in-present">The table below reports a separate Lab 9 experiment with 4,000 vectors and 40 questions. Read each row as one setting tested on all 40 questions. Increasing the probe count searches more lists and recovers more exact neighbors in this experiment.</p>
+
+<div class="vector-results-table" role="region" aria-label="Lab 9 measured IVF results" tabindex="0">
 <table>
-  <thead><tr><th>Index</th><th>Probe count</th><th>Average recall@10</th><th>Comparisons per query</th><th>Comparison reduction</th></tr></thead>
+  <thead><tr><th>Index</th><th>Probe count</th><th>Average recall@10</th><th>Average comparisons per query</th><th>Comparison reduction</th></tr></thead>
   <tbody>
     <tr><td>exact search</td><td>&nbsp;</td><td>1.0000</td><td>4,000</td><td>1.0×</td></tr>
     <tr><td>IVF</td><td>1</td><td>0.6425</td><td>244</td><td><strong>16.4×</strong></td></tr>
@@ -347,37 +350,38 @@ Average recall of 0.75 means that the index missed one quarter of the exact neig
     <tr><td>IVF</td><td>8</td><td>0.9650</td><td>1,756</td><td>2.3×</td></tr>
   </tbody>
 </table>
+</div>
 
 <p class="cite">This course measurement uses 4,000 arXiv abstract vectors from Lab 9, reduced to 64 dimensions. It uses the 40 supplied questions. Recall is the average across questions. Comparison counts include centroid scoring. Each displayed count is the average rounded down to an integer. These measurements are separate from the four-vector illustration.</p>
 
-<p class="key-fact keep-in-present">On the Lab 9 data, IVF probe 4 gives <strong>0.9175 recall at 924 comparisons</strong>. This is about 4.3× fewer comparisons than exact search.</p>
+<p class="key-fact keep-in-present">On the Lab 9 data, IVF probe 4 averages <strong>0.9175 recall at 924 comparisons</strong>. The comparison average is rounded down. This is about 4.3× fewer comparisons than exact search.</p>
 
-<p class="keep-in-present">At probe 1, this experiment misses about one in three exact neighbors. It uses about 16× fewer comparisons than exact search. At probe 4, it misses about one in twelve exact neighbors. It uses about 4.3× fewer comparisons. These numbers measure work reduction. Measure elapsed-time improvements separately.</p>
+<p class="keep-in-present">At probe 1, this experiment misses about one in three exact neighbors while using about 16× fewer comparisons. At probe 4, it misses about one in twelve while using about 4.3× fewer comparisons. These are reductions in comparison counts. They do not show how many times faster a query runs.</p>
 
 <div class="exercise">
   <span class="ex-label">Choose a setting within the limits</span>
-  <p>The classroom example requires average recall@10 of at least <strong>0.90</strong>. It permits at most <strong>1,000 comparisons per query</strong>. Which setting uses the fewest comparisons and meets both requirements?</p>
+  <p>The classroom example requires average recall@10 of at least <strong>0.90</strong>. It permits at most <strong>1,000 average comparisons per query</strong>. Which setting uses the fewest comparisons and meets both requirements?</p>
   <details><summary>Show the setting</summary>
-  <p><strong>Probe 4</strong> meets both requirements. Probe 1 and probe 2 do not meet the recall requirement. Probe 4 gives average recall of 0.9175 with 924 comparisons. Probe 8 improves recall but exceeds the comparison limit.</p>
+  <p><strong>Probe 4</strong> meets both requirements. Probe 1 and probe 2 do not meet the recall requirement. Probe 4 gives average recall of 0.9175 with an average comparison count of 924, rounded down. Probe 8 improves recall but exceeds the average comparison limit.</p>
   <p>This classroom decision uses Lab 9 results. For your project, select a recall target from the consequences of missing evidence. Measure latency separately.</p>
   </details>
 </div>
 
 <h3 class="new-slide" data-kicker="Recall">Choose a recall target for the application</h3>
 
-<p class="keep-in-present">No recall target suits every application. A missed neighbor can remove a useful recommendation or a chunk needed to answer a question. Evaluate these effects with representative queries. Geometric recall measures agreement with exact vector search. It does not establish whether the results answer the question.</p>
+<p class="keep-in-present">No recall target suits every application. Missing one neighbor might remove a useful recommendation or the passage needed to answer a question. Test questions that represent your application. Recall against exact vector search measures agreement about neighbors. It does not measure whether those neighbors contain useful evidence.</p>
 
-<p class="keep-in-present">After a search finds a missed neighbor, read its chunk. If exact search finds useful evidence that IVF misses, examine the search setting. If exact neighbors are also unhelpful, examine chunking, embeddings, metadata, or ranking. A larger probe count searches more vectors. It does not change their similarity scores or chunk text.</p>
+<p class="keep-in-present">Return to Maya’s recovery question and open the retrieved chunks. If exact search finds an answer that IVF misses, try searching more lists. If even exact search returns unhelpful chunks, inspect the chunk boundaries, embedding model, metadata, or ranking method. More probes can recover skipped vectors. They cannot change the stored text or make an unsuitable embedding model understand the question better.</p>
 
 <h3 class="new-slide" data-kicker="Recall">Calculate recall from result IDs</h3>
 
 <div class="exercise">
   <span class="ex-label">Calculate recall@10</span>
-  <p>Exact search returns IDs {1…10} as the top-10 neighbors. At probe&nbsp;2, IVF returns these IDs in order: 1, 2, 3, 5, 6, 8, 9, 11, 14, 20.
-  Calculate recall@10. Determine whether IDs 4, 7, and 10 are in searched lists or skipped lists.</p>
+  <p>Exact search returns IDs {1…10} as the top-10 neighbors. At probe&nbsp;2, IVF returns these IDs in order: 1, 2, 3, 5, 6, 8, 9, 11, 14, 20.</p>
+  <p>Both searches use the same vectors, metric, and tie rule. This IVFFlat index scores every vector in each selected list exactly. Calculate recall@10. Determine whether IDs 4, 7, and 10 are in searched lists or skipped lists.</p>
 
   <details><summary>Show answer</summary>
-  <p>Seven exact neighbors appear: {1, 2, 3, 5, 6, 8, 9}. Therefore, recall@10 = 0.7. This lab uses IVFFlat search, which scores every candidate in the selected lists exactly. The missing IDs 4, 7, and 10 must be in skipped lists.</p>
+  <p>The shared IDs are {1, 2, 3, 5, 6, 8, 9}, so recall@10 = 7 / 10 = 0.7. IDs 11, 14, and 20 do not count because they are outside the exact top 10. The missing exact IDs 4, 7, and 10 must be in skipped lists. If their lists were searched, their scores would place them in the top ten.</p>
   <p>A larger probe count adds lists and retains previous candidates. If scores stay fixed and tie handling stays consistent, recall cannot decrease. The Lab 9 test harness checks this property.<sup class="src"><a href="#src-4" title="FAISS wiki: Faster search">4</a></sup></p>
   </details>
 </div>
@@ -385,10 +389,10 @@ Average recall of 0.75 means that the index missed one quarter of the exact neig
 <!-- ============================================================ -->
 <h2 id="landscape">Where to run a vector index</h2>
 
-<p class="keep-in-present">A vector index can run inside a database, inside an application, or in a separate service. A separate service is optional. In each case, the system must connect vectors to their source chunks.</p>
-<p class="keep-in-present">For example, Maya edits chunk 42. Vector 42 still represents the old text. The application must create a new embedding and update index entry 42. An index inside the database does not automatically create a new embedding.</p>
+<p class="keep-in-present">Maya edits chunk 42 after building the index. Its stored vector still represents the old text. The application must embed the new text and update entry 42. Otherwise, search compares the question with an outdated representation.</p>
+<p class="keep-in-present">Where should that index live? It can run inside a database, inside an application, or in a separate service. Every choice must preserve the connection between vectors and source chunks. Storing the index in the database does not automatically create new embeddings when text changes.</p>
 
-<p class="keep-in-present">Vector-search products often provide IVF, HNSW, or related indexes. Products also differ in filtering, durability, and operations. Some provide compression methods such as <span class="gloss" data-gloss="quantization">quantization</span>. Compare these features when selecting where to run the index.</p>
+<p class="keep-in-present">Products differ in filtering, durability, and operational tools as well as index types. Some compress vectors with <span class="gloss" data-gloss="quantization">quantization</span>, which represents values with fewer bits. Compare these features with your workload and update process.</p>
 
 <h3 class="new-slide" data-kicker="Choosing an index implementation">Compare database extensions, libraries, and services</h3>
 
@@ -396,22 +400,22 @@ Average recall of 0.75 means that the index missed one quarter of the exact neig
   <thead><tr><th>Location</th><th>Examples</th><th>Responsibilities and benefits</th></tr></thead>
   <tbody>
     <tr><td><strong>Inside your database</strong></td><td><span class="gloss" data-gloss="pgvector">pgvector</span> (Postgres), DuckDB VSS</td><td>The database stores vectors beside the source rows. This can simplify joins, filtering, and updates. Check the supported queries and index limitations.<sup class="src"><a href="#src-7" title="DuckDB documentation: Vector Similarity Search Extension">7</a></sup></td></tr>
-    <tr><td><strong>A library</strong></td><td><span class="gloss" data-gloss="faiss">FAISS</span>, hnswlib</td><td>Your application loads the index, serves queries, and coordinates updates. You control the implementation and build the surrounding service.<sup class="src"><a href="#src-8" title="hnswlib README">8</a></sup></td></tr>
-    <tr><td><strong>A separate service</strong></td><td>Pinecone, Weaviate, Milvus, Qdrant</td><td>A separate system stores and queries the vectors. A managed deployment can handle scaling and operations. Your update process must keep the vectors consistent with the source data.<sup class="src"><a href="#src-9" title="Pinecone documentation overview">9</a></sup></td></tr>
+    <tr><td><strong>A library</strong></td><td><span class="gloss" data-gloss="faiss">FAISS</span>, hnswlib</td><td>Your application loads the index, handles queries, and coordinates updates. You must connect returned vector IDs to their source records.<sup class="src"><a href="#src-8" title="hnswlib README">8</a></sup></td></tr>
+    <tr><td><strong>A separate service</strong></td><td>Pinecone, Weaviate, Milvus, Qdrant</td><td>Your application sends queries over the network to another system. It must also send updates when source records change. A managed deployment can handle scaling and operations.<sup class="src"><a href="#src-9" title="Pinecone documentation overview">9</a></sup></td></tr>
   </tbody>
 </table>
 
 <h3 class="new-slide" data-kicker="Choosing an index implementation">Choose a project index and justify its settings</h3>
 
-<p class="keep-in-present">The project permits microvector, pgvector, or FAISS. Use an actual index. Compare it with the exact search baseline. Report measurements that justify its search settings.</p>
+<p class="keep-in-present">The project permits microvector, pgvector, or FAISS. Use an actual index and compare it with exact search. Report the measurements that justify your index settings.</p>
 
 <!-- ============================================================ -->
 <h2 id="thursday">October 29: build and measure an IVF index</h2>
 
 <div class="layer-card">
-  <div class="lc-row"><span class="lc-k">microvector</span><span>The pure Python implementation compares exact search with IVF on the same seeded dataset. The dataset has 4,000 vectors with realistic topic overlap.</span></div>
-  <div class="lc-row"><span class="lc-k">Provided</span><span>The starter provides the <span class="gloss" data-gloss="k-means">k-means</span> clustering code. Call this code. You do not need to write it.</span></div>
-  <div class="lc-row"><span class="lc-k">You write</span><span>Implement dot-product scoring. Assign each vector to the list of its closest centroid. Search only the <em>P</em> lists with the closest centroids.</span></div>
+  <div class="lc-row"><span class="lc-k">microvector</span><span>The pure Python implementation compares exact search and IVF on the same seeded dataset of 4,000 vectors. The topics overlap, so nearby vectors can fall in different lists.</span></div>
+  <div class="lc-row"><span class="lc-k">Provided</span><span>The starter provides the <span class="gloss" data-gloss="k-means">k-means</span> clustering code. Call this code to obtain the centroids. You do not need to write k-means.</span></div>
+  <div class="lc-row"><span class="lc-k">You write</span><span>Implement dot-product scoring. Assign each stored vector to its closest centroid’s list. For a query, score the centroids and search the <em>P</em> selected lists.</span></div>
 </div>
 
 <ul class="checklist">
@@ -425,21 +429,21 @@ Average recall of 0.75 means that the index missed one quarter of the exact neig
 <!-- ============================================================ -->
 <h2 id="recap">Review the search process</h2>
 
-<p class="keep-in-present">Maya and Noor return to the crash-recovery question. The embedding model converts questions and chunks to comparable vectors. Exact search provides reference results. Approximate search reduces work but can miss exact neighbors. Recall measures agreement with the exact results. Maya reads the returned chunks to check whether they answer the question.</p>
+<p class="keep-in-present">Maya and Noor return to <q>How does a database recover after a crash?</q> They encode the question with the model used for the chunks. They save the exact result IDs, search with an index, and count the shared IDs. Dividing that count by the requested number of neighbors gives recall for the query. They also measure the work, then read the chunks to check whether they explain recovery.</p>
 
 <ul class="recap-list">
-  <li>Similarity rankings depend on the query vector. IVF and HNSW can find similar vectors without comparing every stored vector.</li>
-  <li>IVF searches selected lists. HNSW follows graph links. Both methods let you adjust search effort and measure its effect on recall.</li>
-  <li>Recall@k measures overlap with the exact nearest neighbors. Keep the exact search baseline. Evaluate the recall that your application requires.</li>
+  <li>A new question can change the ranking of the same stored chunks. Compatible embeddings let search compare the question and chunks.</li>
+  <li>IVF searches selected lists, while HNSW follows graph links. More search effort can recover neighbors at the cost of more work.</li>
+  <li>Recall@k compares returned IDs with the exact top <em>k</em>. A recall of 1.0 still leaves the usefulness of the chunks unchecked.</li>
 </ul>
 
 <p class="key-fact keep-in-present"><strong>Searching fewer candidate vectors can miss exact neighbors.</strong> Measure this loss against exact search. Then read the returned chunks to check whether they answer the question.</p>
 
 <div class="exercise">
   <span class="ex-label">Explain the search process</span>
-  <p>Explain why the list of the closest centroid can exclude the closest vector. Use the shelf comparison or the four-vector diagram. Explain what recall@10 = 1.0 proves. State what you must still check before trusting the answer.</p>
+  <p>A new question has its closest neighbor in the second-closest centroid’s list. Explain why one probe misses that neighbor. Use the shelf comparison or four-vector diagram. If more probes raise recall@10 to 1.0, what does that prove? What must you still check in the returned chunks?</p>
   <details><summary>Check your explanation</summary>
-  <p>A centroid represents a group of vectors. It does not identify every member. A vector in another list can be closer to the query. Recall@10 = 1.0 means the approximate result contains all ten exact neighbors under the same metric and tie convention. You must still read the chunks and evaluate the evidence and generated answer.</p>
+  <p>One probe searches only the closest centroid’s list, so it skips the neighbor’s list. The centroid’s score does not determine every member’s score. Recall@10 = 1.0 means all ten exact neighbors were found under the same metric and tie rule. Read the chunks to check whether they support an answer. The next lecture follows those passages into a model’s prompt and checks the generated answer.</p>
   </details>
 </div>
 
@@ -456,13 +460,13 @@ Average recall of 0.75 means that the index missed one quarter of the exact neig
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Why cosine instead of Euclidean distance?</h3>
-<p class="keep-in-present">For unit vectors, cosine similarity and Euclidean distance give equivalent rankings because ‖q−v‖² = 2−2q·v. Cosine compares direction and ignores vector length. Use the metric that the embedding model recommends. If you use dot products as cosine scores, normalize vectors consistently.<sup class="src"><a href="#src-2" title="OpenAI Platform: Vector embeddings guide">2</a></sup></p>
+<p class="keep-in-present">Cosine similarity compares direction without depending on vector length. For unit vectors, cosine similarity and Euclidean distance give equivalent rankings because ‖q−v‖² = 2−2q·v. A larger cosine score then corresponds to a smaller Euclidean distance. Use the model’s recommended metric. Normalize vectors consistently when using dot products as cosine scores.<sup class="src"><a href="#src-2" title="OpenAI Platform: Vector embeddings guide">2</a></sup></p>
 
 <h3 class="keep-in-present">Is recall the only quality metric that matters?</h3>
-<p class="keep-in-present">Recall measures whether an approximate index finds the exact geometric neighbors. It does not establish whether those neighbors provide useful evidence. The next lecture separates retrieval evaluation from answer evaluation. You can then measure both.</p>
+<p class="keep-in-present">No. Recall against exact search tells you whether the index found the same neighbors. Even exact neighbors can contain irrelevant text. Check whether the passages supply useful evidence, then check whether a generated answer follows that evidence. The next lecture separates these evaluations.</p>
 
 <h3 class="keep-in-present">When is a separate vector service useful?</h3>
-<p class="keep-in-present">A separate service can support large vector workloads that need managed scaling, tenant isolation, or specialized search features. It also adds another data store and an update process. Compare these benefits and costs with an index in your existing database.<sup class="src"><a href="#src-10" title="FAISS wiki: Guidelines to choose an index">10</a></sup></p>
+<p class="keep-in-present">A separate service can help when you need managed scaling, isolation between customers, or specialized search features. It adds network requests and another store that must track source updates. Compare these costs and benefits with an index in your existing database.<sup class="src"><a href="#src-10" title="FAISS wiki: Guidelines to choose an index">10</a></sup></p>
 
 <h3 class="keep-in-present">Could microdb have a vector index?</h3>
 <p class="keep-in-present">Yes. An IVF list could store <code>(centroid_id, <span class="gloss" data-gloss="rid">RID</span>)</code> entries. Search would select lists and score their vectors. It would return RIDs for matching table rows. Lab 6 <code>IndexSelectScan</code> shows this index-to-table lookup pattern.</p>
@@ -500,8 +504,8 @@ Each primary source supports the corresponding claim.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../labs/_shared/lab-base.js?v=13"></script>
-<script src="viz.js?v=4"></script>
-<script src="embedding-walkthrough.js?v=4"></script>
+<script src="viz.js?v=clear-20261027"></script>
+<script src="embedding-walkthrough.js?v=clear-20261027"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>

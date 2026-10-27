@@ -26,7 +26,7 @@
       clues: ['database', 'crash'],
       contrast: { text: 'She will recover after the flu.', meaning: 'get well again' },
       meaning: 'restore the database after a failure',
-      connection: '“Flu” tells us that “recover” means to get well. “Database” and “crash” tell us that “recover” means to restore a database. These words give context for “recover.”',
+      connection: 'The surrounding words help us interpret “recover.” With “flu,” it means to get well. With “database” and “crash,” it means to restore the database after a failure.',
       transfer: 'Select “A paraphrase.” Should the search return the recovery passage when the question uses different words?',
     },
     restart: {
@@ -38,8 +38,8 @@
       clues: ['help', 'restart'],
       contrast: { text: 'Put another log on the fire.', meaning: 'a piece of wood' },
       meaning: 'a record of database changes',
-      connection: '“Fire” tells us that “log” means a piece of wood. “Help” and “restart” suggest a record that helps restore a database. These words give context for “log.”',
-      transfer: 'The paraphrase also ranks the recovery passage first in this example. Predict the first result for “Query speed.” Then select “Query speed.”',
+      connection: 'The surrounding words help us interpret “log.” With “fire,” it means a piece of wood. With “help” and “restart,” it suggests a record of database changes.',
+      transfer: 'The recovery passage still ranks first, although the question uses different words. Predict the first result for “Query speed.” Then select “Query speed.”',
     },
     speed: {
       label: 'Query speed',
@@ -50,8 +50,8 @@
       clues: ['speed', 'query'],
       contrast: { text: 'Use the index at the back of the book.', meaning: 'a list of topics and page numbers' },
       meaning: 'a database structure for finding rows',
-      connection: '“Book” tells us that “index” means a list of topics and page numbers. “Speed” and “query” suggest a database structure. These words give context for “index.”',
-      transfer: 'The index passage ranks first. The chunk vectors did not change. The new question changed the ranking.',
+      connection: 'The surrounding words help us interpret “index.” With “book,” it means a list of topics and page numbers. With “speed” and “query,” it suggests a database structure for finding rows.',
+      transfer: 'The index passage now ranks first. The saved passage vectors stayed the same. The new query vector changed their order.',
     },
   };
 
@@ -156,7 +156,7 @@
         stageElement.append(node('h4', '', 'Which passage would help Maya?'));
         const cards = node('div', 'ew-passage-pair');
         passages.forEach(passage => cards.append(passageCard(passage)));
-        stageElement.append(cards, paragraph('Predict which passage should rank first. The search compares the meaning of the sentences, even when they use different words.', 'ew-predict'));
+        stageElement.append(cards, paragraph('Predict which passage should rank first. Next, follow the question from text to a vector. Search will compare that vector with the saved passage vectors.', 'ew-predict'));
       } else if (stage === 1) {
         stageElement.append(node('h4', '', 'Split the text into tokens'));
         const tokens = node('div', 'ew-tokens');
@@ -165,7 +165,7 @@
           chip.append(node('small', '', String(index + 1)), node('span', '', token));
           tokens.append(chip);
         });
-        stageElement.append(tokens, paragraph('A tokenizer converts text pieces to token IDs. The model selects a starting vector for each token. The model also uses token positions. A tokenizer can split one word into smaller pieces.'), paragraph(query.tokens.length + ' illustrative tokens → ' + query.tokens.length + ' starting vectors. The model then updates each token vector with information from the other tokens.', 'ew-operation'));
+        stageElement.append(tokens, paragraph('A tokenizer splits text into pieces called tokens. Each token has a numeric ID. The model uses that ID to look up a starting vector. It also uses the token’s position in the sentence. A token can be a word, part of a word, or punctuation.'), paragraph(query.tokens.length + ' illustrative tokens → ' + query.tokens.length + ' starting vectors. Next, the model uses the surrounding tokens to update these vectors.', 'ew-operation'));
       } else if (stage === 2) {
         stageElement.append(node('h4', '', 'Context means the other words in the sentence'));
         const examples = node('div', 'ew-context-examples');
@@ -173,7 +173,7 @@
         examples.append(
           contextCard('The same word in another sentence', query.contrast.text, query.contrast.meaning, focus),
           contextCard('The word in Maya’s question', query.text, query.meaning, focus, true));
-        stageElement.append(examples, paragraph(query.connection), paragraph('The model uses information from other tokens to update each token vector. Thus, the same word can have different vectors in different sentences.', 'ew-context-mechanism'), node('strong', 'ew-context-output', 'Result: one updated vector for each token'));
+        stageElement.append(examples, paragraph(query.connection), paragraph('The model combines information from different tokens when it updates each token vector. The same word can therefore have different vectors in different sentences.', 'ew-context-mechanism'), node('strong', 'ew-context-output', 'Result: one updated vector for each token'));
         const grid = node('div', 'ew-context-grid');
         query.tokens.forEach((token, index) => {
           const button = node('button', 'ew-context-token');
@@ -194,15 +194,15 @@
           button.addEventListener('click', () => {
             selectedToken = index;
             grid.querySelectorAll('button').forEach((item, itemIndex) => item.setAttribute('aria-pressed', String(itemIndex === index)));
-            detail.textContent = 'Example vector for “' + token + '” in this sentence: ' + vectorText(query.context[index], 1) + '. The bars show these three numbers. Individual coordinates do not name topics.';
+            detail.textContent = 'Example vector for “' + token + '” in this sentence: ' + vectorText(query.context[index], 1) + '. Each bar shows one coordinate: one number in the vector. The coordinates do not have topic labels.';
           });
           grid.append(button);
         });
         const detail = node('p', 'ew-token-detail');
         detail.id = 'ew-token-detail';
         detail.setAttribute('aria-live', 'polite');
-        detail.textContent = 'Select a token to see its vector for this sentence. “' + query.tokens[selectedToken] + '”: ' + vectorText(query.context[selectedToken], 1) + '. The bars show these example numbers. Individual coordinates do not name topics.';
-        stageElement.append(grid, detail, paragraph('A new sentence can change the token vectors. The model uses fixed parameters from training. The model does not train again for each sentence.', 'ew-operation'));
+        detail.textContent = 'Select a token to inspect its example vector. “' + query.tokens[selectedToken] + '”: ' + vectorText(query.context[selectedToken], 1) + '. Each bar shows one coordinate: one number in the vector. The coordinates do not have topic labels.';
+        stageElement.append(grid, detail, paragraph('Training sets the model’s parameters. These parameters stay fixed when the model processes a new sentence. Different input text can still produce different token vectors.', 'ew-operation'));
       } else if (stage === 3) {
         stageElement.append(node('h4', '', 'Combine the token vectors into one query vector'));
         const calculation = node('div', 'ew-calculation');
@@ -213,9 +213,10 @@
         calculation.append(average, node('span', 'ew-arrow', '→'), normalized);
         const firstSum = query.context.reduce((sum, row) => sum + row[0], 0);
         stageElement.append(calculation,
-          paragraph('First column: ' + firstSum.toFixed(1) + ' ÷ ' + query.context.length + ' tokens ≈ ' + pooled[0].toFixed(3) + '. Divide each coordinate by the Euclidean norm (magnitude), ' + norm(pooled).toFixed(3) + '. The display rounds the numbers.', 'ew-arithmetic'),
-          paragraph('The query vector has 3 coordinates in this example. Its size does not depend on the number of tokens. Real models often return hundreds or thousands of coordinates.'),
-          paragraph('This example uses context layers, pooling, and normalization. Pooling combines the token vectors. This example uses their average. Other models can use different pooling methods.', 'ew-operation'));
+          paragraph('First column: ' + firstSum.toFixed(1) + ' ÷ ' + query.context.length + ' tokens ≈ ' + pooled[0].toFixed(3) + '. The average vector has magnitude ' + norm(pooled).toFixed(3) + '. Divide each coordinate by this magnitude to get a vector of magnitude 1. The display rounds the numbers.', 'ew-arithmetic'),
+          paragraph('Pooling combines token vectors into one vector. Here, pooling takes the average of each coordinate. Normalization then scales that vector to magnitude 1.'),
+          paragraph('The query vector has 3 coordinates, regardless of the number of tokens. Real models often return hundreds or thousands of coordinates.'),
+          paragraph('This example supplies invented token vectors and computes their average and normalization. A trained model computes the token vectors. Its pooling method can differ.', 'ew-operation'));
       } else {
         stageElement.append(node('h4', '', 'Compare this question with the saved passages'));
         const queryVector = node('div', 'ew-query-vector');
@@ -234,7 +235,7 @@
           row.append(score);
           ranking.append(row);
         });
-        stageElement.append(ranking, paragraph('This example computes each chunk vector once with the same method. Only the query vector changes. Cosine similarity compares vector directions. These scores are not probabilities.', 'ew-arithmetic'), paragraph(query.transfer, 'ew-predict'));
+        stageElement.append(ranking, paragraph('The passage vectors were computed once with the same method. Cosine similarity compares each passage vector’s direction with the query vector’s direction. A higher score gives a higher rank. These scores are not probabilities.', 'ew-arithmetic'), paragraph('Read the first passage. Does its text help answer the question? A similarity score alone cannot establish that.', 'ew-predict'), paragraph(query.transfer, 'ew-predict'));
       }
       if (announce) $('ew-status').textContent = 'Step ' + (stage + 1) + ' of 5: ' + stages[stage] + '. Question: ' + query.label + (stage === 4 ? '. First result: ' + rank(queryId)[0].title + '.' : '.');
     }

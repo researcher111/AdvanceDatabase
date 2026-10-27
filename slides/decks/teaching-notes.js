@@ -1636,26 +1636,26 @@
   },
   "11": {
     "meaning-becomes-geometry": {
-      "idea": "An exact string search needs matching text. An embedding model provides vectors for a different comparison.",
-      "question": "Why does the exact string search miss the recovery passage?",
-      "answer": "The question and the passage use different words. Vector search can return candidate passages. Their relevance still needs a separate check.",
+      "idea": "Vector similarity can retrieve passages whose wording differs from the question. Reading the passages tests whether they answer it.",
+      "question": "Would a B+ tree lookup on the question string find a passage that uses different words?",
+      "answer": "No. That lookup compares keys. A vector search compares numeric representations from an embedding model. The returned passages still need a relevance check.",
       "builds": [
-        "Ask what a B+ tree does for an exact key. Introduce Maya and Noor as fictional students. Maya asks about crash recovery. The stored passage uses different words. Ask why an exact string search finds no match.",
-        "Point to the question and the passage. Explain that compatible embedding settings produce comparable vectors. Similar wording does not guarantee similar vectors for every model.",
-        "Compare the returned vector IDs with exact search. Read the returned passages. Check whether each passage answers the recovery question."
+        "Ask what a B+ tree can retrieve by exact key or key range. Introduce Maya and Noor as fictional students rehearsing a project. Read the recovery question and the stored passage aloud. Ask why an exact string search misses this passage.",
+        "Point to the question and passage entering the embedding model. Define a vector as a list of numeric coordinates. Compatible model settings make the two vectors comparable. The pictured positions illustrate the mechanism. They do not show measured embeddings.",
+        "Trace a result from its vector ID back to its passage. Ask whether the passage explains crash recovery. State the two checks: compare neighbors to test search, and read passages to test relevance. Return to these checks at the end."
       ],
       "checks": [
         {
           "question": "Will an exact B+ tree lookup on the question string find this passage?",
-          "answer": "No. The stored passage does not match that key. A different comparison is necessary."
+          "answer": "No. The passage does not match that key. We need a comparison that can handle different wording."
         },
         {
-          "question": "Can unrelated embedding models produce comparable vectors if their dimensions match?",
-          "answer": "Not necessarily. The models must use compatible coordinate systems, versions, dimensions, preprocessing, and similarity metrics."
+          "question": "Do equal dimensions make unrelated embedding models compatible?",
+          "answer": "No. Their coordinates can represent different learned features. Use compatible models, versions, preprocessing, dimensions, and similarity metrics."
         },
         {
           "question": "Does a nearby vector prove that its passage answers the question?",
-          "answer": "No. Read the passage to check its relevance."
+          "answer": "No. Read the returned passage to check whether it answers the recovery question."
         }
       ]
     },
@@ -1670,66 +1670,66 @@
       ]
     },
     "direction-and-normalization": {
-      "idea": "Unit normalization gives each nonzero vector a length of one.",
+      "idea": "Cosine similarity compares directions. For vectors of length one, the dot product gives the same score.",
       "question": "What does (3, 4) become after unit normalization?",
       "answer": "It becomes (0.6, 0.8). The dot product of unit vectors equals their cosine similarity.",
       "builds": [
-        "Ask students to calculate (0.8, 0.6) dot (0.6, 0.8). The result is 0.48 + 0.48 = 0.96. Identify the direction and length of each arrow.",
-        "Rotate the arrow toward q. Ask students to predict the change in cosine similarity.",
-        "Normalize (3, 4) to (0.6, 0.8). For unit vectors, squared Euclidean distance is 2 − 2q·v. Thus, increasing dot product and decreasing squared distance give the same ranking. Use the metric that the embedding model requires."
+        "Identify the query arrow q and stored-vector arrow v. Ask which direction is closer to q. Check that students can compute (0.8, 0.6) dot (0.6, 0.8). The result is 0.48 + 0.48 = 0.96.",
+        "Before advancing, ask what happens to cosine similarity when v turns toward q. Reveal the rotation. Changing length alone leaves cosine similarity unchanged.",
+        "Normalize (3, 4) to (0.6, 0.8). The operation divides each coordinate by the vector length. For unit vectors, squared Euclidean distance is 2 − 2q·v. Increasing the dot product therefore gives the same ranking as decreasing squared distance. Use the metric required by the embedding model."
       ]
     },
     "the-exact-baseline": {
-      "idea": "This exact baseline scores every stored vector and keeps the top k results.",
-      "question": "Can this loop skip a vector without another bound or index?",
-      "answer": "No. It must score every vector to establish the top k results.",
+      "idea": "Save the exact top-k result IDs before trying a method that skips vectors. These IDs let you identify missed neighbors.",
+      "question": "Why do we save the exact result before trying approximate search?",
+      "answer": "It supplies the reference top-k IDs for the chosen query, metric, and tie rule. Comparing IDs reveals which exact neighbors approximate search missed.",
       "builds": [
-        "Show the search loop. Ask which vectors it can skip without another bound or index.",
-        "Score the first 24 vectors. Keep the ten highest scores so far.",
-        "Score the next 24 vectors. Ask whether an unscored vector can enter the top ten.",
-        "Score the last 24 vectors. Save the ten result IDs. Use these IDs to measure what approximate search misses."
+        "Introduce k as the number of requested results. This example uses k = 10. Ask whether a loop can skip a vector without another index or a bound on its score. It cannot know the final top ten until every vector is scored.",
+        "Score the first 24 vectors. Keep the ten highest scores among those vectors. Explain that the result is still provisional.",
+        "Score the next 24 vectors. Ask whether an unscored vector could replace one of the current top ten. Keep the query and metric fixed.",
+        "Score the last 24 vectors. Save the ten result IDs as the exact baseline. An ID identifies the stored vector and lets us retrieve its passage. The baseline establishes geometric neighbors, not passage relevance."
       ]
     },
     "price-the-baseline": {
-      "idea": "The number of vectors, dimensions, and queries determines the multiplication count for exact search.",
+      "idea": "Exact-search arithmetic grows with the number of vectors, their dimensions, and the query rate.",
       "question": "Do operation counts determine elapsed time?",
       "answer": "No. Memory traffic, batching, result selection, concurrency, and hardware also affect elapsed time.",
       "builds": [
-        "Calculate 4,000 × 64. The result is 256,000 coordinate multiplications per query.",
-        "Calculate 1,000,000 × 1,536. Distinguish operation counts from elapsed time.",
-        "Calculate the work for ten million vectors at 100 queries per second. Identify the measurements needed before selecting an index."
+        "Calculate 4,000 × 64 = 256,000 coordinate multiplications for one query. Connect each factor to stored vectors and coordinates per vector.",
+        "Before revealing the result, calculate 1,000,000 × 1,536. The result counts coordinate multiplications, not seconds. Independent dot products can run in parallel.",
+        "Calculate the work for ten million vectors at 100 queries per second. Ask which factor changes when more users send questions. Memory traffic, batching, result selection, concurrency, and hardware also affect runtime. Measure latency, memory, construction time, update work, and recall before choosing an index."
       ]
     },
     "skipping-with-a-contract": {
-      "idea": "Approximate search can reduce work, but it can miss exact neighbors.",
+      "idea": "Searching fewer candidates can miss exact neighbors. Measure that loss against saved exact results.",
       "question": "Does approximate search identify all its missed exact neighbors during a query?",
       "answer": "No. A separate exact baseline identifies those missed neighbors.",
       "builds": [
-        "Point to the searched region. Identify a nearby vector outside that region. The search does not score that vector.",
-        "Expand the candidate set. Keep the vectors and similarity metric unchanged.",
-        "Compare the result IDs with the exact baseline. Count the missing exact neighbors. Introduce recall as the fraction of exact neighbors returned."
+        "Define a candidate as a stored vector that the search will score. Point to the selected region and a nearby vector outside it. Ask whether the search can return a vector it never examines.",
+        "Expand the candidate set. Keep the query, stored vectors, and metric unchanged. Ask what extra work the next region adds.",
+        "Compare approximate result IDs with the saved exact IDs. Count the exact neighbors that did not return. Introduce recall as the fraction of exact neighbors returned. Reserve representative questions for evaluation."
       ]
     },
     "build-an-ivf-index": {
-      "idea": "IVF assigns vectors to centroid lists. Each query searches selected lists.",
-      "question": "How does the construction algorithm update the centroids?",
-      "answer": "It averages the vectors in each group. It moves each centroid to that average. It then assigns each vector to its nearest updated centroid.",
+      "idea": "IVF groups vectors before queries arrive. Each query selects lists by centroid score and then searches their vectors.",
+      "question": "What moves when the construction algorithm updates a centroid?",
+      "answer": "The group center moves to the average of its assigned vectors. The stored vectors stay fixed. Assignment can then move vectors between lists.",
       "builds": [
-        "Define IVF as inverted file. Introduce a centroid as a group center. Compare a list to a shelf of books. The centroid represents the shelf label. Stored vectors represent the books. The construction algorithm chooses initial centroids before any query.",
-        "Assign each vector to its nearest centroid. This assignment does not depend on a future query.",
-        "Follow the arrow from an old centroid to its new position. Average each coordinate separately. For example, (2, 4) and (6, 8) have average (4, 6). This calculation is separate from the plotted groups. Assign each vector to its nearest updated centroid.\n\nRepeat the averaging and assignment. Stop when assignments do not change or the iteration limit is reached. The stored vectors do not move. Lab 9 supplies k-means.",
-        "Inspect the completed lists. Each list retains its vector IDs. These IDs connect search results to source records. A query that skips a list can miss a nearby vector."
+        "Expand IVF as inverted file. Define a centroid as a numeric center used to represent a group. Compare a list to a shelf of books. The centroid is the shelf label, and stored vectors are the books. Labels help choose shelves, but a useful book can be on a shelf we skip.",
+        "Assign each vector to its nearest centroid. Connect the lines to list membership. Actual membership follows vector geometry, not topic labels. This construction step happens before queries use the lists.",
+        "Follow each arrow from an old centroid to its new average. Average each coordinate separately. For example, (2, 4) and (6, 8) have average (4, 6). This arithmetic example is separate from the plotted groups. Reassign each vector to its nearest updated centroid.\n\nRepeat averaging and assignment until assignments stop changing or the iteration limit is reached. The stored vectors stay fixed. Lab 9 supplies this k-means construction.",
+        "Inspect the completed lists. Each list retains vector IDs and access to the corresponding vectors. These IDs connect returned neighbors to source passages. Ask what happens if a query skips a list containing a nearby vector. The next example makes that miss visible."
       ]
     },
     "count-the-saved-work": {
-      "idea": "IVF compares the query with centroids and with vectors in the searched lists.",
+      "idea": "Count both IVF stages: centroid comparisons first, then candidate-vector comparisons inside selected lists.",
       "question": "What is the estimate for n = 4,000, C = 20, and P = 4 with equal list sizes?",
       "answer": "The estimate is 20 + 4 × (4,000 / 20) = 820 comparisons. Exact search uses 4,000 comparisons.",
       "builds": [
-        "Recall the four-vector example. Identify centroid comparisons and stored-vector comparisons. Apply the same count to 4,000 stored vectors.",
-        "Count the 20 centroid comparisons.",
-        "P = 4 means four searched lists. Give pairs one minute to calculate 4 × 200.",
-        "Reveal the estimate of 820 comparisons. The later measured count is 924. Actual list sizes explain this difference. Ask why d cancels from the simplified work ratio. Measure elapsed time separately."
+        "Return to the four-vector example. Separate centroid comparisons from candidate-vector comparisons. Apply the same two-part count to 4,000 stored vectors.",
+        "Count C = 20 centroid comparisons. Each comparison helps select a list, but does not yet score its stored vectors.",
+        "Assume balanced lists, with 4,000 / 20 = 200 vectors per list. P = 4 means four lists are searched. Ask pairs to calculate 4 × 200 before revealing the total.",
+        "Add 20 centroid comparisons to 800 candidate comparisons. The estimate is 820. Unequal list sizes explain why the later Lab 9 measurement is 924 rather than 820. Both counts describe comparisons, not elapsed time. Ask why d cancels from this simplified work ratio."
       ]
     },
     "navigate-a-graph": {
@@ -1746,23 +1746,23 @@
       ]
     },
     "measure-a-miss": {
-      "idea": "Recall@k measures the fraction of exact top-k IDs that approximate search also returns.",
+      "idea": "Recall@k is the fraction of exact top-k IDs that also appear in the approximate result.",
       "question": "Which exact neighbors are missing, and what is recall@10?",
       "answer": "IDs 4, 7, and 10 are missing. Seven exact neighbors returned. Recall@10 = 7/10 = 0.70 = 70%.",
       "builds": [
-        "Compare two results for one query. The top row contains exact result IDs 1 through 10. The lower row contains approximate result IDs. Each ID identifies a stored vector and its passage. It does not identify a result rank.\n\nAsk which IDs appear in both rows. These example results are separate from the preceding HNSW graph and the earlier IVF example.",
-        "Identify the seven green IDs: 1, 2, 3, 5, 6, 8, and 9. Both results contain these IDs. Identify the orange IDs: 4, 7, and 10. Approximate search missed these exact neighbors. Identify the blue IDs: 11, 14, and 20.\n\nApproximate search returned these instead. For IVFFlat, an unprobed list is a list that the search did not examine. Assume exact scoring within searched lists, the same metric, and the same rule for tied scores. Under these conditions, a missed exact neighbor must be in an unprobed list. The result rows do not identify which lists were searched.",
-        "Count each matching ID once. Seven matches out of ten exact neighbors give recall@10 = 70%. The three extra IDs do not increase recall. Recall measures agreement with exact vector search. Read the passages to check whether they answer the question."
+        "Use these two example result lists for one query. The top row contains exact IDs 1 through 10. Each number identifies a stored vector, not a result rank. Ask students to identify shared IDs before revealing colors.\n\nThese lists illustrate overlap. They are separate from the preceding HNSW graph and the earlier IVF fixture.",
+        "Identify the seven green IDs: 1, 2, 3, 5, 6, 8, and 9. Both rows contain these IDs. The orange IDs 4, 7, and 10 are missing from the approximate result. The blue IDs 11, 14, and 20 appear instead.\n\nAn unprobed list is an IVF list that the query did not search. IVFFlat scores every candidate exactly within searched lists. Use the same metric and tie rule as exact search. Under these conditions, a missed exact neighbor must be in an unprobed list. These result rows do not identify the searched lists.",
+        "Count each shared ID once. Seven shared IDs out of ten exact neighbors give recall@10 = 70%. The extra IDs do not increase recall. Ask whether recall 1.0 would prove that the passages answer the question. It would prove only agreement with exact vector search under the same metric and tie rule."
       ]
     },
     "choose-an-operating-point": {
-      "idea": "Select a measured setting that meets the recall requirement and the comparison limit.",
+      "idea": "Choose a measured search setting that meets both the recall requirement and the comparison limit.",
       "question": "Which listed setting meets mean recall ≥ 0.90 and a limit of 1,000 mean comparisons?",
       "answer": "P = 4 meets both requirements. Its mean recall is 0.9175. Its mean comparison count, rounded down, is 924.",
       "builds": [
-        "Introduce measurements from Lab 9. The dataset contains 4,000 arXiv vectors and 40 questions. These measurements are separate from the small illustrated examples.",
-        "Set the classroom requirement to mean recall ≥ 0.90. Ask which settings meet this requirement.",
-        "Add the limit of 1,000 mean comparisons. P = 1 and P = 2 fail the recall requirement. P = 8 exceeds the comparison limit. P = 4 meets both requirements. A project needs a justified recall requirement and separate latency measurements."
+        "Identify these values as Lab 9 measurements, not the balanced-list estimate. The dataset contains 4,000 arXiv vectors and 40 questions. The plotted count is the mean comparisons per query, rounded down. Recall is averaged across the questions.",
+        "Require mean recall ≥ 0.90 for this classroom choice. Ask which plotted settings meet the requirement. Let students identify the settings before adding the work limit.",
+        "Add the limit of 1,000 mean comparisons. P = 1 and P = 2 miss the recall requirement. P = 8 exceeds the comparison limit. P = 4 meets both with mean recall 0.9175 and floored mean count 924.\n\nA project needs a justified recall requirement based on missed evidence. Compare elapsed time separately. Fewer comparisons do not by themselves establish faster responses."
       ]
     },
     "memory-and-update-budgets": {
@@ -1770,40 +1770,40 @@
       "question": "What uses memory besides lists and graph links?",
       "answer": "The system also stores vectors, metadata, and data structures needed during execution.",
       "builds": [
-        "Count memory for IVF vectors, centroids, and lists. Include data structures needed during execution.",
-        "Add memory for HNSW links. Measure graph construction time. The illustration shows HNSW in memory. Implementations can differ.",
-        "Explain that compression can change vector rankings. Measure recall again after compression. Include construction time and update behavior in the comparison."
+        "List everything IVF retains: vectors, centroids, and list entries. Include metadata and working data structures. Ask whether counting comparisons measures any of this memory.",
+        "Add the stored HNSW neighbor links. Measure graph construction time as well as link memory. The illustration shows an in-memory graph. Implementations can differ.",
+        "Explain that compression stores smaller vector representations. Methods such as product quantization can change similarity scores and rankings. Measure recall again after compression. Include update behavior and construction time when comparing configurations."
       ]
     },
     "where-the-index-lives": {
-      "idea": "When passage text changes, its stored vector must represent the new text.",
+      "idea": "Editing a passage does not update its vector. The application must replace the vector with an embedding of the new text.",
       "question": "Does storing an index in a database automatically create an embedding for changed text?",
       "answer": "No. The application or a configured update process must call the embedding model and update the index. A separate vector service is optional.",
       "builds": [
-        "Identify passage 42 and index entry 42. Both refer to text version 1. The example uses version labels, not measured model outputs.",
-        "Change passage 42 to text version 2. Keep the old vector visible. Explain that the vector still represents version 1.",
-        "Pass the changed text through the compatible embedding model. Replace the vector in index entry 42. Confirm that the text and vector refer to version 2. The application can use a database, a library, or a separate service. Each design needs a defined update process. Database storage alone does not generate an embedding."
+        "Identify passage 42 and index entry 42. Both refer to text version 1. These version labels illustrate matching text and vectors, not measured model outputs.",
+        "Change passage 42 to text version 2. Keep the old vector visible. Ask which text the vector still represents. The answer is version 1, so search scores no longer describe the current passage.",
+        "Send the changed text through the compatible embedding model. Replace the vector in index entry 42. Confirm that passage and vector now refer to text version 2.\n\nA database, embedded library, or separate service can store the index. Every design needs an update process. Database storage alone does not call the embedding model. A separate vector service is optional."
       ]
     },
     "diagnose-the-index": {
-      "idea": "Compare result IDs to test approximate search. Read the passages to test relevance.",
-      "question": "What if exact and approximate search agree, but the passages do not answer the question?",
-      "answer": "Inspect chunking, embeddings, metadata, and ranking. More search work does not change the similarity scores of existing vectors.",
+      "idea": "Missing exact neighbors indicate a search problem. Unhelpful exact neighbors require a separate check of the passage representation and ranking.",
+      "question": "What should we inspect if exact and approximate results agree but neither answers the recovery question?",
+      "answer": "Inspect how passages were split, their embeddings, metadata, and ranking. More probes do not change existing vector scores or make an unhelpful passage useful.",
       "builds": [
-        "Compare approximate result IDs with exact result IDs. Identify any useful exact neighbors that approximate search missed.",
-        "Increase search breadth. Compare the result IDs again. If the missing exact neighbors return, the search setting explains those misses.",
-        "Read the passages. If exact neighbors are also unhelpful, inspect chunking, embeddings, metadata, and ranking. This is a hypothetical diagnosis. The example vector IDs do not establish passage relevance."
+        "Return to the recovery question. Compare approximate IDs with exact IDs. Ask whether exact neighbors are missing before deciding how to adjust the search.",
+        "Increase the probe count or graph search breadth. Compare the IDs again. If missed exact neighbors return, the wider search explains that improvement.",
+        "Read the returned passages. If exact neighbors are also unhelpful, inspect passage boundaries, embeddings, metadata, and ranking. Separate geometric recall from relevance before evaluating generated answers. The diagram illustrates a diagnosis. Its example IDs do not establish passage relevance."
       ]
     },
     "rebuild-the-retrieval-contract": {
-      "idea": "Compare results and search work with an exact baseline before selecting an approximate setting.",
-      "question": "What evidence supports the selected search setting?",
-      "answer": "Use exact result IDs, settings, recall, work counts, latency, and memory measurements. Check passage relevance separately. Evaluate answer quality separately.",
+      "idea": "Save exact IDs, search fewer candidates, compare IDs, and read passages. Each step answers a different question about retrieval.",
+      "question": "Why can recall 1.0 coexist with an answer that lacks useful evidence?",
+      "answer": "Recall 1.0 means the approximate result contains every saved exact neighbor. It does not show that those passages answer the question or support a generated claim.",
       "builds": [
-        "Return to the recovery question. Ask why Maya saved the exact result IDs.",
-        "Ask which vectors IVF or HNSW can skip. Explain how a setting changes the search work.",
-        "Measure recall across representative questions. Recall measures agreement with exact vector search.",
-        "Save exact result IDs. Search fewer candidates. Compare the result IDs. Read the passages. Ask a student to explain these four steps.\n\nAsk why the nearest centroid can have a list without the nearest vector. Ask what recall 1.0 leaves unproved. Introduce answer evaluation in the next lecture."
+        "Return to Maya and Noor’s recovery question. Ask why Maya saved the exact result IDs. They establish which geometric neighbors the approximate search should recover.",
+        "Ask which vectors IVF or HNSW can skip. Connect a larger search setting to more candidate work. Keep the query, metric, and baseline fixed during the comparison.",
+        "Measure recall across representative questions. Ask why one successful question is insufficient evidence for choosing a setting. Record comparison counts, latency, and memory as well.",
+        "Ask a student to explain the four steps in order. Save exact IDs. Search fewer candidates. Compare IDs. Read passages.\n\nAsk why the nearest centroid can belong to a list that omits the nearest vector. Then ask what recall 1.0 leaves unproved. The next lecture follows a retrieved passage into the model prompt and checks which answer claims it supports."
       ]
     }
   },
