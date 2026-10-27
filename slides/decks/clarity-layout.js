@@ -176,7 +176,6 @@ window.CourseClarityLayout = {
   "12/three-places-for-knowledge": [102,270,1178,649],
   "12/design-the-retrieval-record": [127,262,1083,568],
   "12/keep-the-source-identity": [92,203,1193,653],
-  "12/a-synonym-failure": [242,216,1028,618],
   "12/build-an-evaluation-set": [117,247,1083,618],
   "12/presence-in-the-top-results": [189,262,1116,651],
   "12/rank-changes-the-score": [189,262,1119,651],

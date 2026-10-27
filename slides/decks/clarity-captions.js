@@ -1019,11 +1019,6 @@ window.CourseClarityCaptions = {
       "Carry the ranked chunks’ source IDs into the prompt, including repeated IDs.",
       "Hit@3 = 1 if a relevant source appears in the first three results. Otherwise, Hit@3 = 0."
     ],
-    "a-synonym-failure": [
-      "The first wording retrieves the intended buffer-pool source.",
-      "Maya asks the same question in different words and gets different passages.",
-      "Exact search already scored every chunk. More probes would not change those scores."
-    ],
     "build-an-evaluation-set": [
       "Write questions that a corpus user would ask. The project requires at least 25 questions.",
       "Label the sources needed to answer each question independently of the current ranking.",

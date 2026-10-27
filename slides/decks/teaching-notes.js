@@ -1851,16 +1851,6 @@
         "Add overlap and discuss its extra index and prompt cost."
       ]
     },
-    "a-synonym-failure": {
-      "idea": "Exact retrieval can still fail when its representation misses a paraphrase.",
-      "question": "Is the buffer-pool paraphrase failure caused by ANN approximation?",
-      "answer": "No. The browser searches exactly. Its hashed-word representation does not bridge the vocabulary change.",
-      "builds": [
-        "Maya’s paraphrase misses the source even though result positions map to the correct records. Ask whether ANN caused the miss, then reveal that this widget uses exact search. Read the first buffer-pool question and its retrieved source.",
-        "Read the paraphrase and compare the result.",
-        "Confirm the shared information need, then test representation changes."
-      ]
-    },
     "build-an-evaluation-set": {
       "idea": "Retrieval evaluation needs independently labeled evidence and questions held out from tuning.",
       "question": "Should the current system's answer decide which sources are relevant?",
