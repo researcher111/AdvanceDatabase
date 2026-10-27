@@ -1636,26 +1636,26 @@
   },
   "11": {
     "meaning-becomes-geometry": {
-      "idea": "Vector similarity can retrieve passages whose wording differs from the question. Reading the passages tests whether they answer it.",
-      "question": "Would a B+ tree lookup on the question string find a passage that uses different words?",
-      "answer": "No. That lookup compares keys. A vector search compares numeric representations from an embedding model. The returned passages still need a relevance check.",
+      "idea": "A useful passage can use different words from the question. Vector search can help find it, but the result still needs checking.",
+      "question": "Why does this exact phrase search miss a passage that could help answer the question?",
+      "answer": "The passage does not contain the whole question as an exact phrase. It describes a recovery operation with different words.",
       "builds": [
-        "Ask what a B+ tree can retrieve by exact key or key range. Introduce Maya and Noor as fictional students rehearsing a project. Read the recovery question and the stored passage aloud. Ask why an exact string search misses this passage.",
-        "Point to the question and passage entering the embedding model. Define a vector as a list of numeric coordinates. Compatible model settings make the two vectors comparable. The pictured positions illustrate the mechanism. They do not show measured embeddings.",
-        "Trace a result from its vector ID back to its passage. Ask whether the passage explains crash recovery. State the two checks: compare neighbors to test search, and read passages to test relevance. Return to these checks at the end."
+        "Introduce Maya as a fictional student searching her course notes. Read the question and stored passage aloud. Ask whether the passage could help answer the question. Pause before advancing. Replaying the durable log connects the passage to crash recovery.",
+        "Use the whole question as the exact search phrase. Show that this phrase does not occur in the passage. This example explains one exact phrase search. It does not claim that every keyword search or B+ tree lookup fails.",
+        "Follow the arrows from the question through vector search to a possible passage. Define an embedding as a numeric representation of text. The next slide shows how the model creates that representation. No model was run for this fictional example. The arrows illustrate a possible result, not a measured or guaranteed match. Read any returned passage to check whether it answers the question."
       ],
       "checks": [
         {
-          "question": "Will an exact B+ tree lookup on the question string find this passage?",
-          "answer": "No. The passage does not match that key. We need a comparison that can handle different wording."
+          "question": "Can this passage help answer the recovery question?",
+          "answer": "Yes. It describes replaying a durable log to restore committed writes. It uses different words from the question."
         },
         {
-          "question": "Do equal dimensions make unrelated embedding models compatible?",
-          "answer": "No. Their coordinates can represent different learned features. Use compatible models, versions, preprocessing, dimensions, and similarity metrics."
+          "question": "Does this passage contain the whole question as an exact phrase?",
+          "answer": "No. The wording differs, so this exact phrase search misses the passage."
         },
         {
-          "question": "Does a nearby vector prove that its passage answers the question?",
-          "answer": "No. Read the returned passage to check whether it answers the recovery question."
+          "question": "Does vector search guarantee that a returned passage answers the question?",
+          "answer": "No. It ranks numeric representations of text. Read the returned passage to check its relevance."
         }
       ]
     },

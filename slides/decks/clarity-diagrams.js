@@ -120,35 +120,32 @@
   }
 
   use(11,'meaning-becomes-geometry',(d,s)=>{
-    label(d,'question-heading',330,235,'Maya’s question',P.green,27);
-    label(d,'question-line-1',330,286,'How does a database',P.ink,31);
-    label(d,'question-line-2',330,325,'recover after a crash?',P.ink,31);
-    label(d,'passage-heading',955,235,'Stored passage',P.green,27);
-    label(d,'passage-line-1',955,286,'Replay the durable log',P.ink,31);
-    label(d,'passage-line-2',955,325,'to restore committed writes.',P.ink,29);
+    d.rect('question-card',70,220,520,180,s===1?P.orangeLight:P.white,s===1?P.orange:P.line,12,2);
+    d.rect('passage-card',690,220,520,180,P.white,s===2?P.green:P.line,12,2);
+    label(d,'question-heading',330,254,'Maya’s question',P.green,26);
+    label(d,'question-line-1',330,310,'How does a database',P.ink,30);
+    label(d,'question-line-2',330,352,'recover after a crash?',P.ink,30);
+    label(d,'passage-heading',950,254,'Stored passage',P.green,26);
+    label(d,'passage-line-1',950,310,'Replay the durable log',P.ink,30);
+    label(d,'passage-line-2',950,352,'to restore committed writes.',P.ink,29);
     if(s===0){
-      d.line('word-boundary',640,258,640,356,P.line,2);
-      label(d,'no-match',640,492,'Exact string search: no match',P.orange,35);
-      label(d,'first-question',640,554,'The passage exists. Its wording differs.',P.ink,28);
+      label(d,'first-question',640,500,'Can this passage help answer the question?',P.ink,32);
+      label(d,'compare-texts',640,556,'Compare the meaning of the two texts.',P.muted,26);
+    }else if(s===1){
+      d.box('exact-search',130,455,410,90,'Exact phrase search',P.orangeLight,P.orange,30);
+      d.arrow('exact-result',560,500,700,500,P.orange,4);
+      d.box('no-match',720,455,410,90,'No match in this passage',P.white,P.orange,28);
+      label(d,'phrase-reason',640,590,'The passage does not contain the whole question.',P.ink,27);
     }else{
-      label(d,'shared-model',640,402,'Compatible embedding settings',P.orange,29);
-      if(s===1){
-        d.arrow('embed-question',330,363,330,468,P.green,3);
-        d.arrow('embed-passage',955,363,955,468,P.green,3);
-        d.circle('question-vector',330,513,17,P.purple);
-        label(d,'question-vector-label',330,562,'question vector q',P.purple,28);
-        d.circle('passage-vector',955,513,17,P.green);
-        label(d,'passage-vector-label',955,562,'passage vector v',P.green,28);
-      }else{
-        d.circle('question-vector',470,510,17,P.purple);
-        d.circle('passage-vector',635,510,17,P.green);
-        d.line('nearby',491,510,614,510,P.orange,3,'6 6');
-        label(d,'question-vector-label',470,557,'q',P.purple,28);
-        label(d,'passage-vector-label',730,557,'candidate passage',P.green,28);
-        [[920,473],[1000,535],[230,515]].forEach(([x,y],i)=>d.circle('other-'+i,x,y,10,P.muted));
-      }
+      d.line('question-to-search',330,414,330,500,P.green,3);
+      d.arrow('search-input',330,500,475,500,P.green,3);
+      d.box('vector-search',490,455,300,90,'Vector search',P.greenLight,P.green,30);
+      d.line('search-output',805,500,950,500,P.green,3);
+      d.arrow('possible-result',950,500,950,414,P.green,3);
+      label(d,'candidate-label',1064,453,'Possible match',P.green,23);
+      label(d,'check-passage',640,590,'Read the returned passage to check whether it answers the question.',P.ink,26);
     }
-    label(d,'story-label',640,633,'Fictional classroom example · Positions illustrate vector comparisons',P.muted,23);
+    label(d,'story-label',640,640,'Fictional classroom example',P.muted,22);
   });
 
   use(11,'diagnose-the-index',(d,s)=>{

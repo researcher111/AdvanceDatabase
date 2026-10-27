@@ -899,9 +899,9 @@ window.CourseClarityCaptions = {
   },
   "11": {
     "meaning-becomes-geometry": [
-      "Maya asks about crash recovery. The stored passage describes the same task with different words. An exact string search misses it.",
-      "An embedding model converts the question and passage into vectors. Compatible settings make their vectors comparable.",
-      "The search ranks passages by vector similarity. Read each returned passage to check whether it answers the question."
+      "Maya needs a passage about crash recovery. Can this stored passage help answer her question?",
+      "Search for the whole question as an exact phrase. This passage does not contain that phrase, so this search misses it.",
+      "Vector search compares numeric representations of text. It can find passages with different wording. Read each result to check the answer."
     ],
     "embedding": [
       "The embedding model converts the passage into a vector.",
