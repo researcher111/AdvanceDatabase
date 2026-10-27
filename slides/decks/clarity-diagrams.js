@@ -123,11 +123,11 @@
     d.rect('question-card',70,220,520,180,s===1?P.orangeLight:P.white,s===1?P.orange:P.line,12,2);
     d.rect('passage-card',690,220,520,180,P.white,s===2?P.green:P.line,12,2);
     label(d,'question-heading',330,254,'Maya’s question',P.green,26);
-    label(d,'question-line-1',330,310,'How does a database',P.ink,30);
-    label(d,'question-line-2',330,352,'recover after a crash?',P.ink,30);
-    label(d,'passage-heading',950,254,'Stored passage',P.green,26);
-    label(d,'passage-line-1',950,310,'Replay the durable log',P.ink,30);
-    label(d,'passage-line-2',950,352,'to restore committed writes.',P.ink,29);
+    label(d,'question-line-1',330,310,'Why does my model fail',P.ink,30);
+    label(d,'question-line-2',330,352,'on new data?',P.ink,30);
+    label(d,'passage-heading',950,254,'From her course notes',P.green,26);
+    label(d,'passage-line-1',950,310,'Overfitting can cause low',P.ink,30);
+    label(d,'passage-line-2',950,352,'training error but high test error.',P.ink,29);
     if(s===0){
       label(d,'first-question',640,500,'Can this passage help answer the question?',P.ink,32);
       label(d,'compare-texts',640,556,'Compare the meaning of the two texts.',P.muted,26);
@@ -149,7 +149,7 @@
   });
 
   use(11,'diagnose-the-index',(d,s)=>{
-    label(d,'diagnostic-question',640,235,'Does the passage explain crash recovery?',P.ink,29);
+    label(d,'diagnostic-question',640,235,'Is this passage relevant to Maya’s model problem?',P.ink,29);
     label(d,'index-heading',340,331,'Approximate search missed exact neighbors',P.orange,24);
     if(s>=1){
       d.arrow('index-test',340,359,340,438,P.orange,3);
@@ -167,7 +167,7 @@
   });
 
   use(11,'rebuild-the-retrieval-contract',(d,s)=>{
-    label(d,'opening-question',640,237,'“How does a database recover after a crash?”',P.ink,32);
+    label(d,'opening-question',640,237,'“Why does my model fail on new data?”',P.ink,32);
     const names=['Save exact IDs','Search fewer candidates','Compare result IDs','Read the passage'];
     [180,490,800,1110].forEach((x,i)=>{
       if(i>s)return;

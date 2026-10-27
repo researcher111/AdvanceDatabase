@@ -5,6 +5,8 @@ const {chromium}=require('playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const {pathToFileURL}=require('node:url');
 const root=path.resolve(__dirname,'..'),url=pathToFileURL(path.join(root,'slides/lecture-11.html')).href;
+const readingApi=require(path.join(root,'lectures/lecture-11/embedding-walkthrough.js'));
+const readingFixtures=JSON.parse(JSON.stringify({queries:readingApi.queries,passages:readingApi.passages}));
 const output=process.env.EMBEDDING_SLIDE_QA_OUTPUT||fs.mkdtempSync(path.join(os.tmpdir(),'embedding-slides-'));
 fs.mkdirSync(output,{recursive:true});
 
@@ -62,44 +64,54 @@ fs.mkdirSync(output,{recursive:true});
    if(step<6)await page.locator('#forward').click();
   }
   assert.equal(new Set(slides.map(s=>s.svg)).size,7,'all seven builds show a distinct visual state');
-  const fixtures=await page.evaluate(()=>({queries:EmbeddingWalkthrough.queries,passages:EmbeddingWalkthrough.passages}));
+  const fixtures=await page.evaluate(()=>CoursePlayer.deck.scenes.find(scene=>scene.id==='embedding').embeddingExample);
+  assert.deepEqual(await page.evaluate(()=>({queries:EmbeddingWalkthrough.queries,passages:EmbeddingWalkthrough.passages})),readingFixtures,'slide-specific examples do not mutate the shared reading fixtures');
+  for(const fixture of [...Object.values(fixtures.queries),...fixtures.passages]){
+   assert.equal(fixture.tokens.length,fixture.context.length,'each manual token has one contextual vector');
+   assert.equal(fixture.tokens.join(' ').replace(/ ([?.])/g,'$1'),fixture.text,'manual tokens reconstruct their exact example text');
+   assert(fixture.context.every(row=>row.length===3&&row.every(Number.isFinite)),'each token has three finite teaching coordinates');
+  }
+  assert.equal(fixtures.queries.overfitting.tokens.length,9);
+  assert.equal(fixtures.queries.overfitting.tokens[fixtures.queries.overfitting.focus],'model','context focuses on the word with two meanings');
+  assert.equal(fixtures.passages[0].text,'Overfitting can cause low training error but high test error.');
+  assert(fixtures.passages[1].text.includes('median from the training data'),'imputation uses a statistic from the training split');
   function embedding(fixture){
    const average=fixture.context[0].map((_,dimension)=>fixture.context.reduce((sum,row)=>sum+row[dimension],0)/fixture.context.length);
    return {average,unit:average.map(value=>value/Math.hypot(...average))};
   }
   const vectorText=vector=>'['+vector.map(value=>value.toFixed(3)).join(', ')+']';
-  const queryIds=['recovery','recovery','recovery','recovery','recovery','restart','speed'];
+  const queryIds=['overfitting','overfitting','overfitting','overfitting','overfitting','paraphrase','missing'];
   for(let step=0;step<7;step++){
    assert.equal(slides[step].byKey['ew-query'],fixtures.queries[queryIds[step]].text,'every build keeps the actual question visible');
    assert(slides[step].byKey['ew-disclaimer']?.length>0,'invented model values remain explicitly labeled');
   }
-  fixtures.queries.recovery.tokens.forEach((token,index)=>{
-   assert.equal(slides[1].byKey[`ew-token-${index}-label`],token,`build 2: token ${index+1} matches the reading example`);
+  fixtures.queries.overfitting.tokens.forEach((token,index)=>{
+   assert.equal(slides[1].byKey[`ew-token-${index}-label`],token,`build 2: token ${index+1} matches the slide example`);
   });
-  const contextBuild=slides[2].byKey,focus=fixtures.queries.recovery.focus;
-  for(const example of ['health','database'])for(const part of ['sentence-0','clue','meaning']){
+  const contextBuild=slides[2].byKey,focus=fixtures.queries.overfitting.focus;
+  for(const example of ['airplane','prediction'])for(const part of ['sentence-0','clue','meaning']){
    assert(contextBuild[`ew-context-${example}-${part}`]?.trim(),`context stage shows the ${example} sentence, its clue, and the word's meaning`);
   }
-  assert.notEqual(contextBuild['ew-context-health-meaning'],contextBuild['ew-context-database-meaning'],'the same word has different meanings in the two sentences');
-  assert.equal([contextBuild['ew-context-database-sentence-0'],contextBuild['ew-context-database-sentence-1']].join(' '),fixtures.queries.recovery.text,'database context example preserves the current question');
+  assert.notEqual(contextBuild['ew-context-airplane-meaning'],contextBuild['ew-context-prediction-meaning'],'the same word has different meanings in the two sentences');
+  assert.equal([contextBuild['ew-context-prediction-sentence-0'],contextBuild['ew-context-prediction-sentence-1']].join(' '),fixtures.queries.overfitting.text,'prediction context example preserves the current question');
   assert(contextBuild['ew-context-mechanism']?.trim(),'context stage connects the sentence comparison to the vector update');
-  assert(contextBuild['ew-context-vector'].includes(vectorText(fixtures.queries.recovery.context[focus])),'context stage displays the focused token vector from the shared reading example');
-  const recovery=embedding(fixtures.queries.recovery);
-  recovery.average.forEach((value,dimension)=>{
+  assert(contextBuild['ew-context-vector'].includes(vectorText(fixtures.queries.overfitting.context[focus])),'context stage displays the focused token vector from the slide example');
+  const overfitting=embedding(fixtures.queries.overfitting);
+  overfitting.average.forEach((value,dimension)=>{
    assert(Math.abs(Number(slides[3].byKey[`ew-mean-${dimension}`])-value)<=0.0005,'pooling displays the arithmetic mean of contextual coordinates');
-   assert(Math.abs(Number(slides[3].byKey[`ew-embedding-${dimension}`])-recovery.unit[dimension])<=0.0005,'normalization displays the resulting unit vector');
+   assert(Math.abs(Number(slides[3].byKey[`ew-embedding-${dimension}`])-overfitting.unit[dimension])<=0.0005,'normalization displays the resulting unit vector');
   });
-  for(const [step,id]of [[4,'recovery'],[5,'restart'],[6,'speed']]){
+  for(const [step,id]of [[4,'overfitting'],[5,'paraphrase'],[6,'missing']]){
    const query=embedding(fixtures.queries[id]).unit;
    assert.equal(slides[step].byKey['ew-query-vector'],vectorText(query),'comparison uses the selected question vector');
    const ranking=fixtures.passages.map(passage=>{
     const vector=embedding(passage).unit;
     return {id:passage.id,vector,score:vector.reduce((sum,value,dimension)=>sum+value*query[dimension],0)};
    }).sort((a,b)=>b.score-a.score);
-   assert.equal(ranking[0].id,id==='speed'?'index':'recovery');
+   assert.equal(ranking[0].id,id==='missing'?'missing':'overfitting');
    for(const [rank,passage]of ranking.entries()){
     assert.equal(Number(slides[step].byKey[`ew-rank-${passage.id}`]),rank+1,`${id}: passages are ranked by the recomputed cosine`);
-    assert(slides[step].byKey[`ew-score-${passage.id}`].includes(passage.score.toFixed(3)),`${id}: score matches the reading's vector calculation`);
+    assert(slides[step].byKey[`ew-score-${passage.id}`].includes(passage.score.toFixed(3)),`${id}: score matches an independent calculation from slide fixtures`);
     assert.equal(slides[step].byKey[`ew-stored-${passage.id}`],vectorText(passage.vector),'stored passage coordinates stay fixed across questions');
    }
    const first=slides[step].text.find(t=>t.key===`ew-rank-${ranking[0].id}`),second=slides[step].text.find(t=>t.key===`ew-rank-${ranking[1].id}`);
@@ -134,6 +146,6 @@ fs.mkdirSync(output,{recursive:true});
   assert(await article.locator('svg').isVisible(),'print retains the embedding visual');
   await article.screenshot({path:path.join(output,'guide.png')});
   assert.deepEqual(errors,[],'local deck, presenter, and guide produce no browser errors');
-  console.log(`Seven embedding builds: diagrams, shared calculations, ranking changes, presenter synchronization, print guide, reduced motion, tablet, and offline operation pass. Screenshots: ${output}`);
+  console.log(`Seven embedding builds: diagrams, slide calculations, unchanged reading data, ranking changes, presenter synchronization, print guide, reduced motion, tablet, and offline operation pass. Screenshots: ${output}`);
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

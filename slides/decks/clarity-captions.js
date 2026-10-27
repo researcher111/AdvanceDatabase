@@ -899,7 +899,7 @@ window.CourseClarityCaptions = {
   },
   "11": {
     "meaning-becomes-geometry": [
-      "Maya needs a passage about crash recovery. Can this stored passage help answer her question?",
+      "Maya’s model performs well on training data but poorly on new data. She searches her course notes for an explanation.",
       "Search for the whole question as an exact phrase. This passage does not contain that phrase, so this search misses it.",
       "Vector search compares numeric representations of text. It can find passages with different wording. Read each result to check the answer."
     ],
@@ -982,10 +982,10 @@ window.CourseClarityCaptions = {
       "Now read the passages. If exact results also fail to answer, inspect the passages, embeddings, metadata, and ranking."
     ],
     "rebuild-the-retrieval-contract": [
-      "Return to Maya’s recovery question. Save the exact result IDs as the reference for this query and metric.",
+      "Return to Maya’s question about poor predictions on new data. Save the exact result IDs as the reference for this query and metric.",
       "Choose the IVF probe count or HNSW search setting. Measure how much work the search performs.",
       "Compare approximate IDs with exact IDs. Measure recall across representative questions.",
-      "Read the returned passages. Even recall 1.0 does not prove that the passages answer the recovery question."
+      "Read the returned passages. Even recall 1.0 does not prove that the passages explain the poor predictions."
     ]
   },
   "12": {

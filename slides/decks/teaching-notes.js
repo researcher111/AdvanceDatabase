@@ -1638,16 +1638,16 @@
     "meaning-becomes-geometry": {
       "idea": "A useful passage can use different words from the question. Vector search can help find it, but the result still needs checking.",
       "question": "Why does this exact phrase search miss a passage that could help answer the question?",
-      "answer": "The passage does not contain the whole question as an exact phrase. It describes a recovery operation with different words.",
+      "answer": "The passage does not contain the whole question as an exact phrase. It describes one possible cause of poor predictions with different words.",
       "builds": [
-        "Introduce Maya as a fictional student searching her course notes. Read the question and stored passage aloud. Ask whether the passage could help answer the question. Pause before advancing. Replaying the durable log connects the passage to crash recovery.",
+        "Maya’s model performs well on training data but poorly on new data. She searches her machine learning notes for an explanation. This is a fictional classroom example. Read the question and passage aloud. Ask whether overfitting could explain the pattern. Pause before advancing.",
         "Use the whole question as the exact search phrase. Show that this phrase does not occur in the passage. This example explains one exact phrase search. It does not claim that every keyword search or B+ tree lookup fails.",
         "Follow the arrows from the question through vector search to a possible passage. Define an embedding as a numeric representation of text. The next slide shows how the model creates that representation. No model was run for this fictional example. The arrows illustrate a possible result, not a measured or guaranteed match. Read any returned passage to check whether it answers the question."
       ],
       "checks": [
         {
-          "question": "Can this passage help answer the recovery question?",
-          "answer": "Yes. It describes replaying a durable log to restore committed writes. It uses different words from the question."
+          "question": "Can this passage help explain Maya’s poor predictions on new data?",
+          "answer": "Yes. Overfitting is one possible cause of this pattern. The passage does not establish why her particular model fails."
         },
         {
           "question": "Does this passage contain the whole question as an exact phrase?",
@@ -1664,7 +1664,7 @@
       "question": "Do equal dimensions make two embedding models compatible?",
       "answer": "No. The model versions, coordinate systems, preprocessing, and similarity metric must also be compatible.",
       "builds": [
-        "Follow the recovery passage into the model.",
+        "Follow the passage about overfitting into the embedding model.",
         "Point to the four example coordinates. These values illustrate a vector. They are not output from an embedding model.",
         "Ask whether the question can use an unrelated model. Explain which settings must remain compatible."
       ]
@@ -1787,10 +1787,10 @@
     },
     "diagnose-the-index": {
       "idea": "Missing exact neighbors indicate a search problem. Unhelpful exact neighbors require a separate check of the passage representation and ranking.",
-      "question": "What should we inspect if exact and approximate results agree but neither answers the recovery question?",
+      "question": "What should we inspect if exact and approximate results agree but neither helps explain the poor predictions?",
       "answer": "Inspect how passages were split, their embeddings, metadata, and ranking. More probes do not change existing vector scores or make an unhelpful passage useful.",
       "builds": [
-        "Return to the recovery question. Compare approximate IDs with exact IDs. Ask whether exact neighbors are missing before deciding how to adjust the search.",
+        "Return to Maya’s question about poor predictions on new data. Compare approximate IDs with exact IDs. Ask whether exact neighbors are missing before deciding how to adjust the search.",
         "Increase the probe count or graph search breadth. Compare the IDs again. If missed exact neighbors return, the wider search explains that improvement.",
         "Read the returned passages. If exact neighbors are also unhelpful, inspect passage boundaries, embeddings, metadata, and ranking. Separate geometric recall from relevance before evaluating generated answers. The diagram illustrates a diagnosis. Its example IDs do not establish passage relevance."
       ]
@@ -1800,7 +1800,7 @@
       "question": "Why can recall 1.0 coexist with an answer that lacks useful evidence?",
       "answer": "Recall 1.0 means the approximate result contains every saved exact neighbor. It does not show that those passages answer the question or support a generated claim.",
       "builds": [
-        "Return to Maya and Noor’s recovery question. Ask why Maya saved the exact result IDs. They establish which geometric neighbors the approximate search should recover.",
+        "Return to Maya’s question about poor predictions on new data. Ask why Maya saved the exact result IDs. They establish which geometric neighbors the approximate search should recover.",
         "Ask which vectors IVF or HNSW can skip. Connect a larger search setting to more candidate work. Keep the query, metric, and baseline fixed during the comparison.",
         "Measure recall across representative questions. Ask why one successful question is insufficient evidence for choosing a setting. Record comparison counts, latency, and memory as well.",
         "Ask a student to explain the four steps in order. Save exact IDs. Search fewer candidates. Compare IDs. Read passages.\n\nAsk why the nearest centroid can belong to a list that omits the nearest vector. Then ask what recall 1.0 leaves unproved. The next lecture follows a retrieved passage into the model prompt and checks which answer claims it supports."
