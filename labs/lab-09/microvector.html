@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="embedding-network.css?v=1">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 </head>
 <body>
@@ -17,6 +18,7 @@
   <div class="toc-title">Lab 9 · microvector</div>
   <ul>
     <li><a href="#generate-embeddings">Start here · Generate embeddings locally</a></li>
+    <li><a href="#inside-embedding-model">See inside an embedding model</a></li>
     <li><a href="#embedding-lengths">Compare text lengths</a></li>
     <li><a href="#embedding-window">Inspect the input window</a></li>
     <li><a href="#embedding-chunks">Keep the missing text with chunks</a></li>
@@ -74,6 +76,52 @@
    input length limit   fixed output width</code></pre>
 
 <p><strong>A token</strong> is a piece of text recognized by the tokenizer. A token can contain a word, part of a word, or punctuation. Count tokens with the model’s tokenizer. Character counts and word counts are different measurements.</p>
+
+<h2 id="inside-embedding-model">See inside an embedding model</h2>
+
+<p>How do token vectors become one passage vector? Follow a small network with visible numbers. Select a token to inspect its calculations. Then train the shared projection to compare matching and unrelated passages.</p>
+
+<div id="embedding-network" class="viz">
+  <div class="viz-title">From tokens to one searchable vector</div>
+  <p class="en-disclaimer">Computed toy model: one attention head, three hidden coordinates, and two output coordinates. These are invented weights, not EmbeddingGemma 2 activations.</p>
+  <div id="en-fallback" class="en-fallback">
+    <p><strong>Inference:</strong> token lookup → bidirectional attention → feed-forward network → mean pooling → projection → normalization.</p>
+    <p>Each token first has its own vector. Attention mixes information across tokens. Mean pooling averages the resulting token vectors.</p>
+    <p><strong>Training:</strong> encode a query and candidate passages with shared weights. Compare their vectors. Update the weights to favor the matching passage.</p>
+    <p>Enable JavaScript to trace the numbers and train the toy projection.</p>
+  </div>
+  <div id="en-interactive" hidden></div>
+  <div class="en-print">
+    <p><strong>Follow the shapes:</strong> N tokens → N × 3 token vectors → N × 3 contextual vectors → one 3-coordinate mean → one 2-coordinate unit vector.</p>
+    <p>The same encoder processes queries and passages. Contrastive training rewards the matching passage relative to the other candidates.</p>
+    <p>This toy trains only its shared projection. EmbeddingGemma 2 uses a larger model and a multi-stage training process.</p>
+  </div>
+</div>
+
+<h3 class="new-slide" data-kicker="Embedding training">Is this an encoder and decoder?</h3>
+
+<p>An <strong>autoencoder</strong> learns to reconstruct its input. Its encoder creates a representation, and its decoder tries to recover the input. Keeping only the encoder afterward is one way to obtain representations.</p>
+
+<div class="en-model-comparison">
+  <div><strong>Autoencoder training</strong><p>input → encoder → representation → decoder → reconstructed input</p><p>Compare the reconstruction with the original input.</p></div>
+  <div><strong>Retrieval training</strong><p>query and passages → shared encoder → vectors → similarity scores</p><p>Reward the matching passage relative to unrelated passages.</p></div>
+</div>
+
+<p>EmbeddingGemma 2 follows the second pattern for its contrastive training stage. It starts from a pretrained Gemma 4 decoder-only backbone. The embedding model changes causal attention to bidirectional attention. It adds pooling, projection, and normalization to produce a retrieval vector.</p>
+
+<p>Here, <strong>bidirectional attention</strong> lets a token use information from tokens on either side within its attention mask. A causal language model restricts attention to the current and earlier positions. EmbeddingGemma 2 does not generate a reconstructed passage from its embedding.</p>
+
+<p>Earlier EmbeddingGemma 2 training stages learn from a larger model’s vectors. Its final training combines contrastive learning with other objectives. The toy shows one contrastive objective and updates only six projection weights. It does not reproduce the full training process.</p>
+
+<p>The real model uses 24 transformer layers, position information, and both local and full attention. The toy uses one full-attention block and omits position information, local attention, and task prefixes. Reordering the same words therefore leaves this toy’s final vector unchanged. Real EmbeddingGemma 2 produces 768 output coordinates from 512-coordinate hidden states.</p>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Explain the distinction</span>
+  <p>Does encoding another sentence change the weights? Why do training diagrams show two encoders if both inputs use the same model?</p>
+  <details><summary>Check your explanation</summary><p>Inference changes activations while the weights stay fixed. Training updates weights from a loss. The two encoder branches apply the same weights to different inputs. They are parallel computations, not an encoder stacked above a decoder.</p></details>
+</div>
+
+<p class="cite">Architecture and training: <a href="https://arxiv.org/html/2610.37364v1#S2.SS4">EmbeddingGemma 2 technical report, Sections 2.2–2.4</a> and <a href="https://huggingface.co/docs/transformers/main/model_doc/embedding_gemma2">Transformers implementation guide</a>. Visual reference: <a href="https://researcher111.github.io/ML-Security-Public/labs/lab-02/microgpt.html">MicroGPT’s architecture and neuron walkthrough</a>.</p>
 
 <h3 class="new-slide" data-kicker="Generate embeddings">Set up a local environment</h3>
 
@@ -545,6 +593,8 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=ste-20261015"></script>
+<script src="embedding-model.js?v=1"></script>
+<script src="embedding-network.js?v=1"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
