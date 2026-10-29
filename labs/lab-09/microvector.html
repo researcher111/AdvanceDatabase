@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=2">
-<link rel="stylesheet" href="embedding-network.css?v=1">
+<link rel="stylesheet" href="embedding-network.css?v=2">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 </head>
 <body>
@@ -56,17 +56,19 @@
 <!-- Embedding extension: the original index lab follows this section. -->
 <h2 id="generate-embeddings">Start here · Generate embeddings locally</h2>
 
-<p class="lede">Where do the vectors in a vector database come from? Start with text on your computer. Load EmbeddingGemma 2, calculate vectors, and inspect what happens when an input exceeds the model’s window. Then use the same model to compare text with pictures, audio, and video.</p>
+<p class="lede">Where do the vectors in a vector database come from? Start with text on your computer. Load EmbeddingGemma 2. Calculate vectors for texts of different lengths. Inspect what happens when an input exceeds the model’s window. Then use the same model to compare text with pictures, audio, and video.</p>
 
 <div class="callout note">
   <span class="label">Before the existing lab · guided practice</span>
   <p>Complete the text experiment before building the index. The media experiment is additional practice or an instructor demonstration. Allow extra time for installation and the first model download. These activities add no graded submission. The original 75-minute index lab follows below.</p>
 </div>
 
+<p>A <strong>vector</strong> is an ordered list of numbers. Each number is a <strong>coordinate</strong>. The number of coordinates is the vector’s dimension. Vector <strong>length</strong> measures the distance from the origin.</p>
+
 <div class="exercise learning-check">
   <span class="ex-label">Predict</span>
-  <p>A database stores a vector for each passage. Would a longer passage need a longer vector? Could that vector represent a sentence the model never received?</p>
-  <details><summary>Check the starting idea</summary><p>The model converts each accepted input into a fixed number of coordinates. A longer input does not increase that number. Text removed before inference cannot contribute to the vector.</p></details>
+  <p>How many coordinates does <code>(3, 4)</code> have? Would a longer passage need more coordinates? Could its vector represent a sentence the model never received?</p>
+  <details><summary>Check the starting idea</summary><p>The vector <code>(3, 4)</code> has two coordinates and length 5. This model converts each accepted input into a fixed number of coordinates. A longer input does not increase that number. Text removed before the model runs cannot contribute to its vector.</p></details>
 </div>
 
 <p>Think of an embedding as a location on a learned map. Related inputs often have nearby locations. The model determines the coordinates. The index searches them. A location does not reproduce the original passage, and proximity does not prove that a passage answers a question.</p>
@@ -79,23 +81,39 @@
 
 <h2 id="inside-embedding-model">See inside an embedding model</h2>
 
-<p>How do token vectors become one passage vector? Follow a small network with visible numbers. Select a token to inspect its calculations. Then train the shared projection to compare matching and unrelated passages.</p>
+<p>How do token vectors become one passage vector? The first stage works like a table lookup: a token ID selects a row of numbers. Later stages combine those numbers with information from other tokens. The lookup alone does not use the surrounding text.</p>
+
+<p>An <strong>encoder</strong> converts an input into a representation, such as a passage vector. <strong>Weights</strong> are stored numbers that control the model’s calculations. <strong>Activations</strong> are the values calculated for the current input. During <strong>inference</strong>, the model uses its weights without changing them. During <strong>training</strong>, an algorithm adjusts weights to reduce a numerical measure called a <strong>loss</strong>.</p>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Predict, run, explain</span>
+  <p>The toy query is <code>find rows with an index</code>. Which passage should match: <code>index finds rows without scanning</code> or <code>redo log restores committed changes</code>?</p>
+  <p>Select a token below. Use <strong>Next</strong> to trace its values through the network. At <strong>Mean pooling</strong>, inspect where the token vectors become one passage vector. Compare the current ranking with your prediction.</p>
+  <p>Open <strong>Train on pairs</strong>. Select <strong>Train · 20 steps</strong>. Compare the loss and ranking before and after training. Explain why query and passage vectors can both change.</p>
+</div>
 
 <div id="embedding-network" class="viz">
   <div class="viz-title">From tokens to one searchable vector</div>
-  <p class="en-disclaimer">Computed toy model: one attention head, three hidden coordinates, and two output coordinates. These are invented weights, not EmbeddingGemma 2 activations.</p>
+  <p class="en-disclaimer">This toy computes every displayed value from invented weights. One attention head mixes token information. Each token has three internal coordinates, and the output has two coordinates. The toy does not run EmbeddingGemma 2.</p>
   <div id="en-fallback" class="en-fallback">
-    <p><strong>Inference:</strong> token lookup → bidirectional attention → feed-forward network → mean pooling → projection → normalization.</p>
-    <p>Each token first has its own vector. Attention mixes information across tokens. Mean pooling averages the resulting token vectors.</p>
+    <p><strong>Inference:</strong> look up token vectors → mix token information → transform each token → average → project → normalize.</p>
+    <p>Attention mixes information across retained tokens, including later tokens. A feed-forward network transforms each token vector. Mean pooling averages those vectors. A projection matrix maps the average to two coordinates. Normalization divides the projected vector by its length.</p>
     <p><strong>Training:</strong> encode a query and candidate passages with shared weights. Compare their vectors. Update the weights to favor the matching passage.</p>
     <p>Enable JavaScript to trace the numbers and train the toy projection.</p>
   </div>
   <div id="en-interactive" hidden></div>
   <div class="en-print">
     <p><strong>Follow the shapes:</strong> N tokens → N × 3 token vectors → N × 3 contextual vectors → one 3-coordinate mean → one 2-coordinate unit vector.</p>
+    <p>N is the number of retained tokens. Each contextual vector includes information from other tokens. The final unit vector has length 1.</p>
     <p>The same encoder processes queries and passages. Contrastive training rewards the matching passage relative to the other candidates.</p>
     <p>This toy trains only its shared projection. EmbeddingGemma 2 uses a larger model and a multi-stage training process.</p>
   </div>
+</div>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Try a different input window</span>
+  <p>Return to <strong>Trace an embedding</strong> with the <strong>Faster lookup</strong> query. Predict what <strong>Only the first 2</strong> will retain. Select that window. Can the discarded word <code>index</code> affect this query vector? Did changing the window train any weights?</p>
+  <details><summary>Check your explanation</summary><p>The query retains <code>find rows</code>. The discarded tokens never reach the network, so <code>index</code> cannot affect this query vector. The window also truncates each candidate passage. The scores can therefore change while the weights stay fixed. Only the training controls update weights in this toy.</p></details>
 </div>
 
 <h3 class="new-slide" data-kicker="Embedding training">Is this an encoder and decoder?</h3>
@@ -107,9 +125,13 @@
   <div><strong>Retrieval training</strong><p>query and passages → shared encoder → vectors → similarity scores</p><p>Reward the matching passage relative to unrelated passages.</p></div>
 </div>
 
-<p>EmbeddingGemma 2 follows the second pattern for its contrastive training stage. It starts from a pretrained Gemma 4 decoder-only backbone. The embedding model changes causal attention to bidirectional attention. It adds pooling, projection, and normalization to produce a retrieval vector.</p>
+<p><strong>Contrastive training</strong> rewards a matching passage relative to other candidates. The toy measures this preference with a <strong>loss</strong>: a number that training tries to reduce. Both branches use the same encoder weights. The query and passage vectors can both change when those shared weights change.</p>
 
-<p>Here, <strong>bidirectional attention</strong> lets a token use information from tokens on either side within its attention mask. A causal language model restricts attention to the current and earlier positions. EmbeddingGemma 2 does not generate a reconstructed passage from its embedding.</p>
+<p>EmbeddingGemma 2 uses contrastive training as one stage of its training process. It starts from the pretrained Gemma 4 transformer, the network that processes token vectors. This starting model is a <strong>decoder-only</strong> transformer: it generates text without a separate encoder. The name describes the starting model, not an autoencoder’s reconstruction stage.</p>
+
+<p>The embedding model changes causal attention to <strong>bidirectional attention</strong>. Causal attention restricts each token to the current and earlier positions. Bidirectional attention also permits later positions within the attention mask. The mask specifies which positions a token can use.</p>
+
+<p>Like the toy, EmbeddingGemma 2 uses pooling, projection, and normalization to produce a retrieval vector. It does not reconstruct the passage from that vector. Its output represents the input for comparison with other inputs.</p>
 
 <p>Earlier EmbeddingGemma 2 training stages learn from a larger model’s vectors. Its final training combines contrastive learning with other objectives. The toy shows one contrastive objective and updates only six projection weights. It does not reproduce the full training process.</p>
 
@@ -118,7 +140,7 @@
 <div class="exercise learning-check">
   <span class="ex-label">Explain the distinction</span>
   <p>Does encoding another sentence change the weights? Why do training diagrams show two encoders if both inputs use the same model?</p>
-  <details><summary>Check your explanation</summary><p>Inference changes activations while the weights stay fixed. Training updates weights from a loss. The two encoder branches apply the same weights to different inputs. They are parallel computations, not an encoder stacked above a decoder.</p></details>
+  <details><summary>Check your explanation</summary><p>Inference changes activations while the weights stay fixed. Training adjusts weights to reduce a loss. The two encoder branches apply the same weights to different inputs. Each branch maps an input to a vector. An autoencoder instead passes its representation to a decoder that reconstructs the input.</p></details>
 </div>
 
 <p class="cite">Architecture and training: <a href="https://arxiv.org/html/2610.37364v1#S2.SS4">EmbeddingGemma 2 technical report, Sections 2.2–2.4</a> and <a href="https://huggingface.co/docs/transformers/main/model_doc/embedding_gemma2">Transformers implementation guide</a>. Visual reference: <a href="https://researcher111.github.io/ML-Security-Public/labs/lab-02/microgpt.html">MicroGPT’s architecture and neuron walkthrough</a>.</p>
@@ -149,10 +171,10 @@ python -m pip install -r requirements-embeddings.txt</code></pre>
 
 <h2 id="embedding-lengths">Compare text lengths</h2>
 
-<p>Run the complete text experiment:</p>
+<p>The toy showed many token vectors becoming one passage vector. Now run the complete text experiment with EmbeddingGemma 2:</p>
 <pre><code class="language-bash">python embedding_demo.py --mode text</code></pre>
 
-<p>The script embeds a short sentence, repeated paragraphs, and a longer passage. It prints input token counts, vector shapes, and vector lengths. Read the first coordinates to see that an embedding contains numbers. Exact coordinates and similarity scores can vary with software and hardware.</p>
+<p>The script embeds a short sentence, repeated paragraphs, and a longer passage. It prints input token counts, output shapes, and vector lengths. A shape gives array dimensions. For example, <code>(2, 768)</code> means two vectors with 768 coordinates each. Read the first coordinates to see that an embedding contains numbers. Exact coordinates and similarity scores can vary with software and hardware.</p>
 
 <p>This is the core operation used by the script:</p>
 <pre><code class="language-python">import torch
@@ -179,7 +201,7 @@ print(vectors.shape)  # (2, 768)</code></pre>
 
 <div class="exercise">
   <span class="ex-label">Run, then explain</span>
-  <p>Compare the token counts for all three texts. Which count grows? Which output dimension stays fixed? Check that each normalized vector has length approximately 1.</p>
+  <p>Compare the token counts for all three texts. Which count grows? Which output dimension stays fixed? Compare these results with the toy’s pooling stage. Check that each normalized vector has length approximately 1.</p>
   <details><summary>What to look for</summary><p>Input token counts vary. Each output contains 768 coordinates. Normalization divides a vector by its length. For two unit vectors, their dot product equals cosine similarity. A longer passage can change the coordinates without changing their count.</p></details>
 </div>
 
@@ -206,7 +228,7 @@ print(vectors.shape)  # (2, 768)</code></pre>
 <p>The experiment repeats a database paragraph until the formatted input exceeds the window. It then adds this invented fact:</p>
 <blockquote><p>The backup cabinet access code is AMBER-OTTER-731.</p></blockquote>
 
-<p>Predict whether the final sentence survives preprocessing. Inspect the printed full and retained token counts. Then compare the retained token IDs with two different final sentences.</p>
+<p>Recall how the toy discarded tokens beyond its window. Predict whether the final sentence survives here. Inspect the printed full and retained token counts. Then compare the retained token IDs with two different final sentences.</p>
 
 <pre class="equation" aria-label="Truncation removes the final sentence"><code>input:     [ repeated database text ................ ][ AMBER-OTTER-731 ]
 window:    [ up to 8,192 formatted tokens             ]
@@ -594,7 +616,7 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
 <script src="../_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=ste-20261015"></script>
 <script src="embedding-model.js?v=1"></script>
-<script src="embedding-network.js?v=1"></script>
+<script src="embedding-network.js?v=2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
