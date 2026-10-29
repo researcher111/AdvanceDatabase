@@ -16,6 +16,11 @@
 <aside class="toc">
   <div class="toc-title">Lab 9 · microvector</div>
   <ul>
+    <li><a href="#generate-embeddings">Start here · Generate embeddings locally</a></li>
+    <li><a href="#embedding-lengths">Compare text lengths</a></li>
+    <li><a href="#embedding-window">Inspect the input window</a></li>
+    <li><a href="#embedding-chunks">Keep the missing text with chunks</a></li>
+    <li><a href="#embedding-media">Embed pictures, audio, and video</a></li>
     <li><a href="#before-you-start">Check the starting point</a></li>
     <li><a href="#try-it">Compare recall with the number of vectors searched</a></li>
     <li><a href="#big-idea">Partition the space so a query skips most of it</a></li>
@@ -45,6 +50,227 @@
   <div class="subtitle">Implement exact and IVF search over 4,000 vectors, then measure how the number of searched clusters affects recall and work.</div>
   <div class="byline">Follows Lecture 11 (Vector Databases) · in class: 75 min · aim to finish Build + Verify · due Thu Nov 5 at class start</div>
 </header>
+
+<!-- Embedding extension: the original index lab follows this section. -->
+<h2 id="generate-embeddings">Start here · Generate embeddings locally</h2>
+
+<p class="lede">Where do the vectors in a vector database come from? Start with text on your computer. Load EmbeddingGemma 2, calculate vectors, and inspect what happens when an input exceeds the model’s window. Then use the same model to compare text with pictures, audio, and video.</p>
+
+<div class="callout note">
+  <span class="label">Before the existing lab · guided practice</span>
+  <p>Complete the text experiment before building the index. The media experiment is additional practice or an instructor demonstration. Allow extra time for installation and the first model download. These activities add no graded submission. The original 75-minute index lab follows below.</p>
+</div>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Predict</span>
+  <p>A database stores a vector for each passage. Would a longer passage need a longer vector? Could that vector represent a sentence the model never received?</p>
+  <details><summary>Check the starting idea</summary><p>The model converts each accepted input into a fixed number of coordinates. A longer input does not increase that number. Text removed before inference cannot contribute to the vector.</p></details>
+</div>
+
+<p>Think of an embedding as a location on a learned map. Related inputs often have nearby locations. The model determines the coordinates. The index searches them. A location does not reproduce the original passage, and proximity does not prove that a passage answers a question.</p>
+
+<pre class="equation" aria-label="Embedding pipeline"><code>text → tokens → model → one vector → similarity search
+          ↑                 ↓
+   input length limit   fixed output width</code></pre>
+
+<p><strong>A token</strong> is a piece of text recognized by the tokenizer. A token can contain a word, part of a word, or punctuation. Count tokens with the model’s tokenizer. Character counts and word counts are different measurements.</p>
+
+<h3 class="new-slide" data-kicker="Generate embeddings">Set up a local environment</h3>
+
+<p>Use Python 3.12 or 3.13. Run these commands from the repository’s top-level folder:</p>
+<pre><code class="language-bash">git pull
+cd labs/lab-09/starter
+python3 -m venv .venv-embeddings
+source .venv-embeddings/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-embeddings.txt</code></pre>
+<p>In Windows PowerShell, use <code>.venv-embeddings\Scripts\Activate.ps1</code> for activation. Keep this terminal in <code>labs/lab-09/starter</code> for the extension.</p>
+
+<div class="chat-downloads">
+  <span class="chat-downloads-label">Complete examples:</span>
+  <a class="chat-dl-btn" href="starter/embedding_demo.py" download>embedding_demo.py</a>
+  <a class="chat-dl-btn" href="starter/requirements-embeddings.txt" download>requirements-embeddings.txt</a>
+  <a class="chat-dl-btn" href="starter/make_demo_media.py" download>make_demo_media.py</a>
+</div>
+
+<p>The first run downloads <code>google/embeddinggemma-2</code> from Hugging Face. Later runs reuse cached weights. Inference runs on your computer. No hosted embedding API key is needed. Reserve several gigabytes for dependencies, weights, and working memory. Long inputs take longer and need more memory.</p>
+
+<p>The example uses the CPU and <code>float32</code> for portability. It loads only the text components for the text experiment. The media experiment loads the additional encoders. Use <code>--device cuda</code> only with a compatible PyTorch installation and GPU.</p>
+
+<p class="cite">Model and setup: <a href="https://huggingface.co/google/embeddinggemma-2">EmbeddingGemma 2 checkpoint</a>, <a href="https://developers.googleblog.com/en/embeddinggemma-2-the-developer-guide/">Google’s developer guide</a>, and <a href="https://github.com/huggingface/transformers/releases/tag/v5.19.0">Transformers support</a>. Use Sentence Transformers 6.1 or later and Transformers 5.19 or later.</p>
+
+<h2 id="embedding-lengths">Compare text lengths</h2>
+
+<p>Run the complete text experiment:</p>
+<pre><code class="language-bash">python embedding_demo.py --mode text</code></pre>
+
+<p>The script embeds a short sentence, repeated paragraphs, and a longer passage. It prints input token counts, vector shapes, and vector lengths. Read the first coordinates to see that an embedding contains numbers. Exact coordinates and similarity scores can vary with software and hardware.</p>
+
+<p>This is the core operation used by the script:</p>
+<pre><code class="language-python">import torch
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer(
+    "google/embeddinggemma-2",
+    device="cpu",
+    config_kwargs={"vision_config": None, "audio_config": None},
+    model_kwargs={"torch_dtype": torch.float32},
+)
+model.max_seq_length = 8192
+texts = [
+    "The database restores committed changes after a crash.",
+    "A recovery log records changes. After a crash, the database "
+    "uses the log to restore committed changes.",
+]
+vectors = model.encode(
+    texts, prompt_name="Document", normalize_embeddings=True,
+)
+print(vectors.shape)  # (2, 768)</code></pre>
+
+<p>The <code>Document</code> prompt adds a short document prefix. The <code>SearchQuery</code> prompt prepares a query for retrieval. Prefixes and special tokens consume input space too. The complete script measures formatted inputs before embedding them.</p>
+
+<div class="exercise">
+  <span class="ex-label">Run, then explain</span>
+  <p>Compare the token counts for all three texts. Which count grows? Which output dimension stays fixed? Check that each normalized vector has length approximately 1.</p>
+  <details><summary>What to look for</summary><p>Input token counts vary. Each output contains 768 coordinates. Normalization divides a vector by its length. For two unit vectors, their dot product equals cosine similarity. A longer passage can change the coordinates without changing their count.</p></details>
+</div>
+
+<details>
+  <summary>Compare with one verified run</summary>
+  <p>On October 29, 2026, the supplied script produced these results with Python 3.13 and CPU <code>float32</code>. Sentence Transformers was version 6.2.0. Transformers was version 5.21.1.</p>
+  <table>
+    <thead><tr><th>Input</th><th>Characters</th><th>Formatted tokens</th><th>Output shape</th></tr></thead>
+    <tbody>
+      <tr><td>Short</td><td>57</td><td>19</td><td><code>(768,)</code></td></tr>
+      <tr><td>Medium</td><td>798</td><td>150</td><td><code>(768,)</code></td></tr>
+      <tr><td>Long</td><td>8,512</td><td>1,513</td><td><code>(768,)</code></td></tr>
+    </tbody>
+  </table>
+  <p>Every vector had length 1.000000 at the displayed precision. These are measured example results, not grading thresholds.</p>
+</details>
+
+<h2 id="embedding-window">Inspect the input window</h2>
+
+<p>The <strong>context window</strong> limits the input processed in one call. EmbeddingGemma 2 supports 8,192 input tokens. Its full output has 768 coordinates. These numbers measure different things. Increasing output width does not make more input fit.</p>
+
+<p>The script sets <code>model.max_seq_length = 8192</code> explicitly. A library setting controls preprocessing. Raising that setting above the model’s supported window does not create reliable longer-context support.</p>
+
+<p>The experiment repeats a database paragraph until the formatted input exceeds the window. It then adds this invented fact:</p>
+<blockquote><p>The backup cabinet access code is AMBER-OTTER-731.</p></blockquote>
+
+<p>Predict whether the final sentence survives preprocessing. Inspect the printed full and retained token counts. Then compare the retained token IDs with two different final sentences.</p>
+
+<pre class="equation" aria-label="Truncation removes the final sentence"><code>input:     [ repeated database text ................ ][ AMBER-OTTER-731 ]
+window:    [ up to 8,192 formatted tokens             ]
+discarded:                                            [ remaining text ]
+output:    one 768-coordinate vector of the retained input</code></pre>
+
+<p><strong>Truncation</strong> removes input tokens that exceed a length limit. In this experiment, right truncation removes the end. Identical retained token IDs show that the final sentence cannot affect the resulting embedding. Truncation does not summarize the missing text.</p>
+
+<p>The complete script also checks input length before encoding. Its strict helper rejects an oversized input with an explanatory error. Other libraries can truncate or reject oversized inputs. Inspect the behavior of the interface you use.</p>
+
+<div class="exercise">
+  <span class="ex-label">Explain the failure</span>
+  <p>Could a more accurate nearest-neighbor index recover a fact removed before embedding?</p>
+  <details><summary>Check your explanation</summary><p>No. The index searches the vectors it receives. It cannot restore information excluded when those vectors were created. Fix input preparation before tuning search settings.</p></details>
+</div>
+
+<p class="cite">Limits and formatting: <a href="https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2">Google’s model card</a>. Preprocessing behavior: <a href="https://sbert.net/examples/sentence_transformer/applications/computing-embeddings/README.html">Sentence Transformers embedding documentation</a>.</p>
+
+<h2 id="embedding-chunks">Keep the missing text with chunks</h2>
+
+<p>A <strong>chunk</strong> is a bounded part of a source document. Embed each chunk separately. Keep its source ID and position with the vector. Search the chunk vectors. Then open the matching source passage.</p>
+
+<pre class="equation" aria-label="Chunking preserves access to later text"><code>document → [chunk 0] [chunk 1] ... [last chunk: AMBER-OTTER-731]
+              ↓         ↓                    ↓
+            vector    vector               vector
+query → query vector → compare against every chunk vector</code></pre>
+
+<p>The script splits the long text into overlapping token chunks. It checks each decoded chunk again with the document prefix. This check prevents formatting from pushing a chunk beyond the limit. Overlap repeats boundary text so a useful phrase is less likely to be split apart.</p>
+
+<p>The query asks for the backup cabinet access code. The script prints the highest-scoring chunks and the chunk containing the final sentence. Read those passages. Confirm that the sentence survived chunking. Then inspect its rank. Keeping the fact makes retrieval possible, but does not guarantee first place.</p>
+
+<div class="exercise">
+  <span class="ex-label">Transfer the idea</span>
+  <p>Suppose you move the final sentence into the middle of the long text. How could chunk boundaries, overlap, and surrounding text change its ranking?</p>
+  <details><summary>Check your explanation</summary><p>A vector represents its entire chunk. Different boundaries change the input represented by that vector. Overlap preserves some surrounding context, but also duplicates text and increases storage. Measure retrieval quality before choosing chunk settings for your project.</p></details>
+</div>
+
+<h2 id="embedding-media">Embed pictures, audio, and video</h2>
+
+<p><strong>Multimodal</strong> means that a model accepts more than one kind of input. EmbeddingGemma 2 can map text, pictures, audio, and video into the same vector space. A text query can therefore retrieve a related picture or recording.</p>
+
+<p>The following optional experiment generates three small local fixtures. They are synthetic examples, not benchmark data. The picture contains a red circle. The video moves that circle. The audio contains three short tones separated by silence.</p>
+
+<pre><code class="language-bash">python make_demo_media.py --output demo-media
+python embedding_demo.py --mode media \
+  --image demo-media/red-circle.png \
+  --audio demo-media/tone.wav \
+  --video demo-media/moving-circle.mp4 \
+  --query "a red circle moving across a white background"</code></pre>
+
+<p>On Windows, enter the second command on one line. Open the generated files before inspecting the scores. Predict which inputs match the query. Compare the returned ranking with the actual media.</p>
+
+<p>The media mode loads all encoders from the same checkpoint. These calls show the input format:</p>
+<pre><code class="language-python">import torch
+from sentence_transformers import SentenceTransformer
+from transformers.video_utils import load_video
+
+model = SentenceTransformer(
+    "google/embeddinggemma-2", device="cpu",
+    model_kwargs={"torch_dtype": torch.float32},
+)
+model.max_seq_length = 8192
+picture = model.encode(
+    {"image": "demo-media/red-circle.png"}, normalize_embeddings=True,
+)
+audio = model.encode(
+    {"audio": "demo-media/tone.wav"}, normalize_embeddings=True,
+)
+frames, metadata = load_video("demo-media/moving-circle.mp4", backend="pyav")
+video = model.encode(
+    {"video": frames}, normalize_embeddings=True,
+    processing_kwargs={"video": {"video_metadata": [metadata]}},
+)
+query = model.encode(
+    "a red circle moving across a white background",
+    prompt_name="SearchQuery", normalize_embeddings=True,
+)
+print(float(query @ picture), float(query @ audio), float(query @ video))</code></pre>
+
+<p>PyAV decodes the short video before embedding. The metadata preserves frame timing for sampling. This example loads all frames into memory. Cut longer recordings into short clips before using this path.</p>
+
+<p>Run the command again with <code>--query "three short electronic tones separated by silence"</code>. Record the changed scores. A similarity score is a ranking signal, not a probability. Small synthetic fixtures test the pipeline. Use representative media to evaluate retrieval quality.</p>
+
+<h3 class="new-slide" data-kicker="Multimodal inputs">Media also consumes the input window</h3>
+
+<table>
+  <thead><tr><th>Input</th><th>Default token cost</th><th>What to inspect</th></tr></thead>
+  <tbody>
+    <tr><td>Text</td><td>Count with the tokenizer</td><td>Include task prefixes and special tokens.</td></tr>
+    <tr><td>Picture</td><td>280 tokens per image</td><td>Image processing settings can change the cost.</td></tr>
+    <tr><td>Video</td><td>140 tokens per sampled frame</td><td>Sampling can omit a brief event between frames.</td></tr>
+    <tr><td>Audio</td><td>25 tokens per second</td><td>Supply 16 kHz mono audio, as the fixture does.</td></tr>
+  </tbody>
+</table>
+
+<p>All input types share the 8,192-token budget. Combining text and media leaves less space for each. The video path represents sampled visual frames. Do not assume it includes the soundtrack. Embed audio separately when sound matters.</p>
+
+<p>For long recordings, create short segments and store their start and end times. For video, inspect the frame sampling settings too. A larger context budget cannot recover frames that preprocessing never selected.</p>
+
+<p class="cite">Media formats and examples: <a href="https://ai.google.dev/gemma/docs/embeddinggemma/multimodal-embeddinggemma-with-sentence-transformers">Google’s multimodal tutorial</a>. Token budgets: <a href="https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2#context-limits">model card</a>. Frame sampling: <a href="https://huggingface.co/docs/transformers/main/model_doc/embedding_gemma2">Transformers model documentation</a>.</p>
+
+<div class="exercise learning-check">
+  <span class="ex-label">Return to the pipeline</span>
+  <p>Choose a paragraph, a photo, or a video segment. Explain what preprocessing retains, what the vector represents, and what the index searches. Which source information would you store beside the vector?</p>
+  <details><summary>Check your explanation</summary><p>The model embeds only the retained tokens or media features. The index searches those coordinates. Keep the original source, its ID, and any chunk position or time range. Open that source to check whether the result supports the query.</p></details>
+</div>
+
+<div class="callout note">
+  <span class="label">Continue with the original index lab</span>
+  <p>The experiment above creates a new embedding space. The original lab uses supplied MiniLM vectors and its existing tests. Keep those files for Parts 1–3. Do not mix Gemma queries with MiniLM document vectors. Equal vector dimensions alone do not make two model spaces compatible.</p>
+  <p>Return to the original environment with <code>deactivate</code>. Continue below to implement exact and IVF search. The original assignment, data, measurements, and submission requirements follow unchanged.</p>
+</div>
 
 <p class="lede">Compare exact and IVF search results for the same question. Which exact neighbor IDs are missing from the IVF result, and how many comparisons did each search perform? Build both search methods over 4,000 arXiv abstract vectors, then measure how searching fewer candidates affects recall. The provided k-means code chooses <span class="gloss" data-gloss="centroid">centroids</span>. Your code puts each vector in a centroid’s list, searches selected lists, and counts the comparisons.</p>
 
