@@ -17,8 +17,8 @@
 
   ui.innerHTML = `
     <div class="en-modes" role="group" aria-label="Explore encoding or training">
-      <button type="button" data-mode="trace" aria-pressed="true">1 · Trace an embedding</button>
-      <button type="button" data-mode="train" aria-pressed="false">2 · Train on pairs</button>
+      <button type="button" data-mode="trace" aria-pressed="true">Trace an embedding</button>
+      <button type="button" data-mode="train" aria-pressed="false">Train on pairs</button>
     </div>
     <div class="en-toolbar">
       <div class="en-select"><label for="en-example">Query to encode</label><select id="en-example">${M.EXAMPLES.map(e => `<option value="${e.id}">${e.label}</option>`).join('')}</select></div>
@@ -164,6 +164,8 @@
       <p class="en-small">The toy changes each weight slightly to estimate how that weight affects the loss. These estimates guide the next weight update. The toy reduces the step size when needed to avoid increasing training loss. These results use the training pairs. They do not show accuracy on new queries.</p>`;
   }
   function render() {
+    get('en-example').value = selected;
+    get('en-window').value = String(limit);
     const evaluation = M.evaluate(state, {maxTokens:mode==='train'?6:limit});
     const query = evaluation.queries.find(q=>q.id===selected);
     const t = query.trace;
@@ -175,6 +177,7 @@
     get('en-input').innerHTML=`<div class="en-sentence">${esc(query.text)}</div>${mode==='trace'?`<div class="en-tokens" role="group" aria-label="Select a token to inspect">${t.tokens.map((word,i)=>`<button type="button" class="en-token" data-token="${i}" aria-pressed="${i===token}"><small>t${i} · ID ${t.tokenIds[i]}</small><span>${esc(word)}</span></button>`).join('')}${t.dropped.map(word=>`<span class="en-token is-dropped"><small>discarded</small><span>${esc(word)}</span></span>`).join('')}</div><div class="en-token-note">${t.tokens.length} retained tokens → one 2-coordinate vector. ${t.dropped.length?'Crossed-out tokens never enter this network.':'Choose a token to follow its values.'}</div>`:'<p class="en-small">Predict which passage should rank first. Select <strong>Train · 20 steps</strong>. Compare the scores. Explain why both query and passage vectors move.</p>'}`;
     if (mode==='trace') renderTrace(query,evaluation); else renderTraining(query,evaluation);
     get('en-status').textContent=mode==='trace'?`Stage ${stage+1}: ${names[stage]}. Selected token: ${t.tokens[token]}. Weights after ${state.steps} training updates.`:`${state.steps} training updates. Mean loss ${fmt(evaluation.loss,4)}. Top result: ${docName(query.ranking[0])}.`;
+    document.dispatchEvent(new Event('embedding:change'));
   }
   root.addEventListener('click', event=>{
     const button=event.target.closest('button'); if(!button) return;
@@ -198,6 +201,24 @@
   // Preserve native control keys without moving the page's presentation deck.
   root.addEventListener('keydown',event=>{
     if(event.target.closest('button, select, summary, input')) event.stopPropagation();
+  });
+  // All detail levels read the same inference state. Training still uses full pairs.
+  window.EmbeddingExplorer = {
+    getSnapshot: () => ({evaluation:M.evaluate(state,{maxTokens:limit}), selected, limit, steps:state.steps}),
+    setExample(id) {
+      if (!M.EXAMPLES.some(example => example.id === id)) return;
+      selected = id; token = 0; render();
+    },
+    setWindow(value) {
+      if (![2, 3, 6].includes(value)) return;
+      limit = value; token = 0; render();
+    }
+  };
+  // Native disclosures keep their keyboard behavior inside presentation mode.
+  document.querySelectorAll('.embedding-disclosure').forEach(disclosure => {
+    disclosure.addEventListener('keydown', event => {
+      if (event.target.closest('summary, button, select, input')) event.stopPropagation();
+    });
   });
   render();
   get('en-fallback').hidden=true; ui.hidden=false;

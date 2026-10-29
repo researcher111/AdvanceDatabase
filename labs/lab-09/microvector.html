@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="../_shared/clear-teaching.css?v=1">
 <link rel="stylesheet" href="styles.css?v=2">
 <link rel="stylesheet" href="embedding-network.css?v=2">
+<link rel="stylesheet" href="embedding-levels.css?v=1">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 </head>
 <body>
@@ -87,6 +88,38 @@
 
 <h2 id="inside-embedding-model">See inside an embedding model</h2>
 
+<p>Start with the essential idea: the model turns text into a vector, and search compares vectors. Choose a query in Level 1. Open Level 2 or Level 3 when you want more detail.</p>
+
+<div id="embedding-level-1" class="embedding-levels viz">
+  <div class="viz-title">Level 1 · Text becomes one vector</div>
+  <p>The same model encodes the query and each passage. Similar vectors receive higher scores. Read the passage to check whether it answers the query.</p>
+  <p class="el-note">This small toy computes real numbers from invented weights. It does not run EmbeddingGemma 2.</p>
+  <div id="embedding-level-1-fallback" class="el-static">
+    <p><strong>Text → embedding model → one vector → compare passage vectors.</strong></p>
+    <p>The query <code>find rows with an index</code> should match <code>index finds rows without scanning</code>. A high score alone does not establish a useful match.</p>
+    <p>Enable JavaScript to change the query and compare the toy’s results.</p>
+  </div>
+  <div id="embedding-level-1-ui" hidden></div>
+</div>
+
+<details id="embedding-level-2" class="embedding-levels embedding-disclosure">
+  <summary><span>Level 2 · Follow the main steps</span><small>Optional · expand to explore tokens, context, and averaging</small></summary>
+  <div class="embedding-level-body">
+    <p>A token starts with its own vector. The network mixes information across tokens, then combines their vectors into one output.</p>
+    <p class="el-note">All three levels share the selected query and model weights. Opening a level does not reset the model.</p>
+    <div id="embedding-level-2-fallback" class="el-static">
+      <p><strong>Token vectors → vectors with context → one average → one final vector.</strong></p>
+      <p>Each token vector starts with three coordinates. Attention mixes information across the retained tokens. A feed-forward network transforms each token vector.</p>
+      <p>Mean pooling averages each coordinate across those vectors. Projection maps that average to two coordinates. Normalization divides the final vector by its length.</p>
+      <p>Tokens discarded before these steps cannot affect the output. Enable JavaScript to inspect each step and change the input window.</p>
+    </div>
+    <div id="embedding-level-2-ui" hidden></div>
+  </div>
+</details>
+
+<details id="embedding-level-3" class="embedding-levels embedding-disclosure">
+  <summary><span>Level 3 · Inspect every calculation</span><small>Optional · expand the full numerical diagram and training controls</small></summary>
+  <div class="embedding-level-body">
 <p>How do token vectors become one passage vector? The first stage works like a table lookup: a token ID selects a row of numbers. Later stages combine those numbers with information from other tokens. The lookup alone does not use the surrounding text.</p>
 
 <p>An <strong>encoder</strong> converts an input into a representation, such as a passage vector. <strong>Weights</strong> are stored numbers that control the model’s calculations. <strong>Activations</strong> are the values calculated for the current input. During <strong>inference</strong>, the model uses its weights without changing them. During <strong>training</strong>, an algorithm adjusts weights to reduce a numerical measure called a <strong>loss</strong>.</p>
@@ -122,7 +155,7 @@
   <details><summary>Check your explanation</summary><p>The query retains <code>find rows</code>. The discarded tokens never reach the network, so <code>index</code> cannot affect this query vector. The window also truncates each candidate passage. The scores can therefore change while the weights stay fixed. Only the training controls update weights in this toy.</p></details>
 </div>
 
-<h3 class="new-slide" data-kicker="Embedding training">Is this an encoder and decoder?</h3>
+<h3>Is this an encoder and decoder?</h3>
 
 <p>An <strong>autoencoder</strong> learns to reconstruct its input. Its encoder creates a representation, and its decoder tries to recover the input. Keeping only the encoder afterward is one way to obtain representations.</p>
 
@@ -150,6 +183,8 @@
 </div>
 
 <p class="cite">Architecture and training: <a href="https://arxiv.org/html/2610.37364v1#S2.SS4">EmbeddingGemma 2 technical report, Sections 2.2–2.4</a> and <a href="https://huggingface.co/docs/transformers/main/model_doc/embedding_gemma2">Transformers implementation guide</a>. Visual reference: <a href="https://researcher111.github.io/ML-Security-Public/labs/lab-02/microgpt.html">MicroGPT’s architecture and neuron walkthrough</a>.</p>
+  </div>
+</details>
 
 <h3 class="new-slide" data-kicker="Generate embeddings">Set up a local environment</h3>
 
@@ -622,7 +657,8 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
 <script src="../_shared/lab-base.js?v=13"></script>
 <script src="viz.js?v=ste-20261015"></script>
 <script src="embedding-model.js?v=1"></script>
-<script src="embedding-network.js?v=2"></script>
+<script src="embedding-network.js?v=3"></script>
+<script src="embedding-levels.js?v=1"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>

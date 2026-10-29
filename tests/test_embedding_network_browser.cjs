@@ -24,13 +24,16 @@ const fmt = (n, digits = 3) => (Math.abs(n) < 0.5 * 10 ** -digits ? 0 : n).toFix
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(url);
+    const level1 = page.locator('#embedding-level-1');
+    const level2 = page.locator('#embedding-level-2');
+    const level3 = page.locator('#embedding-level-3');
     const widget = page.locator('#embedding-network');
     const query = widget.locator('#en-example');
     const windowSize = widget.locator('#en-window');
     const next = widget.locator('#en-next');
     const back = widget.locator('#en-back');
     const detail = widget.locator('#en-detail');
-    await query.waitFor({state:'visible'});
+    await level1.locator('#el1-example').waitFor({state:'visible'});
     let state = M.createState();
     let checkedStages = 0;
 
@@ -88,11 +91,127 @@ const fmt = (n, digits = 3) => (Math.abs(n) < 0.5 * 10 ** -digits ? 0 : n).toFix
         assert.equal(cell, fmt(rows.flat()[i], digits), 'circle labels match their computed values');
       });
     }
-    async function fits(label) {
-      assert(await widget.evaluate(element => element.scrollWidth <= element.clientWidth + 1), `${label}: widget has no horizontal overflow`);
-      assert(await widget.evaluate(element => { const rect = element.getBoundingClientRect(); return rect.left >= -1 && rect.right <= innerWidth + 1; }), `${label}: widget stays inside viewport`);
+    async function fits(label, element = widget) {
+      assert(await element.evaluate(element => element.scrollWidth <= element.clientWidth + 1), `${label}: no horizontal overflow`);
+      assert(await element.evaluate(element => { const rect = element.getBoundingClientRect(); return rect.left >= -1 && rect.right <= innerWidth + 1; }), `${label}: stays inside viewport`);
     }
-    async function screenshot(name) { await widget.screenshot({path:path.join(output, name + '.png')}); }
+    async function screenshot(name, element = widget) { await element.screenshot({path:path.join(output, name + '.png')}); }
+    async function disclose(element, open) {
+      if (await element.evaluate(element => element.open) !== open) await element.locator(':scope > summary').click();
+      assert.equal(await element.evaluate(element => element.open), open);
+    }
+    async function checkVector(element, expected) {
+      const actual = (await element.getAttribute('data-vector')).split(',').map(Number);
+      assert.equal(actual.length, expected.length, 'displayed vector has the expected coordinate count');
+      assert(actual.every((value, index) => Math.abs(value - expected[index]) < 1e-8), 'displayed vector uses actual model coordinates');
+      assert.equal(await element.innerText(), '[' + expected.map(value => fmt(value)).join(', ') + ']');
+    }
+    async function checkSimpleScores(id, limit = 6) {
+      const expected = M.evaluate(state, {maxTokens:limit}).queries.find(query => query.id === id);
+      const rows = await level1.locator('#el1-results [data-doc]').evaluateAll(elements => elements.map(element => ({
+        id:element.dataset.doc, score:Number(element.querySelector('.el-score').dataset.score),
+        display:element.querySelector('.el-score').textContent
+      })));
+      assert.deepEqual(rows.map(row => row.id), expected.ranking, 'essential comparison shows the actual model ranking');
+      rows.forEach(row => {
+        const expectedScore = expected.scores.find(score => score.id === row.id).cosine;
+        assert(Math.abs(row.score - expectedScore) < 1e-8);
+        assert.equal(row.display, fmt(expectedScore));
+      });
+    }
+    async function checkSharedState(id, limit = 6) {
+      const actual = await page.evaluate(() => window.EmbeddingExplorer.getSnapshot());
+      const expected = M.evaluate(state, {maxTokens:limit});
+      assert.equal(actual.selected, id);
+      assert.equal(actual.limit, limit);
+      assert.equal(actual.steps, state.steps);
+      for (const [i, query] of actual.evaluation.queries.entries()) {
+        assert.deepEqual(query.ranking, expected.queries[i].ranking, 'all detail levels use the actual model ranking');
+        query.trace.unit.forEach((value, j) => assert(Math.abs(value - expected.queries[i].trace.unit[j]) < 1e-8));
+      }
+      assert.equal(await level1.locator('#el1-example').inputValue(), id);
+      assert.equal(await query.inputValue(), id);
+      assert.equal(await level2.locator('#el2-window').inputValue(), String(limit));
+      assert.equal(await windowSize.inputValue(), String(limit));
+      const expectedQuery = expected.queries.find(query => query.id === id);
+      await checkVector(level1.locator('#el1-vector'), expectedQuery.trace.unit);
+      return expectedQuery;
+    }
+
+    // The first encounter is small. Each optional level opens independently.
+    assert(await level1.isVisible(), 'essential interaction is visible on first load');
+    assert(await level1.locator('#embedding-level-1-fallback').isHidden(), 'interactive version replaces the static fallback');
+    for (const level of [level2, level3]) {
+      assert.equal(await level.evaluate(element => element.tagName), 'DETAILS');
+      assert.equal(await level.evaluate(element => element.open), false, 'optional detail starts collapsed');
+      assert(await level.locator(':scope > summary').isVisible(), 'closed level retains its native control');
+    }
+    assert(await level3.evaluate(element => !element.parentElement.closest('#embedding-level-2')), 'optional levels are not nested');
+    assert(await widget.isHidden(), 'full numerical diagram does not load visibly');
+    await fits('desktop essentials', level1);
+    await screenshot('desktop-level-1', level1);
+
+    const simpleQuery = level1.locator('#el1-example');
+    const simpleResults = level1.locator('#el1-results');
+    assert(await simpleResults.isVisible(), 'candidate passages are available for the prediction');
+    assert.equal(await simpleResults.locator('.el-score').count(), 0, 'students can predict before revealing scores');
+    assert.equal(await simpleResults.locator('.is-match, .el-match-label').count(), 0, 'prediction does not reveal the supplied answer');
+    assert(await simpleQuery.evaluate(element => element.labels.length > 0));
+    await simpleQuery.selectOption('recovery');
+    await checkSharedState('recovery');
+    await level1.locator('#el1-compare').click();
+    assert.equal(await simpleResults.locator('.el-score').count(), M.DOCS.length, 'comparison reveals passage scores');
+    await checkSimpleScores('recovery');
+    await screenshot('desktop-level-1-results', level1);
+
+    await disclose(level2, true);
+    assert.equal(await level3.evaluate(element => element.open), false, 'middle level does not open the full diagram');
+    assert(await level2.locator('#el2-window').evaluate(element => element.labels.length > 0));
+    await simpleQuery.selectOption('speed');
+    assert.equal(await simpleResults.locator('.el-score').count(), 0, 'new query restores the prediction step');
+    await level2.locator('#el2-window').selectOption('2');
+    const shortQuery = await checkSharedState('speed', 2);
+    const shortTrace = shortQuery.trace;
+    for (let index = 0; index < 4; index++) {
+      await level2.locator(`#el2-stage-${index}`).click();
+      assert.equal(await level2.locator('#el2-stage-panel').getAttribute('data-stage'), String(index));
+      assert.equal(await level2.locator('[data-el-stage][aria-pressed="true"]').count(), 1);
+      if (index < 2) {
+        assert.equal(await level2.locator('[data-el-token]').count(), 2, 'discarded tokens have no selectable vector');
+        for (let token = 0; token < 2; token++) {
+          await level2.locator(`#el2-token-${token}`).click();
+          await checkVector(level2.locator('#el2-token-value'), index ? shortTrace.hidden[token] : shortTrace.embeddings[token]);
+          assert.equal(await level2.locator('[data-el-token][aria-pressed="true"]').count(), 1);
+        }
+      }
+      if (index === 2) {
+        assert.equal(await level2.locator('.el-token-table tbody tr').count(), 2);
+        await checkVector(level2.locator('#el2-mean'), shortTrace.pooled);
+      }
+      if (index === 3) await checkVector(level2.locator('#el2-vector'), shortTrace.unit);
+    }
+    await level1.locator('#el1-compare').click();
+    await checkSimpleScores('speed', 2);
+    await fits('desktop middle level', level2);
+    await screenshot('desktop-level-2-truncated', level2);
+
+    await disclose(level3, true);
+    await query.waitFor({state:'visible'});
+    assert.equal(await level2.evaluate(element => element.open), true, 'both optional levels can stay open');
+    await checkRanking('speed', 2);
+    await stage(4);
+    await disclose(level2, false);
+    assert(await detail.isVisible(), 'closing middle level leaves the full diagram open');
+    await disclose(level3, false);
+    await disclose(level2, true);
+    await checkSharedState('speed', 2);
+    assert.equal(await level2.locator('#el2-stage-panel').getAttribute('data-stage'), '3', 'reopening preserves the middle stage');
+    await checkVector(level2.locator('#el2-vector'), shortTrace.unit);
+    await disclose(level3, true);
+    assert.equal(await widget.getAttribute('data-stage'), '4', 'reopening retains the detailed stage');
+    await windowSize.selectOption('6');
+    await checkSharedState('speed');
+    await disclose(level2, false);
 
     assert.equal(await query.inputValue(), 'speed', 'default query demonstrates a training correction');
     assert.deepEqual(await query.locator('option').evaluateAll(options => options.map(option => option.value)), M.EXAMPLES.map(item => item.id));
@@ -176,6 +295,15 @@ const fmt = (n, digits = 3) => (Math.abs(n) < 0.5 * 10 ** -digits ? 0 : n).toFix
     const trained = await checkRanking('speed', 6, true);
     assert.equal(trained.ranking[0], trained.positiveId, 'training corrects default speed ranking');
     await screenshot('desktop-training-after');
+    await checkSharedState('speed', 3);
+    await disclose(level3, false);
+    await disclose(level2, true);
+    await checkSharedState('speed', 3);
+    await disclose(level2, false);
+    await disclose(level3, true);
+    assert.equal(await widget.getAttribute('data-mode'), 'train', 'reopening preserves the training view');
+    assert.equal(await widget.getAttribute('data-steps'), '21', 'reopening preserves trained weights');
+    await checkRanking('speed', 6, true);
     for (const example of M.EXAMPLES) {
       await query.selectOption(example.id);
       await checkRanking(example.id, 6, true);
@@ -195,6 +323,20 @@ const fmt = (n, digits = 3) => (Math.abs(n) < 0.5 * 10 ** -digits ? 0 : n).toFix
 
     // Every stage and both modes remain readable at a phone width.
     await page.setViewportSize({width:390,height:844});
+    await disclose(level3, false);
+    await fits('phone essentials', level1);
+    await fits('phone closed middle level', level2);
+    await fits('phone closed full level', level3);
+    await screenshot('phone-level-1', level1);
+    await disclose(level2, true);
+    for (let index = 0; index < 4; index++) {
+      await level2.locator(`#el2-stage-${index}`).click();
+      assert.equal(await level2.locator('#el2-stage-panel').getAttribute('data-stage'), String(index));
+      await fits(`phone middle stage ${index}`, level2);
+    }
+    await screenshot('phone-level-2', level2);
+    await disclose(level2, false);
+    await disclose(level3, true);
     for (let index = 0; index < 7; index++) { await stage(index); await fits(`phone stage ${index}`); }
     await stage(2); await screenshot('phone-attention');
     await stage(4); await screenshot('phone-pooling');
@@ -207,14 +349,26 @@ const fmt = (n, digits = 3) => (Math.abs(n) < 0.5 * 10 ** -digits ? 0 : n).toFix
       let index = 0;
       for (const element of document.querySelector('main').children) {
         if ((element.tagName === 'H2' && element.id) || element.classList.contains('new-slide')) index++;
-        if (element === target) return index;
+        if (element === target || element.contains(target)) return index;
       }
     });
-    assert(Number.isInteger(slide), 'widget is a direct slide build element');
+    assert(Number.isInteger(slide), 'widget belongs to a slide build element');
     await page.evaluate(index => localStorage.setItem('lab.presentationSlide', String(index)), slide);
     await page.locator('#present-toggle').click();
     await page.locator('#present-forward').focus(); await page.keyboard.press('a');
     const counter = await page.locator('#present-counter').innerText();
+    for (const level of [level2, level3]) {
+      const wasOpen = await level.evaluate(element => element.open);
+      await level.locator(':scope > summary').focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await level.evaluate(element => element.open), !wasOpen, 'Enter toggles the native disclosure');
+      assert.equal(await page.locator('#present-counter').innerText(), counter, 'Enter does not reveal a slide build');
+      await page.keyboard.press('Space');
+      assert.equal(await level.evaluate(element => element.open), wasOpen, 'Space toggles the native disclosure');
+      assert.equal(await page.locator('#present-counter').innerText(), counter, 'Space does not reveal a slide build');
+    }
+    await level1.locator('#el1-example').focus(); await page.keyboard.press('ArrowDown');
+    assert.equal(await page.locator('#present-counter').innerText(), counter, 'essential query keys do not change the slide');
     await next.focus(); await page.keyboard.press('ArrowRight');
     assert.equal(await page.locator('#present-counter').innerText(), counter);
     await query.focus(); await page.keyboard.press('ArrowDown');
@@ -231,19 +385,38 @@ const fmt = (n, digits = 3) => (Math.abs(n) < 0.5 * 10 ** -digits ? 0 : n).toFix
     await page.screenshot({path:path.join(output, 'presentation-results.png')});
     await page.locator('#present-toggle').click();
 
+    // Printing must include the static explanation even when both levels are closed.
+    await disclose(level2, false);
+    await disclose(level3, false);
     await page.emulateMedia({media:'print'});
+    assert(await level1.locator('#embedding-level-1-fallback').isVisible(), 'print retains the essential model explanation');
+    assert(await level1.locator('#embedding-level-1-ui').isHidden(), 'print hides essential interactive controls');
+    assert(await level2.locator('#embedding-level-2-fallback').isVisible(), 'print includes the closed middle level explanation');
+    assert(await level2.locator('#embedding-level-2-ui').isHidden(), 'print hides middle interactive controls');
     assert(await widget.locator('.en-print').isVisible(), 'print retains a static explanation');
     assert(await widget.locator('#en-interactive').isHidden(), 'print hides interactive controls');
     await screenshot('print');
     const plainContext = await browser.newContext({javaScriptEnabled:false,viewport:{width:390,height:844}});
     await plainContext.route(/^https?:\/\//, route => route.abort());
     const plain = await plainContext.newPage(); await plain.goto(url);
+    const simpleFallback = plain.locator('#embedding-level-1');
+    assert(await simpleFallback.locator('#embedding-level-1-fallback').isVisible(), 'no-JS retains the essential model explanation');
+    assert(await simpleFallback.locator('#embedding-level-1-ui').isHidden());
+    assert(await simpleFallback.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'no-JS essential explanation fits a phone');
+    await simpleFallback.screenshot({path:path.join(output, 'no-script-level-1.png')});
+    assert.equal(await plain.locator('#embedding-level-2').evaluate(element => element.open), false);
+    assert.equal(await plain.locator('#embedding-level-3').evaluate(element => element.open), false);
+    await plain.locator('#embedding-level-2 > summary').click();
+    assert(await plain.locator('#embedding-level-2-fallback').isVisible(), 'no-JS middle level expands to a static explanation');
+    assert(await plain.locator('#embedding-level-2-ui').isHidden());
+    await plain.locator('#embedding-level-2').screenshot({path:path.join(output, 'no-script-level-2.png')});
+    await plain.locator('#embedding-level-3 > summary').click();
     const fallback = plain.locator('#embedding-network');
     assert(await fallback.locator('#en-fallback').isVisible(), 'no-JS retains the mechanism explanation');
     assert(await fallback.locator('#en-interactive').isHidden());
     assert(await fallback.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'no-JS phone explanation fits');
     await fallback.screenshot({path:path.join(output, 'no-script.png')});
     assert.deepEqual(errors, [], 'no uncaught browser errors');
-    console.log(`Passed ${checkedStages} query/stage combinations, computed coordinates, Q/K/V selection, training, reset, truncation, mobile, presentation, print, and no-JS. Screenshots: ${output}`);
+    console.log(`Passed progressive disclosure, shared state, 4 middle stages, ${checkedStages} full query/stage combinations, computed coordinates, training, reset, truncation, mobile, presentation, closed-level print, and no-JS. Screenshots: ${output}`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
