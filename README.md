@@ -6,25 +6,31 @@ DS 6XXX, UVA School of Data Science. The required sequence builds **microdb**
 through B+ trees in Labs 1–6, then moves to analytics on **October 8**, followed
 by vectors, RAG, distributed compute, LSM engines, and graphs. The **October 22
 midterm** covers Lectures 1–6 and Labs 1–6, with a dedicated 75-minute
-[review on October 20](lectures/review/midterm.html). Lab 9 moves to October 29;
-subsequent labs and lectures follow the revised schedule. Project deadlines remain unchanged.
+[review on October 20](lectures/review/midterm.html).
+
+Lab 9 moves to October 29.
+November 3 is Election Day, with no class. Lab 10 moves to November 5, and later
+classes follow the revised schedule. Project deadlines remain unchanged.
+
 There are 12 required lecture decks and 10 required labs. Lectures 7–9 and Lab 7
 are optional bonus material, linked at the end of the course catalog and schedule.
-Resource numbers and URLs remain stable; the schedule gives the teaching order.
+Resource numbers and URLs remain stable. The schedule gives the teaching order.
 
 The [database discovery session](lectures/lecture-10/discovery.html) creates a
 local DuckDB database from the bundled 60,000-trip NYC taxi sample, then guides
 students through editable SQL, charts, competing explanations, and follow-up
 questions. See the page for setup and the November discovery workshop.
 
-[The discovery bureau](lectures/discovery/index.html) connects five cases across four meetings
-(Nov 19, Nov 24, Dec 1, Dec 3). City and weather share the November 19 session
-to make room for the dedicated midterm review.
+[The discovery bureau](lectures/discovery/index.html) has three scheduled workshops
+(Nov 24, Dec 1, Dec 3). The November 19 city-and-weather workshop is removed
+to make room for the Election Day schedule change. Both cases remain optional practice.
+
 Students query already-hosted ClickHouse taxi/weather tables, NASA's exoplanet
 archive, and Wikidata, then apply the same evidence workflow to their projects.
-No new account or database server is required. The outline preserves question-swap
-and rehearsal time and includes timed teaching beats, four verified queries,
+No new account or database server is required. The question swap remains due November 19. The outline retains rehearsal time
+and includes timed teaching beats, four verified queries,
 dated result snapshots, revealable charts, and instructor setup notes.
+
 Refresh snapshots during class preparation with
 `python3 lectures/discovery/refresh.py` (standard library; four small public reads).
 The page itself makes no requests to the hosted services.

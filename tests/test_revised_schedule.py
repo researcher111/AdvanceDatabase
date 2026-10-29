@@ -26,13 +26,20 @@ class RevisedScheduleTests(unittest.TestCase):
             self.assertNotIn(resource,main)
             self.assertIn(resource,html.split('<section id="bonus">')[1])
         rows=re.findall(r'<tr class="day-[^"]+">.*?</tr>',main,re.S)
-        self.assertEqual(len(rows),29)
+        self.assertEqual(len(rows),28)
         dates={}
         for i,row in enumerate(rows,1):
             self.assertIn(f'Day {i}<',row)
             date=re.search(r'<td class="date">(.*?)</td>',row)[1]
             actual=datetime.strptime(date+' 2026','%a %b %d %Y')
             self.assertEqual(actual.strftime('%a'),date[:3]);dates[date]=row
+        self.assertNotIn('Tue Nov 3', dates)
+        holidays=re.findall(r'<tr class="holiday">.*?</tr>',main,re.S)
+        election=[row for row in holidays if 'Tue Nov 3' in row]
+        self.assertEqual(len(election),1)
+        self.assertIn('Election Day: no class',election[0])
+        self.assertNotIn('Day 20',election[0])
+        self.assertNotIn('Quiz',election[0])
         self.assertIn('lecture-10/analytics.html',dates['Thu Oct 8'])
         self.assertIn('lab-08/duckdb.html',dates['Tue Oct 13'])
         self.assertIn('lecture-11/vectors.html',dates['Thu Oct 15'])
@@ -42,19 +49,24 @@ class RevisedScheduleTests(unittest.TestCase):
         for date, resource in [
             ('Tue Oct 27', 'lecture-12/rag.html'),
             ('Thu Oct 29', 'lab-09/microvector.html'),
-            ('Tue Nov 3', 'lab-10/microrag.html'),
-            ('Thu Nov 5', 'lecture-13/distributed.html'),
-            ('Tue Nov 10', 'lab-11/sparkray.html'),
-            ('Thu Nov 12', 'lecture-14/bigtable.html'),
-            ('Tue Nov 17', 'lecture-15/graphs.html'),
+            ('Thu Nov 5', 'lab-10/microrag.html'),
+            ('Tue Nov 10', 'lecture-13/distributed.html'),
+            ('Thu Nov 12', 'lab-11/sparkray.html'),
+            ('Tue Nov 17', 'lecture-14/bigtable.html'),
+            ('Thu Nov 19', 'lecture-15/graphs.html'),
         ]:
             self.assertIn(resource,dates[date])
-        self.assertIn('discovery/index.html#city',dates['Thu Nov 19'])
-        self.assertIn('discovery/index.html#weather',dates['Thu Nov 19'])
+            self.assertEqual(main.count(resource),1)
+        self.assertNotIn('discovery/index.html#city',main)
+        self.assertNotIn('discovery/index.html#weather',main)
+        for date,case in [('Tue Nov 24','planets'),('Tue Dec 1','evidence'),('Thu Dec 3','finale')]:
+            self.assertIn('discovery/index.html#'+case,dates[date])
         self.assertIn('Midterm exam',dates['Thu Oct 22'])
         self.assertIn('Lectures 1–6 and Labs 1–6',dates['Thu Oct 22'])
         self.assertEqual(re.findall(r'Quiz (\d+) ·',main),[str(i) for i in range(1,12)])
-        for date,text in [('Tue Oct 20','Lab 8'),('Thu Nov 5','Lab 9'),('Tue Nov 10','Lab 10'),('Tue Nov 17','Lab 11')]:
+        for date,quiz in [('Tue Nov 10',9),('Tue Nov 17',10),('Thu Nov 19',11)]:
+            self.assertIn(f'Quiz {quiz} ·',dates[date])
+        for date,text in [('Tue Oct 20','Lab 8'),('Thu Nov 5','Lab 9'),('Thu Nov 12','Lab 10'),('Thu Nov 19','Lab 11')]:
             self.assertIn(text,dates[date].split('<td class="due">')[1])
         for date,text in [('Thu Oct 29','proposal due'),('Thu Nov 12','retrieval working'),('Thu Nov 19','question swap'),('Tue Dec 8','Final project presentations')]:
             self.assertIn(text,dates[date])
@@ -62,16 +74,16 @@ class RevisedScheduleTests(unittest.TestCase):
     def test_shifted_pages_and_decks_match_the_schedule(self):
         for file, date, deadline in [
             ('labs/lab-09/microvector.html', 'Thursday October 29, 2026', 'Thursday Nov 5 at class start'),
-            ('labs/lab-10/microrag.html', 'Tuesday November 3, 2026', 'Tuesday Nov 10 at class start'),
-            ('labs/lab-11/sparkray.html', 'Tuesday November 10, 2026', 'Tuesday Nov 17 at class start'),
+            ('labs/lab-10/microrag.html', 'Thursday November 5, 2026', 'Thursday Nov 12 at class start'),
+            ('labs/lab-11/sparkray.html', 'Thursday November 12, 2026', 'Thursday Nov 19 at class start'),
         ]:
             page=(ROOT/file).read_text()
             self.assertIn(date,page);self.assertIn(deadline,page)
         deck=(ROOT/'slides/decks/lectures-11-15.js').read_text()
         for number, name, slug, date, iso in [
-            (13,'Distributed compute','distributed','Thursday November 5, 2026','2026-11-05'),
-            (14,'Bigtable and LSM trees','bigtable','Thursday November 12, 2026','2026-11-12'),
-            (15,'Graphs and course synthesis','graphs','Tuesday November 17, 2026','2026-11-17'),
+            (13,'Distributed compute','distributed','Tuesday November 10, 2026','2026-11-10'),
+            (14,'Bigtable and LSM trees','bigtable','Tuesday November 17, 2026','2026-11-17'),
+            (15,'Graphs and course synthesis','graphs','Thursday November 19, 2026','2026-11-19'),
         ]:
             self.assertIn(date,(ROOT/f'lectures/lecture-{number}/{slug}.html').read_text())
             self.assertIn(f"register({number},'{name}','{iso}'",deck)

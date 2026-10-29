@@ -9,7 +9,7 @@
 </head>
 <body><main>
 <nav aria-label="Course navigation"><a href="../../index.html">Course home</a><a href="../../schedule.html">Schedule</a><a href="../lecture-10/discovery.html">Taxi SQL workbench</a><a href="#setup">Do I need a database?</a></nav>
-<header><p class="eyebrow">Five cases · Four meetings · November 19 – December 3, 2026</p>
+<header><p class="eyebrow">Three workshops + two optional cases · November 24 – December 3, 2026</p>
 <h1>The discovery bureau</h1><p class="lede">From city streets to distant worlds.</p>
 <p>Your team investigates a surprising chart. Determine what the chart means. Explain the result so another person can reproduce it.</p>
 <p class="notice"><strong>Open a browser to investigate.</strong> The live examples use databases from ClickHouse, NASA’s Exoplanet Archive, and Wikidata. These public queries require no student server or new account. Saved evidence below works without contacting those services.</p>
@@ -18,14 +18,14 @@
 <section id="story"><h2>One story, five cases</h2>
 <p>Each case introduces the next question. First, compare taxi trips per observed day. Then check whether a zero weather value represents a missing observation. Examine how detection methods affect a planet catalog. Follow a knowledge-graph claim to its source. Finally, apply these checks to your team’s discovery.</p>
 <ol class="route">
-<li><a href="#city"><span>Nov 19 · minutes 0–25</span><strong>The city that never sleeps?</strong>Find the missing denominator.</a></li>
-<li><a href="#weather"><span>Nov 19 · minutes 25–75</span><strong>The July that froze?</strong>Interrogate a suspicious zero.</a></li>
+<li><a href="#city"><span>Optional practice · 25 min</span><strong>The city that never sleeps?</strong>Find the missing denominator.</a></li>
+<li><a href="#weather"><span>Optional practice · 30 min</span><strong>The July that froze?</strong>Interrogate a suspicious zero.</a></li>
 <li><a href="#planets"><span>Nov 24 · 75 min</span><strong>The planet census</strong>Separate discovery from detectability.</a></li>
 <li><a href="#evidence"><span>Dec 1 · 30 + 45 min</span><strong>Who says so?</strong>Follow a claim through a graph.</a></li>
 <li><a href="#finale"><span>Dec 3 · 75 min</span><strong>The discovery hearing</strong>Reproduce, challenge, and present.</a></li>
 </ol>
 <p class="method">Question → prediction → row meaning → query → visual evidence → competing explanation → next test</p>
-<p>The <a href="../review/midterm.html">October 20 midterm review</a> changes the later teaching sequence. Five cases now use four dates. City and weather share November 19: 25 minutes, then 30 minutes, followed by a 20-minute project question swap. December 1 retains 45 minutes for rehearsal. December 3 is a project work session. These cases add no quizzes or graded labs.</p><p>The October 22 midterm and all project deadlines remain unchanged.</p>
+<p><strong>Election Day schedule update:</strong> there is no class on November 3. Later lectures replace the November 19 city-and-weather workshop. Those two cases remain optional practice, with no scheduled meeting or submission. The three scheduled workshops meet November 24, December 1, and December 3.</p><p>The project question swap remains due November 19. Exchange ten evaluation questions with your partner team by that date. December 1 retains 45 minutes for rehearsal. Use the December 3 workshop to evaluate partner questions and finish the project. These cases add no quizzes or graded labs.</p>
 </section>
 
 <section id="setup"><h2>Do we need to set up a database?</h2>
@@ -48,7 +48,7 @@
 </section>
 
 <section id="city" class="case" data-case="city">
-<p class="eyebrow">Case 1 · Thursday November 19 · Minutes 0–25</p><h2>The city that never sleeps?</h2>
+<p class="eyebrow">Case 1 · Optional practice · 25 minutes</p><h2>The city that never sleeps?</h2>
 <p class="hook">“More taxi trips happen on weekdays, so New Yorkers go out less on weekends.” The editor wants to publish. Do we sign off?</p>
 <p><strong>Predict:</strong> Which hours change most after dividing by the number of observed weekdays or weekend days? Sketch both curves before viewing results.</p>
 <p><strong>Data:</strong> filtered yellow-cab trips from the hosted July 2015 table. This extract differs from the bundled 2024 sample. Compare day types <em>within this extract</em>. Do not compare counts across these datasets. Each result row represents one hour/day-type pair. Retain its observed-date count with the total.</p>
@@ -58,11 +58,11 @@
 </section>
 
 <section id="weather" class="case" data-case="weather">
-<p class="eyebrow">Case 2 · Thursday November 19 · Minutes 25–55, then question swap</p><h2>The July that froze?</h2>
+<p class="eyebrow">Case 2 · Optional practice · 30 minutes</p><h2>The July that froze?</h2>
 <p class="hook">The next chart reports a zero average temperature for every July day in Central Park. Did the city freeze? Could the data pipeline explain the zeros?</p>
 <p><strong>Predict:</strong> list two explanations for zero. Which extra field or source document could distinguish them?</p>
 <p><strong>Data:</strong> NOAA GHCN-Daily observations from the ClickHouse mirror for station <code>USW00094728</code>, July 2015. Each row represents a station/date pair. Temperature fields use tenths of °C. The query converts units and retains encoded zeros.</p>
-<ol class="beats"><li><b>25–30 · The impossible chart.</b> Reveal only <code>encoded_avg_c</code>. Students predict two explanations.</li><li><b>30–40 · Compare other fields.</b> Reveal minimum and maximum temperatures. Inspect the schema and source preparation.</li><li><b>40–50 · Reconstruct the pipeline.</b> Draw observation rows → quality filtering → pivot → station/date row. Explain how an absent element can become a numeric default.</li><li><b>50–55 · Design the next test.</b> Before joining to daily taxi aggregates, name the key, date-coverage, and time-convention checks needed.</li><li><b>55–75 · Project question swap.</b> Exchange the ten evaluation questions already due today. Label questions that need numeric evidence, retrieved text, or an explicit “unknown.”</li></ol>
+<ol class="beats"><li><b>0–5 · The impossible chart.</b> Reveal only <code>encoded_avg_c</code>. Students predict two explanations.</li><li><b>5–15 · Compare other fields.</b> Reveal minimum and maximum temperatures. Inspect the schema and source preparation.</li><li><b>15–25 · Reconstruct the pipeline.</b> Draw observation rows → quality filtering → pivot → station/date row. Explain how an absent element can become a numeric default.</li><li><b>25–30 · Design the next test.</b> Before joining to daily taxi aggregates, name the key, date-coverage, and time-convention checks needed.</li></ol>
 <div class="query-card"></div>
 <details><summary>Teaching reveal and visual plan</summary><p>The saved chart first displays the suspicious average. It then adds recorded minimum and maximum temperatures. Compare <a href="https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt">NOAA’s original missing-value and flag definitions</a> with <a href="https://clickhouse.com/docs/get-started/sample-datasets/noaa">the mirror’s pivot using <code>anyIf</code></a>. Its numeric default can combine absent observations and actual zeros. Do not replace all zeros with <code>NULLIF</code>. Zero °C and zero precipitation can be actual observations.</p><p><strong>Systems link:</strong> sparse observations, wide rows, schema design, defaults, and joins that preserve row meaning. A taxi/weather scatterplot is an optional follow-up design. This page does not supply that chart or establish causation. Use the same 2015 dates. Do not join this mirror to the 2024 sample by month and day alone.</p><p><strong>Cliffhanger:</strong> if observation rules can change a weather chart, what might they do to a census of planets?</p></details>
 </section>
@@ -98,10 +98,10 @@
 <tr><td>Oct 8 · Analytics</td><td>“Every sampled month is equally busy. Why?”</td><td>Scans, groups, sampling, and denominators.</td></tr>
 <tr><td>Oct 13 · DuckDB lab</td><td>Build the local example database. Check keys before joining tables.</td><td>Load → audit → query → explain.</td></tr>
 <tr><td>Oct 15/29 · Vectors</td><td>Similar descriptions can identify candidates. Similarity alone does not establish identity.</td><td>Nearest neighbors, recall, and metadata filters.</td></tr>
-<tr><td>Oct 27 / Nov 3 · RAG</td><td>Retrieve the field definition before explaining a suspicious zero.</td><td>Evidence selection, citations, and abstention.</td></tr>
-<tr><td>Nov 5/10 · Distributed compute</td><td>Count taxi activity by partition. Combine counts and denominators correctly.</td><td>Local aggregation, shuffle, and skew.</td></tr>
-<tr><td>Nov 12 · Bigtable</td><td>What would a station/date key make easy? What does an absent field mean?</td><td>Key design, sparse observations, and update history.</td></tr>
-<tr><td>Nov 17 · Graphs</td><td>A mission is connected to organizations and references.</td><td>Traversal, identity, and the meaning of an edge.</td></tr>
+<tr><td>Oct 27 / Nov 5 · RAG</td><td>Retrieve the field definition before explaining a suspicious zero.</td><td>Evidence selection, citations, and abstention.</td></tr>
+<tr><td>Nov 10/12 · Distributed compute</td><td>Count taxi activity by partition. Combine counts and denominators correctly.</td><td>Local aggregation, shuffle, and skew.</td></tr>
+<tr><td>Nov 17 · Bigtable</td><td>What would a station/date key make easy? What does an absent field mean?</td><td>Key design, sparse observations, and update history.</td></tr>
+<tr><td>Nov 19 · Graphs</td><td>A mission is connected to organizations and references.</td><td>Traversal, identity, and the meaning of an edge.</td></tr>
 </tbody></table></div>
 </section>
 <section id="sources"><h2>Keep the source with the story</h2>

@@ -59,16 +59,21 @@ class DiscoveryBureauTests(unittest.TestCase):
         self.assertTrue(any(row['reference'] and row['referenceURL'] is None for row in records))
         self.assertTrue(any(row['importURL'] and 'wikipedia.org' in row['importURL'] for row in records))
 
-    def test_all_five_cases_are_linked_from_schedule(self):
+    def test_scheduled_workshops_and_optional_cases_remain_available(self):
         schedule = (ROOT / 'schedule.html').read_text()
         page = (HERE / 'index.html').read_text()
         for case in [*self.cases, 'finale']:
             self.assertIn('lectures/discovery/index.html#' + case, schedule)
             self.assertIn('id="' + case + '"', page)
-        self.assertIn('55–75 · Project question swap', page)
+        self.assertIn('Three workshops + two optional cases', page)
+        self.assertIn('The project question swap remains due November 19.', page)
+        self.assertNotIn('55–75 · Project question swap', page)
         self.assertIn('30–75 · Rehearse the project', page)
-        self.assertIn('Case 1 · Thursday November 19 · Minutes 0–25', page)
-        self.assertIn('Case 2 · Thursday November 19 · Minutes 25–55', page)
+        self.assertIn('Case 1 · Optional practice · 25 minutes', page)
+        self.assertIn('Case 2 · Optional practice · 30 minutes', page)
+        self.assertIn('Case 3 · Tuesday November 24', page)
+        self.assertIn('Case 4 · Tuesday December 1', page)
+        self.assertIn('Case 5 · Thursday December 3', page)
 
 
 if __name__ == '__main__':
