@@ -1072,9 +1072,9 @@ window.CourseClarityCaptions = {
   },
   "13": {
     "one-job-many-machines": [
-      "The count is the same task at a larger scale: 10 TB / 2 GB/s = 5,000 seconds for one ideal scan.",
-      "With 100 independent readers, each receives 100 GB under this capacity estimate.",
-      "The ideal read time is 50 seconds, excluding overhead. A failed worker also needs recovery."
+      "Two lunch orders need one loop. A hypothetical delivery report must scan 10 TB within 10 minutes.",
+      "At 2 GB/s each, 100 balanced readers need an ideal 50 seconds. Coordination and computation add time.",
+      "More capacity introduces coordination: group matching keys, schedule tasks, and reconstruct lost results."
     ],
     "partitioning": [
       "Treat a key like a destination address: it determines the responsible worker.",

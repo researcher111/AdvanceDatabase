@@ -1949,13 +1949,13 @@
   },
   "13": {
     "one-job-many-machines": {
-      "idea": "Distributing a scan adds parallel capacity along with coordination and partial failures.",
-      "question": "Does dividing an ideal scan time by the worker count guarantee that speedup?",
-      "answer": "No. Network movement, coordination, imbalance, and failures add work beyond the capacity model.",
+      "idea": "A workload requirement can justify more capacity, while distribution adds coordination and recovery work.",
+      "question": "Why consider distribution for this report, and what does the scan estimate leave out?",
+      "answer": "At the assumed rate, reading alone exceeds the report’s ten-minute window. Scheduling, computation, transfer, imbalance, and failures add costs beyond the ideal scan.",
       "builds": [
-        "Return to the fictional club lunch orders: Pizza, pizza! and Salad pizza. Can either worker know the total pizza count from its own order? Then scale the counting job to the diagram’s assumed 10 TB. Keep the scan estimate distinct from a benchmark. Calculate the ideal single-reader time for ten terabytes.",
-        "Divide the data among readers and state the hypothetical throughput assumptions.",
-        "Lose a worker and identify the extra coordination and recovery requirements."
+        "Count the two fictional lunch orders with one local loop. Then introduce a hypothetical meal-demand report over 10 TB of stored delivery records. Its reporting window is ten minutes. At 2 GB/s, one ideal scan takes 5,000 seconds, or about 85 minutes. Reading alone exceeds the window. This is a hypothetical business requirement, not a quiz duration or assignment deadline.",
+        "Divide the records evenly among 100 readers with independent storage throughput of 2 GB/s each. Each reader receives 100 GB and needs an ideal 50 seconds. The drawing shows eight of the hundred workers. Extra processors and storage add parallel capacity. Scheduling, computation, data transfer, and imbalance still cost time. The estimate does not establish a benchmark result or guaranteed speedup.",
+        "Lose one worker’s result. Ask how the job can reconstruct the missing contribution without losing or double-counting requests. Grouping keys, scheduling dependencies, and handling failures require coordination around the application code. Google’s MapReduce paper motivates this separation. Spark and Ray provide different runtime abstractions for such work. Their use must still be justified by the workload and measurements."
       ]
     },
     "partitioning": {

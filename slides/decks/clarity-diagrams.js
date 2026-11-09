@@ -485,10 +485,38 @@
     if(s>0)label(d,'quality-bound',850,365,'recall ≥ 0.90',P.orange,23);
     if(s>1)label(d,'work-bound',563,526,'budget: 1,000',P.blue,23);
   });
-  repair(13,'one-job-many-machines',(d,s)=>{
-    if(s===0)d.items=d.items.filter(a=>!(/^(worker|data)[1-7]$/.test(a.key)));
-    if(s>0)label(d,'worker-count',640,251,'100 workers total · 8 shown',P.muted,27);
+  const mapreducePaper='https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/';
+  const distributionOpening=use(13,'one-job-many-machines',(d,s)=>{
+    d.rect('report',65,270,330,230,P.blueLight,P.blue,10,2);
+    label(d,'report-title',230,307,'Delivery report',P.blue,28);
+    label(d,'report-data',230,360,'Stored records: 10 TB',P.ink,25);
+    label(d,'report-window',230,407,'Window: 10 min',P.ink,27);
+    label(d,'report-assumption',230,459,'Hypothetical requirement',P.muted,22);
+    if(s===0){
+      d.box('worker0',500,300,300,130,'One reader: 2 GB/s',P.greenLight,P.green,28);
+      d.arrow('read-time',815,365,890,365,P.orange,3);
+      label(d,'time',1050,342,'5,000 s',P.orange,36);
+      label(d,'minutes',1050,397,'~85 min',P.orange,31);
+      label(d,'missed-window',850,490,'Reading alone exceeds the window',P.red,28);
+      label(d,'capacity-formula',640,560,'10 TB ÷ 2 GB/s = 5,000 seconds',P.ink,30);
+    }else{
+      label(d,'worker-count',825,225,'100 workers total · 8 shown',P.muted,27);
+      for(let i=0;i<8;i++){
+        const x=455+(i%4)*190,y=270+Math.floor(i/4)*145,failed=s===2&&i===6;
+        d.rect('worker'+i,x,y,165,105,failed?P.redLight:P.greenLight,failed?P.red:P.green,10,2);
+        label(d,'data'+i,x+82.5,y+42,'100 GB',failed?P.red:P.green,28);
+        if(failed)label(d,'lost-result',x+82.5,y+79,'lost result',P.red,21);
+      }
+      label(d,'time',640,560,s===1?'100 GB ÷ 2 GB/s = 50 seconds per reader':'50 s ideal reading · recovery adds work',P.orange,30);
+    }
+    label(d,'capacity-limit',640,606,'Capacity estimate, not a benchmark · Computation, transfers, and scheduling add time',P.muted,22);
+    d.link('mapreduce-paper',470,646,'Google MapReduce paper · 2004',mapreducePaper,22);
   });
+  if(distributionOpening){
+    distributionOpening.title='When one machine cannot finish in time';
+    distributionOpening.states=['One reader misses the window','Parallel reads add capacity','Recover a lost result'];
+    distributionOpening.sources=[mapreducePaper,...distributionOpening.sources.filter(src=>src!==mapreducePaper)];
+  }
   repair(14,'a-network-partition-forces-a-choice',(d,s)=>{if(s===4)item(d,'response').text='v2';});
   repair(15,'finish-with-measured-decisions',(d,s)=>{if(s===3){item(d,'dates').attrs.y=691;item(d,'dates').attrs['font-size']=27;}});
 

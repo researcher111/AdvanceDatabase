@@ -7,13 +7,14 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body class="spark-ray-reading">
 <aside class="toc">
   <div class="toc-title">Lecture 13B</div>
   <p><a href="../../slides/lecture-13b.html">Visual slide deck ↗</a></p>
   <ul>
+    <li><a href="#motivation">Why use a distributed framework?</a></li>
     <li><a href="#starting-point">Start with the lunch orders</a></li>
     <li><a href="#spark-model">Spark: describe a data pipeline</a></li>
     <li><a href="#spark-code">Run the Spark example</a></li>
@@ -42,6 +43,12 @@
   <div class="subtitle">Follow the work from Python code to workers, data movement, and results.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
+<div class="cite" id="mapreduce-paper">
+  <strong>Start with Google’s MapReduce paper:</strong> Jeffrey Dean and Sanjay Ghemawat,
+  <a href="https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/"><em>MapReduce: Simplified Data Processing on Large Clusters</em></a>
+  (OSDI 2004, 13 pages) · <a href="https://storage.googleapis.com/gweb-research2023-media/pubtools/4449.pdf">Read the PDF</a>.
+  Its introduction motivates the separation between computation and distributed coordination.
+</div>
 <p class="lede">MapReduce explains how contributions become a complete total. Spark and Ray provide different ways to schedule work around that computation.</p>
 <p><strong>Starting knowledge:</strong> Python functions, lists, dictionaries, SQL grouping, and <a href="distributed.html#mapreduce">map → shuffle → reduce</a>. The opening check reviews the grouping rule.</p>
 <p><strong>Goal:</strong> Trace a Spark job and a Ray program. Explain where data moves, which work can overlap, and what a retry can repeat.</p>
@@ -50,6 +57,14 @@
   <p>Use 60 minutes for the visual lecture and 15 minutes for the <a href="#transfer">closing investigation</a>. This session has no quiz.</p>
   <p>Lab 11 meets Tuesday November 17. Quiz 10 covers MapReduce, Spark, and Ray on Thursday November 19.</p>
 </div>
+
+<h2 id="motivation">Why use a distributed framework?</h2>
+<p>Our two lunch orders need only a loop. The reason to study Spark and Ray appears when a real workload exceeds available time or resources.</p>
+<p>Recall the <a href="distributed.html#report-window">illustrative meal-demand report</a>: scan 10 TB within 10 minutes. At 2 GB/s, one machine needs 5,000 seconds, or about 85 minutes, just to read the input.</p>
+<p>More machines can share that work. With balanced input and independent disks, 100 machines reading at 2 GB/s each have an ideal scan time of 50 seconds. That is about 1 minute, before coordination, data transfer, and processing costs.</p>
+<p>We could manage the workers ourselves. Every program would then need code to assign inputs, transfer results, track completion, and handle failures.</p>
+<p><strong>Spark manages execution for a data pipeline. Ray schedules Python calls and their dependencies.</strong> Both provide reusable execution machinery. In our Ray example, we still write the code that combines results.</p>
+<p>The goal is to meet the workload’s needs with correct results and less custom coordination code. We keep the small lunch example to make that machinery visible. The example itself does not need distributed execution.</p>
 
 <h2 id="starting-point">Start with the lunch orders</h2>
 <div class="story-scene">
@@ -366,6 +381,7 @@ finally:
   <details><summary>Check your explanation</summary><p>For Spark, compare partition sizes, shuffle volume, and per-task duration. Check whether one key concentrates work. For Ray, compare useful task time with scheduling and transfer costs. Try batching several inputs per task. Keep the same result checks in both experiments.</p></details>
 </div>
 <p class="key-fact"><strong>Return to the model:</strong> Spark schedules a data pipeline. Ray Core schedules Python calls. In both cases, explain the dependencies, data movement, and complete result.</p>
+<p><strong>Return to the need:</strong> use these engines when their execution model helps meet a measured time or resource constraint. Check correctness and total cost against the simpler local program.</p>
 
 <h2 id="lab">Prepare for Lab 11</h2>
 <p><a href="../../labs/lab-11/sparkray.html">Lab 11</a> meets <strong>Tuesday November 17</strong>. Submit <code>mapreduce.py</code> by <strong>Tuesday November 24 at class start</strong>.</p>

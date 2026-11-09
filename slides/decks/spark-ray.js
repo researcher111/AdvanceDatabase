@@ -7,6 +7,7 @@
   const decks=window.COURSE_DECKS=window.COURSE_DECKS||{};
   const source='lectures/lecture-13/spark-ray.html';
   const refs={
+    mapreduce:'https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/',
     spark:'https://spark.apache.org/docs/latest/rdd-programming-guide.html',
     cluster:'https://spark.apache.org/docs/latest/cluster-overview.html',
     reduce:'https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.RDD.reduceByKey.html',
@@ -55,32 +56,41 @@
     scenes.push(sc);
   }
 
-  scene('same-orders-two-runtimes','The same lunch count, two runtimes',3,
-    ['Recall the inputs','Recover the baseline','Ask who coordinates'],[
-      'Maya has two group orders. Predict the total for each meal before choosing an execution framework.',
-      'Every implementation must return pizza = 3 and salad = 1.',
-      'Spark coordinates a data-processing plan. Ray runs Python tasks whose results your program combines.'
+  scene('same-orders-two-runtimes','More capacity requires coordination',3,
+    ['Start with a local loop','Add a reporting window','Ask who coordinates'],[
+      'Two lunch orders need only a local loop. The fixture gives pizza = 3 and salad = 1.',
+      'A hypothetical delivery report must scan 10 TB within 10 minutes. One 2 GB/s reader cannot finish in time.',
+      'Spark manages a data plan. Ray schedules Python calls. Both require correct grouping and a plan for failed work.'
     ],(d,s)=>{
-      order(d,'order0',65,260,'Order 0','“Pizza, pizza!”');
-      order(d,'order1',65,435,'Order 1','“Salad pizza.”');
-      if(s>=1){
+      if(s===0){
+        order(d,'order0',65,260,'Order 0','“Pizza, pizza!”');
+        order(d,'order1',65,435,'Order 1','“Salad pizza.”');
         arrow(d,'to-total',390,410,505,410);
-        box(d,'baseline',530,335,285,165,'Correct totals',['pizza: 3','salad: 1']);
+        box(d,'baseline',530,335,285,165,'Local loop',['pizza: 3','salad: 1']);
+        box(d,'small-job',900,335,300,165,'Small input',['No cluster needed'],P.blue,false);
       }
-      if(s>=2){
-        box(d,'spark',900,260,300,125,'Spark',['Plan over partitions'],P.orange);
-        box(d,'ray',900,435,300,125,'Ray',['Calls and references'],P.blue);
+      if(s===1){
+        box(d,'report',90,275,450,245,'Delivery report',['Stored records: 10 TB','Reporting window: 10 min','Assumed read rate: 2 GB/s'],P.blue);
+        arrow(d,'read-cost',560,400,700,400,P.orange);
+        box(d,'single-reader',730,275,460,245,'One reader',['10 TB ÷ 2 GB/s = 5,000 s','About 85 minutes to read','Read alone exceeds the window'],P.orange);
       }
-      foot(d,'Fictional club lunch · One word and one occurrence per requested meal');
+      if(s===2){
+        box(d,'capacity',65,275,340,260,'100 readers',['100 GB per reader','50 s ideal read','Before coordination costs'],P.green);
+        box(d,'spark',470,275,340,260,'Spark',['Schedule a data plan','Group keys with shuffle','Recompute supported outputs'],P.orange);
+        box(d,'ray',875,275,340,260,'Ray Core',['Schedule Python tasks','Track result dependencies','Your code combines counts'],P.blue);
+      }
+      label(d,'opening-limit',640,600,s===0?'Fictional club lunch · Keep this result contract when execution changes':'Hypothetical capacity estimate · Scheduling, transfer, computation, and failures add time',22,P.muted);
+      d.link('mapreduce-paper',470,646,'Google MapReduce paper · 2004',refs.mapreduce,22);
     },{
-      idea:'The result contract stays fixed while the runtime changes how work is coordinated.',
+      idea:'Execution frameworks coordinate work when workload requirements justify distributing it.',
       builds:[
-        'Return to Lecture 13. Each repeated meal name requests another meal. Ask students to count the two orders by hand. The story is fictional, and these inputs are a small correctness fixture.',
-        'Reveal the baseline. Keep this answer for every execution example. Changing machines, partitions, or scheduling must preserve these counts.',
-        'Maya wants to run the same calculation with two libraries. Ask which responsibilities each library takes over. Introduce runtime as the software that schedules and executes work. The following diagrams describe mechanisms, not measured speedups.'
-      ],question:'What result must both implementations preserve?',answer:'Both must produce pizza: 3 and salad: 1, including all repeated requests.',
-      context:'Teaching occupies minutes 0–60. Reserve minutes 60–75 for the discussion in the teaching guide. There is no quiz in this session.'
+        'Return to the fictional lunch orders from Lecture 13. A local loop is sufficient for these two records. Ask why introducing Spark or Ray would not make this tiny input a convincing benchmark. We keep the fixture to see whether each implementation counts every request.',
+        'Introduce a separate hypothetical food-delivery report over 10 TB of stored records. Its reporting window is ten minutes. At an assumed 2 GB/s, reading alone takes 5,000 seconds, or about 85 minutes. The window is an illustrative business requirement, not a course deadline. Ask which resource limits this scan before proposing more machines.',
+        'With 100 balanced readers, each reads 100 GB in an ideal 50 seconds. Extra processors and storage can add parallel capacity. Grouping, scheduling, transfer, and failed work still require coordination. Spark and Ray automate parts of that coordination around application code. Spark manages a collection plan and shuffle, while our Ray program combines dictionaries explicitly. This estimate is not a benchmark or a guaranteed runtime.'
+      ],question:'Why consider distribution for the delivery report but not for the two lunch orders?',answer:'The hypothetical report cannot meet its ten-minute window with the assumed single-reader scan. The lunch fixture is small enough for a local loop.',
+      context:'Google’s 2004 MapReduce paper explains separating map and reduce functions from scheduling, communication, and failure handling. Spark and Ray expose different execution models. Teaching occupies minutes 0–60, followed by fifteen discussion minutes. There is no quiz in this session.'
     });
+  scenes[0].sources=[refs.mapreduce,source];
 
   scene('spark-driver-executors','Spark: the driver schedules executor work',3,
     ['Describe the roles','Assign partition tasks','Return a small result'],[
