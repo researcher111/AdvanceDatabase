@@ -1964,8 +1964,8 @@
       "answer": "Partitions hold different subsets of the data. Replicas keep copies so data can remain available when a worker fails or becomes busy.",
       "builds": [
         "Link key ownership to sorting mail into destination trays. A key corresponds to an address, and a partition corresponds to a tray. A worker processes the assigned partition. A partition is a logical subset, not a permanent machine identity. Routing does not ensure equal work or create replicas.",
-        "Assign keys to four partitions using a deterministic rule.",
-        "Route kim to its partition. Connect the example to the upcoming meal count: every pizza contribution must use the same routing rule. Input splits assign records to map tasks. Intermediate-key partitions assign emitted pairs to reducers. These are two different divisions of the job."
+        "Apply the same character-code sum modulo four to every name. The result selects a partition number, not a permanent worker. Show which names share P0, P1, P2, and P3.",
+        "Calculate kim’s destination: 107 + 105 + 109 = 321, then 321 % 4 = 1. A lookup for kim contacts P1. The system separately assigns that partition to a worker. One worker can process several partitions."
       ]
     },
     "hash-routing": {
@@ -2026,7 +2026,7 @@
       "question": "Does the master need to receive every meal pair before a reducer can start?",
       "answer": "No. The master shares file locations. Reducers fetch their assigned regions from map workers, then sort and group the keys.",
       "builds": [
-        "Zoom into the shuffle arrows from the lunch trace. M0 processed order 0, and M1 processed order 1. R0 handles the illustrated pizza partition, and R1 handles salad. Each map worker buffers pairs, then writes local disk regions by reducer. The empty M0-to-R1 region contains no meal pair.",
+        "Distinguish the two data divisions after the complete MapReduce trace. Input splits assign original records to map tasks. Intermediate-key partitions assign emitted pairs to reducers.\n\nNow examine the shuffle arrows. M0 processed order 0, and M1 processed order 1. R0 handles the illustrated pizza partition, and R1 handles salad. Each map worker buffers pairs, then writes local disk regions by reducer. The empty M0-to-R1 region contains no meal pair.",
         "Show the master’s location metadata. Each completed map task reports where its reducer regions are stored. The master forwards those locations to reducers. Distinguish this coordination from the actual payload transfer. Ask which local regions R0 must read.",
         "Trace both blue transfers to R0 and the green transfer to R1. R0 fetches its region from M0 and M1. R1 also considers both maps, though M0’s region is empty. A reducer sorts received keys and groups matching values before invoking reduce. A partition can contain several different keys. Large sorts can use disk rather than require all intermediate data in RAM."
       ],

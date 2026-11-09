@@ -225,7 +225,7 @@ const KEYS=['ada','ben','cyd','dee','eli','fay','gus','ivy','jon','kim','lee','m
 function owner(k){return [...k].reduce((s,c)=>s+c.charCodeAt(0),0)%4;}
 function rangeOwner(k){return k<'d'?0:k<'g'?1:k<'k'?2:3;}
 function partitionDraw(d,s,kind='hash'){
- for(let p=0;p<4;p++){d.rect('part'+p,150+p*260,350,220,235,P.white,P.line,12);d.text('pid'+p,260+p*260,620,kind==='hash'?'h = '+p:['a–c','d–f','g–j','k–z'][p],29,P.muted);}
+ for(let p=0;p<4;p++){d.rect('part'+p,150+p*260,350,220,235,P.white,P.line,12);d.text('pid'+p,260+p*260,620,kind==='hash'?'P'+p:'P'+p+' · '+['a–c','d–f','g–j','k–z'][p],29,P.muted);}
  const ord=[[],[],[],[]];KEYS.forEach(k=>ord[(kind==='hash'?owner:rangeOwner)(k)].push(k));
  KEYS.forEach((k,i)=>{const p=(kind==='hash'?owner:rangeOwner)(k),j=ord[p].indexOf(k),landed=s>0,x=landed?260+p*260:145+i*89,y=landed?395+j*52:260;const hot=s===2?k==='kim':s===3?k>='dee'&&k<='fay':false;d.box('key'+i,x-40,y-21,80,42,k,hot?P.orangeLight:P.greenLight,hot?P.orange:P.green,22);});
  if(s>1)for(let p=0;p<4;p++){const active=s===2?p===(kind==='hash'?owner('kim'):rangeOwner('kim')):kind==='hash'||p===1;if(active)d.rect('wake'+p,145+p*260,345,230,245,'none',P.orange,14,4);}

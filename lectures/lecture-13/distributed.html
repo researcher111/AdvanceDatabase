@@ -7,7 +7,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
-<link rel="stylesheet" href="styles.css?v=7">
+<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="slide-walkthroughs.css?v=1">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 </head>
 <body class="distributed-reading">
@@ -81,8 +82,8 @@
 </div>
 
 <div class="callout note" id="reading-route">
-  <span class="label">Read alongside the slides</span>
-  <p>Sections 1–16 follow the slide deck in order, using the same titles and examples. Each section links to its slide and explains the diagram’s changes. An animation step within a slide is called a <strong>build</strong>. Read the section before advancing the slide. Section 6 includes a <a href="#worked-example">code trace</a> and an expandable <a href="#python-example">Python companion</a>.</p>
+  <span class="label">Explore the worked examples</span>
+  <p>This reading explains each mechanism with worked examples and interactive diagrams. Use each diagram’s Next and Previous buttons to follow the changes. The slide links open the matching classroom view. Section 6 includes a <a href="#worked-example">code trace</a> and an expandable <a href="#python-example">Python companion</a>.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -95,9 +96,10 @@
   <span class="label">Illustrative workload · not a benchmark</span>
   <p>Suppose a report must scan <strong>10 TB</strong> of records within <strong>10 minutes</strong>. One machine reads <strong>2 GB/s</strong>.</p>
   <p>Even if counting adds no time, reading the input once takes <strong>5,000 seconds, or about 85 minutes</strong>. This machine cannot meet the reporting window under those assumptions.</p>
-  <p>With balanced input and independent disks, 100 machines reading at 2 GB/s each could scan their shares in 50 seconds. Each machine reads 100 GB. The slide draws eight of these 100 workers. That is about 1 minute, before coordination, data transfer, and processing costs.</p>
+  <p>With balanced input and independent disks, 100 machines reading at 2 GB/s each could scan their shares in 50 seconds. Each machine reads 100 GB. The diagram shows eight of these 100 workers. The ideal reading time is about 1 minute, before coordination, data transfer, and processing costs.</p>
 </div>
 
+<div class="lecture-walkthrough" data-lecture-scene="one-job-many-machines"></div>
 <p class="keep-in-present">More machines can share the work. They also create three coordination problems:</p>
 <ul>
   <li><strong>Assign the input:</strong> give each worker a portion of the records to process.</li>
@@ -139,19 +141,32 @@
   </tbody>
 </table>
 </details>
-<p><strong>Read the final build:</strong> one worker loses its output. More capacity does not solve this loss. The framework must reconstruct the missing contribution without counting it twice.</p>
+<p>Suppose one worker loses its output before the rest of the job can use it. The final report would then omit that worker’s contribution. The framework must reconstruct the missing output without counting a repeated attempt as additional input. Sharing work therefore requires both a placement rule and a recovery rule.</p>
 <p>Sharing work raises the next question: which part of the data should each worker process?</p>
 
 <!-- ============================================================ -->
 <h2 id="partition" data-slide="2" data-scene="partitioning">2 · Partitioning</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=2&amp;b=1">Open slide 2 ↗</a></p>
 
-<p><strong>Partitioning</strong> divides records into subsets. The system assigns these partitions to workers for processing. A <strong>worker</strong> is a program process that runs assigned computation. One worker can process several partitions.</p>
+<p><strong>Partitioning</strong> divides records into subsets called <strong>partitions</strong>. Each partition is a bucket for records assigned the same partition number. A <strong>worker</strong> is a program process that runs assigned computation. The system assigns partitions to workers. One worker can process several partitions.</p>
 <p>A <strong>key</strong> is the record value used for routing, such as a person’s name in the next example.</p>
 <p>Consider sorting mail into destination trays. Each address selects a tray, regardless of the sending office. Here, the key acts like the address, and the partition acts like the tray. The routing rule selects a partition. A worker processes that partition’s records.</p>
 <p>The analogy explains placement. It does not guarantee equal work or create spare copies of the data. <strong>Replication</strong> keeps extra copies. Partitioning divides the collection into different subsets.</p>
-<p><strong>Read the slide:</strong> the names first appear together, then move into four partitions. A lookup for <code>kim</code> contacts its assigned partition. The next slide explains the rule that selects this destination.</p>
-<p>Keep two divisions of a MapReduce job separate. <strong>Input splits</strong> assign original records to map tasks. <strong>Intermediate partitions</strong> assign the pairs produced by map to reduce tasks. Both divide work, but they divide data at different points.</p>
+<p>The partition rule answers <strong>which bucket receives this record?</strong> The software running the job applies that rule to the record’s key. The result is a partition number. The software places the record in that partition, then assigns the processing work to a worker.</p>
+<p>Consider twelve records whose keys are people’s names. A character code is a numeric identifier for a character. For this teaching example, add the codes in each name, then take the remainder after division by four. The <code>%</code> operator computes this remainder, which selects P0, P1, P2, or P3.</p>
+<p>For <code>kim</code>, the codes are <code>107 + 105 + 109 = 321</code>. The remainder <code>321 % 4 = 1</code> assigns this record to <strong>P1</strong>. The same calculation places all twelve names as follows:</p>
+<div class="lecture-walkthrough" data-lecture-scene="partitioning"></div>
+<table id="partition-assignments">
+  <thead><tr><th>Partition bucket</th><th>Assigned keys</th></tr></thead>
+  <tbody>
+    <tr><td>P0</td><td><code>cyd, fay, ivy</code></td></tr>
+    <tr><td>P1</td><td><code>ben, kim</code></td></tr>
+    <tr><td>P2</td><td><code>ada, dee, eli, lee</code></td></tr>
+    <tr><td>P3</td><td><code>gus, jon, mia</code></td></tr>
+  </tbody>
+</table>
+<p>The rule chooses a bucket, not a permanent machine. A lookup for <code>kim</code> uses the same rule to find P1. The system knows which worker currently processes P1. Reassigning P1 to another worker does not change the names assigned to that partition.</p>
+
 <p>A <strong>task</strong> is a unit of assigned computation. A partition is a data subset, not a permanent machine identity.</p>
 
 <!-- ============================================================ -->
@@ -159,21 +174,62 @@
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=3&amp;b=1">Open slide 3 ↗</a></p>
 
 <p class="keep-in-present">In <code>hash(key) % n</code>, <code>n</code> is the number of partitions. A hash function converts the key into an integer. The <code>%</code> operator takes the remainder after division by <code>n</code>, selecting a partition numbered from <code>0</code> to <code>n - 1</code>. Here, <code>owner</code> means the selected partition.</p>
-<p>The slide uses these twelve keys: <code>ada, ben, cyd, dee, eli, fay, gus, ivy, jon, kim, lee, mia</code>. Keep them fixed while comparing the routing rules.</p>
+<p>Use these twelve keys: <code>ada, ben, cyd, dee, eli, fay, gus, ivy, jon, kim, lee, mia</code>. Keep them fixed while comparing the routing rules.</p>
 <p>The teaching hash adds the numeric character codes in a name. For <code>kim</code>, that is <code>107 + 105 + 109 = 321</code>. With four partitions, <code>321 % 4 = 1</code>. The name goes to partition P1.</p>
+<p>The software repeats this calculation for every record. Python’s <code>ord()</code> returns a character’s numeric code.</p>
+<div class="routing-calculations" tabindex="0" role="region" aria-label="Hash routing calculations for all twelve keys; scroll horizontally on a small screen">
+<table id="hash-assignments">
+  <thead><tr><th>Key</th><th>Character-code sum</th><th>Remainder after division by 4</th><th>Destination</th></tr></thead>
+  <tbody>
+    <tr><td><code>ada</code></td><td><code>97 + 100 + 97 = 294</code></td><td><code>294 % 4 = 2</code></td><td>P2</td></tr>
+    <tr><td><code>ben</code></td><td><code>98 + 101 + 110 = 309</code></td><td><code>309 % 4 = 1</code></td><td>P1</td></tr>
+    <tr><td><code>cyd</code></td><td><code>99 + 121 + 100 = 320</code></td><td><code>320 % 4 = 0</code></td><td>P0</td></tr>
+    <tr><td><code>dee</code></td><td><code>100 + 101 + 101 = 302</code></td><td><code>302 % 4 = 2</code></td><td>P2</td></tr>
+    <tr><td><code>eli</code></td><td><code>101 + 108 + 105 = 314</code></td><td><code>314 % 4 = 2</code></td><td>P2</td></tr>
+    <tr><td><code>fay</code></td><td><code>102 + 97 + 121 = 320</code></td><td><code>320 % 4 = 0</code></td><td>P0</td></tr>
+    <tr><td><code>gus</code></td><td><code>103 + 117 + 115 = 335</code></td><td><code>335 % 4 = 3</code></td><td>P3</td></tr>
+    <tr><td><code>ivy</code></td><td><code>105 + 118 + 121 = 344</code></td><td><code>344 % 4 = 0</code></td><td>P0</td></tr>
+    <tr><td><code>jon</code></td><td><code>106 + 111 + 110 = 327</code></td><td><code>327 % 4 = 3</code></td><td>P3</td></tr>
+    <tr><td><code>kim</code></td><td><code>107 + 105 + 109 = 321</code></td><td><code>321 % 4 = 1</code></td><td>P1</td></tr>
+    <tr><td><code>lee</code></td><td><code>108 + 101 + 101 = 310</code></td><td><code>310 % 4 = 2</code></td><td>P2</td></tr>
+    <tr><td><code>mia</code></td><td><code>109 + 105 + 97 = 311</code></td><td><code>311 % 4 = 3</code></td><td>P3</td></tr>
+  </tbody>
+</table>
+</div>
 <p>A <strong>point query</strong> asks for one exact key. A lookup for <code>kim</code> computes the same destination and contacts P1.</p>
-<p>A <strong>range query</strong> asks for keys between two bounds. To find names from <code>dee</code> through <code>fay</code>, inspect every hash partition. The hash does not keep neighboring names together.</p>
-<p><strong>Read the builds:</strong> start with the names, assign their hash partitions, locate <code>kim</code>, then inspect the range query. A good hash can spread distinct keys. It cannot divide repeated occurrences of one key across different destinations under this rule.</p>
+<p>A <strong>range query</strong> asks for every key between two bounds. Here, a name must come at or after <code>dee</code> and at or before <code>fay</code> in alphabetical order. Both bounds are included. In SQL, this condition is <code>WHERE name &gt;= 'dee' AND name &lt;= 'fay'</code>.</p>
+<p>The query supplies two bounds, not a list of every matching name. Hash partition numbers do not represent alphabetical intervals. Computing the buckets for <code>dee</code> and <code>fay</code> therefore does not identify every bucket that could contain a matching name.</p>
+<p>The matching range-query names are <code>dee</code>, <code>eli</code>, and <code>fay</code>. Hash routing puts <code>dee</code> and <code>eli</code> in P2, but <code>fay</code> in P0. Alphabetical proximity does not identify one hash destination. Without extra information about partition contents, the query must check all four partitions.</p>
+<figure class="mr-overview" id="range-query-comparison">
+  <div class="mr-diagram-scroll" tabindex="0" role="region" aria-label="Range query across hash and range partitions; scroll horizontally on a small screen">
+    <img src="diagrams/range-query-hash-vs-range.svg" width="1280" height="720" alt="For dee through fay, hash routing checks all four partitions. Range routing checks only P1, the d–f interval. Both return dee, eli, and fay.">
+  </div>
+  <figcaption>Blue outlines identify inspected buckets. Green names match the query. Hash routing checks all four buckets. Ordered range boundaries let the same query skip three buckets.</figcaption>
+</figure>
+<div class="lecture-walkthrough" data-lecture-scene="hash-routing"></div>
+<p>A good hash can spread distinct keys across partitions. Equal keys still receive the same hash and reach the same destination. Many records with one key can therefore concentrate work in one partition. Correct routing does not guarantee balanced work.</p>
 <p>This transparent character-sum hash explains the mechanism. It is a teaching choice, not a recommended production hash.</p>
 
 <!-- ============================================================ -->
 <h2 id="range-routing" data-slide="4" data-scene="range-routing">4 · Range routing</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=4&amp;b=1">Open slide 4 ↗</a></p>
 
-<p>Range partitioning assigns neighboring keys to the same interval. The slide uses four intervals: <strong>P0: a–c, P1: d–f, P2: g–j, and P3: k–z</strong>.</p>
+<p>Range partitioning assigns neighboring keys to the same interval. Use four intervals: <strong>P0: a–c, P1: d–f, P2: g–j, and P3: k–z</strong>. Here, each interval applies to a name’s first letter. The software compares that letter with the interval boundaries to choose a bucket.</p>
+<table id="range-assignments">
+  <thead><tr><th>Partition</th><th>First-letter interval</th><th>Assigned keys</th></tr></thead>
+  <tbody>
+    <tr><td>P0</td><td>a–c</td><td><code>ada, ben, cyd</code></td></tr>
+    <tr><td>P1</td><td>d–f</td><td><code>dee, eli, fay</code></td></tr>
+    <tr><td>P2</td><td>g–j</td><td><code>gus, ivy, jon</code></td></tr>
+    <tr><td>P3</td><td>k–z</td><td><code>kim, lee, mia</code></td></tr>
+  </tbody>
+</table>
 <p>The name <code>kim</code> belongs to P3, so its point lookup still contacts one partition. The range from <code>dee</code> through <code>fay</code> lies entirely in P1. This query contacts one partition instead of all four hash partitions.</p>
-<p><strong>Read the comparison:</strong> both rules can locate one known key. Range partitioning also preserves alphabetical neighborhoods. Its split points can still create uneven work when some intervals receive more records or requests.</p>
-<table>
+<p>The right side of the <a href="#range-query-comparison">query comparison diagram</a> shows this boundary test. P0 ends before <code>dee</code>. P2 and P3 start after <code>fay</code>. Only P1 can contain matching names.</p>
+<p>Both routing rules can locate one known key. Range partitioning also keeps neighboring names together, so this range query contacts only P1. These twelve keys happen to give three records per range. Other inputs can produce unequal counts or concentrate requests in one range.</p>
+<div class="lecture-walkthrough" data-lecture-scene="range-routing"></div>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Hash and range partitioning comparison; scroll horizontally if needed">
+<table id="partition-comparison">
   <thead><tr><th></th><th>Hash partitioning</th><th>Range partitioning</th></tr></thead>
   <tbody>
     <tr><td>Rule</td><td><code>owner = hash(key) % n</code></td><td>P0: a–c; P1: d–f; P2: g–j; P3: k–z</td></tr>
@@ -182,6 +238,7 @@
     <tr><td>Related examples</td><td>Lab 11’s shuffle uses a hash to select a partition. A hash join also uses hashing to group equal keys in one bucket.</td><td>Lab 8’s folders, such as <code>month=12/</code>, group equal month values. B+ tree leaves illustrate sorted key intervals.</td></tr>
   </tbody>
 </table>
+</div>
 <div class="viz" id="viz-part"><div class="viz-title">the same 12 keys, both rules, side by side</div>
   <p class="viz-description">This example uses twelve names as keys. The point query asks for <code>kim</code>. The range query asks for names from <code>dee</code> through <code>fay</code> in alphabetical order. Load the keys. Run each query on both layouts. Count the partitions contacted.</p>
   <div class="qj-controls">
@@ -201,9 +258,10 @@
 <h2 id="map-local" data-slide="5" data-scene="map-is-local-computation">5 · Map is local computation</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=5&amp;b=1">Open slide 5 ↗</a></p>
 
-<p>Return to the fictional lunch orders. Slide 5 starts with only group 0’s order, <code>“Pizza, pizza!”</code>. Predict its map output before looking at the pair labels.</p>
+<p>Return to group 0’s lunch order, <code>“Pizza, pizza!”</code>. One map call receives this record. Predict how many pairs it must emit to preserve both requests.</p>
 <p class="keep-in-present">The map function reads one order and emits one <code>(meal, 1)</code> pair for each requested meal. The <strong>key</strong> is the meal name. The <strong>value</strong>, <code>1</code>, means one request. The function uses lowercase letters and treats punctuation as separators.</p>
 
+<div class="lecture-walkthrough" data-lecture-scene="map-is-local-computation"></div>
 <table id="mr-map-example">
   <thead><tr><th>Input to map</th><th>Output from map</th></tr></thead>
   <tbody>
@@ -213,8 +271,8 @@
 </table>
 
 <p class="keep-in-present">Each map call needs only its own order, so the calls can run independently. The two pizza requests in group 0 remain two pairs. We now have four pairs, still separated by their input orders.</p>
-<p><strong>Read the three builds:</strong> one input order becomes two lowercase occurrences, then two <code>(pizza, 1)</code> pairs. Equal text does not mean the requests are duplicates to discard. A set would lose one requested pizza.</p>
-<p>The second table row prepares the next slide. Group 1 adds one salad request and one pizza request.</p>
+<p>Lowercasing and splitting punctuation produces two occurrences of <code>pizza</code>. Map turns each occurrence into a separate <code>(pizza, 1)</code> pair. Although the pairs have equal contents, they represent two requested meals. Keeping only distinct pairs would discard one pizza.</p>
+<p>Group 1’s separate order, <code>“Salad pizza.”</code>, produces <code>(salad, 1)</code> and <code>(pizza, 1)</code>. Across both orders, four emitted pairs represent four meal requests. The next step must bring contributions for the same meal together.</p>
 
 <!-- ============================================================ -->
 <h2 id="mapreduce" data-slide="6" data-scene="reduce-sees-the-complete-group">6 · MapReduce: map, shuffle, reduce</h2>
@@ -222,12 +280,15 @@
 
 <p class="keep-in-present">MapReduce organizes this count into three operations. <strong>Map</strong> transforms each input record into pairs. <strong>Shuffle</strong> groups the pairs by key. <strong>Reduce</strong> processes each group to produce its result. In this example, reduction adds counts.</p>
 
+<div class="lecture-walkthrough" data-lecture-scene="reduce-sees-the-complete-group"></div>
+<details class="static-reference"><summary>Static diagram of the complete result</summary>
 <figure class="mr-overview">
   <div class="mr-diagram-scroll" tabindex="0" role="region" aria-label="MapReduce diagram; scroll horizontally on a small screen">
     <img src="diagrams/mapreduce-lunch.svg" width="1280" height="650" alt="Map emits four meal-request pairs from two orders. Shuffle groups three pizza values and one salad value. Reduce returns pizza 3 and salad 1.">
   </div>
   <figcaption>Follow each request from its order to its meal group. Each arrow into a shuffle group carries one occurrence. <a href="diagrams/mapreduce-lunch.svg">Open the full diagram.</a></figcaption>
 </figure>
+</details>
 <h3 class="new-slide" data-kicker="MapReduce · 2">Shuffle: bring requests for the same meal together</h3>
 
 <p class="keep-in-present">The <span class="gloss" data-gloss="shuffle">shuffle</span> collects the map outputs and groups their values by key. All <code>pizza</code> values join one group, including the value from group 1. The <code>salad</code> value joins a separate group.</p>
@@ -262,6 +323,11 @@
 
 <p class="keep-in-present">Map and reduce are computation roles. A single process can demonstrate both, as Lab 11 does. A <strong>cluster</strong> is a group of machines working together. On a cluster, the framework schedules those computations across worker processes.</p>
 
+<h3 id="two-divisions">Input splits and intermediate partitions divide different data</h3>
+<p>A MapReduce job divides data at two points. First, the framework divides original records into <strong>input splits</strong> and assigns each split to a map task. Each map task transforms its records into intermediate pairs.</p>
+<p>The framework then routes those pairs into <strong>intermediate partitions</strong> using their keys. Each reduce task processes one intermediate partition. That partition can contain several keys, each with its own value group.</p>
+<p>In our toy job, one input split contains <code>“Pizza, pizza!”</code>, and the other contains <code>“Salad pizza.”</code>. After mapping, the pizza contributions from both input splits reach the same intermediate partition. Original order boundaries no longer define the groups.</p>
+
 <details>
   <summary>General function signatures and another word-count input</summary>
 <pre class="equation"><code>map(record)         → zero or more (key, value) pairs       process each input record
@@ -272,11 +338,12 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
              shuffle: all pairs with key "the" reach the same reducer
              reduce:  the,[1,1,1,…] → (the, total)</code><sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup></pre>
 </details>
-<p><strong>Read the five builds:</strong> two orders produce four occurrence pairs. Shuffle gathers values by meal. Reduce produces <code>pizza = 3</code> and <code>salad = 1</code>. The final build separates your map and reduce functions from the runtime’s assignment, scheduling, and shuffle work.</p>
+<p>Both orders contribute to the same pizza total. Group 0 supplies two values of 1, and group 1 supplies the third. Shuffle forms pizza’s complete group, <code>[1, 1, 1]</code>, and salad’s group, <code>[1]</code>. Reduce adds each group, producing <code>pizza = 3</code> and <code>salad = 1</code>.</p>
+<p>For illustration, pizza goes to P0 and salad to P1. Partition labels describe destinations, while meal names identify groups. A partition can hold several different keys. Changing the partition count may change destinations, but it must preserve each key’s complete total.</p>
 <h3 id="worked-example">Trace the same grouping across partition dictionaries</h3>
 <p class="keep-in-present">Return to the original two orders. The Python companion below uses one dictionary for all groups. Lab 11 adds a routing rule and several partition dictionaries. Follow the same four pairs through the code below.</p>
 
-<p class="keep-in-present">The code stores groups in <strong>partitions</strong>, which are subsets of the intermediate data. A routing rule selects a partition for each key. Each partition contains a separate list of values for each key assigned to it. The hash and range slides explained how such rules select destinations.</p>
+<p class="keep-in-present">The code stores groups in <strong>partitions</strong>, which are subsets of the intermediate data. A routing rule selects a partition for each key. Each partition contains a separate list of values for each key assigned to it.</p>
 
 <div data-teaching-trace="shuffle">
   <p><strong>Worked result:</strong> <code>Pizza, pizza!</code> and <code>Salad pizza.</code> emit four pairs. Shuffle groups <code>pizza: [1,1,1]</code> and <code>salad: [1]</code>. Reduce produces <code>(pizza, 3)</code> and <code>(salad, 1)</code>.</p>
@@ -348,7 +415,7 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 
 
 </details>
-<p>The code demonstrates the counting contract in one process. The next slide shows the files and network transfers that a distributed implementation adds.</p>
+<p>The Python program groups all pairs in one process. A distributed implementation must also move intermediate data between the workers that produce and consume it.</p>
 
 <!-- ============================================================ -->
 <h2 id="shuffle-files" data-slide="7" data-scene="shuffle-manufactures-locality">7 · Shuffle moves files before reduce</h2>
@@ -356,19 +423,23 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 
 <p>The Python companion groups pairs in memory. Across machines, the framework must move those pairs to the workers that run reduce tasks.</p>
 <p>A <strong>map task</strong> processes an assigned portion of the input. A <strong>reduce task</strong> processes a destination partition, which can contain several different keys.</p>
-<p>In the original MapReduce design, map workers write intermediate data to local disk, separated by reducer destination. The coordinator, called the <strong>master</strong> on the slide, records where those outputs are available. <a href="#src-10">[10]</a></p>
+<p>In the original MapReduce design, map workers write intermediate data to local disk, separated by reducer destination. A coordinator, also called the <strong>master</strong>, records where completed map outputs are available. <a href="#src-10">[10]</a></p>
 
 
-<p><strong>Read the labels:</strong> M0 processes order 0, and M1 processes order 1. This toy assigns one order per map task. Reduce task R0 handles partition P0’s pizza group. R1 handles partition P1’s salad group.</p>
-<p>The slide label <code>M0 → R0</code> names M0’s local output region destined for R0. It contains two pizza values. M0’s region for R1 is empty. M1 has one value for each reducer.</p>
-<p>The master sends file locations to reducers. The meal pairs do not pass through the master. Reducers fetch the actual data from the map workers. The diagram’s arrows show that data movement after the fetch requests.</p>
+<p>Map task M0 processes order 0, and M1 processes order 1. This example assigns one order per map task. Reduce task R0 processes P0’s pizza group. R1 processes P1’s salad group.</p>
+<p>Each map task separates its output by reducer destination. The region named <code>M0 → R0</code> holds two pizza values, <code>[1, 1]</code>. M0’s region for R1 is empty. M1’s region for R0 holds <code>[1]</code>, and its region for R1 holds salad’s <code>[1]</code>.</p>
+<p>The master gives reducers these output locations. Each reducer fetches its region from every map task. R0 fetches both pizza regions and forms <code>[1, 1, 1]</code>. R1 finds no contribution from M0 and one salad value from M1. Sorting brings equal keys together before the reducer processes each group.</p>
+<p>The master coordinates locations. The map workers send the actual intermediate data to the reducers. These transfers, sorting, and disk access take time even when the final arithmetic is simple.</p>
 
+<div class="lecture-walkthrough" data-lecture-scene="shuffle-manufactures-locality"></div>
+<details class="static-reference"><summary>Static diagram of the complete result</summary>
 <figure class="mr-overview">
   <div class="mr-diagram-scroll" tabindex="0" role="region" aria-label="MapReduce shuffle files diagram; scroll horizontally on a small screen">
     <img src="diagrams/mapreduce-shuffle-files.svg?v=2" alt="Map task M0 stores two pizza contributions. M1 stores one pizza and one salad contribution. Reducers fetch matching output partitions and form complete groups.">
   </div>
   <figcaption>Return to the original two orders. This diagram uses raw occurrence pairs and a fixed teaching choice: pizza goes to P0, salad to P1.</figcaption>
 </figure>
+</details>
 
 <ol>
   <li><strong>Partition:</strong> assign each intermediate pair to its reducer destination using the key.</li>
@@ -379,7 +450,7 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <p>Apache Hadoop implements the same broad structure. Its reducer fetches map output, merges sorted records, and calls reduce for each group. Fetching and sorting can overlap. The value iterator lets reduce process a large group without creating one Python list. <a href="#src-21">[21]</a></p>
 <p>For our pizza total, the destination needs <code>[1, 1]</code> from M0 and <code>[1]</code> from M1. Neither map task alone supplies the complete result.</p>
 <p>Partitioning selects the destination. Grouping separates keys within that destination. Two different keys can share a partition, and one worker can execute several tasks.</p>
-<p>Moving every raw pair can cost time. The next slide tests whether local aggregation can reduce that traffic without changing the answer.</p>
+<p>Moving every raw pair can cost time. A valid local aggregation can reduce the number of transferred pairs while preserving their contributions.</p>
 
 <!-- ============================================================ -->
 <h2 id="combiner" data-slide="8" data-scene="reduce-network-bytes-early">8 · Optional combiners preserve contribution weights</h2>
@@ -387,6 +458,7 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 
 <p>M0 emits two <code>(pizza, 1)</code> pairs. Could it send <code>(pizza, 2)</code> instead? For an integer count, yes.</p>
 <p>A <strong>combiner</strong> performs an optional local aggregation before the shuffle. It can reduce network traffic while preserving the final result. It does not replace the reducer’s complete group. <a href="#src-20">[20]</a></p>
+<div class="lecture-walkthrough" data-lecture-scene="reduce-network-bytes-early"></div>
 <table id="combiner-example">
   <thead><tr><th>Map task</th><th>Raw output</th><th>After local addition</th></tr></thead>
   <tbody>
@@ -397,15 +469,17 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <p>Three pairs now represent four requests. The pizza reducer adds <code>2 + 1 = 3</code>. The salad reducer returns <code>1</code>. Sending fewer pairs has preserved every request’s contribution.</p>
 <p>The answer must remain correct when the combiner is omitted or applied repeatedly to partial results. Integer addition is <strong>associative</strong> and <strong>commutative</strong>: regrouping or reordering the additions preserves the result. <a href="#src-22">[22]</a></p>
 <p><strong>Lab boundary:</strong> the graded mapper still emits one pair per occurrence. A combiner is an optional extension, with separate local aggregation after mapping.</p>
-<p><strong>Read the builds:</strong> four raw pairs become three partial-count pairs, then the reducer calculates the final totals. Fewer pairs still represent four requested meals. This is a pair-count comparison, not a measured speedup.</p>
-<p>Local addition works for counts. The next slide asks what information an average must retain.</p>
+<p>The combiner changes M0’s two pizza pairs into one pair with value 2. M1 still supplies a pizza pair and a salad pair. Three transmitted pairs therefore represent four requests. The final reducer adds contribution values, not the number of pairs it receives.</p>
+<p>This comparison counts pairs. It does not measure transferred bytes or elapsed time.</p>
+<p>Local addition preserves an integer count. Other calculations need different partial information. An average, for example, must retain how many observations each partial result represents.</p>
 
 <!-- ============================================================ -->
 <h2 id="average-partials" data-slide="9" data-scene="preserve-sum-and-count">9 · Preserve sum and count</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
 
-<p>This is a separate toy example. We want the average delivery time for three deliveries, rather than a meal count.</p>
-<p><strong>First build:</strong> M0 holds delivery times of 10 and 10 minutes. M1 holds one delivery time of 40 minutes. The groups have unequal sizes.</p>
+<p>Consider a separate toy example: the average delivery time for three deliveries.</p>
+<p>M0 holds delivery times of 10 and 10 minutes. M1 holds one delivery time of 40 minutes. M0 therefore represents two deliveries, while M1 represents one.</p>
+<div class="lecture-walkthrough" data-lecture-scene="preserve-sum-and-count"></div>
 <table id="average-inputs">
   <thead><tr><th>Input portion</th><th>Delivery times</th><th>Local average</th></tr></thead>
   <tbody>
@@ -414,12 +488,13 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
   </tbody>
 </table>
 <div class="exercise learning-check" id="average-check">
-  <span class="ex-label">Predict before the second build</span>
+  <span class="ex-label">Check the weighting</span>
   <p>Would averaging the two local averages give each delivery equal weight?</p>
   <details><summary>Reveal the incorrect average</summary><p>No. <code>(10 + 40) / 2 = 25</code> minutes gives each map task equal weight. The single-delivery group receives as much weight as the two-delivery group.</p></details>
 </div>
-<p><strong>Third build:</strong> retain both total time and delivery count. A local average alone loses the group size needed for correct weighting.</p>
+<p>The two local averages do not retain the group sizes. To combine the deliveries correctly, each partial result must retain both total time and delivery count.</p>
 <p>Use one key, <code>delivery_time</code>, for all deliveries. Each map output carries a <code>(sum, count)</code> value, initially <code>(time, 1)</code>. A combiner adds the two fields separately and returns the same value format.</p>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Average summaries by task; scroll horizontally if needed">
 <table id="average-example">
   <thead><tr><th>Input portion</th><th>Total time</th><th>Delivery count</th><th>Safe summary: (sum, count)</th></tr></thead>
   <tbody>
@@ -427,8 +502,9 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
     <tr><td>Map task M1</td><td>40 min</td><td>1</td><td><code>(40, 1)</code></td></tr>
   </tbody>
 </table>
+</div>
 <p>Add the summaries: <code>(20 + 40, 2 + 1) = (60, 3)</code>. The merged state represents 60 total minutes across three deliveries.</p>
-<p><strong>Fourth build:</strong> the final reducer divides total time by total count. <code>60 / 3 = 20</code> minutes is the correct average.</p>
+<p>The final reducer divides the combined total time by the combined delivery count. <code>60 / 3 = 20</code> minutes is the correct average.</p>
 <p>This format also works when local combination is skipped or repeated. The reducer merges every <code>(sum, count)</code> value, then divides once. <strong>Keep enough information to combine correctly.</strong></p>
 
 <!-- ============================================================ -->
@@ -436,7 +512,9 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=10&amp;b=1">Open slide 10 ↗</a></p>
 
 <p>Correct grouping does not guarantee balanced work. <strong>Skew</strong> means the work is distributed unevenly. One frequent key can send many records to one partition, leaving other workers waiting.</p>
-<p>The slide distributes <strong>8,000 rows across eight workers</strong>. One frequent key routes to W0. Its share is 0%, 40%, then 80%. The remaining rows spread evenly across all eight workers, including W0.</p>
+<p>Suppose <strong>8,000 rows are distributed across eight workers</strong>. One frequent key always routes to W0. Compare cases where that key accounts for 0%, 40%, and 80% of all rows. The remaining rows spread evenly across all eight workers, including W0.</p>
+<div class="lecture-walkthrough" data-lecture-scene="skew-creates-idle-time"></div>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Worker loads for different frequent-key shares; scroll horizontally if needed">
 <table id="skew-loads">
   <thead><tr><th>Frequent-key share</th><th>W0 calculation</th><th>W0 total</th><th>Each other worker</th></tr></thead>
   <tbody>
@@ -445,7 +523,8 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
     <tr><td>80%</td><td><code>6,400 + 1,600 / 8</code></td><td>6,600 rows</td><td>200 rows</td></tr>
   </tbody>
 </table>
-<p><strong>Read the bars:</strong> colored areas represent assigned work. Gray areas show waiting after a worker finishes its own partition. The illustration assumes equal work per row. It is not measured processor utilization.</p>
+</div>
+<p>At an 80% share, W0 receives 6,600 rows while each other worker receives only 200. The other workers finish first, but the job must wait for W0. The diagram assumes equal processing time per row. Colored areas show assigned work, and gray areas show waiting after a worker finishes. These areas illustrate the workload model, not measured processor utilization.</p>
 <p>Adding partitions does not split the frequent key under the same routing rule. All its values still meet at one destination.</p>
 <p>A task that finishes much later than its peers is a <span class="gloss" data-gloss="straggler">straggler</span>. Compare input sizes, disk writes, and execution times. These measurements help separate too much input from slow hardware or expensive per-row work. <a href="#src-7">[7]</a></p>
 <div class="viz" id="viz-skew"><div class="viz-title">skew · one frequent key across eight partitions</div>
@@ -457,23 +536,24 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
   <div id="skew-stage"></div>
   <p class="viz-caption">Gray areas show workers waiting after their own partitions finish. When one key accounts for 40% of the rows, one worker receives much more work. Salting can distribute those rows, at the cost of combining the partial results afterward.</p>
 </div>
-<p>Local combination can reduce traffic for a count. If one destination still has too much work, the next slide changes the intermediate keys.</p>
+<p>Local combination can reduce traffic for a count. If one destination still has too much work, salting can divide the frequent key into temporary groups.</p>
 
 <!-- ============================================================ -->
 <h2 id="salting" data-slide="11" data-scene="salt-and-combine">11 · Salt and combine</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=11&amp;b=1">Open slide 11 ↗</a></p>
 
-<p>This slide uses a <strong>separate toy example with 100 occurrences of key A</strong>. It is not a rescaling of the 8,000-row example. A direct grouping sends all 100 occurrences to one destination.</p>
+<p>Consider a <strong>separate toy example with 100 occurrences of key A</strong>. This example uses a different input from the 8,000-row case. Direct grouping sends all 100 occurrences to one destination.</p>
 <p><strong>Salting</strong> adds a temporary suffix to the key. Different records receive <code>A:0</code>, <code>A:1</code>, <code>A:2</code>, or <code>A:3</code>. These distinct keys can route to different partitions. <a href="#src-6">[6]</a></p>
+<div class="lecture-walkthrough" data-lecture-scene="salt-and-combine"></div>
 <ol>
   <li>Start with the frequent key A and its 100 occurrences.</li>
   <li>Assign 25 occurrences to each salted key in this balanced teaching example.</li>
   <li>Count each salted group, producing four partial counts of 25.</li>
   <li>Remove the suffixes and add the partial counts under A: <code>25 + 25 + 25 + 25 = 100</code>.</li>
 </ol>
-<p><strong>Read the four builds:</strong> one concentrated group becomes four salted groups, then four partial totals, then one complete total. Real routing and group sizes may be less balanced.</p>
+<p>The first aggregation counts four salted groups independently. A second aggregation combines their four partial counts under the original key A. That second aggregation receives four counts instead of the original 100 occurrences. The example assigns 25 occurrences to each salted key and routes those keys to different destinations. Real routing and group sizes may be less balanced.</p>
 <p>A combiner aggregates existing keys locally. Salting changes intermediate keys to divide one frequent key’s work across destinations. It requires another aggregation to recover the original key’s result.</p>
-<p>The operation must support correct partial aggregation. For an average, preserve the <code>(sum, count)</code> state from slide 9. Extra tasks and transfers can cost more than salting saves.</p>
+<p>The operation must support correct partial aggregation. For an average, each salted group must retain total time and delivery count as a <code>(sum, count)</code> value. Combine those values, then divide the combined sum by the combined count. Extra tasks and transfers can cost more than salting saves.</p>
 <p>So far, every task has finished successfully. Next, let a worker fail after producing its local files.</p>
 
 <!-- ============================================================ -->
@@ -482,6 +562,7 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 
 <p>Return to the lunch orders. M0 has produced its two pizza pairs. Its machine fails before the pizza reducer fetches them.</p>
 <p>The original MapReduce coordinator reruns map tasks whose local outputs became inaccessible. The input must remain available. Reducers that still need those contributions fetch replacement output. Completed reduce output resides in the shared file system. <a href="#src-10">[10]</a></p>
+<div class="lecture-walkthrough" data-lecture-scene="rerun-maps-when-local-files-disappear"></div>
 <ol>
   <li><strong>Completed map:</strong> M0’s local file contains <code>[1, 1]</code>. R0 already has M1’s <code>[1]</code> but still needs M0.</li>
   <li><strong>Worker failure:</strong> M0’s local output becomes inaccessible before R0 fetches it.</li>
@@ -490,23 +571,24 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 </ol>
 <p><strong>Deterministic</strong> means the same inputs produce the same outputs. Available input and deterministic map code let the replacement reproduce the missing pairs.</p>
 <p>Task completion did not make the local intermediate files durable elsewhere. The rerun restores a missing contribution. It does not create another lunch order.</p>
-<p>The next slide asks how a reducer should account for output when more than one attempt of M0 produces it.</p>
+<p>A rerun restores lost contributions. If multiple attempts produce output for M0, the framework must also prevent the extra attempt from increasing the pizza total.</p>
 
 <!-- ============================================================ -->
 <h2 id="task-attempts" data-slide="13" data-scene="count-one-logical-task-contribution">13 · Count one logical task contribution</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=13&amp;b=1">Open slide 13 ↗</a></p>
 
 <p>A <strong>logical task</strong> identifies assigned work on an input portion. An <strong>attempt</strong> is one execution of that task. A retry starts another attempt, not another lunch order.</p>
-<p>The slide uses the valid partial sums from slide 8. Each M0 attempt produces <code>(pizza, 2)</code>, representing order 0’s two requests. M1 independently produces <code>(pizza, 1)</code>. The diagram focuses on pizza. The salad total remains 1.</p>
+<p>Use local addition to summarize each order before transfer. Each M0 attempt produces <code>(pizza, 2)</code>, representing order 0’s two requests. M1 independently produces <code>(pizza, 1)</code>. The diagram follows the pizza contributions. The salad total remains 1.</p>
+<div class="lecture-walkthrough" data-lecture-scene="count-one-logical-task-contribution"></div>
 <table id="retry-example">
-  <thead><tr><th>Produced output</th><th>Meaning</th><th>R0’s choice in this slide</th></tr></thead>
+  <thead><tr><th>Produced output</th><th>Meaning</th><th>Contribution used by R0</th></tr></thead>
   <tbody>
     <tr><td>M0 · attempt A: <code>(pizza, 2)</code></td><td>Order 0’s two requests</td><td>Do not add this repeated copy</td></tr>
     <tr><td>M0 · attempt B: <code>(pizza, 2)</code></td><td>The same assigned requests</td><td>Accept one usable M0 output</td></tr>
     <tr><td>M1: <code>(pizza, 1)</code></td><td>Order 1’s separate request</td><td>Add this independent contribution</td></tr>
   </tbody>
 </table>
-<p><strong>Read the builds:</strong> identify M0, reveal a repeated attempt, choose one usable M0 output, then add M1’s contribution. Counting both M0 attempts gives the incorrect <code>2 + 2 + 1 = 5</code>. One M0 contribution plus M1 gives <code>2 + 1 = 3</code>.</p>
+<p>Attempts A and B both execute M0’s assigned work. Their outputs represent the same two requests. R0 uses attempt B’s output here and does not add attempt A’s copy. Counting both M0 attempts gives the incorrect <code>2 + 2 + 1 = 5</code>. One M0 contribution plus M1 gives <code>2 + 1 = 3</code>.</p>
 <p>Keep both genuine pizza occurrences within M0’s chosen output. Discarding repeated task output is different from discarding repeated input words.</p>
 <p>Google’s implementation records map-task completions and atomically commits reduce output. It ignores completion messages for a map task already marked complete. For deterministic functions, the final output matches a failure-free sequential run. <a href="#src-10">[10]</a></p>
 <p>The rule applies to each reducer’s input from a logical map task. After a failure, different reducers may have read different attempts. They need compatible values, not necessarily the same attempt identity.</p>
@@ -521,6 +603,7 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=14&amp;b=1">Open slide 14 ↗</a></p>
 
 <p>Start again from the original two orders: <code>pizza = 3</code> and <code>salad = 1</code>. Treat each change below as a separate experiment. Predict which one changes the input before revealing the answers.</p>
+<div class="lecture-walkthrough" data-lecture-scene="distinguish-retries-from-new-orders"></div>
 <table id="transfer-cases">
   <thead><tr><th>Change</th><th>What changes?</th></tr></thead>
   <tbody>
@@ -529,7 +612,7 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
     <tr><td>Add order 2: <code>“Pizza, pizza!”</code></td><td>The input gains a separate order with two requests</td></tr>
   </tbody>
 </table>
-<details id="transfer-answers"><summary>Reveal the totals, as in the final two builds</summary>
+<details id="transfer-answers"><summary>Check the totals for each change</summary>
   <p><strong>Seven partitions:</strong> pizza stays 3 and salad stays 1. Equal keys still reach complete groups, even when their partition numbers change.</p>
   <p><strong>An M0 retry:</strong> pizza stays 3 and salad stays 1. The reducer accepts one M0 contribution.</p>
   <p><strong>A separate order 2:</strong> pizza becomes 5 and salad stays 1. Its text matches order 0, but it represents two additional meal requests.</p>
@@ -546,13 +629,15 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 
 <p id="spark"><strong>Spark</strong> lets you describe a data pipeline. It schedules partition work and manages data movement for operations such as grouped aggregation.</p>
 <p id="ray"><strong>Ray</strong> schedules Python function calls. In our follow-up example, tasks return partial counts and our program combines them.</p>
+<div class="lecture-walkthrough" data-lecture-scene="preview-spark-and-ray"></div>
 <p><a href="spark-ray.html">Lecture 13B</a> explains their APIs, execution plans, dependencies, and recovery behavior. Today’s foundation is <strong>map → shuffle → reduce</strong>, with correct grouping and safe retries.</p>
 
 <!-- ============================================================ -->
 <h2 id="recap" data-slide="16" data-scene="place-move-recover">16 · Preserve the count through movement and failure</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=16&amp;b=1">Open slide 16 ↗</a></p>
 
-<p>Read the final slide from left to right. Each box states one part of the original lunch-count contract.</p>
+<p>The original orders contain three pizza requests and one salad request. The framework must preserve those totals while it moves data and recovers from failures.</p>
+<div class="lecture-walkthrough" data-lecture-scene="place-move-recover"></div>
 <ol>
   <li><strong>Map:</strong> turn each order into occurrence pairs. Keep both pizza requests in order 0.</li>
   <li><strong>Shuffle:</strong> fetch every contribution for a key and form its complete group.</li>
@@ -572,8 +657,8 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <p class="key-fact keep-in-present"><strong>Capacity estimate:</strong> At 2 GB/s per machine, reading 10 TB takes about <strong>85 min</strong> on one machine. The ideal estimate for 100 machines is about 1 min, before coordination and transfer costs.</p>
 
 <!-- ============================================================ -->
-<h2 id="practice">Additional practice after the slide sequence</h2>
-<p>These examples extend the same mechanisms. They are separate from the sixteen-slide walkthrough and add no submission requirement.</p>
+<h2 id="practice">Additional practice</h2>
+<p>These optional examples extend the same mechanisms and add no submission requirement.</p>
 <details><summary>Change the Python input: add a salad order</summary>
 <div class="exercise learning-check" id="mr-transfer"><span class="ex-label">Use the three operations</span>
   <p>A third group sends <code>“Salad, salad!”</code>. Trace the new pairs through map, shuffle, and reduce. Which meal total changes?</p>
@@ -671,9 +756,19 @@ document that supports the claim it is attached to.</p>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="../../slides/_shared/visuals.js"></script>
+<script src="../../labs/_shared/rag-measurements.js?v=1"></script>
+<script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
+<script src="../../slides/_shared/trace-scenes.js?v=3"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=mapreduce-reading-20261109"></script>
+<script src="../../slides/decks/teaching-notes.js?v=mapreduce-reading-20261109"></script>
+<script src="../../slides/decks/clarity-captions.js?v=mapreduce-reading-20261109"></script>
+<script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
+<script src="../../slides/decks/clarity-diagrams.js?v=mapreduce-20261109"></script>
+<script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
+<script src="slide-walkthroughs.js?v=1"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>
 <script src="viz.js?v=ste-20261015"></script>
-<script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../labs/_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

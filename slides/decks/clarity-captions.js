@@ -1077,21 +1077,21 @@ window.CourseClarityCaptions = {
       "More capacity introduces coordination: group matching keys, schedule tasks, and reconstruct lost results."
     ],
     "partitioning": [
-      "Treat a key like a destination address: it determines the responsible worker.",
-      "Use the same routing rule for every record.",
-      "For a lookup, apply the routing rule to its key to find the worker that holds it."
+      "A routing rule maps each record’s key to a partition. A worker processes the records assigned to that partition.",
+      "The character-code sum modulo four selects P0, P1, P2, or P3. Equal keys select the same bucket.",
+      "For kim, 107 + 105 + 109 = 321 and 321 % 4 = 1. The lookup contacts partition P1."
     ],
     "hash-routing": [
       "Keep the same twelve names while changing only the routing rule.",
-      "The shown hash rule assigns each key to one of four workers.",
+      "The character-code sum modulo four assigns each key to one of four partitions.",
       "For an equality lookup on kim, compute its hash to choose one partition.",
       "A key range has no single hash interval, so this example consults every partition."
     ],
     "range-routing": [
       "Now keep neighboring keys together in sorted intervals.",
-      "Assign each interval to a worker, like consecutive ranges in an ordered index.",
-      "Route kim to the owner of k–z.",
-      "One worker owns the d–f range here. Unequal key frequencies can give workers different amounts of work."
+      "Compare each name’s first letter with the four intervals to choose its partition.",
+      "The name kim starts with k, so it belongs to P3, the k–z partition.",
+      "The query dee through fay needs only P1, the d–f partition. The other intervals cannot contain a match."
     ],
     "skew-creates-idle-time": [
       "With equal-cost rows and no hot key, each worker receives 1,000 of the 8,000 rows.",

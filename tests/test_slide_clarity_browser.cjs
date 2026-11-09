@@ -107,6 +107,78 @@ fs.mkdirSync(output,{recursive:true});
     await page.waitForFunction(()=>document.querySelector('[data-key="pair-0-label"]').getAttribute('y')!==window.previousY);
     assert(await page.evaluate(()=>window.movingPair===document.querySelector('[data-key="pair-0-label"]')),'shuffle preserves the animated DOM object');
     await page.emulateMedia({reducedMotion:'reduce'});
+    // The reading embeds the same scenes without loading sixteen full players.
+    const reading=await context.newPage();
+    await reading.route(/^https?:\/\//,route=>route.abort()); // All diagram assets are local.
+    await reading.goto(pathToFileURL(path.join(root,'lectures/lecture-13/distributed.html')).href);
+    const widgets=reading.locator('.lecture-walkthrough');
+    assert.deepEqual(await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.lectureScene)),scenes.map(s=>s.id));
+    assert.equal(await reading.locator('.lecture-walkthrough[data-walkthrough-ready="true"]').count(),16);
+    for(const [index,scene]of scenes.entries()){
+     const widget=widgets.nth(index);
+     for(let step=0;step<scene.steps;step++){
+      const state=await widget.evaluate(root=>{
+       const step=Number(root.dataset.step),scene=COURSE_DECKS[13].scenes.find(s=>s.id===root.dataset.lectureScene);
+       const expected=DeckViz.sceneDrawing(scene,step).filter(i=>i.tag==='text'||i.tag==='a').map(i=>[i.key,i.text]);
+       const actual=[...root.querySelector('.lw-screen svg').children].filter(e=>['text','a'].includes(e.tagName.toLowerCase())).map(e=>[e.dataset.key,e.textContent]);
+       return{step,expected,actual,caption:root.querySelector('.lw-caption').textContent,status:root.querySelector('[role="status"]').textContent};
+      });
+      assert.equal(state.step,step);
+      assert.deepEqual(state.actual,state.expected,'inline diagram retains the slide content');
+      const source=snapshots.find(s=>s.id===13&&s.slide===index+1&&s.step===step+1);
+      assert.equal(state.caption,source.instruction.split('\n\n')[0],'inline caption matches the deck build');
+      assert(state.status.startsWith(`Step ${step+1} of ${scene.steps}:`));
+      if(step<scene.steps-1)await widget.locator('[data-action="next"]').click();
+     }
+     assert(await widget.locator('[data-action="next"]').isDisabled());
+     assert(await widgets.evaluateAll((roots,index)=>roots.every((r,i)=>i===index||r.dataset.step==='0'),index),'advancing one diagram leaves others unchanged');
+     await widget.locator('[data-action="previous"]').click();
+     assert.equal(await widget.getAttribute('data-step'),String(scene.steps-2));
+     await widget.locator('[data-action="reset"]').click();
+     assert.equal(await widget.getAttribute('data-step'),'0');
+     assert(await widget.locator('[data-action="previous"]').isDisabled());
+    }
+    assert.equal(await reading.locator('[data-lecture-scene="preview-spark-and-ray"] .lw-screen a').getAttribute('href'),pathToFileURL(path.join(root,'slides/lecture-13b.html')).href);
+    // Keyboard controls remain local even while the reading's presentation mode is active.
+    const first=widgets.first();
+    await reading.evaluate(()=>localStorage.setItem('lab.presentationSlide','1'));
+    await reading.locator('#present-toggle').click();await reading.keyboard.press('a');
+    const readingPosition=await reading.locator('#present-counter').textContent();
+    await first.locator('[data-action="next"]').focus();await reading.keyboard.press('ArrowRight');
+    assert.equal(await first.getAttribute('data-step'),'1');
+    assert.equal(await reading.locator('#present-counter').textContent(),readingPosition);
+    await reading.keyboard.press('Home');
+    assert.equal(await first.getAttribute('data-step'),'0');
+    await reading.keyboard.press('Enter');
+    assert.equal(await first.getAttribute('data-step'),'1','native Enter activates the focused Next button');
+    await first.locator('.lw-viewport').focus();await reading.keyboard.press('ArrowRight');
+    assert.equal(await reading.locator('#present-counter').textContent(),readingPosition,'scrolling the diagram does not navigate reading sections');
+    await reading.keyboard.press('Escape');
+    assert(!(await reading.locator('body').evaluate(body=>body.classList.contains('presentation-mode'))));
+    for(const width of [390,320]){
+     await reading.setViewportSize({width,height:844});
+     assert(await reading.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'reading fits '+width+'px');
+     const mobile=await widgets.evaluateAll(roots=>roots.map(r=>{
+      const viewport=r.querySelector('.lw-viewport');
+      return{localScroll:viewport.scrollWidth>viewport.clientWidth,buttons:[...r.querySelectorAll('button')].every(b=>{const box=b.getBoundingClientRect();return box.height>=44&&box.x>=0&&box.right<=innerWidth;})};
+     }));
+     assert(mobile.every(s=>s.localScroll&&s.buttons),'diagrams scroll locally and controls remain usable');
+     await widgets.nth(6).screenshot({path:path.join(output,'lecture-13-inline-'+width+'.png')});
+    }
+    const beforePrint=await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.step));
+    await reading.emulateMedia({media:'print'});
+    assert.equal(await reading.locator('.lw-controls:visible').count(),0);
+    assert.equal(await reading.locator('.lw-print:visible').count(),16);
+    const printed=await widgets.evaluateAll(roots=>roots.map(root=>{
+     const scene=COURSE_DECKS[13].scenes.find(s=>s.id===root.dataset.lectureScene);
+     const expected=DeckViz.sceneDrawing(scene,scene.steps-1).filter(i=>i.tag==='text'||i.tag==='a').map(i=>[i.key,i.text]);
+     const actual=[...root.querySelector('.lw-print svg').children].filter(e=>['text','a'].includes(e.tagName.toLowerCase())).map(e=>[e.dataset.key,e.textContent]);
+     return{expected,actual};
+    }));
+    for(const state of printed)assert.deepEqual(state.actual,state.expected,'print retains the complete final drawing');
+    await reading.emulateMedia({media:'screen'});
+    assert.deepEqual(await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.step)),beforePrint,'printing preserves interactive state');
+    await reading.close();
    }
    console.log(`Lecture ${id}: ${scenes.length} scenes; rendered labels, synchronized presenter notes, and guide checked.`);
   }
