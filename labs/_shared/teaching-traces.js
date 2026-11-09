@@ -322,18 +322,18 @@
     question: 'If wal appears twice, does this question earn two hits? Does a citation prove an answer is supported?',
     answer: 'No to both. One question contributes at most one hit. A citation identifies a source. Checking answer support requires reading that source and comparing it with the answer. The graded lab can run in echo mode without generating an answer.'
   });
-  const documents = ['WAL, wal!', 'Page wal.'];
+  const documents = ['Pizza, pizza!', 'Salad pizza.'];
   const mapped = documents.flatMap(text => (text.toLowerCase().match(/[a-z]+/g) || []).map(word => [word,1]));
   add('shuffle', {
     title: 'Map emits occurrences. Shuffle groups equal keys.',
-    premise: 'Toy records: d0="WAL, wal!", d1="Page wal.". For this drawing only, wal routes to partition 0 and page to partition 1. The Python lab uses hash(key) % n, whose bucket numbers can differ between runs.',
+    premise: 'Toy lunch orders, one word per meal requested: d0="Pizza, pizza!", d1="Salad pizza.". For this drawing only, pizza routes to partition 0 and salad to partition 1. The Python lab uses hash(key) % n, whose bucket numbers can differ between runs.',
     code: ['for each input record:', '    emit (word, 1) for each word occurrence', 'partitions = one independent dict per bucket', 'for key, value in mapped_pairs:', '    p = partition_for(key, n)', '    append value to partitions[p][key]', 'for each key and values in each partition:', '    emit (key, sum(values))'],
     frames: [
-      frame('Tokenize the first record', [1, 2], [['d0 tokens', '[wal, wal]'], ['emitted pairs', '(wal,1), (wal,1)'], ['pair count', '2']], 'WAL means write-ahead log. This example counts occurrences of the word. Change letters to lowercase and extract sequences from a to z. The resulting words, called tokens, are wal and wal. Emit one (wal, 1) pair for each occurrence. The key is wal, and the value 1 means one occurrence.'),
-      frame('Map the second record', [1, 2], [['d1 tokens', '[page, wal]'], ['new pairs', '(page,1), (wal,1)'], ['total pair count', '4']], 'The mapper needs only its own record. It does not know which other records also contain wal.'),
-      frame('Route each pair by its key', [3, 4, 5, 6], [['partition 0', 'wal: [1, 1, 1]'], ['partition 1', 'page: [1]'], ['values preserved', '4']], 'All three wal values meet in one partition. Different keys may share a partition, but must keep separate lists within its dictionary.'),
-      frame('Reduce each complete group', [7, 8], [['wal total', 'sum([1,1,1]) = 3'], ['page total', 'sum([1]) = 1'], ['sum of counts', '4']], 'reduce_counts sees all values for one key. Its sum preserves the total number of mapped word occurrences.'),
-      frame('Distinguish counts from output order', [7, 8], [['result as a dictionary', '{wal: 3, page: 1}'], ['partition labels', 'may change across runs'], ['word totals', 'must stay the same']], 'The runner visits partitions in bucket order and sorts keys inside each bucket. That does not promise one global order. Compare counts by key, or explicitly sort the final results.')
+      frame('Tokenize the first record', [1, 2], [['d0 tokens', '[pizza, pizza]'], ['emitted pairs', '(pizza,1), (pizza,1)'], ['pair count', '2']], 'The first group requests two pizzas. Change letters to lowercase and extract sequences from a to z. The resulting words, called tokens, are pizza and pizza. Emit one (pizza, 1) pair for each occurrence. The key is pizza, and the value 1 means one meal requested.'),
+      frame('Map the second record', [1, 2], [['d1 tokens', '[salad, pizza]'], ['new pairs', '(salad,1), (pizza,1)'], ['total pair count', '4']], 'The mapper needs only its own record. It does not know which other records also contain pizza.'),
+      frame('Route each pair by its key', [3, 4, 5, 6], [['partition 0', 'pizza: [1, 1, 1]'], ['partition 1', 'salad: [1]'], ['values preserved', '4']], 'All three pizza values meet in one partition. Different keys may share a partition, but must keep separate lists within its dictionary.'),
+      frame('Reduce each complete group', [7, 8], [['pizza total', 'sum([1,1,1]) = 3'], ['salad total', 'sum([1]) = 1'], ['sum of counts', '4']], 'reduce_counts sees all values for one key. Its sum preserves the total number of mapped word occurrences.'),
+      frame('Distinguish counts from output order', [7, 8], [['result as a dictionary', '{pizza: 3, salad: 1}'], ['partition labels', 'may change across runs'], ['word totals', 'must stay the same']], 'The runner visits partitions in bucket order and sorts keys inside each bucket. That does not promise one global order. Compare counts by key, or explicitly sort the final results.')
     ],
     question: 'Why is [{}] * n a bug when constructing the partitions?',
     answer: 'It repeats references to one dictionary. Adding to one partition changes the same dictionary seen by every partition. Create a new dictionary for each bucket, for example with a comprehension, and check routing with more than one partition.'

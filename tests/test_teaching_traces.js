@@ -58,7 +58,7 @@ assert.deepEqual(fixtures.hits.map(([,i]) => fixtures.chunks[i].doc), ['wal','bl
 assert(fixtures.chunks.every(c => !('score' in c)), 'stored corpus has no query score');
 const counts = new Map();
 fixtures.mapped.forEach(([word,n]) => counts.set(word, (counts.get(word)||0)+n));
-assert.deepEqual([...counts], [['wal',3],['page',1]]);
+assert.deepEqual([...counts], [['pizza',3],['salad',1]]);
 const graph = models.graphCounts(3);
 assert.deepEqual(graph.layers.map(x => x.frontier), [['ben','cyd'],['dee','eli'],['fay']]);
 assert.deepEqual(graph.layers.map(x => x.pathRows), [2,4,5]);

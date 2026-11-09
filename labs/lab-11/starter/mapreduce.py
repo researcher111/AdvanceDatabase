@@ -94,7 +94,7 @@ def shuffle(pairs: list[tuple[str, int]],
 
 
 def reduce_counts(word: str, values: list[int]) -> tuple[str, int]:
-    """Collapse one key's values to a total: ('wal', [1,1,1]) -> ('wal', 3)."""
+    """Collapse one key's values to a total: ('pizza', [1,1,1]) -> ('pizza', 3)."""
     # TODO
     raise NotImplementedError
 

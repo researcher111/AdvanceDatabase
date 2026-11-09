@@ -69,8 +69,8 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
 
 <div class="exercise learning-check">
   <span class="ex-label">Check the starting point</span>
-  <p>How many <code>wal</code> occurrences are in <code>“WAL, wal!”</code>? If another record adds one, what must be preserved while routing the pairs? Can every worker use a different partition rule?</p>
-  <details><summary>Check your explanation</summary><p>Lowercasing the first record gives two occurrences of wal. The other record adds a third. Keep all three pairs and send them to the same partition so reduction returns 3. Separate workers must agree on the routing rule. The graded exercise runs in one process.</p></details>
+  <p>Each word in this toy lunch order requests one meal. How many <code>pizza</code> occurrences are in <code>“Pizza, pizza!”</code>? If another order adds one pizza, what must be preserved while routing the pairs? Can every worker use a different partition rule?</p>
+  <details><summary>Check your explanation</summary><p>Lowercasing the first record gives two occurrences of pizza. The other record adds a third. Keep all three pairs and send them to the same partition so reduction returns 3. Separate workers must agree on the routing rule. The graded exercise runs in one process.</p></details>
 </div>
 
 <p class="keep-in-present">Use <strong>predict, run, explain</strong>. Predict the emitted pairs, their destination partitions, and the final word totals. Run the trace or function check. Explain how each occurrence contributes to its word’s total.</p>
@@ -123,11 +123,11 @@ Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vecto
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace map output into independent partition dictionaries</h2>
 
-<p class="keep-in-present">Predict how many pairs mapping will emit. Watch both occurrences of <code>wal</code> become separate pairs and arrive in the same group. Each partition has a dictionary, and each word in that dictionary has its own list of counts.</p>
+<p class="keep-in-present">Predict how many pairs mapping will emit. Watch both occurrences of <code>pizza</code> become separate pairs and arrive in the same group. Each partition has a dictionary, and each word in that dictionary has its own list of counts.</p>
 
-<p>Follow two tiny records before processing the corpus. The displayed bucket numbers are a fixed teaching choice. Your required implementation uses Python’s <code>hash(key) % n_partitions</code> within one process.</p>
+<p>Follow two lunch orders: <code>“Pizza, pizza!”</code> and <code>“Salad pizza.”</code>. Each word requests one meal. These toy records show the counting rule before you apply it to the corpus. The displayed bucket numbers are a fixed teaching choice. Your required implementation uses Python’s <code>hash(key) % n_partitions</code> within one process.</p>
 <div data-teaching-trace="shuffle">
-  <p><strong>Worked result:</strong> The map emits four pairs. Shuffle groups three values under wal and one under page. Reduction gives <code>{"wal": 3, "page": 1}</code>, independent of bucket numbering.</p>
+  <p><strong>Worked result:</strong> The map emits four pairs. Shuffle groups three values under pizza and one under salad. Reduction gives <code>{"pizza": 3, "salad": 1}</code>, independent of bucket numbering.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
 </div>
 <p><strong>Implementation checkpoints:</strong> create each partition dictionary separately. Preserve all duplicate occurrences in <code>map_words</code> and <code>shuffle</code>. Test with more than one partition. One bucket hides routing errors. The graded implementation runs sequentially, while optional Spark and Ray exercises add actual scheduling.</p>

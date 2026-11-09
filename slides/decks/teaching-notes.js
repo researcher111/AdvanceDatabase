@@ -1953,7 +1953,7 @@
       "question": "Does dividing an ideal scan time by the worker count guarantee that speedup?",
       "answer": "No. Network movement, coordination, imbalance, and failures add work beyond the capacity model.",
       "builds": [
-        "Calibrate with the two small documents from the reading: can either local wal count be called global? Then scale the same job to the diagram’s assumed 10 TB. Keep the scan estimate distinct from a benchmark. Calculate the ideal single-reader time for ten terabytes.",
+        "Return to the fictional club lunch orders: Pizza, pizza! and Salad pizza. Can either worker know the total pizza count from its own order? Then scale the counting job to the diagram’s assumed 10 TB. Keep the scan estimate distinct from a benchmark. Calculate the ideal single-reader time for ten terabytes.",
         "Divide the data among readers and state the hypothetical throughput assumptions.",
         "Lose a worker and identify the extra coordination and recovery requirements."
       ]
@@ -2098,10 +2098,10 @@
     },
     "place-move-recover": {
       "idea": "A distributed job must place data, group it, execute dependencies, and recover lost work.",
-      "question": "What stays the same when the two-record word count changes from two partitions to seven?",
+      "question": "What stays the same when the two lunch orders are counted with seven partitions instead of two?",
       "answer": "The word totals stay the same. Placement and schedule may change. Repeated occurrences and complete grouping must remain correct.",
       "builds": [
-        "Return to the small word count. Identify which worker owns each key. Ask how unequal key frequencies could give one worker most of the work.",
+        "Return to the lunch orders. Identify which worker owns each meal name. Ask how unequal key frequencies could give one worker most of the work.",
         "Explain the movement needed to group equal keys.",
         "Explain the execution plan and when work starts.",
         "Repeat assign, group, execute, recover on the original small count. Ask what changes with seven partitions and which result must stay unchanged."

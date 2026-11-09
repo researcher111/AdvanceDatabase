@@ -315,10 +315,10 @@
     });
   }
   use(13,'place-move-recover',(d,s)=>{
-    repeatModel(d,s,'“WAL, wal!” + “Page wal.” must keep the same word totals',[
+    repeatModel(d,s,'Lunch orders: “Pizza, pizza!” + “Salad pizza.”',[
       ['Assign owners'],['Group equal keys'],['Run each stage','when ready'],['Recover lost work']
     ]);
-    if(s===3)foot(d,'Changing placement should change the schedule, not wal = 3 and page = 1');
+    if(s===3)foot(d,'Keep the lunch totals: pizza = 3 and salad = 1, even when placement changes.');
   });
   use(14,'trace-an-acknowledged-write',(d,s)=>{
     repeatModel(d,s,'Return to k: old@5, new@8, DELETE@9',[
@@ -388,18 +388,18 @@
   }
 
   use(13,'reduce-sees-the-complete-group',(d,s)=>{
-    label(d,'mappers',230,219,'Map each document');label(d,'shuffle',685,219,'Group by key');label(d,'reduce',1090,219,'Reduce');
-    card(d,'doc0',55,260,330,94,'Document 0','“WAL, wal!”');card(d,'doc1',55,434,330,94,'Document 1','“Page wal.”');
+    label(d,'mappers',230,219,'Map each order');label(d,'shuffle',685,219,'Group by key');label(d,'reduce',1090,219,'Reduce');
+    card(d,'doc0',55,260,330,94,'Group order 0','“Pizza, pizza!”');card(d,'doc1',55,434,330,94,'Group order 1','“Salad pizza.”');
     if(s>=1){
-      const entries=[['wal',0],['wal',0],['page',1],['wal',1]];
+      const entries=[['pizza',0],['pizza',0],['salad',1],['pizza',1]];
       entries.forEach(([word,doc],i)=>{
-        const x=s>=2?565:405,y=s>=2?(word==='page'?532:275+[0,1,3].indexOf(i)*72):278+i*76;
-        d.box('pair-'+i,x,y,195,54,word+', 1',word==='wal'?P.blueLight:P.greenLight,word==='wal'?P.blue:P.green,25);
+        const x=s>=2?565:405,y=s>=2?(word==='salad'?532:275+[0,1,3].indexOf(i)*72):278+i*76;
+        d.box('pair-'+i,x,y,195,54,word+', 1',word==='pizza'?P.blueLight:P.greenLight,word==='pizza'?P.blue:P.green,25);
       });
     }
-    if(s>=2){label(d,'owner0',850,328,'P0: wal',P.blue,25);label(d,'owner1',850,557,'P1: page',P.green,25);}
-    if(s>=3){d.arrow('sum-wal',936,343,994,343,P.blue,3);d.box('wal-total',1005,311,190,64,'wal = 3',P.blueLight,P.blue,28);d.arrow('sum-page',936,557,994,557,P.green,3);d.box('page-total',1005,525,190,64,'page = 1',P.greenLight,P.green,28);}
-    foot(d,s===4?'Toy ownership: wal → P0, page → P1. Use a consistent partition function on all workers.':'Every occurrence survives mapping. The shuffle groups equal words before adding their counts.');
+    if(s>=2){label(d,'owner0',850,328,'P0: pizza',P.blue,25);label(d,'owner1',850,557,'P1: salad',P.green,25);}
+    if(s>=3){d.arrow('sum-pizza',936,343,994,343,P.blue,3);d.box('pizza-total',1005,311,190,64,'pizza = 3',P.blueLight,P.blue,28);d.arrow('sum-salad',936,557,994,557,P.green,3);d.box('salad-total',1005,525,190,64,'salad = 1',P.greenLight,P.green,28);}
+    foot(d,s===4?'Toy ownership: pizza → P0, salad → P1. Workers must use the same partition function.':'Every occurrence survives mapping. The shuffle groups equal words before adding their counts.');
   });
 
   use(14,'read-the-newest-visible-value',(d,s)=>{
@@ -520,10 +520,10 @@
     'Load block 7 into frame 0. Point to the frame number and its separate resident block label.',
     'This replacement illustration assumes frame 0 is eligible. Load block 8 into that frame. Block 7 remains stored in the file.'
   ]);
-  cues(13,'reduce-sees-the-complete-group',['Input documents','Map both documents','Shuffle by word','Reduce complete groups','Check the word totals'],[
-    'Read both source records and predict four word occurrences. Two copies of WAL occur in the first record.',
+  cues(13,'reduce-sees-the-complete-group',['Lunch orders','Map both orders','Shuffle by word','Reduce complete groups','Check the meal totals'],[
+    'Read the two fictional club lunch orders. Each meal type uses one word, and each mention requests one meal. Ask students to predict the count.',
     'Follow the four emitted pairs. Each repeated occurrence retains its own stable card rather than disappearing into a set.',
-    'Move the three wal cards to P0 and the page card to P1. A real partition can hold multiple different keys, each with its own value group.',
+    'Move the three pizza cards to P0 and the salad card to P1. A real partition can hold multiple different keys, each with its own value group.',
     'Add the values within each key group. The final totals sum to four, preserving all mapped occurrences.',
     'The word totals must stay the same even if partition numbers or output order change. The toy owner labels are illustrative. Python hash bucket numbers can vary.'
   ]);

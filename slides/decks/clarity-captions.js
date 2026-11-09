@@ -1115,10 +1115,10 @@ window.CourseClarityCaptions = {
       "Group each key’s values at its assigned worker before reduction. Moving records requires work."
     ],
     "reduce-sees-the-complete-group": [
-      "WAL means write-ahead log. Count words: lowercase letters, treat punctuation as separators, and keep repeats.",
-      "Keep three (wal, 1) pairs and one (page, 1) pair.",
+      "Count each meal in the lunch orders. Use lowercase words and treat punctuation as separators.",
+      "Keep three (pizza, 1) pairs and one (salad, 1) pair.",
       "Route equal words to their common owner using a compatible partition rule.",
-      "Reduce complete groups: wal = 3 and page = 1.",
+      "Reduce complete groups: pizza = 3 and salad = 1.",
       "Change the partition count, keep the totals. Bucket numbering and output order may change."
     ],
     "reduce-network-bytes-early": [
@@ -1157,7 +1157,7 @@ window.CourseClarityCaptions = {
       "If one machine meets the workload target, a cluster can add coordination and movement costs."
     ],
     "place-move-recover": [
-      "Return to the count: choose owners using the key, not the sending worker.",
+      "Return to the lunch orders: use each meal name as the key that selects its owner.",
       "Move matching keys together or combine valid partial results.",
       "Run each step when its inputs are ready, and run independent steps at the same time.",
       "Plan retries with retained inputs and task information. Preserve the same word totals."

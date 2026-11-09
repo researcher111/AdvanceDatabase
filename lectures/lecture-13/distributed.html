@@ -48,21 +48,22 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya wants to count each word across two short text records. She gives one record to each of two workers. A <strong>worker</strong> is a program process that performs part of a job.</p>
-  <p>The sample text contains <strong>WAL</strong>, short for <strong>write-ahead log</strong>, from <a href="../lecture-07/wal.html">lecture 7</a>. That log stores recovery information before changed database pages reach disk. Here, the program only counts the word. Its database meaning does not affect the count.</p>
+  <p class="lede">Maya is collecting lunch orders for a student club. Two groups send their orders, and she needs the total number of each meal. Each word requests one meal, so <code>“Pizza, pizza!”</code> requests two pizzas.</p>
+  <p>This small example uses one word per meal type and repeats the word for each meal requested. It does not interpret sentences such as <code>“no pizza”</code>.</p>
+  <p>Maya gives each order to a separate <strong>worker</strong>, a program process that performs part of a job. Each worker sees only its assigned order.</p>
   <p>Both workers change letters to lowercase and extract sequences of letters from <code>a</code> to <code>z</code>. Punctuation separates words and is discarded. Repeated words remain separate occurrences.</p>
   <table>
-    <thead><tr><th>Worker</th><th>Input record</th><th>Words after processing</th><th>Local count of <code>wal</code></th></tr></thead>
+    <thead><tr><th>Worker</th><th>Lunch order</th><th>Words after processing</th><th>Pizza count</th></tr></thead>
     <tbody>
-      <tr><td>A</td><td><code>“WAL, wal!”</code></td><td><code>[wal, wal]</code></td><td>2</td></tr>
-      <tr><td>B</td><td><code>“Page wal.”</code></td><td><code>[page, wal]</code></td><td>1</td></tr>
+      <tr><td>A</td><td><code>“Pizza, pizza!”</code></td><td><code>[pizza, pizza]</code></td><td>2</td></tr>
+      <tr><td>B</td><td><code>“Salad pizza.”</code></td><td><code>[salad, pizza]</code></td><td>1</td></tr>
     </tbody>
   </table>
-  <p>Noor points to the two local counts: <q>How does the program combine these into one total for <code>wal</code>?</q></p>
-  <p>A <strong>reducer</strong> combines values for one word to produce its result. The worker assigned to <code>wal</code> must receive contributions from both inputs. Adding the local counts gives <code>2 + 1 = 3</code>. The total for <code>page</code> is <code>1</code>. A reducer is a role in the computation, so it does not require a third machine.</p>
+  <p>Noor points to the two orders: <q>Each worker counted one group’s order. How do we get the pizza total for the whole club?</q></p>
+  <p>A <strong>reducer</strong> combines values for one word to produce its result. The worker assigned to <code>pizza</code> must receive contributions from both inputs. Adding the local counts gives <code>2 + 1 = 3</code>. Maya can now order three pizzas and one salad. A reducer is a role in the computation, so it does not require a third machine.</p>
 </div>
 
-<p class="keep-in-present"><strong>Starting point:</strong> You can follow this word count without reading lecture 12 on retrieval-augmented generation (RAG). You only need to follow how words are grouped and their counts are added.</p>
+<p class="keep-in-present"><strong>Starting point:</strong> Count repeated items in a list, then add counts from separate lists. The same steps work when programs share a much larger collection of records.</p>
 
 <p class="keep-in-present">We will trace how workers produce word occurrences, send matching words to one destination, and compute each total. Then we will examine how systems schedule work and recover lost results. Lab 11 demonstrates the counting steps in one Python process. Optional Spark and Ray exercises demonstrate local parallel execution.</p>
 
@@ -85,13 +86,13 @@
 
 <div class="exercise learning-check">
   <span class="ex-label">Start with what you already know</span>
-  <p>What would <code>GROUP BY word</code> need to produce one count for <code>wal</code>? If its occurrences are on different workers, can either worker announce the global total from its own input alone?</p>
+  <p>What would <code>GROUP BY word</code> need to produce one count for <code>pizza</code>? If its occurrences are on different workers, can either worker announce the global total from its own input alone?</p>
   <details><summary>Check your explanation</summary><p>A correct global aggregation needs all contributions for the key, either collected together or combined as valid partial results. A worker’s local count alone is not the global count.</p></details>
 </div>
 
-<p class="keep-in-present"><strong>Quiz 9</strong> first (RAG, 10 min), then partitioning, shuffles, Spark, and Ray. The quiz covers lecture 12. The word-count explanation below is self-contained.</p>
+<p class="keep-in-present"><strong>Quiz 9</strong> first (retrieval-augmented generation, or RAG, 10 min), then partitioning, shuffles, Spark, and Ray. The quiz covers lecture 12. The word-count explanation below is self-contained.</p>
 
-<p class="keep-in-present">Counting records per URL uses the same aggregation logic at 10 MB and 10 TB. At the larger size, input reading, memory use, and recovery from a failed task become major design concerns. Distribution changes where the work runs and how intermediate results are combined.</p>
+<p class="keep-in-present">Counting meal requests uses the same aggregation logic at 10 MB and 10 TB. At the larger size, input reading, memory use, and recovery from a failed task become major design concerns. Distribution changes where the work runs and how intermediate results are combined.</p>
 
 
 <p class="keep-in-present">Today’s main idea: <strong>grouping matching keys often requires moving data between workers.</strong> The <span class="gloss" data-gloss="shuffle">shuffle</span> sends records to the workers responsible for their keys and groups each key’s values. Its cost helps explain many distributed query plans.</p>
@@ -158,7 +159,7 @@
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Load balance</span><span>Hashing can balance distinct keys without balancing records. If one key occurs in 40% of the records, all those records reach the same partition. That worker may finish much later than the others.</span></div>
-  <div class="lc-row"><span class="lc-k">The fix</span><span>For suitable aggregations, give different records different suffixes on the frequent key, such as <code>wal:0</code> and <code>wal:1</code>. These temporary keys can route to different partitions. Aggregate each temporary group. Remove the suffixes. Combine the partial results under the original key, <code>wal</code>. This technique, salting, requires another aggregation step.<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">The fix</span><span>For suitable aggregations, give different records different suffixes on the frequent key, such as <code>pizza:0</code> and <code>pizza:1</code>. These temporary keys can route to different partitions. Aggregate each temporary group. Remove the suffixes. Combine the partial results under the original key, <code>pizza</code>. This technique, salting, requires another aggregation step.<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Diagnosis</span><span>A task that runs long after its peers is a <span class="gloss" data-gloss="straggler">straggler</span>. Check input size, spill, and execution time in Spark’s UI. Use these measurements to distinguish skew from a slow worker or other causes.<sup class="src"><a href="#src-7" title="Skew and spill (Databricks on AWS documentation)">7</a></sup></span></div>
 </div>
 
@@ -183,19 +184,19 @@
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace two records through the shuffle</h2>
 
-<p class="keep-in-present">Return to the same two records. The trace represents each word occurrence as a pair, <code>(word, 1)</code>. The word is the key, and <code>1</code> means one occurrence. A <strong>mapper</strong> produces these pairs from an input record.</p>
+<p class="keep-in-present">Return to the two lunch orders. Each order is one input record. The trace represents each word occurrence as a pair, <code>(word, 1)</code>. The word is the key, and <code>1</code> means one occurrence. A <strong>mapper</strong> produces these pairs from an input record.</p>
 
 <ol>
-  <li><strong>Map:</strong> <code>“WAL, wal!”</code> produces <code>(wal, 1), (wal, 1)</code>. <code>“Page wal.”</code> produces <code>(page, 1), (wal, 1)</code>.</li>
-  <li><strong>Shuffle:</strong> Send the three <code>wal</code> pairs to the same partition. Group their values as <code>wal: [1, 1, 1]</code>. Keep <code>page: [1]</code> in its own group.</li>
-  <li><strong>Reduce:</strong> Add each group’s values. The results are <code>wal: 3</code> and <code>page: 1</code>.</li>
+  <li><strong>Map:</strong> <code>“Pizza, pizza!”</code> produces <code>(pizza, 1), (pizza, 1)</code>. <code>“Salad pizza.”</code> produces <code>(salad, 1), (pizza, 1)</code>.</li>
+  <li><strong>Shuffle:</strong> Send the three <code>pizza</code> pairs to the same partition. Group their values as <code>pizza: [1, 1, 1]</code>. Keep <code>salad: [1]</code> in its own group.</li>
+  <li><strong>Reduce:</strong> Add each group’s values. The results are <code>pizza: 3</code> and <code>salad: 1</code>.</li>
 </ol>
 
 <p class="keep-in-present">The opening added local counts: <code>2 + 1 = 3</code>. This trace adds individual occurrences: <code>1 + 1 + 1 = 3</code>. Both give the same total. Lab 11’s graded mapper must emit one pair per occurrence. Combining local counts before sending them is a separate optimization.</p>
 
-<p class="keep-in-present">Use the trace to follow the four pairs through the code. Predict the next operation before advancing. Track both occurrences of <code>wal</code> from the first record. Changing partition numbers must not change final word counts.</p>
+<p class="keep-in-present">Use the trace to follow the four pairs through the code. Predict the next operation before advancing. Track both occurrences of <code>pizza</code> from the first record. Changing partition numbers must not change final word counts.</p>
 <div data-teaching-trace="shuffle">
-  <p><strong>Worked result:</strong> <code>WAL, wal!</code> and <code>Page wal.</code> emit four pairs. Grouping yields <code>wal: [1,1,1]</code> and <code>page: [1]</code>. Reduction returns counts 3 and 1, regardless of which bucket number owns each word.</p>
+  <p><strong>Worked result:</strong> <code>Pizza, pizza!</code> and <code>Salad pizza.</code> emit four pairs. Grouping yields <code>pizza: [1,1,1]</code> and <code>salad: [1]</code>. Reduction returns counts 3 and 1, regardless of which bucket number owns each word.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
 </div>
 <p><strong>Lab connection:</strong> <a href="../../labs/lab-11/sparkray.html#worked-example">Lab 11’s first part runs in one Python process</a>. On a cluster, workers must agree on the partition function and its configuration. Separately launched Python processes do not automatically share a string-hash seed.</p>
@@ -350,7 +351,7 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
   <details><summary>Check your explanation</summary><p>The totals for every word should stay the same. Bucket numbers, placement, scheduling, and output order may change. More partitions can add overhead or leave a frequent key concentrated on one worker. Compare the results before interpreting the timing.</p></details>
 </div>
 
-<p class="keep-in-present">Return to the two documents. Select a partition for each key. Group all values with the same key. Calculate each word’s total. Rerun tasks with lost results. Spark and Ray schedule tasks and track dependencies across workers.</p>
+<p class="keep-in-present">Return to the lunch orders. Select a partition for each meal name. Group all values with the same name. Add the values to recover three pizzas and one salad. Rerun tasks with lost results. Spark and Ray schedule tasks and track dependencies across workers.</p>
 
 <ul class="recap-list">
   <li>Partitioning assigns records to workers. Hash partitioning groups equal keys. Range partitioning groups neighboring keys. Both require checks for skew.</li>
