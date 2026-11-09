@@ -107,25 +107,40 @@ fs.mkdirSync(output,{recursive:true});
     await page.waitForFunction(()=>document.querySelector('[data-key="pair-0-label"]').getAttribute('y')!==window.previousY);
     assert(await page.evaluate(()=>window.movingPair===document.querySelector('[data-key="pair-0-label"]')),'shuffle preserves the animated DOM object');
     await page.emulateMedia({reducedMotion:'reduce'});
-    // The reading embeds the same scenes without loading sixteen full players.
+   }
+   if(id===13||id==='13b'){
+    // Both readings embed their own deck scenes without loading full slide players.
     const reading=await context.newPage();
     await reading.route(/^https?:\/\//,route=>route.abort()); // All diagram assets are local.
-    await reading.goto(pathToFileURL(path.join(root,'lectures/lecture-13/distributed.html')).href);
+    const readingFile=id===13?'distributed.html':'spark-ray.html';
+    await reading.goto(pathToFileURL(path.join(root,'lectures/lecture-13',readingFile)).href);
     const widgets=reading.locator('.lecture-walkthrough');
     assert.deepEqual(await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.lectureScene)),scenes.map(s=>s.id));
-    assert.equal(await reading.locator('.lecture-walkthrough[data-walkthrough-ready="true"]').count(),16);
+    assert.equal(await reading.locator('.lecture-walkthrough[data-walkthrough-ready="true"]').count(),scenes.length);
+    if(id==='13b'){
+     const hostOverride=await reading.evaluate(()=>{
+      const host=document.createElement('div');host.className='lecture-walkthrough';
+      host.dataset.lectureDeck='13b';host.dataset.lectureScene='same-orders-two-runtimes';
+      const bodyDeck=document.body.dataset.lectureDeck;document.body.dataset.lectureDeck='13';
+      document.body.append(host);LectureSlideWalkthroughs.initialize(host);LectureSlideWalkthroughs.initialize(host);
+      document.body.dataset.lectureDeck=bodyDeck;
+      const result={ready:host.dataset.walkthroughReady,drawings:host.querySelectorAll('.lw-screen svg').length};
+      host.remove();return result;
+     });
+     assert.deepEqual(hostOverride,{ready:'true',drawings:1},'host override selects its deck and repeated initialization does not duplicate controls');
+    }
     for(const [index,scene]of scenes.entries()){
      const widget=widgets.nth(index);
      for(let step=0;step<scene.steps;step++){
-      const state=await widget.evaluate(root=>{
-       const step=Number(root.dataset.step),scene=COURSE_DECKS[13].scenes.find(s=>s.id===root.dataset.lectureScene);
+      const state=await widget.evaluate((root,id)=>{
+       const step=Number(root.dataset.step),scene=COURSE_DECKS[id].scenes.find(s=>s.id===root.dataset.lectureScene);
        const expected=DeckViz.sceneDrawing(scene,step).filter(i=>i.tag==='text'||i.tag==='a').map(i=>[i.key,i.text]);
        const actual=[...root.querySelector('.lw-screen svg').children].filter(e=>['text','a'].includes(e.tagName.toLowerCase())).map(e=>[e.dataset.key,e.textContent]);
        return{step,expected,actual,caption:root.querySelector('.lw-caption').textContent,status:root.querySelector('[role="status"]').textContent};
-      });
+      },id);
       assert.equal(state.step,step);
       assert.deepEqual(state.actual,state.expected,'inline diagram retains the slide content');
-      const source=snapshots.find(s=>s.id===13&&s.slide===index+1&&s.step===step+1);
+      const source=snapshots.find(s=>s.id===id&&s.slide===index+1&&s.step===step+1);
       assert.equal(state.caption,source.instruction.split('\n\n')[0],'inline caption matches the deck build');
       assert(state.status.startsWith(`Step ${step+1} of ${scene.steps}:`));
       if(step<scene.steps-1)await widget.locator('[data-action="next"]').click();
@@ -138,7 +153,8 @@ fs.mkdirSync(output,{recursive:true});
      assert.equal(await widget.getAttribute('data-step'),'0');
      assert(await widget.locator('[data-action="previous"]').isDisabled());
     }
-    assert.equal(await reading.locator('[data-lecture-scene="preview-spark-and-ray"] .lw-screen a').getAttribute('href'),pathToFileURL(path.join(root,'slides/lecture-13b.html')).href);
+    if(id===13)assert.equal(await reading.locator('[data-lecture-scene="preview-spark-and-ray"] .lw-screen a').getAttribute('href'),pathToFileURL(path.join(root,'slides/lecture-13b.html')).href);
+    else assert.equal(await reading.locator('[data-lecture-scene="same-orders-two-runtimes"] .lw-screen a').getAttribute('href'),'https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/');
     // Keyboard controls remain local even while the reading's presentation mode is active.
     const first=widgets.first();
     await reading.evaluate(()=>localStorage.setItem('lab.presentationSlide','1'));
@@ -163,18 +179,18 @@ fs.mkdirSync(output,{recursive:true});
       return{localScroll:viewport.scrollWidth>viewport.clientWidth,buttons:[...r.querySelectorAll('button')].every(b=>{const box=b.getBoundingClientRect();return box.height>=44&&box.x>=0&&box.right<=innerWidth;})};
      }));
      assert(mobile.every(s=>s.localScroll&&s.buttons),'diagrams scroll locally and controls remain usable');
-     await widgets.nth(6).screenshot({path:path.join(output,'lecture-13-inline-'+width+'.png')});
+     await widgets.nth(6).screenshot({path:path.join(output,'lecture-'+id+'-inline-'+width+'.png')});
     }
     const beforePrint=await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.step));
     await reading.emulateMedia({media:'print'});
     assert.equal(await reading.locator('.lw-controls:visible').count(),0);
-    assert.equal(await reading.locator('.lw-print:visible').count(),16);
-    const printed=await widgets.evaluateAll(roots=>roots.map(root=>{
-     const scene=COURSE_DECKS[13].scenes.find(s=>s.id===root.dataset.lectureScene);
+    assert.equal(await reading.locator('.lw-print:visible').count(),scenes.length);
+    const printed=await widgets.evaluateAll((roots,id)=>roots.map(root=>{
+     const scene=COURSE_DECKS[id].scenes.find(s=>s.id===root.dataset.lectureScene);
      const expected=DeckViz.sceneDrawing(scene,scene.steps-1).filter(i=>i.tag==='text'||i.tag==='a').map(i=>[i.key,i.text]);
      const actual=[...root.querySelector('.lw-print svg').children].filter(e=>['text','a'].includes(e.tagName.toLowerCase())).map(e=>[e.dataset.key,e.textContent]);
      return{expected,actual};
-    }));
+    }),id);
     for(const state of printed)assert.deepEqual(state.actual,state.expected,'print retains the complete final drawing');
     await reading.emulateMedia({media:'screen'});
     assert.deepEqual(await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.step)),beforePrint,'printing preserves interactive state');

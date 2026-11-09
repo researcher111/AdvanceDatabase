@@ -1,10 +1,9 @@
-/* Embed the authored Lecture 13 scenes without creating full slide players.
- * Load after the trace adapter, teaching cues, and course clarity layer.
+/* Embed authored lecture scenes without creating full slide players.
+ * Load after the selected deck and any teaching or clarity adapters.
  * Each instance owns its step. Only a reader action starts a transition. */
 (function () {
   'use strict';
   const scriptURL=document.currentScript?.src||new URL('slide-walkthroughs.js',document.baseURI).href;
-  const deckURL=new URL('../../slides/lecture-13.html',scriptURL);
   const NS='http://www.w3.org/2000/svg';
   let serial=0;
   const el=(tag,className,text)=>{
@@ -21,10 +20,13 @@
     return node;
   }
   function initialize(scope=document){
-    const V=window.DeckViz,deck=window.COURSE_DECKS?.[13];
+    const V=window.DeckViz;
     const roots=[...(scope.matches?.('.lecture-walkthrough[data-lecture-scene]')?[scope]:[]),...scope.querySelectorAll('.lecture-walkthrough[data-lecture-scene]')];
     for(const root of roots){
       if(root.dataset.walkthroughReady==='true')continue;
+      const deckId=root.dataset.lectureDeck||document.body.dataset.lectureDeck||'13';
+      const deck=window.COURSE_DECKS?.[deckId];
+      const deckURL=new URL('../../slides/lecture-'+String(deckId).padStart(2,'0')+'.html',scriptURL);
       const scene=deck?.scenes.find(item=>item.id===root.dataset.lectureScene);
       if(!V||!scene){
         if(root.querySelector('.lw-unavailable'))continue;

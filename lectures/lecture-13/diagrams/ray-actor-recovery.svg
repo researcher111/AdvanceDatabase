@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 650" width="1280" height="650" role="img" aria-labelledby="title description" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+  <title id="title">Restarting an actor does not restore its saved totals</title>
+  <desc id="description">This is a teaching extension to the MealCounter example. The actor has processed both original lunch orders and holds pizza 3 and salad 1. Before failure, application code saves a checkpoint outside the actor, where it survives this worker's failure. The worker then fails and loses its memory state. If actor restarts are enabled, Ray starts a replacement actor and reruns its constructor. The constructor sets counts to an empty dictionary. Restart alone does not restore the totals. Application recovery code must read the saved checkpoint and load pizza 3 and salad 1 into the replacement actor. This example assumes the checkpoint includes both completed calls and no later updates occurred. The supplied actor code does not implement checkpoint saving or state restoration.</desc>
+  <defs>
+    <marker id="actor-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#356885"/></marker>
+    <marker id="restore-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#30785b"/></marker>
+  </defs>
+  <rect width="1280" height="650" rx="12" fill="#f7f6f2"/>
+  <g text-anchor="middle" fill="#20352e">
+    <text x="640" y="43" font-size="32" font-weight="650">Restarting an actor does not restore its totals</text>
+    <text x="640" y="82" font-size="24" fill="#61716a">Teaching extension: enable restarts, then add application code to save and restore state.</text>
+  </g>
+
+  <rect x="40" y="135" width="310" height="190" rx="12" fill="#dce9f0" stroke="#356885" stroke-width="2"/>
+  <rect x="470" y="135" width="280" height="190" rx="12" fill="#fae7e2" stroke="#b74b3e" stroke-width="2"/>
+  <rect x="880" y="135" width="360" height="190" rx="12" fill="#fff1dc" stroke="#b66b20" stroke-width="2"/>
+  <g text-anchor="middle" fill="#20352e">
+    <text x="195" y="173" font-size="27" font-weight="650">Before failure</text>
+    <text x="195" y="216" font-size="28">pizza: 3, salad: 1</text>
+    <text x="195" y="261" font-size="23">Both calls completed.</text>
+    <text x="195" y="296" font-size="23">Totals are in actor memory.</text>
+    <text x="610" y="173" font-size="27" font-weight="650">Worker fails</text>
+    <text x="610" y="226" font-size="25">Actor process stops.</text>
+    <text x="610" y="272" font-size="25">Memory state is lost.</text>
+    <text x="1060" y="173" font-size="27" font-weight="650">Restart enabled</text>
+    <text x="1060" y="216" font-size="25">Ray reruns __init__.</text>
+    <text x="1060" y="260" font-size="30" font-weight="650">counts = {}</text>
+    <text x="1060" y="296" font-size="23">The constructor starts empty.</text>
+  </g>
+  <g fill="none" stroke="#356885" stroke-width="3" marker-end="url(#actor-arrow)">
+    <path d="M 362 230 H 458"/>
+    <path d="M 762 230 H 868"/>
+  </g>
+
+  <text x="195" y="365" text-anchor="middle" font-size="22" fill="#30785b">Application saves before failure.</text>
+  <path d="M 195 375 V 403" fill="none" stroke="#30785b" stroke-width="3" marker-end="url(#restore-arrow)"/>
+  <rect x="40" y="415" width="310" height="140" rx="12" fill="#dcece1" stroke="#30785b" stroke-width="2"/>
+  <g text-anchor="middle" fill="#20352e">
+    <text x="195" y="450" font-size="27" font-weight="650">Saved checkpoint</text>
+    <text x="195" y="490" font-size="27">pizza: 3, salad: 1</text>
+    <text x="195" y="530" font-size="23">Survives this worker failure.</text>
+  </g>
+
+  <path d="M 1060 337 V 403" fill="none" stroke="#356885" stroke-width="3" marker-end="url(#actor-arrow)"/>
+  <text x="820" y="371" text-anchor="middle" font-size="23" fill="#356885">Application recovery step</text>
+  <path d="M 362 488 H 868" fill="none" stroke="#30785b" stroke-width="3" marker-end="url(#restore-arrow)"/>
+  <text x="615" y="454" text-anchor="middle" font-size="24" fill="#30785b">Read the saved state.</text>
+  <rect x="880" y="415" width="360" height="140" rx="12" fill="#dcece1" stroke="#30785b" stroke-width="2"/>
+  <g text-anchor="middle" fill="#20352e">
+    <text x="1060" y="450" font-size="27" font-weight="650">Application restores totals</text>
+    <text x="1060" y="492" font-size="28">pizza: 3, salad: 1</text>
+    <text x="1060" y="531" font-size="23">Restore is explicit code.</text>
+  </g>
+  <g text-anchor="middle" fill="#61716a" font-size="23">
+    <text x="640" y="598">The checkpoint includes both completed calls. No updates occur after that saved copy.</text>
+    <text x="640" y="632">The supplied actor example has no checkpoint or restore code.</text>
+  </g>
+</svg>

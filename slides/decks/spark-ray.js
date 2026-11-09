@@ -43,7 +43,7 @@
   function arrow(d,key,x1,y1,x2,y2,color=P.green){d.arrow(key,x1,y1,x2,y2,color,3);}
   function scene(id,title,minutes,states,captions,draw,teaching,sources=[]){
     const builds=teaching.builds.map((cue,i)=>captions[i]+'\n\n'+cue);
-    const sc={id,title,minutes,kind:'visual',steps:states.length,states,clarityNative:true,
+    const sc={id,title,minutes,kind:'visual',steps:states.length,states,clarityNative:true,clarityCaptions:captions,
       sources:[source,...sources],teaching:{...teaching,builds},
       notes:[teaching.idea,...builds,'Ask: '+teaching.question,'Expected answer: '+teaching.answer,teaching.context].filter(Boolean).join('\n\n'),
       draw(d,step){
@@ -60,14 +60,14 @@
     ['Start with a local loop','Add a reporting window','Ask who coordinates'],[
       'Two lunch orders need only a local loop. The fixture gives pizza = 3 and salad = 1.',
       'A hypothetical delivery report must scan 10 TB within 10 minutes. One 2 GB/s reader cannot finish in time.',
-      'Spark manages a data plan. Ray schedules Python calls. Both require correct grouping and a plan for failed work.'
+      'A runtime coordinates running work. Spark follows a sequence of data operations. Ray schedules Python calls. Both must preserve correct results.'
     ],(d,s)=>{
       if(s===0){
         order(d,'order0',65,260,'Order 0','“Pizza, pizza!”');
         order(d,'order1',65,435,'Order 1','“Salad pizza.”');
         arrow(d,'to-total',390,410,505,410);
         box(d,'baseline',530,335,285,165,'Local loop',['pizza: 3','salad: 1']);
-        box(d,'small-job',900,335,300,165,'Small input',['No cluster needed'],P.blue,false);
+        box(d,'small-job',900,335,300,165,'Small input',['One computer is enough'],P.blue,false);
       }
       if(s===1){
         box(d,'report',90,275,450,245,'Delivery report',['Stored records: 10 TB','Reporting window: 10 min','Assumed read rate: 2 GB/s'],P.blue);
@@ -76,8 +76,8 @@
       }
       if(s===2){
         box(d,'capacity',65,275,340,260,'100 readers',['100 GB per reader','50 s ideal read','Before coordination costs'],P.green);
-        box(d,'spark',470,275,340,260,'Spark',['Schedule a data plan','Group keys with shuffle','Recompute supported outputs'],P.orange);
-        box(d,'ray',875,275,340,260,'Ray Core',['Schedule Python tasks','Track result dependencies','Your code combines counts'],P.blue);
+        box(d,'spark',470,275,340,260,'Spark',['Run data operations','Group matching meal keys','Restore missing results'],P.orange);
+        box(d,'ray',875,275,340,260,'Ray Core',['Schedule Python calls','Track needed results','Your code combines counts'],P.blue);
       }
       label(d,'opening-limit',640,600,s===0?'Fictional club lunch · Keep this result contract when execution changes':'Hypothetical capacity estimate · Scheduling, transfer, computation, and failures add time',22,P.muted);
       d.link('mapreduce-paper',470,646,'Google MapReduce paper · 2004',refs.mapreduce,22);
@@ -86,7 +86,7 @@
       builds:[
         'Return to the fictional lunch orders from Lecture 13. A local loop is sufficient for these two records. Ask why introducing Spark or Ray would not make this tiny input a convincing benchmark. We keep the fixture to see whether each implementation counts every request.',
         'Introduce a separate hypothetical food-delivery report over 10 TB of stored records. Its reporting window is ten minutes. At an assumed 2 GB/s, reading alone takes 5,000 seconds, or about 85 minutes. The window is an illustrative business requirement, not a course deadline. Ask which resource limits this scan before proposing more machines.',
-        'With 100 balanced readers, each reads 100 GB in an ideal 50 seconds. Extra processors and storage can add parallel capacity. Grouping, scheduling, transfer, and failed work still require coordination. Spark and Ray automate parts of that coordination around application code. Spark manages a collection plan and shuffle, while our Ray program combines dictionaries explicitly. This estimate is not a benchmark or a guaranteed runtime.'
+        'With 100 balanced readers, each reads 100 GB in an ideal 50 seconds. A cluster is a group of computers working together. A runtime is software that coordinates running work. Spark describes a pipeline: a sequence of data operations. Ray schedules function calls, while our example combines their dictionaries explicitly. This estimate is not a benchmark or a guaranteed running time.'
       ],question:'Why consider distribution for the delivery report but not for the two lunch orders?',answer:'The hypothetical report cannot meet its ten-minute window with the assumed single-reader scan. The lunch fixture is small enough for a local loop.',
       context:'Google’s 2004 MapReduce paper explains separating map and reduce functions from scheduling, communication, and failure handling. Spark and Ray expose different execution models. Teaching occupies minutes 0–60, followed by fifteen discussion minutes. There is no quiz in this session.'
     });
@@ -94,8 +94,8 @@
 
   scene('spark-driver-executors','Spark: the driver schedules executor work',3,
     ['Describe the roles','Assign partition tasks','Return a small result'],[
-      'The driver runs the coordinating program. Executors run tasks and retain application data.',
-      'A task is a unit of work on one partition. An executor can run many tasks over time.',
+      'The driver coordinates the application. Executors are processes that run its assigned work and retain data.',
+      'A partition is a data subset. A task processes a partition. An executor can run many tasks over time.',
       'collect() brings the result to the driver. Use it only when that result fits there.'
     ],(d,s)=>{
       box(d,'driver',455,220,370,120,'Driver',['Your coordinating program'],P.orange);
@@ -108,7 +108,7 @@
     },{
       idea:'Spark separates the program that coordinates work from the processes that execute its tasks.',
       builds:[
-        'Define the driver and executors before following the arrows. The driver requests application resources through a cluster manager. Executors belong to this application. The drawing separates roles, not a required machine count.',
+        'Define the driver and executors before following the arrows. A process is a running program. A cluster manager allocates resources to applications, and the driver requests those resources. Executors belong to this application. The drawing separates roles, not a required machine count.',
         'Give each of the two input partitions a task. A partition is data, a task is a unit of execution, and an executor is a process. Those terms describe different things. PySpark also uses Python workers for Python functions.',
         'Explain that collect returns the complete result to the driver. Our two totals are small. Collecting a large dataset can exceed driver memory. A distributed write is usually more suitable for a large output.'
       ],question:'Does having eight partitions require eight executor processes?',answer:'No. Executors can process several partition tasks, concurrently when resources allow or in successive waves.'
@@ -117,7 +117,7 @@
   scene('spark-lazy-plan','RDD transformations describe work',4,
     ['Start with a collection','Add transformations','Request an action'],[
       'An RDD is a Resilient Distributed Dataset: a collection split into partitions.',
-      'Transformations define new RDDs and their dependencies. They do not yet compute these meal counts.',
+      'A transformation describes a new RDD without changing its input. Dependencies record which earlier data each operation needs.',
       'collect() is an action. It requests the result and starts the required computation.'
     ],(d,s)=>{
       const xs=[65,365,665,965],names=['Input RDD','flatMap','map','reduceByKey'];
@@ -134,7 +134,7 @@
       idea:'Spark records transformations and executes the required plan when an action requests results.',
       builds:[
         'Expand RDD and identify its two example partitions. An RDD is a logical collection, not one large Python list held by the driver. Input reading has its own API details; focus on when the transformations run.',
-        'Follow the chain from order records to words, pairs, and grouped counts. Define a transformation as an operation that describes a new collection. Pause before revealing the action. Ask whether writing these expressions has computed the totals.',
+        'Follow the chain from orders to words, pairs, and grouped counts. flatMap extracts individual words, map attaches a count, and reduceByKey adds matching keys. Each box describes a new collection. The arrows record which earlier collection each step needs. Lazy evaluation means these transformations wait until an action needs their results. Ask whether writing the expressions has computed the totals.',
         'Reveal collect. Define an action as a request that starts the computation needed for its result. Spark uses the recorded dependencies to schedule that work. The printed order of the two final pairs is not a correctness guarantee.'
       ],question:'Is reduceByKey an action because its name contains “reduce”?',answer:'No. reduceByKey defines another RDD. An action such as collect requests its result.'
     },[refs.spark]);
@@ -165,7 +165,7 @@
 
   scene('spark-local-combine','Combine local counts before sending them',3,
     ['Keep occurrence pairs','Compute partial sums','Preserve the total weight'],[
-      'Spark reduceByKey can combine values for the same key within each input partition.',
+      'A partial count summarizes part of the input. Spark reduceByKey can add matching values within each input partition.',
       'Partition 0 produces (pizza, 2). Partition 1 produces (salad, 1) and (pizza, 1).',
       'Three partial-count pairs represent four requests. Add their values, not their number of pairs.'
     ],(d,s)=>{
@@ -179,13 +179,13 @@
       builds:[
         'Return to the four occurrence pairs. Spark reduceByKey performs local merging for its combining function. For addition, replacing two ones with their sum preserves the final result. This differs from the graded micro-mapreduce mapper, which emits occurrences.',
         'Reveal the three partial pairs. The value 2 represents two original requests. A value is no longer always 1 after local combining. The second partition still contributes two different keys.',
-        'Ask students to count pairs and then count represented requests. Those quantities differ. For an average, preserve both sum and count rather than averaging unequal partial averages. Addition is the only combining rule used in this fixture.'
+        'Ask students to count pairs and then count represented requests. Those quantities differ. A contribution’s weight is the number of requests its value represents. For an average, preserve both sum and count rather than averaging unequal partial averages. Addition is the only combining rule used in this fixture.'
       ],question:'Why does (pizza, 2) preserve both requests while a single (pizza, 1) does not?',answer:'The value 2 retains the combined contribution. The value 1 would discard one occurrence.'
     },[refs.reduce]);
 
   scene('spark-shuffle-stages','The shuffle separates two stages',4,
     ['Run partition-local operations','Move partial contributions','Sum each destination group'],[
-      'Stage 0 extracts words, attaches counts, and combines local values within each input partition.',
+      'A stage runs tasks without a shuffle between their operations. Stage 0 extracts words, attaches counts, and adds local values.',
       'The shuffle sends every contribution for pizza to its destination, including the partial value 2.',
       'Stage 1 combines the received values: pizza gets [2, 1], while salad gets [1].'
     ],(d,s)=>{
@@ -207,60 +207,81 @@
     },{
       idea:'A shuffle moves contributions between partitions and creates a scheduling boundary between stages.',
       builds:[
-        'Define a stage as tasks that perform one portion of the dependency plan without crossing a shuffle boundary. The input tasks can pipeline word extraction, pair creation, and local combining. Stage count is not the count of API calls.',
+        'An action starts a job: the computation needed for its requested result. A stage groups tasks that can run without a shuffle between their operations. Each input task can perform word extraction, pair creation, and local addition together. Running these steps together is called pipelining. Stage count is not the number of function calls.',
         'Trace both pizza contributions across the boundary. They have values 2 and 1, not two single requests. The salad contribution remains separate. Shuffle can use network transfer and disk storage. Two keys can share a destination partition while keeping separate groups.',
-        'Compute the final sums only after their required contributions are available. The drawing uses one destination per meal for clarity. Spark chooses task placement and partition assignments. The invariant is complete per-key aggregation.'
+        'Compute the final sums only after their required contributions are available. The drawing uses one destination per meal for clarity. Spark chooses task placement and partition assignments. Each meal still needs every contribution for its total.'
       ],question:'What values must the pizza destination add?',answer:'It must add 2 from partition 0 and 1 from partition 1, producing 3.'
     },[refs.spark,refs.reduce]);
 
   scene('spark-partitions-tasks','Partitions, tasks, and workers differ',3,
     ['Name the data units','Schedule ready tasks','Distinguish narrow and shuffle dependencies'],[
       'Four partitions describe four subsets of data. They do not require four machines.',
-      'With two available execution slots, four ready tasks can run in two waves.',
-      'Narrow dependencies permit local pipelines. A shuffle redistributes data to satisfy a new grouping.'
+      'An execution slot can run one task at a time. With two slots, four ready tasks can run in two waves.',
+      'A narrow dependency keeps each parent partition’s output with at most one child. A shuffle can send it to several destinations.'
     ],(d,s)=>{
-      for(let i=0;i<4;i++)box(d,'partition'+i,65+i*305,230,250,110,'Partition '+i,['Data subset'],P.blue,s===0);
-      if(s>=1){
+      if(s<2)for(let i=0;i<4;i++)box(d,'partition'+i,65+i*305,230,250,110,'Partition '+i,['Data subset'],P.blue,s===0);
+      if(s===1){
         box(d,'slot0',130,425,440,140,'Slot A',['Task P0 → then task P2'],P.green);
         box(d,'slot1',710,425,440,140,'Slot B',['Task P1 → then task P3'],P.green);
       }
-      if(s>=2)label(d,'dependency',640,375,'map → map: narrow     reduceByKey: shuffle here',28,P.orange);
-      foot(d,'Task counts describe stage partitions · Slots describe simultaneous execution capacity');
+      if(s===2){
+        d.rect('narrow-panel',45,205,570,390,P.white,P.line,10,2);
+        d.rect('wide-panel',665,205,570,390,P.white,P.line,10,2);
+        label(d,'narrow-title',330,240,'map → map: narrow',27,P.green);
+        label(d,'shuffle-title',950,240,'reduceByKey: shuffle here',27,P.orange);
+        for(let i=0;i<2;i++){
+          const y=300+i*145;
+          d.box('narrow-parent'+i,75,y,150,75,'Parent '+i,P.blueLight,P.blue,24);
+          d.box('narrow-child'+i,435,y,150,75,'Child '+i,P.greenLight,P.green,24);
+          arrow(d,'narrow-flow'+i,235,y+38,425,y+38,P.green);
+          d.box('wide-parent'+i,695,y,150,75,'Parent '+i,P.blueLight,P.blue,24);
+          d.box('wide-child'+i,1055,y,150,75,'Child '+i,P.orangeLight,P.orange,24);
+        }
+        for(let i=0;i<2;i++)for(let j=0;j<2;j++)arrow(d,'wide-flow'+i+j,855,337+i*145,1045,337+j*145,P.orange);
+        label(d,'narrow-meaning',330,560,'Each parent feeds one child',23,P.green);
+        label(d,'wide-meaning',950,560,'Each parent can feed both children',23,P.orange);
+      }
+      foot(d,s===2?'Arrows show data dependencies · Parent: input partition · Child: output partition':'Task counts describe stage partitions · Slots describe simultaneous execution capacity');
     },{
       idea:'Partition count controls task units while execution resources control how many tasks can run at once.',
       builds:[
         'Use four partitions in this separate scheduling illustration. A partition is a data subset. In a stage, Spark schedules a task for each required partition. A worker or executor can process more than one task over its lifetime.',
-        'Assume two available execution slots. Four ready tasks therefore need at least two waves under this illustration. Task durations can differ. These rectangles do not measure time or promise balanced work.',
-        'Define a narrow dependency: each parent partition contributes to at most one child partition. This permits pipelining without a shuffle. It does not prohibit every data transfer. The count example requires a shuffle to regroup meal keys across input partitions.'
+        'Define an execution slot as capacity to run one task at a time. Assume two slots are available. Four ready tasks therefore need at least two waves in this illustration. Task durations can differ. These rectangles do not measure time or promise balanced work.',
+        'Parent means an input partition, and child means an output partition. For a narrow dependency, each parent contributes to at most one child. The left diagram traces two independent paths that can run without a shuffle. The right diagram lets each parent send values to both children. Our count requires this regrouping so matching meal keys meet. A narrow dependency does not prohibit every data transfer.'
       ],question:'Does adding partitions always increase simultaneous execution?',answer:'No. Tasks still need available resources. More partitions can create smaller tasks and additional scheduling overhead.'
     },[refs.spark,refs.cluster]);
 
   scene('spark-cache-recompute','Cache reusable data and rebuild lost output',3,
-    ['Compute an intermediate collection','Reuse cached partitions','Recompute a lost partition'],[
-      'Caching marks an RDD for reuse. An action computes and stores the partitions it needs.',
-      'A later action can reuse available cached partitions instead of repeating their transformations.',
+    ['Mark a collection for reuse','Compute, save, then reuse','Recompute a lost partition'],[
+      'Caching asks Spark to retain computed partitions. Marking the RDD alone does not compute or store them.',
+      'The first action computes and saves needed partitions. Later actions can reuse those saved values.',
       'If a cached partition is lost, Spark can recompute it from available inputs and recorded dependencies.'
     ],(d,s)=>{
       box(d,'source',65,330,285,160,'Available inputs',['Saved order records'],P.blue,false);
-      arrow(d,'compute',370,405,470,405);
-      box(d,'cache',490,285,300,250,'Cached RDD',[s===2?'P0: lost → rebuild':'P0: computed','P1: available'],s===2?P.orange:P.green);
-      if(s>=1){arrow(d,'reuse',810,405,900,405);box(d,'action',920,330,295,160,'Later action',['Read cached output'],P.blue);}
-      if(s===2)label(d,'lineage',640,575,'Lineage = recorded steps for recomputation',27,P.orange);
+      if(s>=1)arrow(d,'compute',370,405,470,405,s===2?P.orange:P.green);
+      box(d,'cache',490,285,300,250,s===0?'RDD marked for cache':'Cached RDD',s===0?['P0: not stored','P1: not stored']:s===1?['P0: computed + saved','P1: computed + saved']:['P0: lost → rebuild','P1: still available'],s===2?P.orange:P.green,s!==0);
+      if(s>=1){
+        arrow(d,'reuse',810,405,900,405);
+        box(d,'action',920,330,295,160,'Later action',['Read saved values'],P.blue);
+        label(d,'first-action',640,245,s===1?'First action computes; a later action reuses':'Rebuild missing P0; reuse available P1',25,s===2?P.orange:P.green);
+      }
+      if(s===0)label(d,'cache-mark',640,575,'cache() records reuse intent. No action has requested values yet.',26,P.muted);
+      if(s===2)label(d,'lineage',640,575,'Lineage = the recorded operations and inputs needed to rebuild data',25,P.orange);
       foot(d,'Reuse costs memory · Recomputing requires accessible inputs and repeatable transformations');
     },{
       idea:'Caching reuses computed data, while lineage describes how lost data can be recomputed.',
       builds:[
-        'Maya wants several queries over the same cleaned orders. Marking the RDD with cache does not immediately compute every partition. The first action materializes the partitions it needs. Choose what to cache from actual reuse and memory needs.',
-        'Follow the second action to retained output. Cache placement and storage levels affect reuse. Cached data can consume memory needed by other work. Caching is a performance choice, not a requirement for correct counts.',
+        'Maya wants several queries over the same cleaned orders. Caching, also called persistence, asks Spark to retain computed partitions for reuse. Marking an RDD does not itself compute or save values. Predict which request will start that work. Choose what to retain from actual reuse and memory needs.',
+        'The first action computes the required partitions and saves their values. This computation and storage is called materialization. Follow a later action to those saved values. The storage setting controls whether Spark retains data in memory, on disk, or both. Retained data consumes space that other work may need. Caching is a performance choice, not a requirement for correct counts.',
         'Erase one cached partition. Follow its recorded transformations back to available inputs. Define lineage as this dependency record. Recalculation must reproduce the required data. Lineage does not roll back writes made to an external service.'
       ],question:'Does cache make the meal counts permanently durable?',answer:'No. Cached partitions can be lost. Spark can recompute supported outputs when the required inputs and transformations remain available.'
     },[refs.spark]);
 
   scene('spark-skew','A frequent key can delay a stage',3,
     ['Start with several keys','Concentrate pizza requests','Inspect before changing the plan'],[
-      'Equal keys must reach a compatible aggregation path. Their frequency determines how much work arrives.',
+      'Skew means uneven data or work. A frequent meal key can send much of the work to one final group.',
       'Many pizza requests can leave one destination busy while other tasks finish.',
-      'Inspect task duration, input sizes, spill, and shuffle data before choosing a remedy.'
+      'Spill is temporary data written to disk when memory is insufficient. Compare task times, input sizes, spill, and shuffle volume.'
     ],(d,s)=>{
       const widths=s?[690,170,140]:[330,300,320];
       for(let i=0;i<3;i++){
@@ -269,31 +290,31 @@
         d.rect('work'+i,270,275+i*90,widths[i],45,i===0&&s?P.orange:P.green,'none',6);
       }
       if(s>=1)label(d,'hot',640,555,'pizza is the frequent key',29,P.orange);
-      foot(d,s===2?'Schematic work bars · Diagnose the bottleneck before choosing a remedy':'Schematic work bars · No measured times or speedup');
+      foot(d,s===2?'Schematic work bars · Find the cause before choosing a remedy':'Schematic work bars · No measured times or speedup');
     },{
       idea:'Uneven key frequencies can concentrate work even when a job has many partitions.',
       builds:[
         'Connect the lunch orders to a much larger, hypothetical order collection. Explain skew as uneven data or work. These bars are schematic. They do not claim equal hardware, equal row cost, or measured duration.',
         'Concentrate many requests under pizza. Local combining helps a simple count, but other aggregations can retain much more state. A long task can also result from slow resources or an expensive function, so skew is a hypothesis to test.',
-        'Name the measurements to inspect in the Spark UI. A valid partial aggregation, a different join strategy, or salting may help a suitable workload. More partitions alone do not split an indivisible same-key group. Preserve result correctness when changing the plan.'
+        'The Spark UI is a browser page that reports task and stage measurements. Compare input sizes, elapsed times, shuffle bytes, and temporary disk data called spill. Ask whether the longest task also received more data. Valid partial sums or salting may help a suitable workload. Salting splits a frequent key into temporary groups, then combines their results. More partitions alone do not split a same-key group.'
       ],question:'Does a long task prove that its partition has a frequent key?',answer:'No. Compare data sizes, spill, execution costs, and resource behavior before attributing the delay to skew.'
     },[refs.spark]);
 
   scene('spark-dataframe-rdd','Use DataFrames for structured operations',3,
     ['Expose the operation','Give Spark a relational plan','Keep RDDs for the mechanism'],[
-      'A DataFrame has named columns and a schema. Spark SQL can reason about its relational operations.',
-      'A grouping expression describes the requested result and leaves execution planning to Spark SQL.',
-      'The RDD example exposes partitions and combining. Choose the API that fits the actual computation.'
+      'A DataFrame is a table with named columns. Its schema specifies the column names and their types.',
+      'A grouping expression describes a table operation. Spark SQL can choose how to execute that operation.',
+      'The RDD example exposes partitions and combining. Choose the programming interface that fits the actual computation.'
     ],(d,s)=>{
       box(d,'rows',65,275,325,270,'DataFrame',['meal: string','pizza','pizza','salad','pizza'],P.blue);
       if(s>=1){arrow(d,'plan-arrow',410,380,500,380);box(d,'plan',520,275,335,210,'Relational operation',['groupBy("meal")','.count()'],P.green);}
       if(s>=2){arrow(d,'output-arrow',875,380,925,380);box(d,'out',945,275,270,210,'Result',['pizza: 3','salad: 1'],P.orange);}
-      foot(d,'RDD: explicit functions over elements · DataFrame: schema and relational expressions');
+      foot(d,'RDD: functions over elements · DataFrame: named columns and table operations');
     },{
       idea:'Structured expressions expose information that Spark SQL can use when planning execution.',
       builds:[
         'Define schema as the named columns and their types. The diagram shows all four requests from the same fixture. A DataFrame represents structured data, even when its contents are spread across workers.',
-        'Read groupBy meal followed by count. Spark SQL can optimize supported relational expressions because it understands their structure. An arbitrary Python function can conceal details from that optimizer. The diagram states a result, not a universal performance guarantee.',
+        'Read groupBy meal followed by count. Relational operations act on tables, such as filtering rows, joining tables, and grouping values. Spark’s optimizer chooses an execution plan for supported expressions. Named columns and types help it reason about those operations. An arbitrary Python function can conceal these details. The diagram states a result, not a universal performance guarantee.',
         'Return to the RDD trace. We used it to expose map, partial aggregation, shuffle, and reduction. For ordinary structured joins and aggregations, a DataFrame is often the appropriate starting API. Measure the actual workload and inspect its plan.'
       ],question:'Why might Spark optimize a column expression more easily than an arbitrary Python function?',answer:'The column expression exposes relational structure and types. An arbitrary Python function can hide how it uses or transforms its inputs.'
     },[refs.sql]);
@@ -332,7 +353,7 @@
     ['Wait after each call','Submit both calls first','Separate permission from speed'],[
       'Waiting immediately after each submission prevents the driver from submitting the next task until the first completes.',
       'Submitting both calls first lets the runtime overlap them when resources are available.',
-      'This order permits concurrency. It does not guarantee a speedup for tiny tasks.'
+      'Concurrency means work can overlap in time. This submission order permits overlap but does not guarantee a speedup for tiny tasks.'
     ],(d,s)=>{
       const x=270,unit=260;
       label(d,'wait-label',135,300,'Wait in loop',25);
@@ -357,125 +378,126 @@
 
   scene('ray-dependency-references','A result reference expresses a dependency',3,
     ['Submit a producer','Pass its reference','Wait at the final boundary'],[
-      'Submitting the producer returns an ObjectRef. Its value may still be pending.',
-      'Passing that ObjectRef as a top-level argument makes the next task depend on the producer’s result.',
-      'Ray resolves the top-level reference before running the consumer. The driver can wait for only the final result.'
+      'A producer creates a value that another task needs. Submitting it returns an ObjectRef while its value may still be pending.',
+      'Pass the reference directly as an argument, rather than inside a list or dictionary. Ray waits for its value before running that task.',
+      'Ray replaces the direct argument’s reference with its completed value. The consumer receives the dictionary, and the driver can await its final result.'
     ],(d,s)=>{
       box(d,'producer',65,325,310,160,'count_order',['Produces local counts'],P.blue);
       if(s>=1){
         arrow(d,'a-ref',395,405,480,405,P.blue);
-        box(d,'ref',500,325,280,160,'ObjectRef a',['Dependency handle'],P.orange);
+        box(d,'ref',500,325,280,160,s===2?'Argument value':'ObjectRef a',s===2?['{pizza: 2}']:['Identifies a result'],P.orange);
         arrow(d,'consumer-input',800,405,875,405,P.orange);
-        box(d,'consumer',895,325,320,160,'format_count',['Needs the count value'],P.green);
+        box(d,'consumer',895,325,320,160,'summarize',s===2?['Receives {pizza: 2}']:['Waits for count value'],P.green);
       }
-      if(s>=2){label(d,'chain',640,550,'b = format_count.remote(a)',29,P.green);label(d,'final-get',640,595,'ray.get(b)',27,P.green);}
-      foot(d,'Dependency example · Top-level ObjectRef arguments are resolved for the task');
+      if(s>=1)label(d,'chain',640,550,'b = summarize.remote(a)',29,P.green);
+      if(s>=2)label(d,'final-get',640,595,'ray.get(b)',27,P.green);
+      foot(d,s===0?'The consumer is the task that needs the producer’s value':'Top-level means a direct argument: summarize.remote(a), not summarize.remote([a])');
     },{
       idea:'Task-result references connect producers and consumers without requiring an intermediate driver wait.',
       builds:[
-        'Use a separate dependency example after the main driver-merge program. The producer returns a count dictionary. The driver receives its reference while the task may still be running.',
-        'Pass a as a top-level argument to a formatting task. The consumer is not ready until the producer result is available. This is a dependency, not an instruction to pass the unfinished handle as the function value.',
-        'Ray resolves a top-level ObjectRef argument before the consumer executes. The consumer receives the count dictionary. The driver can call ray.get only on b at the final boundary. References nested inside other Python objects have different resolution rules.'
+        'Use a separate dependency example after the main driver-merge program. A producer creates a value, and a consumer needs that value. The producer returns a count dictionary. The driver receives its reference while the task may still be running.',
+        'Pass a directly to summarize.remote(a). This is a top-level argument: the reference is not inside another list or dictionary. The consumer must wait until the producer result is available. The driver can submit the consumer without first calling ray.get(a).',
+        'Resolve means replace the direct reference argument with its completed value. The summarize function receives the dictionary {pizza: 2}, not the pending reference. The driver can wait only on b for the final result. Passing [a] instead would give the function a list containing a reference. That nested reference is not automatically replaced with its value.'
       ],question:'Can the consumer run before the value it needs is available?',answer:'No. A top-level ObjectRef argument makes that result a scheduling dependency. The runtime resolves it before the function executes.'
     },[refs.objects]);
 
   scene('ray-put-shared-input','Put a reusable input in the object store',3,
     ['Identify repeated input','Create one reference','Pass it to several tasks'],[
-      'Several tasks may need the same read-only menu or model input.',
-      'ray.put(menu) stores the object and returns a reference that can be reused.',
+      'Several tasks may need the same read-only menu or model input. Read-only means they do not change that shared input.',
+      'Ray’s object store holds values for tasks to retrieve. ray.put(menu) stores a value there and returns a reusable reference.',
       'Pass menu_ref to each task. Reusing a reference avoids repeatedly submitting the same large value.'
     ],(d,s)=>{
       box(d,'menu',65,330,320,170,'Shared menu',['Read-only input'],P.orange);
       if(s>=1){arrow(d,'put',405,415,475,415,P.orange);box(d,'store',495,330,290,170,'Object store',['menu_ref'],P.blue);}
       if(s>=2){
         arrow(d,'to-a',805,385,895,320,P.blue);arrow(d,'to-b',805,445,895,520,P.blue);
-        box(d,'task0',915,250,300,130,'Check order 0',['menu_ref'],P.green);
-        box(d,'task1',915,450,300,130,'Check order 1',['menu_ref'],P.green);
+        box(d,'task0',915,250,300,130,'Check order 0',['Receives menu value'],P.green);
+        box(d,'task1',915,450,300,130,'Check order 1',['Receives menu value'],P.green);
       }
-      foot(d,'Data may still move between nodes · A shared reference is not shared mutable state');
+      foot(d,'Data may still move between machines · A reference does not create shared editable data');
     },{
       idea:'A reusable object reference lets several tasks depend on one submitted read-only input.',
       builds:[
         'Extend the lunch application to validate orders against a larger menu. The large shared object is hypothetical. Two short strings do not need this optimization. Identify which input is reused across tasks before choosing an object-store strategy.',
         'Call ray.put once and keep the returned ObjectRef. Ray places the object in its object store. This avoids repeatedly passing the same large Python value by value to many task submissions.',
-        'Pass menu_ref as a top-level argument. Tasks receive the object value after resolution. Copies may be transferred to other nodes, and deserialization has costs. The object-store reference does not provide a shared mutable Python dictionary.'
+        'Pass menu_ref as a direct argument. Tasks receive the object value after Ray resolves the reference. Copies may be transferred to other machines. Reconstructing Python values from transferred bytes also costs work. Stored objects are immutable: changing a local object does not update the stored value for other tasks. The reference does not create a shared editable dictionary.'
       ],question:'Does ray.put guarantee that no data crosses the network?',answer:'No. Ray may transfer the object to nodes that need it. Reusing its reference avoids repeated submissions of the same value.'
     },[refs.objects]);
 
   scene('ray-stateful-actor','An actor keeps state between calls',4,
     ['Create a remote object','Apply one method call','Apply the next call'],[
-      'An actor is an instance of a remote class. Its state persists between method calls while the actor is alive.',
-      'A default synchronous actor runs one method at a time. The first update adds two pizza requests.',
+      'An actor is a Python object hosted by a worker. Its state is data, such as this counter, retained between method calls.',
+      'This synchronous actor finishes one method before starting the next. The first update adds two pizza requests.',
       'The next update sees the changed state and adds one pizza and one salad.'
     ],(d,s)=>{
       box(d,'caller',65,300,330,210,'One caller',['add({pizza: 2})','add({pizza: 1, salad: 1})'],P.blue,false);
       arrow(d,'actor-call',415,405,540,405,P.blue);
       box(d,'actor',560,250,380,310,'MealCounter actor',[
-        'Persistent object state',
+        'State kept between calls',
         s===0?'pizza: 0':s===1?'pizza: 2':'pizza: 3',
         s<2?'salad: 0':'salad: 1'
       ],P.green);
       if(s>=1)box(d,'serial',1010,330,205,150,'Methods',['One at a time'],P.orange);
-      foot(d,'Default synchronous actor · No automatic durable recovery of application state');
+      foot(d,'Ordinary actor methods · State survives calls, but is not automatically restored after a failure');
     },{
       idea:'An actor owns mutable state, while ordinary tasks are function calls that return results.',
       builds:[
-        'Define a class with remote methods rather than a remote function. Its constructor creates a counter object in an actor process. The counter state survives from one method call to the next while that actor remains alive.',
-        'Submit both updates from one caller. An ordinary synchronous actor executes one method at a time. Without out-of-order options or retries, same-caller calls run in submission order. Async and threaded actor options change concurrency behavior.',
-        'Apply the second update to the existing object. The new total depends on the first update. An actor is useful for deliberate persistent state, such as a loaded model. It is not a durable database. Restarts and state reconstruction require an explicit design.'
+        'A class defines an object’s data and methods. A method is a function attached to that object. The constructor creates the counter object in an actor process. State means the data retained by that object, such as its running meal totals. This state survives successive method calls while the actor remains alive.',
+        'Submit both updates from one caller. An ordinary synchronous actor executes one method at a time. Without out-of-order options or retries, same-caller calls run in submission order. Other actor modes can allow methods to overlap, with different ordering rules.',
+        'Apply the second update to the existing object. The new total depends on the first update. An actor can retain useful data, such as a loaded model. Durable storage retains data after the worker fails. An actor does not automatically save and restore its counter that way. Its restart and state recovery need an explicit design.'
       ],question:'Why can two calls to the same counter actor observe updated state?',answer:'Both methods operate on the same persistent remote object. A default synchronous actor executes those methods serially.'
     },[refs.actors,refs.order,refs.actorFailure]);
 
   scene('retries-and-side-effects','A retry can repeat an external effect',3,
     ['Retry a pure count','Consider an external write','Design repeated execution deliberately'],[
-      'Repeating a pure count over the same input can reproduce its result.',
-      'If a task writes externally before failing, retrying can repeat that write.',
-      'Separate result recomputation from external effects. Use an explicit deduplication or idempotency design where needed.'
+      'A pure count depends only on its input and changes no external system. Repeating it can reproduce the same result.',
+      'An external effect changes something outside the returned value. A receipt appended before failure remains in the file.',
+      'A retry can return one count but leave two receipt rows. The application must recognize repeated requests before applying the effect again.'
     ],(d,s)=>{
-      box(d,'task',65,325,310,170,'Task attempt',['Count the order'],P.blue);
+      box(d,'task',65,325,310,170,s===2?'Retry same task':'Task attempt',['Count the order'],P.blue);
       if(s===0){arrow(d,'pure-result',395,410,525,410);box(d,'count',550,325,340,170,'Pure result',['{pizza: 2}'],P.green);}
       if(s>=1){
         arrow(d,'external-write',395,410,475,410,P.orange);
-        box(d,'external',495,325,340,170,'External file',['Append receipt row'],P.orange);
-        arrow(d,'crash',855,410,925,410,P.red);
-        box(d,'failure',945,325,270,170,'Worker fails',['Before completion'],P.red);
+        box(d,'external',495,325,340,170,'External file',s===2?['Receipt from first attempt','Receipt from retry']:['Appended receipt row'],P.orange);
+        arrow(d,'crash',855,410,925,410,s===2?P.green:P.red);
+        box(d,'failure',945,325,270,170,s===2?'Returned result':'Worker fails',s===2?['{pizza: 2}']:['Before completion'],s===2?P.green:P.red);
       }
-      if(s===2)label(d,'repeat-risk',640,565,'A retry may append the receipt again',31,P.red);
-      foot(d,'Task retries, exception retries, actor restarts, and state recovery are separate policies');
+      if(s===2)label(d,'repeat-risk',640,565,'One returned dictionary does not prove one external write',29,P.red);
+      foot(d,'A repeated attempt processes the same intended input. It is not a new lunch order.');
     },{
       idea:'Runtime retries do not automatically make external side effects occur exactly once.',
       builds:[
-        'Begin with the pure count_order function. Its result depends on its input and has no external writes. Ray can retry task execution after supported system failures according to its configuration. Application-exception retry settings are a separate choice.',
+        'Begin with the pure count_order function. Its result depends on its input and has no external writes. An attempt is one execution of a task. Ray can retry after supported worker failures according to its configuration. An exception is an error raised by application code. Retrying those errors requires a separate setting.',
         'Change the function to append a receipt before it returns. Crash after the append but before completion is acknowledged. Repeating the task can repeat that effect. This is a hypothetical failure trace, not an observed course incident.',
-        'Ask what identifies one logical receipt across attempts. Possible application designs include idempotent writes or deduplication by a stable request ID. Actor restarts do not automatically reconstruct arbitrary state. Spark lineage also does not undo external writes.'
+        'Follow the retry: one returned dictionary, but two appended receipt rows. A stable request ID names the same intended request across attempts. Deduplication recognizes that repeated ID and avoids applying its effect again. An idempotent operation can repeat without changing its intended effect. The application must keep its request tracking and actual updates consistent through failures. Neither actor restarts nor Spark lineage automatically undo external writes.'
       ],question:'Does receiving one task result prove that an external append happened once?',answer:'No. An earlier failed attempt may have performed the append before a later attempt returned the accepted result.'
     },[refs.retries,refs.actorFailure]);
 
   scene('measure-overhead','Parallel work still has overhead',3,
     ['Name all the work','Batch small inputs','Measure equal results'],[
-      'Elapsed time includes setup, serialization, data movement, computation, and result handling.',
-      'Combining tiny inputs into larger tasks can reduce scheduling overhead per item.',
+      'Serialization converts values into bytes. Elapsed time also includes setup, data movement, computation, and result handling.',
+      'Batching puts several inputs in one task. This can reduce the scheduling work required for each input.',
       'Compare equal outputs and the same workload before interpreting elapsed time.'
     ],(d,s)=>{
-      const labels=['Start','Serialize','Transfer','Compute','Collect'];
+      const labels=['Start','Encode bytes','Transfer','Compute','Collect'];
       labels.forEach((text,i)=>box(d,'cost'+i,60+i*240,285,210,110,text,[],i===3?P.green:P.orange));
       if(s>=1){
         box(d,'tiny',105,465,440,120,'Many tiny tasks',['More scheduling per item'],P.orange);
         box(d,'batch',735,465,440,120,'Fewer larger tasks',['Less scheduling per item'],P.green);
       }
-      foot(d,s===2?'Measure cold and warm runs deliberately · Report workload, resources, and equality':'Schematic cost categories · No benchmark or speedup is claimed');
+      foot(d,s===2?'State whether startup and saved data are included · Compare the same input and result':'Schematic cost categories · No benchmark or speedup is claimed');
     },{
       idea:'Parallelism helps only when useful overlapping work outweighs coordination and movement costs.',
       builds:[
-        'Read every cost category. The boxes show categories, not proportional times. A two-order job will often be dominated by overhead, so the fixture establishes correctness rather than a performance case.',
-        'Batch many small orders into one call when that matches the workload. Explain the tradeoff: very large tasks can reduce scheduling flexibility, increase memory needs, or create stragglers. Batch size is a measurement question.',
+        'Overhead is work needed to coordinate the computation rather than perform its main calculation. Serialization converts Python values into bytes for storage or transfer. Read every cost category. The boxes show categories, not proportional times. Coordination can cost more than counting two orders. This fixture establishes correctness rather than a performance case.',
+        'A batch contains several inputs handled by one call. Grouping small orders into batches can reduce scheduling work per order. Very large tasks can reduce scheduling flexibility and increase memory needs. They can also become stragglers: tasks that finish much later than their peers. Batch size is a measurement question.',
         'Compare the same input, output contract, and relevant resources. Decide whether runtime startup belongs in the measured use case. Check result equality first. Then report elapsed times with enough context for another person to interpret the comparison.'
       ],question:'Why can launching more tasks make a small job slower?',answer:'Each task adds scheduling, serialization, and result-handling work. Tiny tasks may not contain enough computation to offset those costs.'
     },[refs.overhead]);
 
   scene('choose-and-transfer','Choose who should coordinate the work',4,
     ['Choose a local baseline','Match the execution shape','Return to the lunch orders'],[
-      'Begin with a local implementation and a result contract. Measure whether it meets the workload’s needs.',
+      'A baseline is the comparison run. Begin with a correct local implementation and measure whether it meets the workload’s needs.',
       'Spark plans structured data operations. Ray Core coordinates function calls and explicit dependencies.',
       'Explain where each implementation groups the meal counts, then prepare to trace a new order.'
     ],(d,s)=>{
