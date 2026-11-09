@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Lecture 13 · Distributed Compute · Advanced Databases for Data Science</title>
+<title>Lecture 13 · MapReduce · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
@@ -24,8 +24,10 @@
     <li><a href="#wall">Why distribute a job?</a></li>
     <li><a href="#partition">Assign records with hash or range partitioning</a></li>
     <li><a href="#try-it">Follow records through map, shuffle, and reduce</a></li>
-    <li><a href="#spark">Spark records a plan before executing it</a></li>
-    <li><a href="#ray">Ray runs Python tasks and stateful actors</a></li>
+    <li><a href="#shuffle-files">Move and group intermediate files</a></li>
+    <li><a href="#combiner">Combine partial results safely</a></li>
+    <li><a href="#recovery">Recover failed tasks without double-counting</a></li>
+    <li><a href="#engine-preview">Preview: Spark and Ray</a></li>
     <li><a href="#thursday">Next lecture and Lab 11</a></li>
     <li><a href="#recap">Return to the opening question</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -43,7 +45,7 @@
 
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 13 · Tuesday November 10, 2026</div>
-  <h1>Distributed Compute</h1>
+  <h1>MapReduce and distributed execution</h1>
   <div class="subtitle">Use MapReduce to turn separate lunch orders into one total for each meal.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
@@ -95,13 +97,9 @@
   <p>Noor asks: <q>If we read different orders, how do we bring all the pizza requests together?</q></p>
 </div>
 
-<p class="keep-in-present"><strong>Goal:</strong> Explain how MapReduce transforms each order, groups requests by meal name, and calculates each meal’s total.</p>
+<p class="keep-in-present"><strong>Goal:</strong> Trace map, shuffle, and reduce. Explain how partitioning, local combination, and task retries preserve the complete result.</p>
 
-<div class="cite">
-  Later companion readings:
-  Zaharia et&nbsp;al., <a href="https://www.usenix.org/conference/nsdi12/technical-sessions/presentation/zaharia"><em>Resilient Distributed Datasets</em></a> (the Spark paper) ·
-  Ray's <a href="https://docs.ray.io/en/latest/ray-core/walkthrough.html">core walkthrough</a> (tasks in ten minutes).
-</div>
+<p>Today’s reading is Google’s MapReduce paper, linked above. Engine-specific readings and demonstrations are in <a href="spark-ray.html">lecture 13B</a>.</p>
 
 <p class="glossary-hint">Terms with dotted underlines, such as <span class="gloss-demo">this one</span>, have definitions. Hover over a term or tap it to show its definition below the sentence.</p>
 <div class="glossary-panel" id="glossary-panel" hidden>
@@ -118,7 +116,7 @@
   <details><summary>Check your explanation</summary><p>No. Each person sees only part of the requests. The final pizza count needs contributions from both orders.</p></details>
 </div>
 
-<p class="keep-in-present">We will first trace <strong>map → shuffle → reduce</strong> on the two lunch orders. Then we will examine how these operations run across machines. Lab 11 implements the pattern in one Python process. Its Spark and Ray exercises are optional.</p>
+<p class="keep-in-present">We will trace <strong>map → shuffle → reduce</strong>, then follow the data between workers. We will test local combination and recovery against the same counting rule. Lab 11 implements the pattern in one Python process. Its engine exercises are optional.</p>
 
 <!-- ============================================================ -->
 <h2 id="mapreduce">MapReduce: map each order, shuffle by meal, reduce each group</h2>
@@ -382,109 +380,93 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="spark">Spark records a plan before executing it</h2>
+<h2 id="shuffle-files">The shuffle moves files, then forms complete groups</h2>
 
-<p class="keep-in-present">Noor asks who will run the map and reduce work. Spark schedules those operations across workers and moves records when grouping requires it. The code below describes the operations first. Spark performs the required computation when the program requests a result.</p>
+<p>The Python example groups pairs in memory. Across machines, the framework must move those pairs to the workers that run reduce tasks.</p>
+<p>A <strong>map task</strong> processes an assigned portion of the input. A <strong>reduce task</strong> processes a destination partition, which can contain several different keys.</p>
+<p>In the original MapReduce design, map workers write intermediate data to local disk, separated by reducer destination. The coordinator records where those outputs are available. <a href="#src-10">[10]</a></p>
 
-<p class="keep-in-present">An <span class="gloss" data-gloss="rdd">RDD (Resilient Distributed Dataset)</span> is a collection divided into partitions. In the code below, <code>lines</code> is the input RDD. A <strong>transformation</strong> describes a new collection from an existing one. An <strong>action</strong>, such as <code>collect()</code>, requests a result and starts the required computation.</p>
+<figure class="mr-overview">
+  <div class="mr-diagram-scroll" tabindex="0" role="region" aria-label="MapReduce shuffle files diagram; scroll horizontally on a small screen">
+    <img src="diagrams/mapreduce-shuffle-files.svg" alt="Map task M0 stores two pizza contributions. M1 stores one pizza and one salad contribution. Reducers fetch matching output partitions and form complete groups.">
+  </div>
+  <figcaption>Return to the original two orders. This diagram uses raw occurrence pairs and a fixed teaching choice: pizza goes to P0, salad to P1.</figcaption>
+</figure>
 
-<h3 class="new-slide" data-kicker="Spark">Word count in Spark is three chained calls and one shuffle</h3>
+<ol>
+  <li><strong>Partition:</strong> assign each intermediate pair to its reducer destination using the key.</li>
+  <li><strong>Transfer:</strong> fetch that destination’s data from the completed map tasks.</li>
+  <li><strong>Group:</strong> bring equal keys together. In these implementations, sorting supports the grouping.</li>
+  <li><strong>Reduce:</strong> pass one key and its grouped values to the reduce function.</li>
+</ol>
+<p>Apache Hadoop implements the same broad structure. Its reducer fetches map output, merges sorted records, and calls reduce for each group. Fetching and sorting can overlap. The value iterator lets reduce process a large group without creating one Python list. <a href="#src-21">[21]</a></p>
+<p>For our pizza total, the destination needs <code>[1, 1]</code> from M0 and <code>[1]</code> from M1. Neither map task alone supplies the complete result.</p>
+<p>Partitioning selects the destination. Grouping separates keys within that destination. Two different keys can share a partition, and one worker can execute several tasks.</p>
 
-<pre><code class="language-python">counts = (lines                                       # an RDD, split into 4 partitions
-    .flatMap(lambda t: re.findall(r"[a-z]+", t.lower()))   # your map_words
-    .map(lambda word: (word, 1))
-    .reduceByKey(lambda a, b: a + b))                 # your shuffle + reduce, one call<sup class="src"><a href="#src-11" title="RDD Programming Guide (Apache Spark documentation)">11</a></sup>
+<h2 id="combiner">Combine locally when the operation permits it</h2>
 
-counts.collect()                                      # NOW it runs</code></pre>
-
-<p class="keep-in-present"><code>flatMap</code> turns each line into word occurrences. <code>map</code> attaches the count <code>1</code> to each word. <code>reduceByKey</code> groups matching words as needed and adds their counts. <code>collect()</code> requests the result and brings it back to the program. Use <code>collect()</code> only when the result fits in that program’s memory.</p>
-
-<h3 class="new-slide" data-kicker="Spark">Shuffle dependencies create stage boundaries</h3>
-
-<p class="keep-in-present">Spark represents dependencies as a <strong>DAG (directed acyclic graph)</strong>. Arrows show which earlier results an operation needs. The graph has no cycles, so an operation cannot depend on its own output.</p>
-
-<p class="keep-in-present"><code>flatMap</code> and <code>map</code> can process each partition without requesting records from other partitions. This is a <strong>narrow dependency</strong>: each input partition contributes to at most one output partition. <code>reduceByKey</code> can require a <strong>wide dependency</strong>, where one input partition contributes to several output partitions. Spark uses a shuffle to transfer and group those records. A <span class="gloss" data-gloss="stage">stage</span> contains tasks that can execute without crossing a shuffle. Several transformations can share a stage, so counting function calls does not give the stage count.<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup></p>
-
-<table>
-  <thead><tr><th></th><th>Narrow</th><th>Wide</th></tr></thead>
+<p>M0 emits two <code>(pizza, 1)</code> pairs. Could it send <code>(pizza, 2)</code> instead? For an integer count, yes.</p>
+<p>A <strong>combiner</strong> performs an optional local aggregation before the shuffle. It can reduce network traffic while preserving the final result. It does not replace the reducer’s complete group. <a href="#src-20">[20]</a></p>
+<table id="combiner-example">
+  <thead><tr><th>Map task</th><th>Raw output</th><th>After local addition</th></tr></thead>
   <tbody>
-    <tr><td>Examples</td><td><code>flatMap</code>, <code>map</code>, <code>filter</code></td><td><code>reduceByKey</code>, <code>join</code>, <code>groupBy</code></td></tr>
-    <tr><td>Where it runs</td><td>Processes partition data without redistribution. Adjacent operations can run together on each partition.</td><td>redistributes records when the required grouping is not already available</td></tr>
-    <tr><td>What it costs</td><td>computation still costs time, but chaining avoids an intermediate shuffle</td><td>converting records to bytes, transferring data, and often reading or writing disk files</td></tr>
+    <tr><td>M0</td><td><code>(pizza, 1), (pizza, 1)</code></td><td><code>(pizza, 2)</code></td></tr>
+    <tr><td>M1</td><td><code>(salad, 1), (pizza, 1)</code></td><td><code>(salad, 1), (pizza, 1)</code></td></tr>
   </tbody>
 </table>
+<p>Three pairs now represent four requests. The pizza reducer adds <code>2 + 1 = 3</code>. The salad reducer returns <code>1</code>. Sending fewer pairs has preserved every request’s contribution.</p>
+<p>The answer must remain correct when the combiner is omitted or applied repeatedly to partial results. Integer addition is <strong>associative</strong> and <strong>commutative</strong>: regrouping or reordering the additions preserves the result. <a href="#src-22">[22]</a></p>
+<p><strong>Lab boundary:</strong> the graded mapper still emits one pair per occurrence. A combiner is an optional extension, with separate local aggregation after mapping.</p>
 
-<h3 class="new-slide" data-kicker="Spark">In the printed plan, the stage break is the shuffle</h3>
-
-<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span><span class="t-mute">        # Part B, on the 4,000 arXiv abstracts</span>
-=== the DAG (read bottom-up; the stage break is the shuffle) ===
-(4) PythonRDD[5] at RDD at PythonRDD.scala:59 []
- |  MapPartitionsRDD[4] at mapPartitions at PythonRDD.scala:197 []
- |  ShuffledRDD[3] at partitionBy at NativeMethodAccessorImpl.java:0 []
- +-(4) PairwiseRDD[2] at reduceByKey at spark_wordcount.py:37 []
-    |  PythonRDD[1] at reduceByKey at spark_wordcount.py:37 []
-    |  ParallelCollectionRDD[0] at readRDDFromFile at PythonRDD.scala:326 []</code></pre>
-
-<p class="keep-in-present">Start at <code>ParallelCollectionRDD</code>, the input collection at the bottom. Read upward toward the result. Find <code>ShuffledRDD</code>, which marks the redistribution step. That shuffle separates the work into stages.</p>
-
-<h3 class="new-slide" data-kicker="Spark">Lineage lets Spark recompute lost partitions</h3>
-
-<p class="keep-in-present">Suppose a worker loses the word pairs it produced. Spark records the inputs and transformations used to produce each RDD. This record, called <span class="gloss" data-gloss="lineage">lineage</span>, lets Spark repeat the work that produced a lost partition. The inputs must remain available, and the transformations must reproduce the data. This method avoids storing a separate durable copy of every intermediate result. Systems can also save selected results as checkpoints or keep extra copies through replication.<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup></p>
-
-<!-- ============================================================ -->
-<h2 id="ray">Ray runs Python tasks and stateful actors</h2>
-
-<p class="keep-in-present">Spark expressed the word count as operations on a collection. Ray lets us assign individual Python function calls to workers. One such call is a <strong>task</strong>. We will now use independent searches to show when those calls can run at the same time.</p>
-
-<p class="keep-in-present">The lab gives each task one abstract and asks for its ten nearest neighbors among 4,000 stored vectors. These vectors represent the abstracts as lists of numbers for comparison. Each task can calculate its answer without waiting for another task’s answer. Compare the parallel results with a serial run, where one call finishes before the next begins.</p>
-
-<h3 class="new-slide" data-kicker="Ray">Use @ray.remote to define a task</h3>
-
-<pre><code class="language-python">@ray.remote                               # this function may run anywhere
-def knn_remote(doc):
-    return neighbors(doc)                 # 10 nearest abstracts, brute force over 4,000 vectors
-
-futures = [knn_remote.remote(d) for d in docs]      # all launched, returns instantly
-graph = ray.get(futures)                            # wait; order preserved<sup class="src"><a href="#src-13" title="ray.get (Ray Core API reference)">13</a></sup></code></pre>
-
-<p class="keep-in-present">Calling <code>.remote()</code> submits work and returns a reference to its future result. The list named <code>futures</code> holds those references. <code>ray.get(futures)</code> waits for the results and returns them in the same order as the references.</p>
-
-<h3 class="new-slide" data-kicker="Ray">Submit tasks before waiting for results</h3>
-
-<p class="key-fact keep-in-present"><strong>3.5×</strong> measured speedup on a 10-core laptop: 2.27 s serial and 0.66 s parallel. Both runs returned identical results.</p>
-
-<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span><span class="t-mute">             # Part C, measured on a 10-core laptop</span>
-200 documents, 10 nearest neighbors each, brute force over 4,000 vectors
-serial:      2.27 s
-parallel:    0.66 s     speedup: 3.5x
-identical results: True
-
-neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
-   Decomposition-Driven Multi-Table Retrieval and Reasoning for Numerical
-   Novel Table Search [Technical Report]
-   Toward Multi-Database Query Reasoning for Text2Cypher</code></pre>
-
-<p class="keep-in-present">This measurement uses Lab 11 Part C. In a loop, calling <code>ray.get()</code> after each submission waits for that result before the loop submits the next task. Submit the tasks first. Then call <code>ray.get(futures)</code> to wait for their results. This permits tasks to overlap when resources are available. The lab checks that your submission loop does not wait after each task.<sup class="src"><a href="#src-14" title="Anti-pattern: Calling ray.get in a loop harms parallelism (Ray documentation)">14</a></sup></p>
-
-<h3 class="new-slide" data-kicker="Ray">Actors hold state on a worker: @ray.remote on a class</h3>
-
-<p class="keep-in-present">What if several calls need the same loaded model? An <span class="gloss" data-gloss="actor">actor</span> is an object on a worker that keeps data between method calls. This stored data is its <strong>state</strong>. For example, an actor can reuse a loaded model across requests. Apply <code>@ray.remote</code> to a class to define an actor.<sup class="src"><a href="#src-15" title="Actors (Ray Core documentation)">15</a></sup></p>
-
-<h3 class="new-slide" data-kicker="Ray">Choose an engine for the workload and performance target</h3>
-
-<table>
-  <thead><tr><th>Your job looks like…</th><th>Engine to evaluate</th><th>Because</th></tr></thead>
+<h3 id="average-partials">Why averaging partial averages can give the wrong answer</h3>
+<p>Change the question for a separate toy example. We now want the average delivery time for three deliveries, rather than a meal count.</p>
+<p>Use one key, <code>delivery_time</code>, for all deliveries. Each map output carries a <code>(sum, count)</code> value, initially <code>(time, 1)</code>. A combiner adds the two fields separately and returns the same value format. The final reducer adds all summaries, then divides total time by total count. This works when local combination is skipped or repeated.</p>
+<table id="average-example">
+  <thead><tr><th>Input portion</th><th>Delivery times</th><th>Local average</th><th>Safe summary: (sum, count)</th></tr></thead>
   <tbody>
-    <tr><td>Filter, join, and group a large collection of records</td><td>Use Spark for distributed data processing. Evaluate DuckDB for a single-machine workload.</td><td>Spark SQL combines query planning with distributed execution and shuffle management</td></tr>
-    <tr><td>Run a Python function many times, or reuse an object’s stored data</td><td>Ray</td><td>Tasks distribute function calls. Actors retain state between calls. Your code must account for data transfer, dependencies, and task size.</td></tr>
-    <tr><td>fits on one machine</td><td>one machine</td><td>One machine avoids network shuffles and cluster management. Measure whether it meets memory, latency, and throughput requirements before distributing the work.</td></tr>
+    <tr><td>Map task 0</td><td>10 min, 10 min</td><td>10 min</td><td><code>(20, 2)</code></td></tr>
+    <tr><td>Map task 1</td><td>40 min</td><td>40 min</td><td><code>(40, 1)</code></td></tr>
   </tbody>
 </table>
+<div class="exercise learning-check" id="average-check">
+  <span class="ex-label">Predict before combining</span>
+  <p>Would averaging the two local averages give each delivery equal weight?</p>
+  <details><summary>Check your explanation</summary><p>No. <code>(10 + 40) / 2 = 25</code> minutes gives each map task equal weight. Their input counts differ. Add the summaries first: <code>(20 + 40, 2 + 1) = (60, 3)</code>. Divide once at the end: <code>60 / 3 = 20</code> minutes.</p></details>
+</div>
+<p><strong>Keep enough information to combine correctly.</strong> A sum and count preserve the weights that a local average loses.</p>
+
+<h2 id="recovery">Retry work without treating a retry as new input</h2>
+
+<p>Return to the lunch orders. M0 has produced its two pizza pairs. Its machine fails before the pizza reducer fetches them.</p>
+<p>The original MapReduce coordinator reruns map tasks whose local outputs became inaccessible. The input must remain available. Reducers that still need those contributions fetch replacement output. Completed reduce output resides in the shared file system. <a href="#src-10">[10]</a></p>
+<p>A <strong>task</strong> identifies logical work on an input portion. An <strong>attempt</strong> is one execution of that task. A retry starts another attempt, not another lunch order.</p>
+<table id="retry-example">
+  <thead><tr><th>Work identity</th><th>Pizza values produced</th><th>What the pizza reducer needs</th></tr></thead>
+  <tbody>
+    <tr><td>M0 · first attempt</td><td><code>[1, 1]</code></td><td rowspan="2">One usable M0 output: <code>[1, 1]</code></td></tr>
+    <tr><td>M0 · retry</td><td><code>[1, 1]</code></td></tr>
+    <tr><td>M1 · one attempt</td><td><code>[1]</code></td><td>M1’s contribution: <code>[1]</code></td></tr>
+  </tbody>
+</table>
+<p>Using both M0 attempts would produce <code>2 + 2 + 1 = 5</code> pizzas. Using one M0 output and M1’s output gives the correct <code>2 + 1 = 3</code>.</p>
+<p>Keep both original pizza occurrences within M0’s chosen output. Discarding repeated task output is different from discarding repeated input words.</p>
+<p>Google’s implementation records map-task completions and atomically commits reduce output. For deterministic functions, its final output matches a failure-free sequential run. <strong>Deterministic</strong> means the same inputs produce the same outputs. <a href="#src-10">[10]</a></p>
+<p>This output rule does not make an external action happen only once. A task that sends a payment request can send it again during a retry.</p>
+<div class="exercise learning-check" id="retry-check">
+  <span class="ex-label">Explain the two kinds of repetition</span>
+  <p>M0 contains two pizza requests and runs twice after a failure. How many pizzas should M0 contribute, and why?</p>
+  <details><summary>Check your explanation</summary><p>Two pizzas. The input contains two genuine requests. The second attempt repeats the same task. Recovery must preserve the requests while avoiding another copy of the task’s contribution.</p></details>
+</div>
+
+<h2 id="engine-preview">Next lecture: a short Spark and Ray preview</h2>
+<p id="spark"><strong>Spark</strong> lets you describe a data pipeline. It schedules partition work and manages data movement for operations such as grouped aggregation.</p>
+<p id="ray"><strong>Ray</strong> schedules Python function calls. In our follow-up example, tasks return partial counts and our program combines them.</p>
+<p><a href="spark-ray.html">Lecture 13B</a> explains their APIs, execution plans, dependencies, and recovery behavior. Today’s foundation is <strong>map → shuffle → reduce</strong>, with correct grouping and safe retries.</p>
 
 <!-- ============================================================ -->
 <h2 id="thursday">Next lecture and Lab 11</h2>
 
-<p><strong>Thursday November 12:</strong> <a href="spark-ray.html">Spark and Ray in depth</a> develops today’s engine overview. Trace Spark stages, Ray tasks, and recovery before the lab.</p>
+<p><strong>Thursday November 12:</strong> <a href="spark-ray.html">Spark and Ray in depth</a> builds on today’s MapReduce foundation. Trace Spark stages, Ray tasks, and recovery before the lab.</p>
 
 <p><strong>Tuesday November 17:</strong> Implement a small MapReduce word count for Lab 11’s graded Part A. Optional Parts B and C use Spark for word count and Ray for parallel nearest-neighbor tasks.</p>
 
@@ -511,11 +493,10 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
 <ul class="recap-list">
   <li>Partitioning divides the data that workers process. Hash partitioning sends equal keys to the same partition. Range partitioning keeps neighboring keys together. Check whether either rule leaves one worker with most of the work.</li>
   <li>MapReduce separates task logic from execution. The shuffle groups intermediate values so each reduce call receives the values for its key.</li>
-  <li>Spark records a plan and starts the required work when an action requests a result. It tracks how to rebuild lost outputs. Ray runs Python function calls as tasks and retains object state in actors.</li>
+  <li>A valid combiner preserves each contribution while reducing intermediate data. Retries repeat task execution, so the framework must prevent repeated task output from changing the result.</li>
 </ul>
 
 <p class="key-fact keep-in-present"><strong>Capacity estimate:</strong> At 2 GB/s per machine, reading 10 TB takes about <strong>85 min</strong> on one machine. The ideal estimate for 100 machines is about 1 min, before coordination and transfer costs.</p>
-<p class="key-fact keep-in-present"><strong>3.5×</strong> measured Ray speedup on a 10-core laptop, with identical results.</p>
 
 <p class="keep-in-present"><strong>Thursday November 19:</strong> Class begins with Quiz 10 on MapReduce, Spark, and Ray. The lecture then examines Bigtable and log-structured merge (LSM) trees for workloads with many writes.<sup class="src"><a href="#src-16" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006 paper PDF)">16</a></sup> Lab 11 is due Tuesday November 24 at class start.</p>
 
@@ -532,14 +513,13 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
 <h3 class="keep-in-present">Do current systems still use MapReduce ideas?</h3>
 <p class="keep-in-present">MapReduce explains partitioned aggregation even when a system exposes SQL or another API. Spark and DuckDB use related partition-and-combine methods for parallel grouped aggregation. For a slow distributed job, inspect stage times, data movement, skew, and resource use. Identify the cause before attributing the delay to the framework.<sup class="src"><a href="#src-17" title="Parallel Grouped Aggregation in DuckDB (DuckDB blog)">17</a></sup></p>
 
-<h3 class="keep-in-present">Why did we learn DuckDB if Spark exists?</h3>
-<p class="keep-in-present">DuckDB processes large datasets on one machine, including jobs that spill to disk. This can be simpler than managing a cluster. Spark helps when a job requires distributed resources. Benchmark the workload. Dataset size alone does not determine the choice.<sup class="src"><a href="#src-18" title="Memory Management in DuckDB (DuckDB blog)">18</a></sup></p>
+<h3 class="keep-in-present">Does every key need its own worker?</h3>
+<p class="keep-in-present">No. A reduce task handles a partition that can contain many keys. A worker can execute multiple tasks. Keep keys grouped correctly even when placement changes.</p>
 
 <h3 class="keep-in-present">Where does the shuffle physically put the data?</h3>
-<p class="keep-in-present">In the original MapReduce design, each mapper writes local output files organized by reducer destination. Each reducer fetches its assigned records over the network. The system must convert records into bytes, transfer those bytes, and often read or write disk files. These steps cost time. Some systems use object storage to retain shuffle data after workers stop. The storage location depends on the engine and configuration.<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup><sup class="src"><a href="#src-19" title="Cloud Shuffle Storage Plugin for Apache Spark (AWS Glue Developer Guide)">19</a></sup></p>
+<p class="keep-in-present">In the original MapReduce design, each mapper writes local output files organized by reducer destination. Each reducer fetches its assigned records over the network. The system must convert records into bytes, transfer those bytes, and often read or write disk files. These steps cost time. The <a href="#shuffle-files">file diagram</a> shows that movement for the lunch orders. Other engines can store intermediate data differently.<sup class="src"><a href="#src-10" title="MapReduce: Simplified Data Processing on Large Clusters (OSDI 2004 paper PDF)">10</a></sup><sup class="src"><a href="#src-19" title="Cloud Shuffle Storage Plugin for Apache Spark (AWS Glue Developer Guide)">19</a></sup></p>
 
-<h3 class="keep-in-present">Could our RAG project need Spark or Ray?</h3>
-<p class="keep-in-present">The project should not need several machines to search its required document collection. Preparing many text chunks, or short passages, may benefit from parallel work. This preparation converts each chunk into a vector for comparison with a question. A Ray task can run one of these conversion calls. Any benefit depends on batch size, model loading, and limits on requests to an external service. Measure the result and explain your choice in the report.</p>
+
 
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
@@ -569,13 +549,16 @@ document that supports the claim it is attached to.</p>
   <li id="src-17"><a href="https://duckdb.org/2022/03/07/aggregate-hashtable">Parallel Grouped Aggregation in DuckDB (DuckDB blog)</a> <span class="src-note">DuckDB's own blog describes thread-local hash tables radix-partitioned on the group hash, then per-partition merging across threads, which is the same partition-by-hash-then-combine shape but within one process; the BigQuery and Snowflake parts of the claim were not checked.</span></li>
   <li id="src-18"><a href="https://duckdb.org/2024/07/09/memory-management">Memory Management in DuckDB (DuckDB blog)</a></li>
   <li id="src-19"><a href="https://docs.aws.amazon.com/glue/latest/dg/cloud-shuffle-storage-plugin.html">Cloud Shuffle Storage Plugin for Apache Spark (AWS Glue Developer Guide)</a></li>
+  <li id="src-20"><a href="https://hadoop.apache.org/docs/current/api/org/apache/hadoop/mapreduce/Mapper.html">Apache Hadoop: Mapper and optional local combining</a></li>
+  <li id="src-21"><a href="https://hadoop.apache.org/docs/current/api/org/apache/hadoop/mapreduce/Reducer.html">Apache Hadoop: Reducer shuffle, sort, and grouped input</a></li>
+  <li id="src-22"><a href="https://hadoop.apache.org/docs/current/hadoop-mapreduce-client/hadoop-mapreduce-client-core/MapReduceTutorial.html">Apache Hadoop: MapReduce Tutorial</a></li>
 </ol>
 
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
-<script src="../../labs/_shared/lab-base.js?v=14"></script>
+<script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>
 <script src="viz.js?v=ste-20261015"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../labs/_shared/teaching-trace.js?v=1"></script>

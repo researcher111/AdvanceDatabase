@@ -243,7 +243,7 @@
     { kind: 'Lab',     num: '09', dir: 'labs/lab-09',         file: 'microvector.html', title: 'microvector · the IVF index' },
     { kind: 'Lecture', num: '12', dir: 'lectures/lecture-12', file: 'rag.html',         title: 'RAG as a systems problem' },
     { kind: 'Lab',     num: '10', dir: 'labs/lab-10',         file: 'microrag.html',    title: 'micro-rag · wire the pipeline' },
-    { kind: 'Lecture', num: '13', dir: 'lectures/lecture-13', file: 'distributed.html', title: 'Distributed compute' },
+    { kind: 'Lecture', num: '13', dir: 'lectures/lecture-13', file: 'distributed.html', title: 'MapReduce and distributed execution' },
     { kind: 'Lecture', num: '13B', dir: 'lectures/lecture-13', file: 'spark-ray.html', title: 'Spark and Ray in depth' },
     { kind: 'Lab',     num: '11', dir: 'labs/lab-11',         file: 'sparkray.html',    title: 'Spark & Ray · the pattern and the products' },
     { kind: 'Lecture', num: '14', dir: 'lectures/lecture-14', file: 'bigtable.html',    title: 'Bigtable, LSM trees & NoSQL' },

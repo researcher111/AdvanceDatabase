@@ -29,6 +29,7 @@
     <li><a href="#choose">Choose and measure</a></li>
     <li><a href="#transfer">Explain a changed workload</a></li>
     <li><a href="#lab">Prepare for Lab 11</a></li>
+    <li><a href="#faq">Questions about engine choice</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
@@ -50,7 +51,7 @@
   Its introduction motivates the separation between computation and distributed coordination.
 </div>
 <p class="lede">MapReduce explains how contributions become a complete total. Spark and Ray provide different ways to schedule work around that computation.</p>
-<p><strong>Starting knowledge:</strong> Python functions, lists, dictionaries, SQL grouping, and <a href="distributed.html#mapreduce">map → shuffle → reduce</a>. The opening check reviews the grouping rule.</p>
+<p><strong>Starting knowledge:</strong> Python functions, lists, dictionaries, SQL grouping, and <a href="distributed.html#mapreduce">map → shuffle → reduce</a>. Lecture 13 focuses on MapReduce. This lecture develops its short Spark and Ray preview. The opening check reviews the grouping rule.</p>
 <p><strong>Goal:</strong> Trace a Spark job and a Ray program. Explain where data moves, which work can overlap, and what a retry can repeat.</p>
 <div class="callout note">
   <span class="label">Class plan · 75 minutes</span>
@@ -168,6 +169,13 @@ if __name__ == &quot;__main__&quot;:
 <p>A <strong>narrow dependency</strong> lets each input partition contribute to at most one output partition. These <code>flatMap</code> and <code>map</code> operations keep each order’s work within its partition.</p>
 <p>A <strong>wide dependency</strong> can send contributions from one input partition to several output partitions. Our grouped totals require a <strong>shuffle</strong>: redistribution by meal name.</p>
 <p>A <strong>stage</strong> groups tasks that can run without a shuffle between their operations. A shuffle separates stages. An action starts a <strong>job</strong> to compute its result. <a href="#src-cluster">[1]</a> <a href="#src-paper">[3]</a></p>
+<table>
+  <thead><tr><th>Dependency</th><th>Examples</th><th>Execution and costs</th></tr></thead>
+  <tbody>
+    <tr><td>Narrow</td><td><code>flatMap</code>, <code>map</code>, <code>filter</code></td><td>Adjacent operations can process each partition together. Computation still takes time, but these operations need no intermediate shuffle.</td></tr>
+    <tr><td>Wide</td><td><code>reduceByKey</code>, <code>join</code>, <code>groupBy</code>, when redistribution is needed</td><td>A shuffle converts records to bytes and transfers them. It can also read or write disk files.</td></tr>
+  </tbody>
+</table>
 <ol>
   <li>Process both input partitions. Emit one pair per meal request.</li>
   <li>Combine repeated keys locally. Partition 0 produces <code>(pizza, 2)</code>.</li>
@@ -183,6 +191,29 @@ if __name__ == &quot;__main__&quot;:
 </div>
 <p><strong>Inspect the plan:</strong> run <code>python3 spark_lunch.py --plan</code>. Find <code>ShuffledRDD</code>. Its surrounding dependencies connect the work before and after redistribution.</p>
 <p>For a larger run, compare stage duration, shuffle volume, and individual task times in the Spark UI. A slow task can reveal uneven work.</p>
+
+<details id="spark-corpus-example">
+  <summary>Optional Lab 11 example: word count over 4,000 abstracts</summary>
+  <p>The <a href="../../labs/lab-11/sparkray.html#spark">optional Spark exercise</a> uses the same operations on arXiv abstracts. The excerpt assumes <code>re</code> is imported and <code>lines</code> is an RDD with four partitions.</p>
+  <p>Predict where the shuffle occurs. Then compare the code with the printed dependency plan.</p>
+  <!-- The original Lecture 13 code and plan are preserved below. -->
+  <pre><code class="language-python">counts = (lines                                       # an RDD, split into 4 partitions
+    .flatMap(lambda t: re.findall(r"[a-z]+", t.lower()))   # your map_words
+    .map(lambda word: (word, 1))
+    .reduceByKey(lambda a, b: a + b))                 # your shuffle + reduce, one call<sup class="src"><a href="distributed.html#src-11" title="RDD Programming Guide (Apache Spark documentation)">11</a></sup>
+
+counts.collect()                                      # NOW it runs</code></pre>
+  <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span><span class="t-mute">        # Part B, on the 4,000 arXiv abstracts</span>
+=== the DAG (read bottom-up; the stage break is the shuffle) ===
+(4) PythonRDD[5] at RDD at PythonRDD.scala:59 []
+ |  MapPartitionsRDD[4] at mapPartitions at PythonRDD.scala:197 []
+ |  ShuffledRDD[3] at partitionBy at NativeMethodAccessorImpl.java:0 []
+ +-(4) PairwiseRDD[2] at reduceByKey at spark_wordcount.py:37 []
+    |  PythonRDD[1] at reduceByKey at spark_wordcount.py:37 []
+    |  ParallelCollectionRDD[0] at readRDDFromFile at PythonRDD.scala:326 []</code></pre>
+  <p>Start at <code>ParallelCollectionRDD</code>, the input collection at the bottom. Read upward toward the result. Find <code>ShuffledRDD</code>, which marks the redistribution step. That shuffle separates the work into stages.</p>
+  <p>The printed identifiers and source line numbers can vary between Spark versions. The shuffle boundary is the feature to explain.</p>
+</details>
 
 <h2 id="dataframes">Express the same task as a table query</h2>
 <p>We used RDDs to expose the mechanism. A <strong>DataFrame</strong> represents records as named columns with a schema, which defines column names and types.</p>
@@ -215,6 +246,7 @@ spark.stop()</code></pre>
 <p>The next action computes the required partitions. Later actions can reuse retained data. <code>cleaned.unpersist()</code> releases those retained partitions when they are no longer useful. <a href="#src-persist">[7]</a></p>
 <p>Retaining data also consumes storage. Selective reuse can help a repeated workload. Persisting every intermediate result can leave less memory for useful computation.</p>
 <p>Spark records <strong>lineage</strong>: the operations needed to rebuild an RDD partition. If a computed partition is lost, Spark can recompute it when its dependencies remain available. <a href="#src-paper">[3]</a></p>
+<p>This avoids requiring a durable copy of every intermediate result. Systems can also save selected results as checkpoints or keep extra copies through replication.</p>
 <p>Lineage is not a backup of an unavailable input file. Repeated execution can also repeat an external effect, such as a payment request.</p>
 <p><strong>Skew</strong> means work is distributed unevenly. If one meal key dominates, increasing partition count does not divide that key’s final reduction automatically. Local combination helps this sum, but skew can still matter.</p>
 
@@ -289,6 +321,32 @@ refs = [count_order.remote(order) for order in orders]
 partials = ray.get(refs)</code></pre>
 <p>The first loop blocks on each result. The second allows independent tasks to overlap. It still waits for all requested results before merging them. <a href="#src-wait">[9]</a></p>
 <p>For millions of jobs, limit outstanding work and process results in batches. Submitting every job at once can exhaust memory. The two-task example isolates the wait rule.</p>
+
+<details id="ray-corpus-example">
+  <summary>Optional Lab 11 example: independent searches and a recorded timing</summary>
+  <p>The <a href="../../labs/lab-11/sparkray.html#ray">optional Ray exercise</a> gives each task one abstract. The task finds its ten nearest neighbors among 4,000 stored vectors. These vectors represent the abstracts as lists of numbers for comparison.</p>
+  <p>Each search can finish without another search’s answer. Compare its results with a serial run, where one call finishes before the next begins. The excerpt assumes the lab has already defined <code>neighbors</code> and <code>docs</code>.</p>
+  <pre><code class="language-python">@ray.remote                               # this function may run anywhere
+def knn_remote(doc):
+    return neighbors(doc)                 # 10 nearest abstracts, brute force over 4,000 vectors
+
+futures = [knn_remote.remote(d) for d in docs]      # all launched, returns instantly
+graph = ray.get(futures)                            # wait; order preserved<sup class="src"><a href="distributed.html#src-13" title="ray.get (Ray Core API reference)">13</a></sup></code></pre>
+  <p>The variable <code>futures</code> holds result references. Here, “launched” means submitted, not necessarily running. Submission returns without waiting for task results, but still takes some time. <code>ray.get(futures)</code> returns results in the order of those references.</p>
+  <p><strong>Recorded course measurement:</strong> <strong>3.5×</strong> measured speedup on a 10-core laptop: 2.27 s serial and 0.66 s parallel. Both runs returned identical results.</p>
+  <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span><span class="t-mute">             # Part C, measured on a 10-core laptop</span>
+200 documents, 10 nearest neighbors each, brute force over 4,000 vectors
+serial:      2.27 s
+parallel:    0.66 s     speedup: 3.5x
+identical results: True
+
+neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
+   Decomposition-Driven Multi-Table Retrieval and Reasoning for Numerical
+   Novel Table Search [Technical Report]
+   Toward Multi-Database Query Reasoning for Text2Cypher</code></pre>
+  <p>This measurement uses Lab 11 Part C. It is not a timing prediction for your machine. The figures describe the search workload above, not the two lunch orders.</p>
+  <p>Submit the tasks before waiting for their results. This permits overlap when resources are available. The optional lab check verifies that the submission loop does not wait after each task. <a href="#src-wait">[9]</a></p>
+</details>
 
 <h2 id="dependencies">Pass data and dependencies</h2>
 <p>Suppose a second task needs the first task’s result. Pass the first task’s reference as a top-level argument to the second task.</p>
@@ -389,6 +447,14 @@ finally:
 <p><strong>Optional engine exercises:</strong> run the supplied Spark word count and Ray nearest-neighbor program. Use this lecture to explain their execution and measurements. The new lunch examples are practice, with no additional submission.</p>
 <p><strong>Next:</strong> Quiz 10 and Bigtable on Thursday November 19. The project retrieval milestone remains November 12. The project question swap remains November 19.</p>
 
+<h2 id="faq">Questions about engine choice</h2>
+<h3>Why did we learn DuckDB if Spark exists?</h3>
+<p>DuckDB processes large datasets on one machine, including jobs that spill to disk. This can be simpler than managing a cluster. Spark helps when a job requires distributed resources. Benchmark the workload. Dataset size alone does not determine the choice. <a href="#src-duckdb-memory">[14]</a></p>
+
+<h3>Could our RAG project need Spark or Ray?</h3>
+<p>The project should not need several machines to search its required document collection. Preparing many text chunks, or short passages, may benefit from parallel work. This preparation converts each chunk into a vector for comparison with a question.</p>
+<p>A Ray task can run one of these conversion calls. Any benefit depends on batch size, model loading, and limits on requests to an external service. Measure the result and explain your choice in the report.</p>
+
 <h2 id="sources">Sources</h2>
 <p>The lunch scene, counts, diagrams, and Python examples are course teaching examples. The sources below describe the execution mechanisms and APIs.</p>
 <ol class="sources">
@@ -405,11 +471,12 @@ finally:
   <li id="src-actors"><a href="https://docs.ray.io/en/latest/ray-core/actors.html">Ray Core: Actors</a></li>
   <li id="src-task-failure"><a href="https://docs.ray.io/en/latest/ray-core/fault_tolerance/tasks.html">Ray Core: Task Fault Tolerance</a></li>
   <li id="src-actor-failure"><a href="https://docs.ray.io/en/latest/ray-core/fault_tolerance/actors.html">Ray Core: Actor Fault Tolerance</a></li>
+  <li id="src-duckdb-memory"><a href="https://duckdb.org/2024/07/09/memory-management">DuckDB: Memory Management in DuckDB</a></li>
 </ol>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
-<script src="../../labs/_shared/lab-base.js?v=14"></script>
+<script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>
 </body>
 </html>

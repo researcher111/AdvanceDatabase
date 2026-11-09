@@ -86,7 +86,7 @@ class RevisedScheduleTests(unittest.TestCase):
                       (ROOT/'lectures/lecture-13/spark-ray.html').read_text())
         deck=(ROOT/'slides/decks/lectures-11-15.js').read_text()
         for number, name, slug, date, iso in [
-            (13,'Distributed compute','distributed','Tuesday November 10, 2026','2026-11-10'),
+            (13,'MapReduce and distributed execution','distributed','Tuesday November 10, 2026','2026-11-10'),
             (14,'Bigtable and LSM trees','bigtable','Thursday November 19, 2026','2026-11-19'),
             (15,'Graphs and course synthesis','graphs','Tuesday November 24, 2026','2026-11-24'),
         ]:

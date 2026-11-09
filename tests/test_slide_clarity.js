@@ -47,7 +47,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,232);assert.equal(builds,868);
+assert.equal(slides,232);assert.equal(builds,866);
 const resources=decks[10].scenes.at(-1);
 assert.equal(resources.id,'more-models-with-duckdb');
 const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');
@@ -292,6 +292,40 @@ for(const [word,total]of Object.entries(counts))assert.equal(text(draw(13,'reduc
 const pairs=step=>draw(13,'reduce-sees-the-complete-group',step).filter(a=>/^pair-\d+-label$/.test(a.key));
 assert.deepEqual(pairs(1).map(a=>[a.key,a.text]),pairs(2).map(a=>[a.key,a.text]));
 assert(pairs(1).some((a,i)=>a.attrs.y!==pairs(2)[i].attrs.y));
+// Lecture 13 spends its 60 minutes on MapReduce, with one three-minute engine preview.
+const mrOrder=['one-job-many-machines','partitioning','hash-routing','range-routing','map-is-local-computation','reduce-sees-the-complete-group','shuffle-manufactures-locality','reduce-network-bytes-early','preserve-sum-and-count','skew-creates-idle-time','salt-and-combine','rerun-maps-when-local-files-disappear','count-one-logical-task-contribution','distinguish-retries-from-new-orders','preview-spark-and-ray','place-move-recover'];
+assert.deepEqual(Array.from(decks[13].scenes,s=>s.id),mrOrder);
+assert.equal(decks[13].scenes.reduce((n,s)=>n+s.minutes,0),60);
+const engineSlides=decks[13].scenes.filter(s=>Array.from({length:s.steps},(_,i)=>strings(V.sceneDrawing(s,i))).some(t=>/Spark|Ray|RDD|ray\.get/.test(t)));
+assert.deepEqual(Array.from(engineSlides,s=>s.id),['preview-spark-and-ray']);
+assert.equal(engineSlides[0].minutes,3);
+assert(draw(13,'preview-spark-and-ray',0).some(item=>item.tag==='a'&&item.attrs.href==='lecture-13b.html'));
+// The local-combine optimization changes pair count, but preserves every meal's weight.
+for(let step=0;step<3;step++){
+ const emitted=draw(13,'reduce-network-bytes-early',step).filter(item=>/^map[01]-line-\d+$/.test(item.key)).map(item=>/^\((\w+), (\d+)\)$/.exec(item.text));
+ const weighted={};
+ for(const [,meal,weight]of emitted)weighted[meal]=(weighted[meal]||0)+Number(weight);
+ assert.deepEqual(weighted,counts,'optional combining preserves the full input result');
+ assert.equal(emitted.length,step===0?fixtures.mapped.length:3);
+}
+// Physical shuffle receives one region from each logical map, including an empty region.
+const shuffleFiles=draw(13,'shuffle-manufactures-locality',2);
+assert.equal(text(shuffleFiles,'region-value-0'),'pizza: 1, 1');
+assert.equal(text(shuffleFiles,'region-value-1'),'empty');
+assert.equal(text(shuffleFiles,'region-value-2'),'pizza: 1');
+assert.equal(text(shuffleFiles,'region-value-3'),'salad: 1');
+for(const [id,meal]of [['r0','pizza'],['r1','salad']])assert.equal(text(shuffleFiles,id+'-line-0'),'['+Array(counts[meal]).fill(1).join(', ')+']');
+// Unequal group sizes expose the incorrect average before the sufficient partial state.
+const deliveryGroups=[[10,10],[40]],mean=xs=>xs.reduce((a,b)=>a+b,0)/xs.length;
+assert.equal(text(draw(13,'preserve-sum-and-count',1),'average-line-1'),mean(deliveryGroups.map(mean))+' min: incorrect');
+assert.equal(text(draw(13,'preserve-sum-and-count',3),'average-line-1'),mean(deliveryGroups.flat())+' min: correct');
+assert(!strings(draw(13,'preserve-sum-and-count',0)).includes('20 min: correct'),'predict before revealing the average');
+// A retry preserves the original result, while a separate identical order adds real requests.
+assert.equal(text(draw(13,'rerun-maps-when-local-files-disappear',3),'waiting-reducer-line-2'),'pizza = '+counts.pizza);
+assert(!draw(13,'count-one-logical-task-contribution',2).some(item=>item.key==='retry-total-label'));
+assert.equal(text(draw(13,'count-one-logical-task-contribution',3),'retry-total-label'),'pizza = 2 + 1 = '+counts.pizza);
+for(const step of [1,2])for(const c of [0,1])assert.equal(text(draw(13,'distinguish-retries-from-new-orders',step),'case-'+c+'-line-1'),'pizza = '+counts.pizza+', salad = '+counts.salad);
+assert.equal(text(draw(13,'distinguish-retries-from-new-orders',2),'case-2-line-1'),'pizza = '+(counts.pizza+2)+', salad = '+counts.salad);
 assert.match(strings(draw(14,'read-the-newest-visible-value',3)),/Merged output keeps DELETE @ 9/);
 assert.match(strings(draw(14,'read-the-newest-visible-value',3)),/SSTable C \(flushed\)/);
 assert.match(strings(draw(14,'read-the-newest-visible-value',4)),/no active snapshot needs them/);

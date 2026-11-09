@@ -314,12 +314,6 @@
       if(i<s)d.arrow('repeat-next-'+i,x+67,401,x+243,401,P.orange,3);
     });
   }
-  use(13,'place-move-recover',(d,s)=>{
-    repeatModel(d,s,'Lunch orders: “Pizza, pizza!” + “Salad pizza.”',[
-      ['Assign owners'],['Group equal keys'],['Run each stage','when ready'],['Recover lost work']
-    ]);
-    if(s===3)foot(d,'Keep the lunch totals: pizza = 3 and salad = 1, even when placement changes.');
-  });
   use(14,'trace-an-acknowledged-write',(d,s)=>{
     repeatModel(d,s,'Return to k: old@5, new@8, DELETE@9',[
       ['Log durably'],['Buffer in order'],['Flush sorted files'],['Read the newest','visible record']

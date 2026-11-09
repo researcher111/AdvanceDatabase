@@ -1105,14 +1105,14 @@ window.CourseClarityCaptions = {
       "Combine 25 + 25 + 25 + 25 to recover A = 100. Placement changes. The answer stays the same."
     ],
     "map-is-local-computation": [
-      "Read the four occurrences in “the log the tree.”",
-      "Normalize and tokenize without removing repeated words.",
-      "Emit four (word, 1) pairs. Both occurrences of “the” must survive."
+      "The runtime assigns each record to a task. The map function transforms that record into zero or more pairs.",
+      "Normalize “Pizza, pizza!” into two pizza occurrences. Repeated requests must remain separate.",
+      "Emit (pizza, 1) twice. The meal name is the key. Each value 1 represents one requested meal."
     ],
     "shuffle-manufactures-locality": [
-      "The same word can appear in records processed by different mappers.",
-      "Like sorting mail by destination, send pairs with the same word to the same worker.",
-      "Group each key’s values at its assigned worker before reduction. Moving records requires work."
+      "Each map worker writes intermediate pairs to local disk regions, with one region per reducer.",
+      "The master tells reducers where their regions are stored. The master does not relay all meal pairs.",
+      "Reducers fetch their regions from every map task, then sort and group matching keys before calling reduce."
     ],
     "reduce-sees-the-complete-group": [
       "Each map call handles one order. Predict the (meal, 1) pairs it produces.",
@@ -1122,45 +1122,43 @@ window.CourseClarityCaptions = {
       "Map and reduce produce the same totals when the number of partitions changes."
     ],
     "reduce-network-bytes-early": [
-      "Each mapper holds four local occurrences of log.",
-      "For this sum, replace those four pairs with one local partial count, (log, 4).",
-      "Send three partial counts instead of twelve pairs, then add them to get the same total of 12."
-    ],
-    "a-lazy-spark-plan": [
-      "Describe the input collection before triggering execution.",
-      "flatMap creates the word occurrences.",
-      "map attaches a count to each word.",
-      "reduceByKey creates the dependency that groups equal keys.",
-      "An action starts computation. collect returns the small result to the driver."
-    ],
-    "stages-follow-dependencies": [
-      "Operations on one partition can run together without moving data between workers.",
-      "Grouping can require a shuffle across workers.",
-      "The shuffle divides this word-count plan into stages.",
-      "Schedule tasks within each stage. The number of stages can differ from the number of API calls."
-    ],
-    "lineage-rebuilds-lost-partitions": [
-      "Keep the transformations and available inputs needed to reconstruct a partition.",
-      "A worker loss can remove its cached output.",
-      "Trace the missing output back to the required available inputs.",
-      "Replay the required transformations on another worker. Lineage describes recomputation, not transaction recovery."
-    ],
-    "launch-before-waiting": [
-      "Waiting for each call before starting the next makes the calls run one at a time.",
-      "Submit the independent calls before waiting for their results.",
-      "The tasks can now run concurrently. Resources and overhead determine actual speedup.",
-      "Actors keep explicit state across calls. Treat state reuse separately from the timing result."
-    ],
-    "choose-the-execution-shape": [
-      "Use a relational plan when the job joins tables and calculates totals for groups.",
-      "Use tasks for independent Python calls. Consider actors when state must persist across calls.",
-      "If one machine meets the workload target, a cluster can add coordination and movement costs."
+      "M0 has two pizza pairs. M1 has one pizza pair and one salad pair. Four pairs represent four meals.",
+      "An optional combiner replaces M0’s two pizza pairs with (pizza, 2). Three pairs still represent four meals.",
+      "The global reduce sums the partial counts. Correctness must not depend on whether a combiner runs."
     ],
     "place-move-recover": [
-      "Return to the lunch orders: use each meal name as the key that selects its owner.",
-      "Move matching keys together or combine valid partial results.",
-      "Run each step when its inputs are ready, and run independent steps at the same time.",
-      "Plan retries with retained inputs and task information. Preserve the same word totals."
+      "Map emits one pair per meal occurrence. Two identical occurrences can represent two real requests.",
+      "Shuffle sends every contribution for a meal to its reducer, where matching keys form a group.",
+      "Reduce adds contribution weights. A valid combiner can reduce pair counts while preserving all requested meals.",
+      "Re-execute lost work and control accepted task outputs. Preserve the same count when placement and attempts change."
+    ],
+    "preserve-sum-and-count": [
+      "A new toy task averages delivery times. One group has two deliveries. The other group has one.",
+      "Averaging 10 and 40 gives 25 minutes. This incorrectly gives the unequal groups equal weight.",
+      "Represent each partial result as (sum, count), then add the sums and counts separately.",
+      "The correct average is 60 total minutes divided by 3 deliveries: 20 minutes."
+    ],
+    "rerun-maps-when-local-files-disappear": [
+      "M0 has completed. Its intermediate pairs remain on its worker’s local disk until reducers fetch them.",
+      "The worker fails before R0 fetches M0’s region. M0’s completed output is now unavailable.",
+      "The master assigns M0 to another worker. The same available input and deterministic map reproduce the pairs.",
+      "R0 reads the replacement region. Recovery restores the missing contribution without adding a new order."
+    ],
+    "count-one-logical-task-contribution": [
+      "M0 names one assigned input task. An attempt is one execution of that task.",
+      "Two attempts can produce the same M0 output. They do not represent two separate customer orders.",
+      "R0 consumes one accepted M0 output. It must not add both copies of M0’s contribution.",
+      "M0 contributes 2 and M1 contributes 1, so pizza remains 3. External writes need separate retry protection."
+    ],
+    "distinguish-retries-from-new-orders": [
+      "Predict the meal totals after each change: seven partitions, an M0 retry, or a separate third order.",
+      "More partitions and a retry change execution. The original input still requests three pizzas and one salad.",
+      "A new order with identical text adds two real pizza requests. The totals become pizza = 5 and salad = 1."
+    ],
+    "preview-spark-and-ray": [
+      "MapReduce separates application functions from partitioning, shuffle, scheduling, and recovery.",
+      "Spark lets you describe a data plan with grouping operations. Lecture 13B traces its execution.",
+      "Ray Core schedules Python tasks. Our application combines returned counts. Lecture 13B develops the details."
     ]
   },
   "14": {

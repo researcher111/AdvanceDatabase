@@ -10,6 +10,7 @@ midterm** covers Lectures 1–6 and Labs 1–6, with a dedicated 75-minute
 
 Lab 9 moves to October 29.
 November 3 is Election Day, with no class. Lab 10 moves to November 5.
+[Lecture 13](lectures/lecture-13/distributed.html) focuses on MapReduce on November 10, with a short Spark and Ray preview.
 A detailed [Spark and Ray lecture](lectures/lecture-13/spark-ray.html) meets
 November 12. Lab 11 meets November 17 and is due November 24. Bigtable meets
 November 19, and graph databases meet November 24. Project deadlines remain unchanged.

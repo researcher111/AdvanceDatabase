@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" role="img" aria-labelledby="title description" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+  <title id="title">Reducers fetch their buckets from local map output files</title>
+  <desc id="description">Toy routing sends pizza to reducer partition P0 and salad to P1. Map task M0 reads Pizza, pizza! and stores two separate pizza, 1 pairs in its local P0 bucket. Its P1 bucket is empty. Map task M1 reads Salad pizza. and stores one pizza, 1 pair in P0 and one salad, 1 pair in P1. Each reducer fetches its bucket from every map output. The arrows show nonempty transfers over the network. P0 groups three pizza values and adds 1 plus 1 plus 1 to return 3. P1 groups one salad value and returns 1. No combiner runs in this example. Different keys can share a partition, and a worker can run several tasks. The task boxes do not represent one fixed machine per partition.</desc>
+  <defs>
+    <marker id="blue-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#356885"/></marker>
+    <marker id="green-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#30785b"/></marker>
+  </defs>
+  <rect width="1280" height="720" rx="12" fill="#f7f6f2"/>
+  <g text-anchor="middle" fill="#20352e">
+    <text x="640" y="44" font-size="32" font-weight="650">Local map files → network fetch → complete groups</text>
+    <text x="640" y="82" font-size="24" fill="#61716a">Four raw pairs remain four contributions. No combiner runs here.</text>
+    <text x="280" y="130" font-size="25" font-weight="650">1 · Store locally</text>
+    <text x="700" y="130" font-size="25" font-weight="650">2 · Fetch over network</text>
+    <text x="1060" y="130" font-size="25" font-weight="650">3 · Group and reduce</text>
+  </g>
+
+  <g fill="#fff" stroke="#c8d1c9" stroke-width="2">
+    <rect x="30" y="150" width="500" height="190" rx="12"/>
+    <rect x="30" y="385" width="500" height="190" rx="12"/>
+  </g>
+  <g fill="#20352e" text-anchor="middle">
+    <text x="280" y="182" font-size="25" font-weight="650">Map task M0 · local files</text>
+    <text x="280" y="214" font-size="24">Input: “Pizza, pizza!”</text>
+    <text x="280" y="417" font-size="25" font-weight="650">Map task M1 · local files</text>
+    <text x="280" y="449" font-size="24">Input: “Salad pizza.”</text>
+  </g>
+  <g stroke-width="2">
+    <rect x="55" y="228" width="450" height="46" rx="7" fill="#dce9f0" stroke="#356885"/>
+    <rect x="55" y="284" width="450" height="34" rx="7" fill="#f7f6f2" stroke="#c8d1c9" stroke-dasharray="5 5"/>
+    <rect x="55" y="463" width="450" height="46" rx="7" fill="#dce9f0" stroke="#356885"/>
+    <rect x="55" y="519" width="450" height="46" rx="7" fill="#dcece1" stroke="#30785b"/>
+  </g>
+  <g text-anchor="middle" font-size="24" fill="#20352e">
+    <text x="280" y="258">P0: [(pizza, 1), (pizza, 1)]</text>
+    <text x="280" y="309" fill="#61716a">P1: empty</text>
+    <text x="280" y="493">P0: [(pizza, 1)]</text>
+    <text x="280" y="549">P1: [(salad, 1)]</text>
+  </g>
+
+  <g fill="none" stroke-width="3" marker-end="url(#blue-arrow)" stroke="#356885">
+    <path d="M 510 251 C 625 251 743 251 860 251"/>
+    <path d="M 510 486 C 660 486 712 287 860 287"/>
+  </g>
+  <path d="M 510 542 C 635 542 735 500 860 500" fill="none" stroke="#30785b" stroke-width="3" marker-end="url(#green-arrow)"/>
+  <g text-anchor="middle" font-size="24" font-weight="600">
+    <text x="695" y="232" fill="#356885">M0 → P0</text>
+    <text x="660" y="366" fill="#356885">M1 → P0</text>
+    <text x="700" y="563" fill="#30785b">M1 → P1</text>
+  </g>
+
+  <g stroke-width="2">
+    <rect x="870" y="175" width="380" height="170" rx="12" fill="#dce9f0" stroke="#356885"/>
+    <rect x="870" y="412" width="380" height="150" rx="12" fill="#dcece1" stroke="#30785b"/>
+  </g>
+  <g text-anchor="middle" fill="#20352e">
+    <text x="1060" y="211" font-size="26" font-weight="650">Reducer partition P0</text>
+    <text x="1060" y="259" font-size="26">pizza: [1, 1, 1]</text>
+    <text x="1060" y="314" font-size="30" font-weight="650">1 + 1 + 1 = 3</text>
+    <text x="1060" y="448" font-size="26" font-weight="650">Reducer partition P1</text>
+    <text x="1060" y="491" font-size="26">salad: [1]</text>
+    <text x="1060" y="538" font-size="30" font-weight="650">salad = 1</text>
+  </g>
+
+  <g text-anchor="middle" font-size="24" fill="#61716a">
+    <text x="640" y="614">Each reducer fetches its bucket from every map output. Empty buckets send no pairs.</text>
+    <text x="640" y="653">Toy routing: pizza → P0 · salad → P1. Different keys can share a partition.</text>
+  </g>
+  <rect x="30" y="670" width="1220" height="35" rx="8" fill="#e9eee8"/>
+  <text x="640" y="696" text-anchor="middle" font-size="24" fill="#20352e">A worker can run several tasks. These boxes show task outputs and reducer partitions.</text>
+</svg>
