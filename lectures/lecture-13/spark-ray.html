@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lecture 13B · Spark and Ray in depth · Advanced Databases</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
+<link rel="stylesheet" href="styles.css?v=5">
+</head>
+<body class="spark-ray-reading">
+<aside class="toc">
+  <div class="toc-title">Lecture 13B</div>
+  <p><a href="../../slides/lecture-13b.html">Visual slide deck ↗</a></p>
+  <ul>
+    <li><a href="#starting-point">Start with the lunch orders</a></li>
+    <li><a href="#spark-model">Spark: describe a data pipeline</a></li>
+    <li><a href="#spark-code">Run the Spark example</a></li>
+    <li><a href="#spark-stages">Follow the shuffle boundary</a></li>
+    <li><a href="#dataframes">Express the same task as a table query</a></li>
+    <li><a href="#reuse">Reuse and recover intermediate data</a></li>
+    <li><a href="#ray-model">Ray: submit Python function calls</a></li>
+    <li><a href="#ray-code">Run the Ray example</a></li>
+    <li><a href="#dependencies">Pass data and dependencies</a></li>
+    <li><a href="#actors">Keep state in an actor</a></li>
+    <li><a href="#failure">Reason about failure and retries</a></li>
+    <li><a href="#choose">Choose and measure</a></li>
+    <li><a href="#transfer">Explain a changed workload</a></li>
+    <li><a href="#lab">Prepare for Lab 11</a></li>
+    <li><a href="#sources">Sources</a></li>
+  </ul>
+  <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
+</aside>
+<button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
+  <span class="present-icon">◧</span><span class="present-label">Present</span>
+</button>
+<main>
+<header class="hero">
+  <div class="eyebrow">DS 6XXX · Lecture 13B · Thursday November 12, 2026</div>
+  <h1>Spark and Ray in depth</h1>
+  <div class="subtitle">Follow the work from Python code to workers, data movement, and results.</div>
+  <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
+</header>
+<p class="lede">MapReduce explains how contributions become a complete total. Spark and Ray provide different ways to schedule work around that computation.</p>
+<p><strong>Starting knowledge:</strong> Python functions, lists, dictionaries, SQL grouping, and <a href="distributed.html#mapreduce">map → shuffle → reduce</a>. The opening check reviews the grouping rule.</p>
+<p><strong>Goal:</strong> Trace a Spark job and a Ray program. Explain where data moves, which work can overlap, and what a retry can repeat.</p>
+<div class="callout note">
+  <span class="label">Class plan · 75 minutes</span>
+  <p>Use 60 minutes for the visual lecture and 15 minutes for the <a href="#transfer">closing investigation</a>. This session has no quiz.</p>
+  <p>Lab 11 meets Tuesday November 17. Quiz 10 covers MapReduce, Spark, and Ray on Thursday November 19.</p>
+</div>
+
+<h2 id="starting-point">Start with the lunch orders</h2>
+<div class="story-scene">
+  <p class="story-label">A fictional classroom investigation</p>
+  <p>Maya opens the student club’s lunch orders: <code>“Pizza, pizza!”</code> and <code>“Salad pizza.”</code>. Noor points to their Python word count.</p>
+  <p><q>We know the total. Which parts could different workers do?</q></p>
+  <p>Each word requests one meal. These two toy orders produce three pizzas and one salad.</p>
+</div>
+<div class="exercise learning-check">
+  <span class="ex-label">Predict before continuing</span>
+  <p>The first worker finds two pizzas. The second finds one pizza and one salad. Is either pizza count the club’s final total?</p>
+  <details><summary>Check your explanation</summary><p>No. The complete pizza total needs both contributions: 2 + 1 = 3. The grouping rule connects work across the two inputs.</p></details>
+</div>
+<p>Think of two ways to organize helpers. Give them a shared sequence of steps, or assign individual jobs and collect their results.</p>
+<table>
+  <thead><tr><th>Familiar organization</th><th>System mechanism</th><th>What you must specify</th></tr></thead>
+  <tbody>
+    <tr><td>A recipe applied to many trays of orders</td><td>Spark runs a pipeline over data partitions.</td><td>The operations and their dependencies</td></tr>
+    <tr><td>Helpers receive separate jobs and return answers</td><td>Ray Core runs Python tasks and actor methods.</td><td>The calls, their inputs, and how results combine</td></tr>
+  </tbody>
+</table>
+<p>The comparison explains organization. Computers also need resources, data transfer, and recovery rules. A helper’s paper tray does not explain those costs.</p>
+
+<h2 id="spark-model">Spark: describe a data pipeline</h2>
+<p>A <strong>partition</strong> is a portion of a dataset. Our example starts with two partitions, each containing one order.</p>
+<p>A <strong>resilient distributed dataset (RDD)</strong> is Spark’s partitioned collection of records. An RDD transformation describes a new collection without changing the input.</p>
+<p>The <strong>driver</strong> runs the main program and coordinates the application. In a cluster, <strong>executors</strong> are processes that run tasks and store application data. A cluster manager allocates resources to applications. <a href="#src-cluster">[1]</a></p>
+<p>A <strong>task</strong> is one unit of work on a partition. An executor can run several tasks when resources permit. Two partitions do not imply two machines.</p>
+<p>We use <code>local[2]</code> to run Spark locally with two worker threads. This demonstrates scheduling on one computer, without creating a two-machine cluster.</p>
+<div class="callout">
+  <span class="label">The essential idea</span>
+  <p><strong>Spark records a data pipeline, then executes the needed work when an action requests a result.</strong></p>
+</div>
+<table>
+  <thead><tr><th>Operation</th><th>Effect on the lunch orders</th><th>When work starts</th></tr></thead>
+  <tbody>
+    <tr><td><code>flatMap</code></td><td>Turn each order into separate meal names.</td><td>Records a transformation</td></tr>
+    <tr><td><code>map</code></td><td>Turn each meal into <code>(meal, 1)</code>.</td><td>Records a transformation</td></tr>
+    <tr><td><code>reduceByKey</code></td><td>Add the contributions for each meal.</td><td>Records a transformation</td></tr>
+    <tr><td><code>collect</code></td><td>Return the result records to the driver.</td><td>Requests execution as an action</td></tr>
+  </tbody>
+</table>
+<p><strong>Lazy evaluation</strong> means these transformations wait until an action needs their results. Spark retains a directed acyclic graph (DAG) of dependencies. Its arrows show which results require earlier results. <a href="#src-rdd">[2]</a></p>
+
+<h2 id="spark-code">Run the Spark example</h2>
+<p>Read the code before running it. Predict the final dictionary and identify the action.</p>
+<p><a href="spark_lunch.py" download>Download spark_lunch.py</a>. Install <code>pyspark</code> and a Java version supported by that installation. Then run <code>python3 spark_lunch.py</code>. See the <a href="https://spark.apache.org/docs/latest/api/python/getting_started/install.html">PySpark installation requirements</a>.</p>
+<pre id="spark-source"><code class="language-python">&quot;&quot;&quot;Count a tiny lunch fixture with Spark on this computer.&quot;&quot;&quot;
+import argparse
+import re
+from operator import add
+
+from pyspark import SparkContext
+
+
+def split_order(order):
+    &quot;&quot;&quot;Return one word per meal request, including repeats.&quot;&quot;&quot;
+    return re.findall(r&quot;[a-z]+&quot;, order.lower())
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        &quot;--plan&quot;, action=&quot;store_true&quot;, help=&quot;Print the RDD dependencies.&quot;
+    )
+    args = parser.parse_args()
+
+    sc = SparkContext(master=&quot;local[2]&quot;, appName=&quot;Lunch counts&quot;)
+    try:
+        orders = [&quot;Pizza, pizza!&quot;, &quot;Salad pizza.&quot;]
+        source = sc.parallelize(orders, numSlices=2)
+
+        # These transformations describe work. They do not start the count.
+        meals = source.flatMap(split_order)
+        pairs = meals.map(lambda meal: (meal, 1))
+        counts = pairs.reduceByKey(add, numPartitions=2)
+
+        if args.plan:
+            print(counts.toDebugString().decode(&quot;utf-8&quot;))
+
+        # collect starts the job and brings this small result to the driver.
+        totals = dict(sorted(counts.collect()))
+        print(&quot;Totals:&quot;, totals)
+    finally:
+        sc.stop()
+
+
+if __name__ == &quot;__main__&quot;:
+    main()</code></pre>
+<p><strong>Expected output:</strong> <code>Totals: {'pizza': 3, 'salad': 1}</code>. Startup logs can vary. This toy input explains execution, not a performance advantage.</p>
+<p><code>collect()</code> brings every result record into driver memory. That is safe for our two totals. For large outputs, write distributed results or inspect a bounded sample. <a href="#src-rdd">[2]</a></p>
+
+<h2 id="spark-stages">Follow the shuffle boundary</h2>
+<p>Can one input partition compute its local pizza contribution? Yes. Can that partition compute the final pizza total alone? No.</p>
+<figure class="mr-overview">
+  <div class="mr-diagram-scroll" tabindex="0" role="region" aria-label="Spark execution diagram, horizontally scrollable on small screens">
+    <img src="diagrams/spark-lunch.svg" alt="Two Spark input partitions produce partial meal counts. A shuffle brings matching meals together before final totals return to the driver.">
+  </div>
+  <figcaption>Illustrative partition placement. Local combination reduces the transferred pairs, while their weights still represent all four meal requests.</figcaption>
+</figure>
+<p>A <strong>narrow dependency</strong> lets each input partition contribute to at most one output partition. These <code>flatMap</code> and <code>map</code> operations keep each order’s work within its partition.</p>
+<p>A <strong>wide dependency</strong> can send contributions from one input partition to several output partitions. Our grouped totals require a <strong>shuffle</strong>: redistribution by meal name.</p>
+<p>A <strong>stage</strong> groups tasks that can run without a shuffle between their operations. A shuffle separates stages. An action starts a <strong>job</strong> to compute its result. <a href="#src-cluster">[1]</a> <a href="#src-paper">[3]</a></p>
+<ol>
+  <li>Process both input partitions. Emit one pair per meal request.</li>
+  <li>Combine repeated keys locally. Partition 0 produces <code>(pizza, 2)</code>.</li>
+  <li>Shuffle contributions by meal. The pizza destination receives values <code>2</code> and <code>1</code>.</li>
+  <li>Add each meal’s values. Return pizza <code>3</code> and salad <code>1</code>.</li>
+</ol>
+<p><code>reduceByKey</code> combines values locally before shuffling. Addition permits that grouping because it is associative and commutative. Changing the grouping and order does not change these integer totals. <a href="#src-reduce">[4]</a></p>
+<p>The first lecture showed every occurrence crossing the conceptual shuffle. Spark can send fewer pairs by carrying partial sums. Both versions retain every occurrence’s contribution.</p>
+<div class="exercise learning-check">
+  <span class="ex-label">Predict a different partition count</span>
+  <p>Change <code>numPartitions=2</code> to <code>numPartitions=4</code>. Must the job run twice as fast?</p>
+  <details><summary>Check your explanation</summary><p>No. The result still contains two keys, and some output partitions can be empty. Scheduling and data transfer add costs. Available worker resources also limit overlap.</p></details>
+</div>
+<p><strong>Inspect the plan:</strong> run <code>python3 spark_lunch.py --plan</code>. Find <code>ShuffledRDD</code>. Its surrounding dependencies connect the work before and after redistribution.</p>
+<p>For a larger run, compare stage duration, shuffle volume, and individual task times in the Spark UI. A slow task can reveal uneven work.</p>
+
+<h2 id="dataframes">Express the same task as a table query</h2>
+<p>We used RDDs to expose the mechanism. A <strong>DataFrame</strong> represents records as named columns with a schema, which defines column names and types.</p>
+<p>Spark SQL can use that structure to optimize relational operations. This is useful for filters, joins, and grouped aggregates. The execution still uses tasks and data partitions. <a href="#src-sql">[5]</a></p>
+<p>Suppose tokenization has already produced a <code>meals</code> table. The four rows are pizza, pizza, salad, and pizza.</p>
+<pre><code class="language-sql">SELECT meal, COUNT(*) AS requests
+FROM meals
+GROUP BY meal;</code></pre>
+<p>Run this separate Python example to create the table and execute the same grouping:</p>
+<pre><code class="language-python">from pyspark.sql import SparkSession
+
+spark = (
+    SparkSession.builder.master("local[2]")
+    .appName("Lunch table")
+    .getOrCreate()
+)
+meals = spark.createDataFrame(
+    [("pizza",), ("pizza",), ("salad",), ("pizza",)], ["meal"]
+)
+totals = meals.groupBy("meal").count()
+totals.explain(mode="formatted")
+totals.show()
+spark.stop()</code></pre>
+<p>The answer remains pizza <code>3</code> and salad <code>1</code>. Row order is unspecified. <code>show()</code> requests execution and displays results.</p>
+<p><code>explain()</code> displays the plan. Look for partial aggregation, an <code>Exchange</code>, and final aggregation. An exchange marks data redistribution. Exact plan labels depend on the Spark version and configuration. <a href="#src-explain">[6]</a></p>
+
+<h2 id="reuse">Reuse and recover intermediate data</h2>
+<p>Suppose Maya requests both a total count and a filtered report from the same cleaned orders. Repeating the cleaning work may waste time.</p>
+<p><strong>Persistence</strong> asks Spark to retain computed partitions for reuse. For an RDD named <code>cleaned</code>, <code>cleaned.persist()</code> marks that intention. It does not immediately compute every partition.</p>
+<p>The next action computes the required partitions. Later actions can reuse retained data. <code>cleaned.unpersist()</code> releases those retained partitions when they are no longer useful. <a href="#src-persist">[7]</a></p>
+<p>Retaining data also consumes storage. Selective reuse can help a repeated workload. Persisting every intermediate result can leave less memory for useful computation.</p>
+<p>Spark records <strong>lineage</strong>: the operations needed to rebuild an RDD partition. If a computed partition is lost, Spark can recompute it when its dependencies remain available. <a href="#src-paper">[3]</a></p>
+<p>Lineage is not a backup of an unavailable input file. Repeated execution can also repeat an external effect, such as a payment request.</p>
+<p><strong>Skew</strong> means work is distributed unevenly. If one meal key dominates, increasing partition count does not divide that key’s final reduction automatically. Local combination helps this sum, but skew can still matter.</p>
+
+<h2 id="ray-model">Ray: submit Python function calls</h2>
+<p>Maya now wants each helper to analyze an order independently. The helper returns a dictionary of counts. Maya combines the dictionaries.</p>
+<p>A <strong>Ray task</strong> is a function call that Ray schedules on a worker process. <code>@ray.remote</code> makes the function available for remote calls.</p>
+<p>Calling <code>count_order.remote(order)</code> submits work and returns an <strong>ObjectRef</strong>. This reference identifies a result that may still be pending. It is not the result dictionary.</p>
+<p><code>ray.get(ref)</code> retrieves that result, waiting if necessary. Independent tasks can overlap when resources are available. Submission does not guarantee immediate execution. <a href="#src-tasks">[8]</a></p>
+<div class="callout">
+  <span class="label">The essential idea</span>
+  <p><strong>Ray Core schedules your Python calls. Your program defines their dependencies and combines their results.</strong></p>
+</div>
+<figure class="mr-overview">
+  <div class="mr-diagram-scroll" tabindex="0" role="region" aria-label="Ray task diagram, horizontally scrollable on small screens">
+    <img src="diagrams/ray-lunch.svg" alt="The driver submits two order-counting tasks before waiting. Ray returns two partial dictionaries, and driver code merges them into pizza 3 and salad 1.">
+  </div>
+  <figcaption>Ray Core does not infer a grouped reduction from these calls. The merge loop in our program supplies that step.</figcaption>
+</figure>
+
+<h2 id="ray-code">Run the Ray example</h2>
+<p><a href="ray_lunch.py" download>Download ray_lunch.py</a>. Install <code>ray</code> in your Python environment. Then run <code>python3 ray_lunch.py</code>.</p>
+<pre id="ray-source"><code class="language-python">&quot;&quot;&quot;Count a tiny lunch fixture with Ray on this computer.&quot;&quot;&quot;
+import re
+
+import ray
+
+
+@ray.remote
+def count_order(order):
+    &quot;&quot;&quot;Count every meal request in one order.&quot;&quot;&quot;
+    counts = {}
+    for meal in re.findall(r&quot;[a-z]+&quot;, order.lower()):
+        counts[meal] = counts.get(meal, 0) + 1
+    return counts
+
+
+def main():
+    ray.init(num_cpus=2, include_dashboard=False)
+    try:
+        orders = [&quot;Pizza, pizza!&quot;, &quot;Salad pizza.&quot;]
+
+        # Submit both tasks before waiting for either result.
+        refs = []
+        for order in orders:
+            refs.append(count_order.remote(order))
+
+        # The driver waits for both dictionaries, then combines their counts.
+        partials = ray.get(refs)
+        totals = {}
+        for partial in partials:
+            for meal, count in partial.items():
+                totals[meal] = totals.get(meal, 0) + count
+
+        print(&quot;Task results:&quot;, partials)
+        print(&quot;Totals:&quot;, dict(sorted(totals.items())))
+    finally:
+        ray.shutdown()
+
+
+if __name__ == &quot;__main__&quot;:
+    main()</code></pre>
+<p><strong>Expected final line:</strong> <code>Totals: {'pizza': 3, 'salad': 1}</code>. Each task counts one order. The driver’s loop adds both dictionaries into the final result.</p>
+<p>This program uses two local CPU resources. It demonstrates process scheduling on one computer. The tiny tasks are useful for tracing, and may cost more to schedule than to execute.</p>
+<h3>Why does the position of the wait matter?</h3>
+<pre><code class="language-python"># This driver waits before submitting the next order.
+partials = []
+for order in orders:
+    partials.append(ray.get(count_order.remote(order)))
+
+# This driver submits both orders before waiting.
+refs = [count_order.remote(order) for order in orders]
+partials = ray.get(refs)</code></pre>
+<p>The first loop blocks on each result. The second allows independent tasks to overlap. It still waits for all requested results before merging them. <a href="#src-wait">[9]</a></p>
+<p>For millions of jobs, limit outstanding work and process results in batches. Submitting every job at once can exhaust memory. The two-task example isolates the wait rule.</p>
+
+<h2 id="dependencies">Pass data and dependencies</h2>
+<p>Suppose a second task needs the first task’s result. Pass the first task’s reference as a top-level argument to the second task.</p>
+<pre><code class="language-python">first_ref = count_order.remote("Pizza, pizza!")
+second_ref = summarize.remote(first_ref)</code></pre>
+<p>Here, <code>summarize</code> represents another remote function. Ray waits for the dependency before starting that task, then supplies the resolved value. The driver does not need an intermediate <code>ray.get()</code>.</p>
+<p><code>ray.put(data)</code> stores a value and returns an ObjectRef. Several tasks can receive that reference instead of repeatedly submitting the same large input.</p>
+<p>Ray objects are immutable. A reference does not create a shared mutable Python dictionary. Objects may still need transfer between machines. <a href="#src-objects">[10]</a></p>
+<p><strong>Lab connection:</strong> several nearest-neighbor tasks need the same vector collection. A reference can identify that shared input while each task receives a different query ID.</p>
+
+<h2 id="actors">Keep state in an actor</h2>
+<p>The club collects another order. Maya wants one worker to remember the running meal totals between calls.</p>
+<p>An <strong>actor</strong> is a worker that holds an instance of a Python class. Its methods can read and change that instance’s state. <a href="#src-actors">[11]</a></p>
+<p>This complete example creates one actor. Its ordinary synchronous methods run one at a time.</p>
+<pre id="actor-source"><code class="language-python">import ray
+
+@ray.remote
+class MealCounter:
+    def __init__(self):
+        self.counts = {}
+
+    def add(self, partial):
+        for meal, count in partial.items():
+            self.counts[meal] = self.counts.get(meal, 0) + count
+        return dict(self.counts)
+
+ray.init(num_cpus=2, include_dashboard=False)
+try:
+    counter = MealCounter.remote()
+    first = counter.add.remote({"pizza": 2})
+    second = counter.add.remote({"pizza": 1, "salad": 1})
+    print(ray.get([first, second]))
+finally:
+    ray.shutdown()</code></pre>
+<p><strong>Expected output:</strong> <code>[{'pizza': 2}, {'pizza': 3, 'salad': 1}]</code>. Both calls come from this driver. The second call sees the first call’s state change.</p>
+<p>One ordinary actor can become a bottleneck because its methods run serially. Multiple actors retain separate states. Ray also supports explicit concurrency modes with different ordering rules.</p>
+<p>Use an actor when state should stay with a worker, such as a loaded model or a running accumulator. Use independent tasks when calls need no shared mutable state.</p>
+
+<h2 id="failure">Reason about failure and retries</h2>
+<p>Imagine a worker fails after computing <code>{'pizza': 2}</code>. Recomputing that dictionary from the same order can recover the result.</p>
+<p>Now imagine the worker also sent a payment request. Running the function again could repeat the payment. Recomputing a value and repeating an external action have different consequences.</p>
+<table>
+  <thead><tr><th>Mechanism</th><th>What it can recover</th><th>What your design must handle</th></tr></thead>
+  <tbody>
+    <tr><td>Spark lineage and task retries</td><td>Lost computation, when dependencies remain available</td><td>Input availability, repeatable computation, and repeated external effects</td></tr>
+    <tr><td>Ray task retries</td><td>Failed tasks within the configured retry policy</td><td>Which errors permit retries and which effects can repeat</td></tr>
+    <tr><td>Ray actor restart</td><td>An actor process, when restarts are enabled</td><td>Saving and restoring application state</td></tr>
+  </tbody>
+</table>
+<p>Ray distinguishes worker failures from exceptions raised by application code. <code>max_retries</code> controls task retries. <code>retry_exceptions</code> controls retries for application exceptions. <a href="#src-task-failure">[12]</a></p>
+<p>Restarting an actor does not automatically restore its running totals. A durable checkpoint or another recovery design must restore important state. <a href="#src-actor-failure">[13]</a></p>
+<p>An <strong>idempotent operation</strong> can repeat without changing its intended effect. A payment service could use a request ID to recognize a repeated request.</p>
+<p>Our task examples return counts without changing an external system. They merge one returned result per submitted task. The actor’s <code>add</code> method is different: submitting it twice adds twice.</p>
+
+<h2 id="choose">Choose and measure</h2>
+<table>
+  <thead><tr><th>Workload</th><th>Starting choice</th><th>Evidence to inspect</th></tr></thead>
+  <tbody>
+    <tr><td>Grouped aggregates and joins over partitioned tables</td><td>Spark SQL or DataFrames</td><td>Query plan, shuffle volume, skew, and task durations</td></tr>
+    <tr><td>Independent Python functions or workers that retain state</td><td>Ray Core tasks or actors</td><td>Dependencies, task size, transfer costs, and worker utilization</td></tr>
+    <tr><td>A workload that meets its goals on one machine</td><td>Ordinary Python or a local query engine</td><td>Memory use, elapsed time, and implementation effort</td></tr>
+  </tbody>
+</table>
+<p>These are starting points for this lecture’s APIs. Ray has higher-level data libraries, and Spark supports more than grouped counts. A product name alone does not settle the choice.</p>
+<p>A <strong>baseline</strong> is the comparison run. Keep the same input, computation, and correctness checks when comparing it with a parallel run.</p>
+<ol>
+  <li>Check the results before comparing times.</li>
+  <li>State whether timing includes startup, loading, transfer, and final collection.</li>
+  <li>Repeat the measurement. Report variation and the available resources.</li>
+  <li>Increase useful work per task before concluding that additional workers help.</li>
+</ol>
+<p><strong>Speedup = baseline elapsed time / parallel elapsed time.</strong> Startup, data transfer, serial work, and uneven workloads limit the benefit.</p>
+<p>Our lunch inputs establish correct totals. They do not establish a measured speedup. Lab 11 provides a larger workload for that investigation.</p>
+
+<h2 id="transfer">Explain a changed workload</h2>
+<p><strong>Closing investigation · 15 minutes:</strong> work with a partner. Use five minutes for each question. Draw the operations before revealing the explanations.</p>
+<div class="exercise learning-check">
+  <span class="ex-label">1 · Add one order</span>
+  <p>Add <code>“Salad, salad!”</code>. Trace both implementations. Where do the two new salad contributions enter the final result?</p>
+  <details><summary>Check your explanation</summary><p>The new total is pizza <code>3</code>, salad <code>3</code>. Spark routes the new salad contribution to the same key’s reduction. Ray returns another partial dictionary, which our merge loop must include. Neither route may discard repeated requests.</p></details>
+</div>
+<div class="exercise learning-check">
+  <span class="ex-label">2 · Repeat one update</span>
+  <p>Call the actor’s <code>add({"pizza": 2})</code> method twice. Does actor state prevent duplicate counting?</p>
+  <details><summary>Check your explanation</summary><p>No. Those calls add four pizzas. The actor remembers state, but this method does not recognize duplicate requests. An application needs request IDs and suitable recovery rules if repeated updates must count once.</p></details>
+</div>
+<div class="exercise learning-check">
+  <span class="ex-label">3 · Choose the next experiment</span>
+  <p>A large Spark job has one slow reduce task. A Ray job has thousands of tiny tasks. What would you inspect first?</p>
+  <details><summary>Check your explanation</summary><p>For Spark, compare partition sizes, shuffle volume, and per-task duration. Check whether one key concentrates work. For Ray, compare useful task time with scheduling and transfer costs. Try batching several inputs per task. Keep the same result checks in both experiments.</p></details>
+</div>
+<p class="key-fact"><strong>Return to the model:</strong> Spark schedules a data pipeline. Ray Core schedules Python calls. In both cases, explain the dependencies, data movement, and complete result.</p>
+
+<h2 id="lab">Prepare for Lab 11</h2>
+<p><a href="../../labs/lab-11/sparkray.html">Lab 11</a> meets <strong>Tuesday November 17</strong>. Submit <code>mapreduce.py</code> by <strong>Tuesday November 24 at class start</strong>.</p>
+<p><strong>Required:</strong> the offline MapReduce implementation. Its seven OFFLINE tests determine the lab grade. Spark and Ray installations are unnecessary for that graded part.</p>
+<p><strong>Optional engine exercises:</strong> run the supplied Spark word count and Ray nearest-neighbor program. Use this lecture to explain their execution and measurements. The new lunch examples are practice, with no additional submission.</p>
+<p><strong>Next:</strong> Quiz 10 and Bigtable on Thursday November 19. The project retrieval milestone remains November 12. The project question swap remains November 19.</p>
+
+<h2 id="sources">Sources</h2>
+<p>The lunch scene, counts, diagrams, and Python examples are course teaching examples. The sources below describe the execution mechanisms and APIs.</p>
+<ol class="sources">
+  <li id="src-cluster"><a href="https://spark.apache.org/docs/latest/cluster-overview.html">Apache Spark: Cluster Mode Overview</a></li>
+  <li id="src-rdd"><a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html">Apache Spark: RDD Programming Guide</a></li>
+  <li id="src-paper"><a href="https://www.usenix.org/conference/nsdi12/technical-sessions/presentation/zaharia">Zaharia et al.: Resilient Distributed Datasets (NSDI 2012)</a></li>
+  <li id="src-reduce"><a href="https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.RDD.reduceByKey.html">PySpark: RDD.reduceByKey</a></li>
+  <li id="src-sql"><a href="https://spark.apache.org/docs/latest/sql-programming-guide.html">Apache Spark: SQL, DataFrames and Datasets Guide</a></li>
+  <li id="src-explain"><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.explain.html">PySpark: DataFrame.explain</a></li>
+  <li id="src-persist"><a href="https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.RDD.persist.html">PySpark: RDD.persist</a></li>
+  <li id="src-tasks"><a href="https://docs.ray.io/en/latest/ray-core/tasks.html">Ray Core: Tasks</a></li>
+  <li id="src-wait"><a href="https://docs.ray.io/en/latest/ray-core/patterns/ray-get-loop.html">Ray Core: Calling ray.get in a loop harms parallelism</a></li>
+  <li id="src-objects"><a href="https://docs.ray.io/en/latest/ray-core/objects.html">Ray Core: Objects</a></li>
+  <li id="src-actors"><a href="https://docs.ray.io/en/latest/ray-core/actors.html">Ray Core: Actors</a></li>
+  <li id="src-task-failure"><a href="https://docs.ray.io/en/latest/ray-core/fault_tolerance/tasks.html">Ray Core: Task Fault Tolerance</a></li>
+  <li id="src-actor-failure"><a href="https://docs.ray.io/en/latest/ray-core/fault_tolerance/actors.html">Ray Core: Actor Fault Tolerance</a></li>
+</ol>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="../../labs/_shared/lab-base.js?v=14"></script>
+</body>
+</html>

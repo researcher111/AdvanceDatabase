@@ -214,7 +214,7 @@
   // ----- Course prev/next navigation ----- ----- ----- ----- -----
   //
   // One sequence for the whole semester, in teaching order: lectures and
-  // labs interleaved exactly as they meet (Tue lecture, Thu lab). The
+  // labs interleaved in the course sequence. The
   // prev/next cards therefore walk the course, not just the labs.
   //
   // Append entries here as pages are built. `dir` is relative to the
@@ -244,6 +244,7 @@
     { kind: 'Lecture', num: '12', dir: 'lectures/lecture-12', file: 'rag.html',         title: 'RAG as a systems problem' },
     { kind: 'Lab',     num: '10', dir: 'labs/lab-10',         file: 'microrag.html',    title: 'micro-rag · wire the pipeline' },
     { kind: 'Lecture', num: '13', dir: 'lectures/lecture-13', file: 'distributed.html', title: 'Distributed compute' },
+    { kind: 'Lecture', num: '13B', dir: 'lectures/lecture-13', file: 'spark-ray.html', title: 'Spark and Ray in depth' },
     { kind: 'Lab',     num: '11', dir: 'labs/lab-11',         file: 'sparkray.html',    title: 'Spark & Ray · the pattern and the products' },
     { kind: 'Lecture', num: '14', dir: 'lectures/lecture-14', file: 'bigtable.html',    title: 'Bigtable, LSM trees & NoSQL' },
     { kind: 'Lecture', num: '15', dir: 'lectures/lecture-15', file: 'graphs.html',      title: 'Graph databases & course synthesis' },
@@ -253,7 +254,9 @@
     const m = location.pathname.match(/\/(labs\/lab-(\d{2})|lectures\/lecture-(\d{2}))\//);
     if (!m) return -1;
     const dir = m[1];
-    return COURSE_SEQUENCE.findIndex(e => e.dir === dir);
+    const file = location.pathname.split('/').pop();
+    const exact = COURSE_SEQUENCE.findIndex(e => e.dir === dir && e.file === file);
+    return exact >= 0 ? exact : COURSE_SEQUENCE.findIndex(e => e.dir === dir);
   }
 
   (function initIndexButton() {

@@ -97,7 +97,7 @@ Keep the balanced-list estimate of **820** evaluations separate from the Lab 9 m
 
 ## Applications across the course
 
-The same method connects all fifteen lecture readings and slide decks, all eleven labs, the midterm review, and the discovery sessions. Preserve the distinction between optional material and required coursework. Lab 5 supplies the front end; Lab 7 is optional practice; Lab 8’s model investigation retains its existing deliverables.
+The same method connects all lecture readings and slide decks, all eleven labs, the midterm review, and the discovery sessions. Preserve the distinction between optional material and required coursework. Lab 5 supplies the front end; Lab 7 is optional practice; Lab 8’s model investigation retains its existing deliverables.
 
 | Topic | Familiar connection | Small example to trace | Closing transfer question |
 | --- | --- | --- | --- |
@@ -119,6 +119,7 @@ The same method connects all fifteen lecture readings and slide decks, all eleve
 | Lecture 11 and Lab 9 | Shelf labels and the books on each shelf | Four vectors, two centroid lists, a skipped v1, and separately counted centroid and candidate work | Why can searching every list match exact results while doing more comparisons? |
 | Lecture 12 and Lab 10 | An open-book answer with page references | A search position maps to a chunk copy and its source ID; three toy rankings separate hit rate from reciprocal rank | What does a relevant source in the prompt leave unproved about the generated claim? |
 | Lecture 13 and Lab 11 | Sorting mail into destination trays | Two records emit four occurrences; equal words meet before their totals are computed | What must stay the same when the partition count changes, and what can still affect timing? |
+| Lecture 13B | A recipe applied to trays of orders, or helpers receiving separate jobs | The same lunch orders produce Spark partial sums and Ray task results, each combined into pizza 3 and salad 1 | Where do a new order’s contributions enter, and why can repeating an actor update double-count them? |
 | Lecture 14 | An ordered notebook sealed into sorted pages | old@5, new@8, and DELETE@9 remain in different structures while the newest visible record wins | Why must an incomplete compaction keep a deletion marker? |
 | Lecture 15 | Directed routes and distinct destinations on a map | Two walks reach Dee, while a visited frontier keeps Dee once | Which result and cycle rules must match before comparing SQL and graph execution? |
 

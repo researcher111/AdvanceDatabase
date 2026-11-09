@@ -3,8 +3,13 @@
 Open [the lecture index](index.html), choose a lecture, and put the audience
 window on the projector. Each deck contains **60 minutes of teaching**.
 The scheduled ten-minute quizzes are additional. There are no decks for labs,
-breaks, workshops, or student presentations. Lecture 7 is the Thursday lecture
-after Reading Days.
+breaks, workshops, or student presentations. Lectures 7–9 are optional bonus decks.
+Follow the course schedule for meeting dates.
+
+[Lecture 13B](lecture-13b.html) develops Spark and Ray on November 12.
+Its 60-minute deck is followed by a 15-minute investigation in the
+[reading](../lectures/lecture-13/spark-ray.html#transfer).
+The teaching guide includes the discussion prompts and expected answers.
 
 Each scene has a timed teaching script, a prediction or discussion prompt,
 an expected answer, and a sequence of animation builds. Definitions are brief.

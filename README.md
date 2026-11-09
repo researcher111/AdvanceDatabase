@@ -9,21 +9,23 @@ midterm** covers Lectures 1–6 and Labs 1–6, with a dedicated 75-minute
 [review on October 20](lectures/review/midterm.html).
 
 Lab 9 moves to October 29.
-November 3 is Election Day, with no class. Lab 10 moves to November 5, and later
-classes follow the revised schedule. Project deadlines remain unchanged.
+November 3 is Election Day, with no class. Lab 10 moves to November 5.
+A detailed [Spark and Ray lecture](lectures/lecture-13/spark-ray.html) meets
+November 12. Lab 11 meets November 17 and is due November 24. Bigtable meets
+November 19, and graph databases meet November 24. Project deadlines remain unchanged.
 
-There are 12 required lecture decks and 10 required labs. Lectures 7–9 and Lab 7
+There are 13 required lecture decks, including Lecture 13B, and 10 required labs. Lectures 7–9 and Lab 7
 are optional bonus material, linked at the end of the course catalog and schedule.
 Resource numbers and URLs remain stable. The schedule gives the teaching order.
 
 The [database discovery session](lectures/lecture-10/discovery.html) creates a
 local DuckDB database from the bundled 60,000-trip NYC taxi sample, then guides
 students through editable SQL, charts, competing explanations, and follow-up
-questions. See the page for setup and the November discovery workshop.
+questions. See the page for setup and optional discovery practice.
 
-[The discovery bureau](lectures/discovery/index.html) has three scheduled workshops
-(Nov 24, Dec 1, Dec 3). The November 19 city-and-weather workshop is removed
-to make room for the Election Day schedule change. Both cases remain optional practice.
+[The discovery bureau](lectures/discovery/index.html) has two scheduled workshops
+(Dec 1 and Dec 3). The city, weather, and planet cases remain optional practice.
+The planet workshop leaves room for the additional Spark and Ray lecture in the teaching sequence.
 
 Students query already-hosted ClickHouse taxi/weather tables, NASA's exoplanet
 archive, and Wikidata, then apply the same evidence workflow to their projects.

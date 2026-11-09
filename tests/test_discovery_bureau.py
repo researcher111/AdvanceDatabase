@@ -65,13 +65,13 @@ class DiscoveryBureauTests(unittest.TestCase):
         for case in [*self.cases, 'finale']:
             self.assertIn('lectures/discovery/index.html#' + case, schedule)
             self.assertIn('id="' + case + '"', page)
-        self.assertIn('Three workshops + two optional cases', page)
+        self.assertIn('Two workshops + three optional cases', page)
         self.assertIn('The project question swap remains due November 19.', page)
         self.assertNotIn('55–75 · Project question swap', page)
         self.assertIn('30–75 · Rehearse the project', page)
         self.assertIn('Case 1 · Optional practice · 25 minutes', page)
         self.assertIn('Case 2 · Optional practice · 30 minutes', page)
-        self.assertIn('Case 3 · Tuesday November 24', page)
+        self.assertIn('Case 3 · Optional practice · 75 minutes', page)
         self.assertIn('Case 4 · Tuesday December 1', page)
         self.assertIn('Case 5 · Thursday December 3', page)
 

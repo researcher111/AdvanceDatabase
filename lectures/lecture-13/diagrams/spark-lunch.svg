@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 680" role="img" aria-labelledby="title description" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+  <title id="title">Spark combines counts before and after the shuffle</title>
+  <desc id="description">Two fictional lunch orders occupy two input partitions. In stage 0, flatMap splits each order into words, and map emits a meal, 1 pair for each word. Spark's reduceByKey combines values locally. Partition 0 produces pizza, 2. Partition 1 produces salad, 1 and pizza, 1. The shuffle brings contributions for each key together. Stage 1 adds pizza values 2 and 1 to produce 3, and the salad value remains 1. The key groups shown are not worker or partition assignments. Different keys can share an output partition. collect returns both totals to the driver.</desc>
+  <defs>
+    <marker id="gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#61716a"/></marker>
+    <marker id="blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#356885"/></marker>
+    <marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#30785b"/></marker>
+  </defs>
+  <rect width="1280" height="680" rx="12" fill="#f7f6f2"/>
+  <g fill="#20352e" text-anchor="middle">
+    <text x="640" y="45" font-size="32" font-weight="650">Spark combines counts before and after the shuffle</text>
+    <text x="640" y="81" font-size="22" fill="#61716a">The same four meal requests pass through two stages.</text>
+  </g>
+  <rect x="30" y="112" width="755" height="455" rx="12" fill="#fff" stroke="#c8d1c9" stroke-width="2"/>
+  <rect x="1000" y="112" width="250" height="455" rx="12" fill="#fff" stroke="#c8d1c9" stroke-width="2"/>
+  <g text-anchor="middle" fill="#20352e">
+    <text x="407" y="146" font-size="25" font-weight="650">Stage 0 · read and count locally</text>
+    <text x="1125" y="146" font-size="25" font-weight="650">Stage 1 · add</text>
+    <text x="160" y="187" font-size="21">Input partition</text>
+    <text x="435" y="187" font-size="21">flatMap → map</text>
+    <text x="680" y="187" font-size="21">Local sum</text>
+    <text x="892" y="187" font-size="25" font-weight="650">Shuffle</text>
+    <text x="1125" y="187" font-size="21">One total per key</text>
+  </g>
+
+  <g fill="#f7f6f2" stroke="#c8d1c9" stroke-width="1.5">
+    <rect x="50" y="218" width="220" height="116" rx="8"/>
+    <rect x="50" y="402" width="220" height="116" rx="8"/>
+  </g>
+  <g text-anchor="middle" fill="#20352e">
+    <text x="160" y="257" font-size="21" font-weight="650">Partition 0</text>
+    <text x="160" y="299" font-size="24">“Pizza, pizza!”</text>
+    <text x="160" y="441" font-size="21" font-weight="650">Partition 1</text>
+    <text x="160" y="483" font-size="24">“Salad pizza.”</text>
+  </g>
+  <g fill="none" stroke="#61716a" stroke-width="2.5" marker-end="url(#gray)">
+    <path d="M 275 276 L 325 276"/>
+    <path d="M 275 460 L 325 460"/>
+    <path d="M 545 276 L 595 276"/>
+    <path d="M 545 436 L 595 436"/>
+    <path d="M 545 491 L 595 491"/>
+  </g>
+  <g stroke-width="2">
+    <rect x="330" y="219" width="210" height="115" rx="8" fill="#dce9f0" stroke="#356885"/>
+    <rect x="330" y="410" width="210" height="52" rx="8" fill="#dcece1" stroke="#30785b"/>
+    <rect x="330" y="465" width="210" height="52" rx="8" fill="#dce9f0" stroke="#356885"/>
+    <rect x="600" y="248" width="160" height="56" rx="8" fill="#dce9f0" stroke="#356885"/>
+    <rect x="600" y="410" width="160" height="52" rx="8" fill="#dcece1" stroke="#30785b"/>
+    <rect x="600" y="465" width="160" height="52" rx="8" fill="#dce9f0" stroke="#356885"/>
+  </g>
+  <g text-anchor="middle" fill="#20352e" font-size="24">
+    <text x="435" y="259">(pizza, 1)</text>
+    <text x="435" y="307">(pizza, 1)</text>
+    <text x="435" y="445">(salad, 1)</text>
+    <text x="435" y="500">(pizza, 1)</text>
+    <text x="680" y="285" font-weight="650">(pizza, 2)</text>
+    <text x="680" y="445" font-weight="650">(salad, 1)</text>
+    <text x="680" y="500" font-weight="650">(pizza, 1)</text>
+  </g>
+
+  <g fill="none" stroke="#356885" stroke-width="3" marker-end="url(#blue)">
+    <path d="M 764 276 C 860 276 912 264 1020 264"/>
+    <path d="M 764 491 C 880 491 902 306 1020 306"/>
+  </g>
+  <path d="M 764 436 C 860 436 912 461 1020 461" fill="none" stroke="#f7f6f2" stroke-width="12"/>
+  <path d="M 764 436 C 860 436 912 461 1020 461" fill="none" stroke="#30785b" stroke-width="3" marker-end="url(#green)"/>
+  <g stroke-width="2">
+    <rect x="1025" y="233" width="200" height="103" rx="8" fill="#dce9f0" stroke="#356885"/>
+    <rect x="1025" y="410" width="200" height="103" rx="8" fill="#dcece1" stroke="#30785b"/>
+  </g>
+  <g text-anchor="middle" fill="#20352e">
+    <text x="1125" y="273" font-size="28" font-weight="650">pizza: 3</text>
+    <text x="1125" y="312" font-size="24">2 + 1 = 3</text>
+    <text x="1125" y="450" font-size="28" font-weight="650">salad: 1</text>
+    <text x="1125" y="489" font-size="24">1 = 1</text>
+    <text x="640" y="603" font-size="20" fill="#61716a">These are key groups. Different keys can share an output partition.</text>
+  </g>
+  <rect x="30" y="625" width="1220" height="38" rx="8" fill="#e9eee8"/>
+  <text x="640" y="651" text-anchor="middle" font-size="21" fill="#20352e">reduceByKey adds by key across partitions. collect returns the two totals to the driver.</text>
+</svg>

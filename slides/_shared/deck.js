@@ -1,8 +1,10 @@
 /* Local-file compatible slide player. No services, fonts, or libraries to download. */
 (function () {
   'use strict';
-  const id=Number(document.body.dataset.lecture),deck=window.COURSE_DECKS[id],V=window.DeckViz;
+  const lectureKey=document.body.dataset.lecture||'';
+  const id=/^\d+$/.test(lectureKey)?Number(lectureKey):lectureKey.toLowerCase(),deck=window.COURSE_DECKS[id],V=window.DeckViz;
   if(!deck){document.body.textContent='This lecture deck could not load. Open it from the slides index.';return;}
+  const displayId=deck.label||String(id);
   const params=new URLSearchParams(location.search),role=params.has('presenter')?'presenter':params.has('script')?'script':params.has('guide')?'guide':'audience';
   const $=id=>document.getElementById(id),el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
   const svg=()=>{const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('viewBox','0 0 1280 720');return s;};
@@ -11,7 +13,7 @@
   const channel=location.protocol!=='file:'&&typeof BroadcastChannel!=='undefined'?new BroadcastChannel('course-deck-'+id+'-'+session):null;
   const state={slide:0,step:0,elapsed:0,running:false,playing:false,blanked:false};
   let presenterWindow=null,auto=null,clockStart=0,quietTimer,toastTimer,hashWrite=false;
-  document.title=deck.title+' · Visual lecture '+id;
+  document.title=deck.title+' · Visual lecture '+displayId;
   const scene=()=>deck.scenes[state.slide];
   // Chromium reports file:// here, but local-file message recipients have an
   // opaque origin. Messages still go only to the stored peer window, and the
@@ -130,7 +132,9 @@
   }
   function presenter(){
     document.body.className='presenter';document.body.innerHTML='<header><div><h1></h1><p>Presenter view · 60 teaching minutes · quizzes separate</p><span class="connection" id="connection"></span></div><div><span class="clock" id="clock">0:00</span> <button id="clock-button">Start clock</button> <button id="reset-clock">↺</button></div></header><div class="workspace"><section><div class="preview" id="preview"></div><div class="timing"><span id="scene-time"></span><span id="pace"></span></div><div class="speaker-tools" id="speaker-tools"></div><div class="timeline"><span id="timeline-progress"></span></div><label for="jump">Slide </label><select id="jump"></select><p class="next" id="next-scene"></p><a class="guide-link" id="guide-link" target="_blank">Full teaching guide</a></section><section id="notes" aria-live="polite"></section></div>';
-    document.querySelector('h1').textContent=`${pad(id)} · ${deck.title}${deck.bonus?" · Bonus":""}`;const s=svg();s.id='presenter-canvas';$('preview').append(s);
+    document.querySelector('h1').textContent=`${pad(displayId)} · ${deck.title}${deck.bonus?" · Bonus":""}`;
+    if(deck.discussionMinutes)document.querySelector('header p').textContent=`Presenter view · ${total} teaching minutes + ${deck.discussionMinutes} discussion minutes`;
+    const s=svg();s.id='presenter-canvas';$('preview').append(s);
     [['←','Previous build','back'],['→','Next build','next'],['↺','Replay scene','replay'],['▷','Play or pause animation','play'],['▸▸','Next slide','next-slide'],['◼','Blank audience screen','blackout']].forEach(([t,l,c])=>$('speaker-tools').append(button(t,l,()=>command(c))));
     $('clock-button').onclick=()=>command('clock');$('reset-clock').title='Reset lecture clock';$('reset-clock').onclick=()=>command('reset-clock');
     $('guide-link').href=location.pathname.split('/').pop()+'?guide=1';
@@ -151,9 +155,19 @@
     const notes=$('notes');if(changed||!notes.childElementCount){notes.replaceChildren(el('h2','',sc.title));if(!sc.teaching)notes.append(el('p','build',sc.states?.[state.step]||`Build ${state.step+1}`));teachingNotes(notes,sc,state.step);const sources=el('p','sources');sourceList(sc,sources);notes.append(sources);notes.scrollTop=0;}
   }
   function guide(){
-    document.body.className='guide';const tools=el('div','guide-tools');const a=el('a','','← Lecture deck');a.href=location.pathname.split('/').pop();tools.append(a,button('Print teaching guide','Print teaching guide',()=>window.print()));document.body.append(tools,el('h1','',deck.title));document.body.append(el('p','intro',`${deck.bonus?'Optional bonus · self-paced':deck.date} · ${deck.scenes.length} scenes · ${total} teaching minutes. Scheduled quizzes are separate. Advance each animation with the right arrow or Space. Pause at the prediction prompts before revealing the next build.`));
+    document.body.className='guide';const tools=el('div','guide-tools');const a=el('a','','← Lecture deck');a.href=location.pathname.split('/').pop();tools.append(a,button('Print teaching guide','Print teaching guide',()=>window.print()));document.body.append(tools,el('h1','',deck.title));document.body.append(el('p','intro',`${deck.bonus?'Optional bonus · self-paced':deck.date} · ${deck.scenes.length} scenes · ${total} teaching minutes. ${deck.discussionMinutes?`Follow with ${deck.discussionMinutes} discussion minutes.`:'Scheduled quizzes are separate.'} Advance each animation with the right arrow or Space. Pause at the prediction prompts before revealing the next build.`));
     scriptLink(tools);
     deck.scenes.forEach((sc,i)=>{const article=el('article');article.append(el('div','meta',`${pad(i+1)} · ${starts[i]}–${starts[i]+sc.minutes} min · ${sc.steps} builds`),el('h2','',sc.title));const row=el('div','guide-row'),preview=svg(),notes=el('div');render(preview,sc,sc.steps-1);row.append(preview,notes);if(sc.definition)notes.append(el('p','',`${sc.term}: ${sc.definition}`));teachingNotes(notes,sc);if(sc.states&&!sc.teaching)notes.append(el('p','meta','Builds: '+sc.states.join(' / ')));const sources=el('p','sources');sourceList(sc,sources);notes.append(sources);article.append(row);document.body.append(article);});
+    if(deck.discussion?.length){
+      const discussion=el('section','discussion-guide');discussion.id='discussion';
+      discussion.append(el('h2','',`${total}–${total+deck.discussionMinutes} min · Discussion`));
+      let start=total;
+      for(const item of deck.discussion){
+        discussion.append(el('h3','',`${start}–${start+item.minutes} min · ${item.title}`),el('p','',item.prompt),el('p','',`Expected explanation: ${item.answer}`));
+        start+=item.minutes;
+      }
+      document.body.append(discussion);
+    }
   }
   function scriptGuide(){
     document.body.className='script-guide';

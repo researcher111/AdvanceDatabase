@@ -5,7 +5,8 @@ const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const assert=require('node:assert/strict'),{pathToFileURL}=require('node:url');
 const root=path.resolve(__dirname,'..');
-const ids=process.argv.length>2?process.argv.slice(2).map(Number):Array.from({length:15},(_,i)=>i+1).filter(i=>i!==6);
+const parseId=value=>/^\d+$/.test(value)?Number(value):value.toLowerCase();
+const ids=process.argv.length>2?process.argv.slice(2).map(parseId):[...Array.from({length:13},(_,i)=>i+1),'13b',14,15].filter(i=>i!==6);
 const output=process.env.SLIDE_QA_OUTPUT||fs.mkdtempSync(path.join(os.tmpdir(),'slide-clarity-'));
 fs.mkdirSync(output,{recursive:true});
 (async()=>{
@@ -64,6 +65,13 @@ fs.mkdirSync(output,{recursive:true});
    assert.equal(await gallery.locator('article').count(),scenes.length);
    const guideText=await gallery.locator('body').textContent();
    for(const snap of snapshots.filter(x=>x.id===id))for(const paragraph of snap.instruction.split(/\n\s*\n|\n/))assert(guideText.includes(paragraph),'guide contains each build cue paragraph');
+   if(id==='13b'){
+    assert.equal(await page.evaluate(()=>CoursePlayer.deck.id),'13b','lettered lecture keeps its registry ID');
+    assert.equal(await page.evaluate(()=>CoursePlayer.deck.scenes.reduce((n,s)=>n+s.minutes,0)),60);
+    assert.equal(await page.evaluate(()=>CoursePlayer.deck.discussionMinutes),15);
+    assert.equal(await gallery.locator('#discussion h3').count(),3,'guide includes three discussion rounds');
+    assert.match(await gallery.locator('#discussion').innerText(),/60–75 min/);
+   }
    if(id===12){
     await gallery.getByRole('link',{name:'Read-aloud script'}).waitFor();
     await gallery.setViewportSize({width:390,height:844});

@@ -4,6 +4,12 @@ Each lecture is registered in one of `decks/lectures-01-05.js`,
 `decks/lectures-06-10.js`, or `decks/lectures-11-15.js`. A deck contains its
 source reading, date, and an ordered `scenes` array.
 
+Lecture 13B uses `decks/spark-ray.js` with the string ID `13b`. Its native diagrams
+include their own captions and structured teaching cues. The reading and downloads
+are in `lectures/lecture-13/`. Keep the shared lunch inputs and results consistent.
+Validate this deck with `node scripts/validate_slides.mjs 13b` and
+`node tests/test_slide_clarity_browser.cjs 13b`.
+
 A scene has a stable `id`, a `title`, `minutes`, `kind`,
 `steps`, `states`, `notes`, and a `draw(d, step)` function. The minutes across
 a lecture must total 60, excluding any quiz. `steps` counts states starting
