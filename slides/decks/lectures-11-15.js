@@ -242,9 +242,9 @@ function mapLocal(d,s){
  mrPanel(d,'order',80,275,360,190,'Order 0',['“Pizza, pizza!”']);
  d.arrow('transform',455,367,555,367,P.blue,3);
  mrLabel(d,'function',760,244,'Map transforms one record',P.blue,28);
- if(s===0)d.box('predict',585,300,610,140,'What pairs should map emit?',P.white,P.line,29);
+ if(s===0)d.box('predict',585,300,610,140,'What pairs should map output?',P.white,P.line,29);
  else for(let i=0;i<2;i++)d.box('occurrence-'+i,585+i*320,320,290,90,s===1?'pizza':'(pizza, 1)',P.blueLight,P.blue,30);
- mrFoot(d,['The runtime assigns records to tasks. Map defines what each record produces.','Lowercase and split punctuation. Keep both occurrences.','Two equal pairs represent two requested meals. A set would lose one.'][s]);
+ mrFoot(d,['The runtime assigns records to tasks. Map defines what each record produces.','Lowercase and split punctuation. Keep both occurrences.','Two equal pairs represent two requests. Keeping only distinct pairs would lose one.'][s]);
 }
 function physicalShuffle(d,s){
  mrLabel(d,'map-side',330,215,'Map workers: local disk regions',P.blue,27);
@@ -289,13 +289,51 @@ function averagePartials(d,s){
  if(s>=1)d.arrow('combine-times',842,375,885,375,P.orange,3);
  mrFoot(d,['Two groups have different numbers of deliveries. Can their means get equal weight?','The one-delivery group received as much weight as the two-delivery group.','Keep sufficient partial information: total minutes and number of deliveries.','Merge (sum, count) pairs. Divide once, after the final merge.'][s]);
 }
+function saltAndCombine(d,s){
+ mrLabel(d,'salt-fixture',640,207,'Separate toy count: 100 occurrences of key A',P.muted,25);
+ if(s===0){
+  mrPanel(d,'unsalted-input',120,290,380,215,'One grouping key',['100 records with key A','All select one destination'],P.orange);
+  d.arrow('unsalted-route',520,397,740,397,P.orange,3);
+  mrPanel(d,'unsalted-reducer',760,290,380,215,'One reducer',['Count all 100 records','Other workers cannot help'],P.orange);
+ }else{
+  mrLabel(d,'salt-operation',640,247,s===1?'Number occurrences 0–99. Use number % 4 as the suffix, then route.':'First reduction: count each temporary key independently.',P.ink,24);
+  for(let i=0;i<4;i++){
+   const x=55+i*310,cx=x+120;
+   d.rect('salt-group-'+i,x,281,240,150,P.orangeLight,P.orange,9,2);
+   mrLabel(d,'salt-key-'+i,cx,316,'Key A:'+i,P.orange,27);
+   mrLabel(d,'salt-records-'+i,cx,360,'25 occurrences',P.ink,24);
+   mrLabel(d,'salt-worker-'+i,cx,402,s===1?'P'+i+' → W'+i:'W'+i+' counts 25',P.ink,24);
+   if(s>=2){
+    d.arrow('remove-salt-'+i,cx,438,cx,450,P.green,3);
+    d.box('original-key-partial-'+i,x,495,240,58,'(A, 25)',P.greenLight,P.green,27);
+    if(s===3)d.path('regroup-partial-'+i,'M '+cx+' 558 L '+cx+' 573 L 640 573','none',P.green,3);
+   }
+  }
+  if(s>=2)mrLabel(d,'remove-suffix-label',640,480,'Next job’s map removes suffixes: all four partials now have key A.',P.ink,23);
+  if(s===2)mrLabel(d,'regroup-next',640,602,'Next: regroup these four A partials for a second reduction.',P.green,26);
+  if(s===3){
+   d.arrow('second-reduce-arrow',640,573,640,584,P.green,3);
+   d.box('salt-total',285,588,710,53,'Second reduce: A = 25 + 25 + 25 + 25 = 100',P.greenLight,P.green,26);
+  }
+ }
+ mrLabel(d,'salt-foot',640,661,[
+  'A repeated key concentrates work at one destination. Predict how to share this count.',
+  'Each salted key selects a different partition, assigned to one worker here.',
+  'The first reduction emits four counts. Restore A so those counts can meet again.',
+  'The second shuffle moves four partial counts instead of the original 100 occurrences.'
+ ][s],P.muted,22);
+}
 function lostMapFiles(d,s){
- mrPanel(d,'durable-input',65,280,290,220,'Stored input',['Order 0','“Pizza, pizza!”','still accessible'],P.green);
- mrPanel(d,'map-worker',455,280,335,220,s>=2?'Replacement worker':'Original map worker',s===1?['Worker failed','local files unavailable']:['Map task M0',s===2?'rerun same input':'local pizza: [1, 1]'],s===1?P.red:s===2?P.orange:P.blue);
+ mrLabel(d,'input-location',210,232,'Shared input storage',P.green,25);
+ mrLabel(d,'output-location',622,232,'Map worker’s local disk',s===1?P.red:P.blue,25);
+ mrPanel(d,'durable-input',65,280,290,220,'Order 0',['“Pizza, pizza!”','Copies kept elsewhere','still accessible'],P.green);
+ mrPanel(d,'map-worker',455,280,335,220,s>=2?'Replacement worker':'Original map worker',s===1?['Worker failed','local files unavailable']:['Map task M0',s===2?'reread the same order':'local pizza: [1, 1]'],s===1?P.red:s===2?P.orange:P.blue);
  mrPanel(d,'waiting-reducer',900,280,310,220,'Reducer R0',s===3?['M0: [1, 1]','M1: [1]','pizza = 3']:['M1: [1]','needs M0’s region'],P.blue);
  if(s===0||s>=2)d.arrow('read-input',367,390,440,390,s===2?P.orange:P.green,3);
+ if(s===1){d.line('lost-file-mark-1',487,445,758,470,P.red,3);d.line('lost-file-mark-2',487,470,758,445,P.red,3);}
  if(s===3)d.arrow('fetch-replacement',802,390,885,390,P.blue,3);
- mrFoot(d,['M0 completed, but R0 has not fetched M0’s intermediate data yet.','A completed map task can need another execution when its local output disappears.','The master reschedules M0. Available input and deterministic code reproduce its pairs.','R0 fetches replacement output. A rerun restores a contribution; it creates no new order.'][s]);
+ mrLabel(d,'storage-distinction',640,558,'Input copies survive elsewhere. M0’s intermediate output has no spare copy here.',P.muted,24);
+ mrFoot(d,['M0 completed, but R0 has not fetched M0’s intermediate data yet.','The worker’s failure removes local output, while the original order remains available.','The master reschedules M0. The same input and code reproduce the same two pairs.','R0 fetches replacement output. A rerun restores a contribution without creating a new order.'][s]);
 }
 function acceptedAttempts(d,s){
  mrLabel(d,'same-task',330,225,'Two attempts of logical map task M0',P.blue,27);
@@ -322,7 +360,7 @@ function enginePreview(d,s){
 }
 function mapreduceRecap(d,s){
  const titles=['Map','Shuffle','Reduce','Recover'];
- const lines=[['Order → occurrences','Keep both pizzas'],['One owner per key','Fetch and group values'],['Sum all weights','pizza 3 · salad 1'],['Replay lost work','Accept one task result']];
+ const lines=[['Order → occurrences','Keep both pizzas'],['One destination per key','Fetch and group values'],['Sum all weights','pizza 3 · salad 1'],['Rerun lost work','Accept one task result']];
  titles.forEach((title,i)=>{
   mrPanel(d,'recap-'+i,55+i*300,295,270,195,title,i<=s?lines[i]:['Predict this step'],i===s?P.orange:P.green);
   if(i<3)d.arrow('flow-'+i,330+i*300,393,345+i*300,393,P.green,2);
@@ -340,7 +378,7 @@ scene("Shuffle manufactures locality",["Local output regions", "Share file locat
 scene("Reduce network bytes early",["Four occurrence pairs", "Optional local sum", "Global sum"],localCombiner,"A combiner is an optional optimization. A local partial sum replaces two pizza pairs with one pair of weight two. All four meal requests remain represented. Global reduction is still necessary. See paper section 4.3.",{clarityNative:true,minutes:4,sources:[MR_PAPER,'lectures/lecture-13/distributed.html'],title:"Optional combiners preserve contribution weights"}),
 scene("Preserve sum and count",["Unequal groups", "Wrong average of averages", "Keep sufficient partials", "Divide after merging"],averagePartials,"This separate toy task computes average delivery time. Two deliveries took ten minutes each and one took forty minutes. The correct average is twenty minutes. Preserve total minutes and delivery count through partial aggregation.",{clarityNative:true,minutes:4,sources:[MR_PAPER,'lectures/lecture-13/distributed.html']}),
 scene('Skew creates idle time',['Uniform','40 percent hot','80 percent hot'],(d,s)=>{const share=[0,.4,.8][s],hot=8000*share,rest=(8000-hot)/8,max=hot+rest;for(let i=0;i<8;i++){const rows=rest+(i===0?hot:0);d.text('worker'+i,155,266+i*46,'W'+i,23);d.rect('idle'+i,225,244+i*46,max/8,28,P.line,'none');d.rect('work'+i,225,244+i*46,rows/8,28,i===0&&s?P.orange:P.green,'none');d.text('count'+i,1110,268+i*46,rows.toLocaleString(),25);}d.text('share',640,635,(share*100)+'% hot key',33,P.orange);},'Ask whether adding workers fixes one key carrying 40% of the rows. Expected: not if all rows for that key still go to one worker. At 40%, worker 0 gets 3,800 rows and the others 600. The total remains 8,000.\n\nExplain that the bars assume equal work per row. Grey area is waiting at the barrier, not literal measured utilization. A long-running task can also reflect slow hardware or an expensive per-row function.',{demo:'viz-skew',minutes:3}),
-scene('Salt and combine',['Hot key','Salted keys','Partial totals','Final total'],(d,s)=>{const xs=[250,510,770,1030];xs.forEach((x,i)=>{d.box('worker'+i,x-90,405,180,130,'W'+i,P.white,P.line,29);});const n=s?4:1;for(let i=0;i<n;i++){token(d,'hot'+i,s?xs[i]:250,330,s>1?25:s?'A:'+i:'A',P.orange,35);if(s)d.arrow('down'+i,xs[i],368,xs[i],400,P.orange);}if(s>1)d.text('parts',640,575,'25 + 25 + 25 + 25',39,P.green);if(s>2)d.text('total',640,635,'100',44,P.green);},'Ask students to split a hot count without losing correctness. Expected: add a salt, compute independent partial counts, then aggregate by the original key. Reveal 25 per bucket and final 100. Ask whether the same trick works for an average.\n\nExpected: retain sum and count, then combine. Averaging averages is wrong when bucket sizes differ. Salting adds another aggregation and is only valid when the operator can combine partial results correctly.',{minutes:4}),
+scene('Salt and combine',['One key, 100 records','Assign suffixes, then route','Count groups, then remove suffixes','Regroup and add partial counts'],saltAndCombine,'Ask students to split a hot count without losing correctness. Expected: add a salt, compute independent partial counts, then aggregate by the original key. Reveal 25 per bucket and final 100. Ask whether the same trick works for an average.\n\nExpected: retain sum and count, then combine. Averaging averages is wrong when bucket sizes differ. Salting adds another aggregation and is only valid when the operator can combine partial results correctly.',{clarityNative:true,minutes:4}),
 scene("Rerun maps when local files disappear",["Completed local output", "Worker failure", "Repeat the map task", "Fetch replacement output"],lostMapFiles,"In the original Google implementation, a failed worker loses access to its local intermediate files. Completed map tasks on that worker must run again. Reducers that have not read their regions use replacement locations. Completed reduce outputs reside in the global file system. See paper section 3.3.",{clarityNative:true,minutes:5,sources:[MR_PAPER,'lectures/lecture-13/distributed.html']}),
 scene("Count one logical task contribution",["Logical task identity", "Repeated attempt", "One accepted input", "Same final count"],acceptedAttempts,"Deterministic task code and controlled output commits preserve the sequential result. A reducer consumes one output for each logical map task. Different reducers can consume different successful attempts. Output accounting does not make arbitrary external side effects exactly once. See paper sections 3.3 and 4.5.",{clarityNative:true,minutes:4,sources:[MR_PAPER,'lectures/lecture-13/distributed.html']}),
 scene("Distinguish retries from new orders",["Predict three changes", "Placement and retry", "A separate new input"],transferCount,"Use the original lunch count as the baseline. Changing partition count and retrying an existing map task preserve its result. A newly submitted third order with identical text is a separate input record. Its two pizza requests must be counted.",{clarityNative:true,minutes:3,sources:[MR_PAPER,'lectures/lecture-13/distributed.html'],kind:"activity"}),

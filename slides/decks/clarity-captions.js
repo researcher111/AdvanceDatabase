@@ -1074,7 +1074,7 @@ window.CourseClarityCaptions = {
     "one-job-many-machines": [
       "Two lunch orders need one loop. A hypothetical delivery report must scan 10 TB within 10 minutes.",
       "At 2 GB/s each, 100 balanced readers need an ideal 50 seconds. Coordination and computation add time.",
-      "More capacity introduces coordination: group matching keys, schedule tasks, and reconstruct lost results."
+      "More machines need coordination: assign records, combine each meal’s counts, and restore lost work."
     ],
     "partitioning": [
       "A routing rule maps each record’s key to a partition. A worker processes the records assigned to that partition.",
@@ -1094,25 +1094,25 @@ window.CourseClarityCaptions = {
       "The query dee through fay needs only P1, the d–f partition. The other intervals cannot contain a match."
     ],
     "skew-creates-idle-time": [
-      "With equal-cost rows and no hot key, each worker receives 1,000 of the 8,000 rows.",
+      "A hot key occurs much more often than other keys. Without one, each worker receives 1,000 of the 8,000 rows.",
       "At 40%, the busiest worker gets 3,800 rows. The other workers get 600 rows each.",
-      "At 80%, one worker gets 6,600 rows. More workers do not divide that same-key group."
+      "At 80%, one worker gets 6,600 rows. The other workers finish first, but the job still waits for that group."
     ],
     "salt-and-combine": [
-      "Every record with key A goes to the same worker.",
-      "Split it into four salted keys only if the operation supports correct partial results.",
-      "Count each salted group separately.",
-      "Combine 25 + 25 + 25 + 25 to recover A = 100. Placement changes. The answer stays the same."
+      "All 100 occurrences of A reach one destination. How can several workers count them and still produce one A total?",
+      "Salting adds temporary suffixes. This example assigns 25 occurrences to each of A:0, A:1, A:2, and A:3.",
+      "Each destination counts its salted group independently. Four partial counts each represent 25 occurrences.",
+      "Remove the suffixes, group the four counts under A, then add them: 25 + 25 + 25 + 25 = 100."
     ],
     "map-is-local-computation": [
-      "The runtime assigns each record to a task. The map function transforms that record into zero or more pairs.",
-      "Normalize “Pizza, pizza!” into two pizza occurrences. Repeated requests must remain separate.",
-      "Emit (pizza, 1) twice. The meal name is the key. Each value 1 represents one requested meal."
+      "Map transforms one input record into output pairs. What should it produce for the two pizza requests?",
+      "Convert “Pizza, pizza!” to lowercase words. Keep both pizza occurrences.",
+      "Emit means output. Map emits (pizza, 1) twice. The meal name is the key. Each value 1 represents one requested meal."
     ],
     "shuffle-manufactures-locality": [
-      "Each map worker writes intermediate pairs to local disk regions, with one region per reducer.",
-      "The master tells reducers where their regions are stored. The master does not relay all meal pairs.",
-      "Reducers fetch their regions from every map task, then sort and group matching keys before calling reduce."
+      "Intermediate pairs are map outputs used before the final result. Each map worker stores them locally, separated by reducer destination.",
+      "The master coordinates workers. It tells reducers where to fetch their regions directly from map workers.",
+      "Reducers fetch their regions from every map task. Sorting puts matching keys together before reduce processes each key’s values."
     ],
     "reduce-sees-the-complete-group": [
       "Each map call handles one order. Predict the (meal, 1) pairs it produces.",
@@ -1123,13 +1123,13 @@ window.CourseClarityCaptions = {
     ],
     "reduce-network-bytes-early": [
       "M0 has two pizza pairs. M1 has one pizza pair and one salad pair. Four pairs represent four meals.",
-      "An optional combiner replaces M0’s two pizza pairs with (pizza, 2). Three pairs still represent four meals.",
-      "The global reduce sums the partial counts. Correctness must not depend on whether a combiner runs."
+      "A combiner adds matching local values. It replaces M0’s two pizza pairs with (pizza, 2). Three pairs still represent four meals.",
+      "The final reducers add the partial counts. They must get the same totals when the optional combiner is skipped."
     ],
     "place-move-recover": [
       "Map emits one pair per meal occurrence. Two identical occurrences can represent two real requests.",
       "Shuffle sends every contribution for a meal to its reducer, where matching keys form a group.",
-      "Reduce adds contribution weights. A valid combiner can reduce pair counts while preserving all requested meals.",
+      "Reduce adds the represented counts. A valid combiner can send fewer pairs while preserving all requested meals.",
       "Re-execute lost work and control accepted task outputs. Preserve the same count when placement and attempts change."
     ],
     "preserve-sum-and-count": [
@@ -1139,16 +1139,16 @@ window.CourseClarityCaptions = {
       "The correct average is 60 total minutes divided by 3 deliveries: 20 minutes."
     ],
     "rerun-maps-when-local-files-disappear": [
-      "M0 has completed. Its intermediate pairs remain on its worker’s local disk until reducers fetch them.",
+      "M0 finished, but R0 still needs its local file. Stored input remains available for another execution.",
       "The worker fails before R0 fetches M0’s region. M0’s completed output is now unavailable.",
-      "The master assigns M0 to another worker. The same available input and deterministic map reproduce the pairs.",
+      "A deterministic map produces the same outputs from the same input. The master assigns M0 to another worker.",
       "R0 reads the replacement region. Recovery restores the missing contribution without adding a new order."
     ],
     "count-one-logical-task-contribution": [
       "M0 names one assigned input task. An attempt is one execution of that task.",
       "Two attempts can produce the same M0 output. They do not represent two separate customer orders.",
       "R0 consumes one accepted M0 output. It must not add both copies of M0’s contribution.",
-      "M0 contributes 2 and M1 contributes 1, so pizza remains 3. External writes need separate retry protection."
+      "M0 contributes 2 and M1 contributes 1, so pizza remains 3. Retrying a separate payment request could still send it twice."
     ],
     "distinguish-retries-from-new-orders": [
       "Predict the meal totals after each change: seven partitions, an M0 retry, or a separate third order.",
@@ -1156,9 +1156,9 @@ window.CourseClarityCaptions = {
       "A new order with identical text adds two real pizza requests. The totals become pizza = 5 and salad = 1."
     ],
     "preview-spark-and-ray": [
-      "MapReduce separates application functions from partitioning, shuffle, scheduling, and recovery.",
-      "Spark lets you describe a data plan with grouping operations. Lecture 13B traces its execution.",
-      "Ray Core schedules Python tasks. Our application combines returned counts. Lecture 13B develops the details."
+      "You supply MapReduce functions. The framework assigns work, groups values, and restores missing results.",
+      "Spark runs a data pipeline: a sequence of data operations. Grouping can be one operation in that sequence.",
+      "Ray Core schedules Python function calls as tasks. Our application combines their returned counts. Lecture 13B traces both systems."
     ]
   },
   "14": {

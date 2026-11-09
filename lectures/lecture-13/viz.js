@@ -5,7 +5,7 @@
   const GLOSSARY = {
     'working-set': {
       title: 'Working set',
-      body: "<p>The data an operation needs to retain while it runs. Examples include running totals for an aggregation or the build-side hash table for a join. If this state exceeds RAM, the engine may partition or spill it to disk. Distribution can reduce each worker’s share, but uneven key frequencies can still leave one worker with too much state.</p>",
+      body: "<p>The data an operation needs to retain while it runs, such as the meal totals counted so far. If this data exceeds available memory, the system can process smaller portions or store temporary results on disk. Sharing work can reduce each worker’s needs. Uneven assignments can still leave one worker with too much data.</p>",
     },
     'rdd': {
       title: 'RDD (Resilient Distributed Dataset)',
@@ -13,15 +13,15 @@
     },
     'shuffle': {
       title: 'Shuffle',
-      body: "<p>A shuffle redistributes records across partitions, often to group equal keys for a join or aggregation. MapReduce groups mapper output by reducer destination and transfers it to reducers. Serialization, network traffic, and storage access can make this expensive. Other operations can also transfer data.</p>",
+      body: "<p>A shuffle brings values with the same key together. In this lunch count, pizza values from separate orders must reach the same group. Map workers store their output by destination. Reducers fetch those records and group matching keys. Converting records into bytes, transferring them, and reading disk files all take work.</p>",
     },
     'skew': {
       title: 'Skew',
-      body: "<p>An uneven distribution of data or work. For example, one key may occur in 40% of the records, putting much of an aggregation on one partition. A uniform hash of distinct keys does not prevent that imbalance. Possible remedies include splitting suitable aggregations with salted keys or handling a frequent key separately.</p>",
+      body: "<p>An uneven distribution of data or work. For example, one key may occur in 40% of the records. Routing all those records to one partition concentrates work there. A hash can spread different keys while still sending every occurrence of one key to the same destination.</p>",
     },
     'straggler': {
       title: 'Straggler',
-      body: "<p>A task that finishes much later than comparable tasks and delays the job. Skew, a slow worker, and resource contention are possible causes. Some runtimes use speculative execution: start another copy elsewhere and accept the first completed result. That can help with a slow worker but does not remove an inherently oversized partition.</p>",
+      body: "<p>A task that finishes much later than comparable tasks and delays the job. It may have more input, slower hardware, or more processing per record. Other tasks may also compete for its machine’s memory or disk. Compare input sizes and task times to distinguish these causes.</p>",
     },
     'stage': {
       title: 'Stage',
@@ -70,7 +70,7 @@
 
   const PHASES = [
     {
-      label: 'Phase 0 · the input — 4 documents, one per "machine"',
+      label: 'Phase 0 · the input — 4 documents, one per map task in this toy',
       render() {
         return `<div class="mr-cols">` + DOCS.map((d, i) =>
           `<div class="mr-box"><div class="mr-box-title">doc ${i + 1}</div>` +

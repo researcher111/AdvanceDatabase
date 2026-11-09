@@ -91,6 +91,7 @@
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=1&amp;b=1">Open slide 1 ↗</a></p>
 
 <p class="keep-in-present">Two lunch orders need only a short Python loop. Now imagine a food-delivery service preparing meal-demand reports across many restaurants. Reading and processing its stored records can take longer than the time available for a report.</p>
+<p>A <strong>job</strong> is the whole computation that produces the report. A <strong>task</strong> is one assigned part of that computation. A <strong>worker</strong> is a program process that runs tasks. Several workers can process different parts at the same time.</p>
 
 <div class="callout" id="report-window">
   <span class="label">Illustrative workload · not a benchmark</span>
@@ -107,7 +108,7 @@
   <li><strong>Recover from failure:</strong> retry failed work without losing input or counting a retried contribution twice.</li>
 </ul>
 <p class="keep-in-present">You already use SQL <code>GROUP BY</code> to compute totals. Here, orders can be spread across machines, but each meal still needs one complete total.</p>
-<p class="keep-in-present"><strong>MapReduce lets you write the counting logic while its framework coordinates distributed execution.</strong> This separation is the central motivation of Google’s paper. We will use two orders so every contribution remains visible.</p>
+<p class="keep-in-present"><strong>MapReduce lets you write the counting logic while its framework coordinates the workers.</strong> The <strong>framework</strong> is software that assigns work, moves results, and handles failures. Its running coordination software is also called the <strong>runtime</strong>. This separation is the central motivation of Google’s paper. We will use two orders so every contribution remains visible.</p>
 <p>Use one machine when it meets the workload’s needs. Distribution adds overhead, so a larger input alone does not establish a speedup.</p>
 
 <p class="keep-in-present"><strong>Goal:</strong> Trace map, shuffle, and reduce. Explain how partitioning, local combination, and task retries preserve the complete result.</p>
@@ -126,7 +127,7 @@
   <details><summary>Check your explanation</summary><p>No. Each person sees only part of the requests. The final pizza count needs contributions from both orders.</p></details>
 </div>
 
-<p class="keep-in-present">First, choose how to assign data to partitions. Then trace <strong>map → shuffle → reduce</strong>, local combination, skew, and recovery. Lab 11 implements the pattern in one Python process. Its engine exercises are optional.</p>
+<p class="keep-in-present">First, choose how to divide the data. Then count each order, group requests by meal, and calculate totals. We will also examine uneven work and worker failures. Lab 11 implements the counting pattern in one Python process. Its engine exercises are optional.</p>
 <details id="wall"><summary>More context: reading, memory, and recovery costs</summary>
 <p class="keep-in-present">The <a href="#report-window">10 TB report</a> also illustrates memory and recovery concerns. Its 10-minute window explains why the one-machine scan is insufficient. The table separates reading, memory, and recovery concerns. These estimates do not specify a course-project requirement or guarantee a speedup.</p>
 
@@ -136,8 +137,8 @@
   <thead><tr><th>Resource</th><th>One machine</th><th>10 TB job needs</th><th>The distributed answer</th></tr></thead>
   <tbody>
     <tr><td>Disk read</td><td>~2 GB/s sequential</td><td>~85 min just to read once<sup class="src"><a href="#src-2" title="What is PCIe Gen 4 for SSDs, and how does it compare to Gen 3 and Gen 5? (Samsung Business Insights)">2</a></sup></td><td>100 machines read their own 100 GB in ~1 min</td></tr>
-    <tr><td>Memory</td><td>hundreds of GB</td><td>the <span class="gloss" data-gloss="working-set">working set</span>, or data needed during processing, may exceed available memory. The engine must then process smaller pieces or store intermediate data on disk.</td><td>Give each machine a smaller share. Uneven work, called <span class="gloss" data-gloss="skew">skew</span>, can still leave one machine without enough memory.</td></tr>
-    <tr><td>Failure</td><td>without a recovery mechanism, a crash can force the whole job to restart</td><td>more machines and longer jobs increase the chance of a failure<sup class="src"><a href="#src-3" title="Designs, Lessons and Advice from Building Large Distributed Systems (Jeff Dean, LADIS 2009 keynote)">3</a></sup></td><td>the framework retries failed tasks and reconstructs lost intermediate results instead of restarting all completed work</td></tr>
+    <tr><td>Memory</td><td>hundreds of GB</td><td>the <span class="gloss" data-gloss="working-set">working set</span>, or data needed during processing, may exceed available memory. The engine must then process smaller pieces or store temporary results on disk.</td><td>Give each machine a smaller share. Uneven work, called <span class="gloss" data-gloss="skew">skew</span>, can still leave one machine without enough memory.</td></tr>
+    <tr><td>Failure</td><td>without a recovery mechanism, a crash can force the whole job to restart</td><td>more machines and longer jobs increase the chance of a failure<sup class="src"><a href="#src-3" title="Designs, Lessons and Advice from Building Large Distributed Systems (Jeff Dean, LADIS 2009 keynote)">3</a></sup></td><td>the framework retries failed tasks and reconstructs lost temporary results instead of restarting all completed work</td></tr>
   </tbody>
 </table>
 </details>
@@ -258,8 +259,9 @@
 <h2 id="map-local" data-slide="5" data-scene="map-is-local-computation">5 · Map is local computation</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=5&amp;b=1">Open slide 5 ↗</a></p>
 
-<p>Return to group 0’s lunch order, <code>“Pizza, pizza!”</code>. One map call receives this record. Predict how many pairs it must emit to preserve both requests.</p>
-<p class="keep-in-present">The map function reads one order and emits one <code>(meal, 1)</code> pair for each requested meal. The <strong>key</strong> is the meal name. The <strong>value</strong>, <code>1</code>, means one request. The function uses lowercase letters and treats punctuation as separators.</p>
+<p>Return to group 0’s lunch order, <code>“Pizza, pizza!”</code>. A <strong>map function</strong> transforms one input record at a time. Here, one function call reads one order.</p>
+<p class="keep-in-present">The function produces <strong>key-value pairs</strong>, written <code>(meal, 1)</code>. The <strong>key</strong> is the meal name. The <strong>value</strong>, <code>1</code>, means one request. To <strong>emit</strong> a pair means to output it. An <strong>occurrence</strong> is one appearance of a meal name in the order.</p>
+<p>The function uses lowercase letters and treats punctuation as separators. Predict how many pairs group 0 must emit to preserve both requests.</p>
 
 <div class="lecture-walkthrough" data-lecture-scene="map-is-local-computation"></div>
 <table id="mr-map-example">
@@ -270,15 +272,15 @@
   </tbody>
 </table>
 
-<p class="keep-in-present">Each map call needs only its own order, so the calls can run independently. The two pizza requests in group 0 remain two pairs. We now have four pairs, still separated by their input orders.</p>
-<p>Lowercasing and splitting punctuation produces two occurrences of <code>pizza</code>. Map turns each occurrence into a separate <code>(pizza, 1)</code> pair. Although the pairs have equal contents, they represent two requested meals. Keeping only distinct pairs would discard one pizza.</p>
-<p>Group 1’s separate order, <code>“Salad pizza.”</code>, produces <code>(salad, 1)</code> and <code>(pizza, 1)</code>. Across both orders, four emitted pairs represent four meal requests. The next step must bring contributions for the same meal together.</p>
+<p class="keep-in-present">Each map call needs only its own order, so the calls can run independently. This computation is <strong>local</strong>: the worker uses data already available to it. Group 0’s equal-content pairs represent two separate requests. Keeping only distinct pairs would discard one pizza.</p>
+<p>Across both orders, four emitted pairs represent four meal requests. The next step must bring contributions for the same meal together.</p>
 
 <!-- ============================================================ -->
 <h2 id="mapreduce" data-slide="6" data-scene="reduce-sees-the-complete-group">6 · MapReduce: map, shuffle, reduce</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=6&amp;b=1">Open slide 6 ↗</a></p>
 
 <p class="keep-in-present">MapReduce organizes this count into three operations. <strong>Map</strong> transforms each input record into pairs. <strong>Shuffle</strong> groups the pairs by key. <strong>Reduce</strong> processes each group to produce its result. In this example, reduction adds counts.</p>
+<p><strong>Intermediate data</strong> means the map outputs that the job still needs to process into final results. The next diagram follows these pairs from their original orders to their meal groups.</p>
 
 <div class="lecture-walkthrough" data-lecture-scene="reduce-sees-the-complete-group"></div>
 <details class="static-reference"><summary>Static diagram of the complete result</summary>
@@ -319,14 +321,15 @@
 
 <h3 class="new-slide" data-kicker="MapReduce">You write the functions. The framework connects their work.</h3>
 
-<p class="keep-in-present">You write the map and reduce functions. The MapReduce framework is the software that coordinates the job. It assigns input records, runs the functions, groups intermediate values, and retries failed work. A <strong>worker</strong> is a program process that runs assigned computation. Assigning records to workers happens before those workers apply the map function to their records.</p>
+<p class="keep-in-present">You write the map and reduce functions. The framework assigns records to workers, runs the functions, groups their outputs, and retries failed work.</p>
 
 <p class="keep-in-present">Map and reduce are computation roles. A single process can demonstrate both, as Lab 11 does. A <strong>cluster</strong> is a group of machines working together. On a cluster, the framework schedules those computations across worker processes.</p>
 
 <h3 id="two-divisions">Input splits and intermediate partitions divide different data</h3>
-<p>A MapReduce job divides data at two points. First, the framework divides original records into <strong>input splits</strong> and assigns each split to a map task. Each map task transforms its records into intermediate pairs.</p>
-<p>The framework then routes those pairs into <strong>intermediate partitions</strong> using their keys. Each reduce task processes one intermediate partition. That partition can contain several keys, each with its own value group.</p>
+<p>A MapReduce job divides data at two points. First, the framework divides original records into <strong>input splits</strong>. A <strong>map task</strong> processes one input split by calling the map function for each record. One task can therefore make many map calls.</p>
+<p>The framework then routes the emitted pairs into <strong>intermediate partitions</strong> using their keys. A <strong>reduce task</strong> processes one intermediate partition. It calls the reduce function separately for each key’s group. One task can therefore make many reduce calls.</p>
 <p>In our toy job, one input split contains <code>“Pizza, pizza!”</code>, and the other contains <code>“Salad pizza.”</code>. After mapping, the pizza contributions from both input splits reach the same intermediate partition. Original order boundaries no longer define the groups.</p>
+<p>Think of an input split as a stack of order slips. A map call reads one slip. A reduce call totals one meal’s requests. The software chooses worker assignments and transfers data between them.</p>
 
 <details>
   <summary>General function signatures and another word-count input</summary>
@@ -423,12 +426,12 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 
 <p>The Python companion groups pairs in memory. Across machines, the framework must move those pairs to the workers that run reduce tasks.</p>
 <p>A <strong>map task</strong> processes an assigned portion of the input. A <strong>reduce task</strong> processes a destination partition, which can contain several different keys.</p>
-<p>In the original MapReduce design, map workers write intermediate data to local disk, separated by reducer destination. A coordinator, also called the <strong>master</strong>, records where completed map outputs are available. <a href="#src-10">[10]</a></p>
+<p>In the original MapReduce design, map workers write intermediate data to <strong>local disk</strong>: storage attached to their own machine. They separate that data by reducer destination. A coordinator, also called the <strong>master</strong>, records where completed map outputs are available. <a href="#src-10">[10]</a></p>
 
 
 <p>Map task M0 processes order 0, and M1 processes order 1. This example assigns one order per map task. Reduce task R0 processes P0’s pizza group. R1 processes P1’s salad group.</p>
-<p>Each map task separates its output by reducer destination. The region named <code>M0 → R0</code> holds two pizza values, <code>[1, 1]</code>. M0’s region for R1 is empty. M1’s region for R0 holds <code>[1]</code>, and its region for R1 holds salad’s <code>[1]</code>.</p>
-<p>The master gives reducers these output locations. Each reducer fetches its region from every map task. R0 fetches both pizza regions and forms <code>[1, 1, 1]</code>. R1 finds no contribution from M0 and one salad value from M1. Sorting brings equal keys together before the reducer processes each group.</p>
+<p>A <strong>region</strong> is the part of a map task’s stored output assigned to one reducer. The region named <code>M0 → R0</code> holds two pizza values, <code>[1, 1]</code>. M0’s region for R1 is empty. M1’s region for R0 holds <code>[1]</code>, and its region for R1 holds salad’s <code>[1]</code>.</p>
+<p>The master gives reducers these output locations. Each reducer <strong>fetches</strong>, or requests and reads, its region from every map task. R0 fetches both pizza regions and forms <code>[1, 1, 1]</code>. R1 finds no contribution from M0 and one salad value from M1. Sorting brings equal keys together before the reducer processes each group.</p>
 <p>The master coordinates locations. The map workers send the actual intermediate data to the reducers. These transfers, sorting, and disk access take time even when the final arithmetic is simple.</p>
 
 <div class="lecture-walkthrough" data-lecture-scene="shuffle-manufactures-locality"></div>
@@ -447,17 +450,30 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
   <li><strong>Group:</strong> bring equal keys together. In these implementations, sorting supports the grouping.</li>
   <li><strong>Reduce:</strong> pass one key and its grouped values to the reduce function.</li>
 </ol>
-<p>Apache Hadoop implements the same broad structure. Its reducer fetches map output, merges sorted records, and calls reduce for each group. Fetching and sorting can overlap. The value iterator lets reduce process a large group without creating one Python list. <a href="#src-21">[21]</a></p>
+<p><strong>Apache Hadoop</strong> is an open-source system that implements MapReduce. Its reducer fetches map output, merges sorted records, and calls reduce for each group. Fetching and sorting can overlap. An <strong>iterator</strong> supplies values one at a time. It lets reduce process a large group without holding the entire group in one list. <a href="#src-21">[21]</a></p>
 <p>For our pizza total, the destination needs <code>[1, 1]</code> from M0 and <code>[1]</code> from M1. Neither map task alone supplies the complete result.</p>
 <p>Partitioning selects the destination. Grouping separates keys within that destination. Two different keys can share a partition, and one worker can execute several tasks.</p>
-<p>Moving every raw pair can cost time. A valid local aggregation can reduce the number of transferred pairs while preserving their contributions.</p>
+<p>Now keep the same four pairs but use <strong>one partition, P0</strong>. Both meal names reach R0. Sorting puts all pizza pairs together and keeps salad separate. R0 calls reduce once for pizza and once for salad.</p>
+<figure class="mr-overview" id="partition-key-groups">
+  <div class="mr-diagram-scroll" tabindex="0" role="region" aria-label="Two key groups inside one partition; scroll horizontally on a small screen">
+    <img src="diagrams/partition-key-groups.svg" width="1280" height="560" alt="In a one-partition version of the lunch count, all four pairs reach P0. Sorting forms a pizza group of three values and a separate salad group of one. R0 reduces each key separately.">
+  </div>
+  <figcaption>One partition can hold several key groups. Changing from two partitions to one preserves pizza 3 and salad 1.</figcaption>
+</figure>
+<div class="exercise learning-check" id="shuffle-location-check">
+  <span class="ex-label">Check the data movement</span>
+  <p>The master sends R0 two file locations. Does R0 now have the complete pizza group?</p>
+  <details><summary>Check your explanation</summary><p>No. Locations tell R0 where to read. R0 must fetch the values from both map outputs before it can total all pizza requests.</p></details>
+</div>
+<p>Moving every raw pair can cost time. Could each map worker add its own counts before sending them?</p>
 
 <!-- ============================================================ -->
 <h2 id="combiner" data-slide="8" data-scene="reduce-network-bytes-early">8 · Optional combiners preserve contribution weights</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=8&amp;b=1">Open slide 8 ↗</a></p>
 
 <p>M0 emits two <code>(pizza, 1)</code> pairs. Could it send <code>(pizza, 2)</code> instead? For an integer count, yes.</p>
-<p>A <strong>combiner</strong> performs an optional local aggregation before the shuffle. It can reduce network traffic while preserving the final result. It does not replace the reducer’s complete group. <a href="#src-20">[20]</a></p>
+<p><strong>Aggregation</strong> combines several values into a summary, such as a sum or count. A <strong>partial result</strong> summarizes only part of the input. A contribution’s <strong>weight</strong> is the number of original requests that its value represents. Here, the value 2 represents two requests.</p>
+<p>A <strong>combiner</strong> optionally combines a map task’s values for each key before transfer. Think of each lunch-order helper sending a subtotal instead of individual tally marks. The reducer still needs every helper’s contribution. The framework can omit the combiner, so correct results cannot depend on its use. <a href="#src-20">[20]</a></p>
 <div class="lecture-walkthrough" data-lecture-scene="reduce-network-bytes-early"></div>
 <table id="combiner-example">
   <thead><tr><th>Map task</th><th>Raw output</th><th>After local addition</th></tr></thead>
@@ -467,17 +483,28 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
   </tbody>
 </table>
 <p>Three pairs now represent four requests. The pizza reducer adds <code>2 + 1 = 3</code>. The salad reducer returns <code>1</code>. Sending fewer pairs has preserved every request’s contribution.</p>
-<p>The answer must remain correct when the combiner is omitted or applied repeatedly to partial results. Integer addition is <strong>associative</strong> and <strong>commutative</strong>: regrouping or reordering the additions preserves the result. <a href="#src-22">[22]</a></p>
+<p>The partial pair <code>(pizza, 2)</code> replaces M0’s two original pairs. Sending both the originals and their partial sum would count M0’s requests twice.</p>
+<p>The answer must remain correct when the combiner is omitted or applied repeatedly to partial results. Integer addition has two useful properties: <a href="#src-22">[22]</a></p>
+<ul>
+  <li><strong>Associative:</strong> regrouping preserves the sum, as in <code>(1 + 1) + 1 = 1 + (1 + 1)</code>.</li>
+  <li><strong>Commutative:</strong> reordering preserves the sum, as in <code>2 + 1 = 1 + 2</code>.</li>
+</ul>
+<p>The partial output must also keep a format that another combiner or reducer can accept. For this count, both raw values and partial sums are integers.</p>
 <p><strong>Lab boundary:</strong> the graded mapper still emits one pair per occurrence. A combiner is an optional extension, with separate local aggregation after mapping.</p>
-<p>The combiner changes M0’s two pizza pairs into one pair with value 2. M1 still supplies a pizza pair and a salad pair. Three transmitted pairs therefore represent four requests. The final reducer adds contribution values, not the number of pairs it receives.</p>
+<p>The final reducer adds contribution values, not the number of pairs it receives.</p>
 <p>This comparison counts pairs. It does not measure transferred bytes or elapsed time.</p>
+<div class="exercise learning-check" id="combiner-check">
+  <span class="ex-label">Check the optional step</span>
+  <p>M0 sends its two raw pizza pairs. M1 sends its raw pairs too. What should the final counts be?</p>
+  <details><summary>Check your explanation</summary><p>Pizza remains 3 and salad remains 1. Skipping local combination sends more pairs, but each original request still contributes once.</p></details>
+</div>
 <p>Local addition preserves an integer count. Other calculations need different partial information. An average, for example, must retain how many observations each partial result represents.</p>
 
 <!-- ============================================================ -->
 <h2 id="average-partials" data-slide="9" data-scene="preserve-sum-and-count">9 · Preserve sum and count</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
 
-<p>Consider a separate toy example: the average delivery time for three deliveries.</p>
+<p>Consider a separate toy example: the average, also called the <strong>mean</strong>, of three delivery times. Add the times, then divide by the number of deliveries.</p>
 <p>M0 holds delivery times of 10 and 10 minutes. M1 holds one delivery time of 40 minutes. M0 therefore represents two deliveries, while M1 represents one.</p>
 <div class="lecture-walkthrough" data-lecture-scene="preserve-sum-and-count"></div>
 <table id="average-inputs">
@@ -494,6 +521,7 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 </div>
 <p>The two local averages do not retain the group sizes. To combine the deliveries correctly, each partial result must retain both total time and delivery count.</p>
 <p>Use one key, <code>delivery_time</code>, for all deliveries. Each map output carries a <code>(sum, count)</code> value, initially <code>(time, 1)</code>. A combiner adds the two fields separately and returns the same value format.</p>
+<p>For a 10-minute delivery, the complete pair is <code>(delivery_time, (10, 1))</code>. The key is <code>delivery_time</code>. The value contains two numbers: 10 total minutes and one delivery. The table below shows only these two-number values.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Average summaries by task; scroll horizontally if needed">
 <table id="average-example">
   <thead><tr><th>Input portion</th><th>Total time</th><th>Delivery count</th><th>Safe summary: (sum, count)</th></tr></thead>
@@ -506,13 +534,19 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <p>Add the summaries: <code>(20 + 40, 2 + 1) = (60, 3)</code>. The merged state represents 60 total minutes across three deliveries.</p>
 <p>The final reducer divides the combined total time by the combined delivery count. <code>60 / 3 = 20</code> minutes is the correct average.</p>
 <p>This format also works when local combination is skipped or repeated. The reducer merges every <code>(sum, count)</code> value, then divides once. <strong>Keep enough information to combine correctly.</strong></p>
+<div class="exercise learning-check" id="average-format-check">
+  <span class="ex-label">Trace the same input without a combiner</span>
+  <p>Which values reach the reducer if neither map task combines its delivery times?</p>
+  <details><summary>Check your explanation</summary><p>The values are <code>(10, 1)</code>, <code>(10, 1)</code>, and <code>(40, 1)</code>. Adding both fields gives <code>(60, 3)</code>. The final average remains 20 minutes.</p></details>
+</div>
 
 <!-- ============================================================ -->
 <h2 id="skew" data-slide="10" data-scene="skew-creates-idle-time">10 · Skew creates idle time</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=10&amp;b=1">Open slide 10 ↗</a></p>
 
-<p>Correct grouping does not guarantee balanced work. <strong>Skew</strong> means the work is distributed unevenly. One frequent key can send many records to one partition, leaving other workers waiting.</p>
-<p>Suppose <strong>8,000 rows are distributed across eight workers</strong>. One frequent key always routes to W0. Compare cases where that key accounts for 0%, 40%, and 80% of all rows. The remaining rows spread evenly across all eight workers, including W0.</p>
+<p>Correct grouping does not guarantee balanced work. <strong>Skew</strong> means the work is distributed unevenly. A <strong>hot key</strong> is a key that accounts for much of the data or activity. One frequent key can send many records to one partition, leaving other workers waiting.</p>
+<p>Suppose <strong>8,000 rows are distributed across eight workers</strong>. This example assigns one partition to each worker, W0 through W7. Each row takes the same processing time. One frequent key always reaches W0’s partition.</p>
+<p>Compare cases where that key accounts for 0%, 40%, and 80% of all rows. The remaining rows spread evenly across all eight workers, including W0. Predict which worker finishes last.</p>
 <div class="lecture-walkthrough" data-lecture-scene="skew-creates-idle-time"></div>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Worker loads for different frequent-key shares; scroll horizontally if needed">
 <table id="skew-loads">
@@ -524,17 +558,17 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
   </tbody>
 </table>
 </div>
-<p>At an 80% share, W0 receives 6,600 rows while each other worker receives only 200. The other workers finish first, but the job must wait for W0. The diagram assumes equal processing time per row. Colored areas show assigned work, and gray areas show waiting after a worker finishes. These areas illustrate the workload model, not measured processor utilization.</p>
+<p>At an 80% share, W0 receives 6,600 rows while each other worker receives only 200. The other workers finish first, but the job must wait for W0. Colored areas show assigned work, and gray areas show waiting after a worker finishes. These areas illustrate the workload model, not measured processor utilization.</p>
 <p>Adding partitions does not split the frequent key under the same routing rule. All its values still meet at one destination.</p>
 <p>A task that finishes much later than its peers is a <span class="gloss" data-gloss="straggler">straggler</span>. Compare input sizes, disk writes, and execution times. These measurements help separate too much input from slow hardware or expensive per-row work. <a href="#src-7">[7]</a></p>
 <div class="viz" id="viz-skew"><div class="viz-title">skew · one frequent key across eight partitions</div>
-  <p class="viz-description">The widget hashes 8,000 rows across 8 workers. Increase the fraction of rows with one key. Those rows share a hash and reach one worker. The job must wait for that worker to finish.</p>
+  <p class="viz-description">The widget models 8,000 rows across eight partitions, with one worker per partition. Increase the fraction of rows with one key. Those rows reach the same partition. The job must wait for that partition’s worker to finish.</p>
   <div class="skew-controls">
     <label>hot key's share of all rows: <span id="skew-val">0%</span></label>
     <input type="range" id="skew-slider" min="0" max="80" step="5" value="0">
   </div>
   <div id="skew-stage"></div>
-  <p class="viz-caption">Gray areas show workers waiting after their own partitions finish. When one key accounts for 40% of the rows, one worker receives much more work. Salting can distribute those rows, at the cost of combining the partial results afterward.</p>
+  <p class="viz-caption">Gray areas show workers waiting after their own partitions finish. A 40% hot-key share gives W0 3,800 rows and every other worker 600. The next section divides a frequent key into temporary groups.</p>
 </div>
 <p>Local combination can reduce traffic for a count. If one destination still has too much work, salting can divide the frequent key into temporary groups.</p>
 
@@ -544,6 +578,8 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 
 <p>Consider a <strong>separate toy example with 100 occurrences of key A</strong>. This example uses a different input from the 8,000-row case. Direct grouping sends all 100 occurrences to one destination.</p>
 <p><strong>Salting</strong> adds a temporary suffix to the key. Different records receive <code>A:0</code>, <code>A:1</code>, <code>A:2</code>, or <code>A:3</code>. These distinct keys can route to different partitions. <a href="#src-6">[6]</a></p>
+<p>The map code chooses a suffix for each occurrence before the partition rule selects a destination. Here, the 100 input occurrences have separate numbers from 0 through 99. Each map call uses <code>occurrence_number % 4</code> as its suffix. This assigns exactly 25 occurrences to each suffix. The teaching routing rule sends these four keys to four different partitions.</p>
+<p>Think of four helpers counting separate batches of A requests. Each helper reports a subtotal, then one helper adds the four subtotals. What key must those final four contributions share?</p>
 <div class="lecture-walkthrough" data-lecture-scene="salt-and-combine"></div>
 <ol>
   <li>Start with the frequent key A and its 100 occurrences.</li>
@@ -551,9 +587,16 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
   <li>Count each salted group, producing four partial counts of 25.</li>
   <li>Remove the suffixes and add the partial counts under A: <code>25 + 25 + 25 + 25 = 100</code>.</li>
 </ol>
-<p>The first aggregation counts four salted groups independently. A second aggregation combines their four partial counts under the original key A. That second aggregation receives four counts instead of the original 100 occurrences. The example assigns 25 occurrences to each salted key and routes those keys to different destinations. Real routing and group sizes may be less balanced.</p>
+<p>The first aggregation counts four salted groups independently. Its outputs are <code>(A:0, 25)</code>, <code>(A:1, 25)</code>, <code>(A:2, 25)</code>, and <code>(A:3, 25)</code>.</p>
+<p>In a second MapReduce job, map removes each suffix and emits <code>(A, 25)</code>. Shuffle brings all four partial counts together under A. Reduce adds <code>25 + 25 + 25 + 25 = 100</code>. This final reducer receives four partial counts instead of the original 100 occurrences.</p>
+<p>The example deliberately gives each salted key 25 occurrences and a different destination. Real hash routing can place two salted keys in the same partition. Real group sizes may also differ. Check actual assignments and loads before expecting less waiting.</p>
 <p>A combiner aggregates existing keys locally. Salting changes intermediate keys to divide one frequent key’s work across destinations. It requires another aggregation to recover the original key’s result.</p>
 <p>The operation must support correct partial aggregation. For an average, each salted group must retain total time and delivery count as a <code>(sum, count)</code> value. Combine those values, then divide the combined sum by the combined count. Extra tasks and transfers can cost more than salting saves.</p>
+<div class="exercise learning-check" id="salting-check">
+  <span class="ex-label">Check the final grouping</span>
+  <p>What would the result contain if the second job kept the four different suffixes?</p>
+  <details><summary>Check your explanation</summary><p>Four separate A groups would remain. Removing the suffixes lets shuffle form one A group, whose reducer adds the partial counts to 100.</p></details>
+</div>
 <p>So far, every task has finished successfully. Next, let a worker fail after producing its local files.</p>
 
 <!-- ============================================================ -->
@@ -561,7 +604,9 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=12&amp;b=1">Open slide 12 ↗</a></p>
 
 <p>Return to the lunch orders. M0 has produced its two pizza pairs. Its machine fails before the pizza reducer fetches them.</p>
-<p>The original MapReduce coordinator reruns map tasks whose local outputs became inaccessible. The input must remain available. Reducers that still need those contributions fetch replacement output. Completed reduce output resides in the shared file system. <a href="#src-10">[10]</a></p>
+<p>The original design keeps input in a <strong>shared file system</strong> that multiple workers can access. Replication keeps copies on different machines. The worker’s local intermediate file has no such protection. Losing that worker can make its map output inaccessible while another input copy remains readable. <a href="#src-10">[10]</a></p>
+<p><strong>Deterministic</strong> means the same inputs produce the same outputs. Our map function follows fixed rules, so rereading the same order reproduces the same pairs. Predict which data the replacement worker needs before it can rerun M0.</p>
+<p>The coordinator reruns map tasks whose local outputs became inaccessible. Reducers that still need those contributions fetch replacement output. Completed reduce output resides in the shared file system, so it survives this individual worker failure.</p>
 <div class="lecture-walkthrough" data-lecture-scene="rerun-maps-when-local-files-disappear"></div>
 <ol>
   <li><strong>Completed map:</strong> M0’s local file contains <code>[1, 1]</code>. R0 already has M1’s <code>[1]</code> but still needs M0.</li>
@@ -569,8 +614,12 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
   <li><strong>Replacement task:</strong> the master assigns M0 to another worker, which reads the same available input.</li>
   <li><strong>Replacement output:</strong> R0 fetches M0’s new <code>[1, 1]</code> and calculates <code>2 + 1 = 3</code> pizzas.</li>
 </ol>
-<p><strong>Deterministic</strong> means the same inputs produce the same outputs. Available input and deterministic map code let the replacement reproduce the missing pairs.</p>
-<p>Task completion did not make the local intermediate files durable elsewhere. The rerun restores a missing contribution. It does not create another lunch order.</p>
+<p>Available input and deterministic map code let the replacement reproduce the missing pairs. Finishing M0 did not copy its intermediate file to another machine. The rerun restores a missing contribution. It does not create another lunch order.</p>
+<div class="exercise learning-check" id="recovery-input-check">
+  <span class="ex-label">Check what makes recovery possible</span>
+  <p>Could rerunning M0 recover the count if every copy of its original input had also disappeared?</p>
+  <details><summary>Check your explanation</summary><p>No. The map function needs the original order. A retry restores missing intermediate output only when the required input remains available.</p></details>
+</div>
 <p>A rerun restores lost contributions. If multiple attempts produce output for M0, the framework must also prevent the extra attempt from increasing the pizza total.</p>
 
 <!-- ============================================================ -->
@@ -590,8 +639,18 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 </table>
 <p>Attempts A and B both execute M0’s assigned work. Their outputs represent the same two requests. R0 uses attempt B’s output here and does not add attempt A’s copy. Counting both M0 attempts gives the incorrect <code>2 + 2 + 1 = 5</code>. One M0 contribution plus M1 gives <code>2 + 1 = 3</code>.</p>
 <p>Keep both genuine pizza occurrences within M0’s chosen output. Discarding repeated task output is different from discarding repeated input words.</p>
-<p>Google’s implementation records map-task completions and atomically commits reduce output. It ignores completion messages for a map task already marked complete. For deterministic functions, the final output matches a failure-free sequential run. <a href="#src-10">[10]</a></p>
-<p>The rule applies to each reducer’s input from a logical map task. After a failure, different reducers may have read different attempts. They need compatible values, not necessarily the same attempt identity.</p>
+<p>Google’s coordinator records each completed map task’s output locations. It ignores another completion message while that task remains marked complete. After a failure, it can schedule a new attempt and record replacement locations. <a href="#src-10">[10]</a></p>
+<p>The rule applies to each reducer’s input from a logical map task. After a failure, different reducers may have read different attempts. Deterministic map code gives those attempts the same values. Each reducer still uses one contribution from that map task.</p>
+<h3 id="reduce-output-commit">A reduce retry must also leave one final output</h3>
+<p>The same concern applies when R0 runs twice. Both attempts can compute the correct pizza total, 3. The job needs one final R0 result.</p>
+<p>To <strong>commit</strong> output means to make a completed result the task’s final output. Each reduce attempt first writes a private temporary file. Its worker then asks the file system to rename that file to R0’s final output name.</p>
+<p>The rename is <strong>atomic</strong>: it installs one complete file in one indivisible step. The final name refers to one attempt’s complete output. Repeated renames do not append the attempts’ results together. With deterministic functions, the final job result matches a successful run with no failures. <a href="#src-10">[10]</a></p>
+<figure class="mr-overview" id="reduce-commit-diagram">
+  <div class="mr-diagram-scroll" tabindex="0" role="region" aria-label="Reduce attempts and one final output file; scroll horizontally on a small screen">
+    <img src="diagrams/reduce-output-commit.svg" width="1280" height="580" alt="Two attempts of reduce task R0 each produce a temporary file containing pizza 3. Atomic rename installs one complete file at the final R0 output name.">
+  </div>
+  <figcaption>These are two attempts of the same reduce task. They produce one final task output, not two additional pizza contributions.</figcaption>
+</figure>
 <p>This output rule does not make an external action happen only once. A task that sends a payment request can send it again during a retry.</p>
 <div class="exercise learning-check" id="retry-check"><span class="ex-label">Explain the two kinds of repetition</span>
   <p>M0 contains two pizza requests and runs twice after a failure. How many pizzas should M0 contribute, and why?</p>
@@ -627,10 +686,16 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <h2 id="engine-preview" data-slide="15" data-scene="preview-spark-and-ray">15 · Preview Spark and Ray</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=15&amp;b=1">Open slide 15 ↗</a></p>
 
-<p id="spark"><strong>Spark</strong> lets you describe a data pipeline. It schedules partition work and manages data movement for operations such as grouped aggregation.</p>
+<p>The lunch total still needs the same operations. Spark and Ray provide two ways to organize the workers that perform them.</p>
+<p id="spark"><strong>Spark</strong> lets you describe a <strong>data pipeline</strong>: a sequence of operations on data. A data <strong>operator</strong> is one such step, such as grouping meal requests by name. Spark schedules the partition tasks and transfers their data.</p>
 <p id="ray"><strong>Ray</strong> schedules Python function calls. In our follow-up example, tasks return partial counts and our program combines them.</p>
 <div class="lecture-walkthrough" data-lecture-scene="preview-spark-and-ray"></div>
-<p><a href="spark-ray.html">Lecture 13B</a> explains their APIs, execution plans, dependencies, and recovery behavior. Today’s foundation is <strong>map → shuffle → reduce</strong>, with correct grouping and safe retries.</p>
+<p><a href="spark-ray.html">Lecture 13B</a> shows how to write these programs, trace their work, and handle failures. Today’s foundation is <strong>map → shuffle → reduce</strong>, with correct grouping and safe retries.</p>
+<div class="exercise learning-check" id="engine-preview-check">
+  <span class="ex-label">Keep the responsibility clear</span>
+  <p>Two Ray tasks return separate meal-count dictionaries. Does our lunch program already have the final total?</p>
+  <details><summary>Check your explanation</summary><p>No. Our program must still combine the returned counts for each meal. Ray schedules the calls, while our code performs this final combination.</p></details>
+</div>
 
 <!-- ============================================================ -->
 <h2 id="recap" data-slide="16" data-scene="place-move-recover">16 · Preserve the count through movement and failure</h2>
@@ -760,15 +825,15 @@ document that supports the claim it is attached to.</p>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
-<script src="../../slides/decks/lectures-11-15.js?v=mapreduce-reading-20261109"></script>
-<script src="../../slides/decks/teaching-notes.js?v=mapreduce-reading-20261109"></script>
-<script src="../../slides/decks/clarity-captions.js?v=mapreduce-reading-20261109"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=mapreduce-clear-20261109"></script>
+<script src="../../slides/decks/teaching-notes.js?v=mapreduce-clear-20261109"></script>
+<script src="../../slides/decks/clarity-captions.js?v=mapreduce-clear-20261109"></script>
 <script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
 <script src="../../slides/decks/clarity-diagrams.js?v=mapreduce-20261109"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
 <script src="slide-walkthroughs.js?v=1"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>
-<script src="viz.js?v=ste-20261015"></script>
+<script src="viz.js?v=mapreduce-clear-20261109"></script>
 <script src="../../labs/_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>
