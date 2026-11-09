@@ -1115,7 +1115,7 @@ window.CourseClarityCaptions = {
       "Group each key’s values at its assigned worker before reduction. Moving records requires work."
     ],
     "reduce-sees-the-complete-group": [
-      "Return to Maya’s two records. Predict how many occurrences mapping must preserve.",
+      "WAL means write-ahead log. Count words: lowercase letters, treat punctuation as separators, and keep repeats.",
       "Keep three (wal, 1) pairs and one (page, 1) pair.",
       "Route equal words to their common owner using a compatible partition rule.",
       "Reduce complete groups: wal = 3 and page = 1.",

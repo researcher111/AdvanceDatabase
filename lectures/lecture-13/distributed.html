@@ -48,11 +48,23 @@
 
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya gives one worker <code>“WAL, wal!”</code> and another <code>“Page wal.”</code>. The first reports two occurrences of <code>wal</code>. The second reports one. Noor circles both outputs: <q>Which worker combines these counts into the final total?</q></p>
-  <p>Maya draws arrows from both workers to one group. Each worker has a partial count. The workers must send all contributions for the same word to a reducer. The system must retain every occurrence. It must also rerun failed tasks without losing contributions.</p>
+  <p class="lede">Maya wants to count each word across two short text records. She gives one record to each of two workers. A <strong>worker</strong> is a program process that performs part of a job.</p>
+  <p>The sample text contains <strong>WAL</strong>, short for <strong>write-ahead log</strong>, from <a href="../lecture-07/wal.html">lecture 7</a>. That log stores recovery information before changed database pages reach disk. Here, the program only counts the word. Its database meaning does not affect the count.</p>
+  <p>Both workers change letters to lowercase and extract sequences of letters from <code>a</code> to <code>z</code>. Punctuation separates words and is discarded. Repeated words remain separate occurrences.</p>
+  <table>
+    <thead><tr><th>Worker</th><th>Input record</th><th>Words after processing</th><th>Local count of <code>wal</code></th></tr></thead>
+    <tbody>
+      <tr><td>A</td><td><code>“WAL, wal!”</code></td><td><code>[wal, wal]</code></td><td>2</td></tr>
+      <tr><td>B</td><td><code>“Page wal.”</code></td><td><code>[page, wal]</code></td><td>1</td></tr>
+    </tbody>
+  </table>
+  <p>Noor points to the two local counts: <q>How does the program combine these into one total for <code>wal</code>?</q></p>
+  <p>A <strong>reducer</strong> combines values for one word to produce its result. The worker assigned to <code>wal</code> must receive contributions from both inputs. Adding the local counts gives <code>2 + 1 = 3</code>. The total for <code>page</code> is <code>1</code>. A reducer is a role in the computation, so it does not require a third machine.</p>
 </div>
 
-<p class="keep-in-present">This word count separates local computation from coordination. Partitioning assigns records to workers. A shuffle groups equal keys. Execution engines schedule and recover tasks. Lab 11 demonstrates these rules in one Python process. Optional Spark and Ray exercises demonstrate local parallel execution.</p>
+<p class="keep-in-present"><strong>Starting point:</strong> You can follow this word count without reading lecture 12 on retrieval-augmented generation (RAG). You only need to follow how words are grouped and their counts are added.</p>
+
+<p class="keep-in-present">We will trace how workers produce word occurrences, send matching words to one destination, and compute each total. Then we will examine how systems schedule work and recover lost results. Lab 11 demonstrates the counting steps in one Python process. Optional Spark and Ray exercises demonstrate local parallel execution.</p>
 
 <div class="cite">
   Companion reading: Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce: Simplified Data Processing on Large Clusters</em></a> (OSDI 2004, 13 readable pages)<sup class="src"><a href="#src-1" title="MapReduce: Simplified Data Processing on Large Clusters (Google Research publication page)">1</a></sup> ·
@@ -69,18 +81,20 @@
 <!-- ============================================================ -->
 <h2 id="plan">The question we will trace</h2>
 
+<p class="keep-in-present">A <strong>key</strong> identifies the group that a value belongs to. In this word count, the word is the key.</p>
+
 <div class="exercise learning-check">
   <span class="ex-label">Start with what you already know</span>
   <p>What would <code>GROUP BY word</code> need to produce one count for <code>wal</code>? If its occurrences are on different workers, can either worker announce the global total from its own input alone?</p>
   <details><summary>Check your explanation</summary><p>A correct global aggregation needs all contributions for the key, either collected together or combined as valid partial results. A worker’s local count alone is not the global count.</p></details>
 </div>
 
-<p class="keep-in-present"><strong>Quiz 9</strong> first (RAG, 10 min), then partitioning, shuffles, Spark, and Ray.</p>
+<p class="keep-in-present"><strong>Quiz 9</strong> first (RAG, 10 min), then partitioning, shuffles, Spark, and Ray. The quiz covers lecture 12. The word-count explanation below is self-contained.</p>
 
 <p class="keep-in-present">Counting records per URL uses the same aggregation logic at 10 MB and 10 TB. At the larger size, input reading, memory use, and recovery from a failed task become major design concerns. Distribution changes where the work runs and how intermediate results are combined.</p>
 
 
-<p class="keep-in-present">Today’s main idea: <strong>grouping matching keys often requires moving data between workers.</strong> The <span class="gloss" data-gloss="shuffle">shuffle</span> performs that movement, and its cost helps explain many distributed query plans.</p>
+<p class="keep-in-present">Today’s main idea: <strong>grouping matching keys often requires moving data between workers.</strong> The <span class="gloss" data-gloss="shuffle">shuffle</span> sends records to the workers responsible for their keys and groups each key’s values. Its cost helps explain many distributed query plans.</p>
 
 <!-- ============================================================ -->
 <h2 id="wall">Why distribute a job?</h2>
@@ -105,7 +119,11 @@
 <!-- ============================================================ -->
 <h2 id="partition">Assign records with hash or range partitioning</h2>
 
+<p class="keep-in-present">A <strong>partition</strong> is one subset of the data. Partitioning divides records into these subsets. The system assigns partitions to workers for processing. One worker can process several partitions.</p>
+
 <p class="keep-in-present">Consider sorting mail into destination trays. The address determines the tray, regardless of the sending office. Similarly, a partition rule selects an owner from the key. The actual hash or range rule determines placement. Neither rule guarantees equal work for each owner.</p>
+
+<p class="keep-in-present">In <code>hash(key) % n</code>, <code>n</code> is the number of partitions. A hash function converts the key into an integer. The <code>%</code> operator takes the remainder after division by <code>n</code>, selecting a partition numbered from <code>0</code> to <code>n - 1</code>. Here, <code>owner</code> means the selected partition.</p>
 
 <h3 class="new-slide" data-kicker="Hash or range">Hash distributes distinct keys. Range groups neighboring keys.</h3>
 
@@ -140,7 +158,7 @@
 
 <div class="layer-card">
   <div class="lc-row"><span class="lc-k">Load balance</span><span>Hashing can balance distinct keys without balancing records. If one key occurs in 40% of the records, all those records reach the same partition. That worker may finish much later than the others.</span></div>
-  <div class="lc-row"><span class="lc-k">The fix</span><span>For suitable aggregations, add a suffix to the frequent key so its records spread across several partitions. Aggregate the groups. Remove the suffix. Combine their partial results. This technique, salting, requires another aggregation step.<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup></span></div>
+  <div class="lc-row"><span class="lc-k">The fix</span><span>For suitable aggregations, give different records different suffixes on the frequent key, such as <code>wal:0</code> and <code>wal:1</code>. These temporary keys can route to different partitions. Aggregate each temporary group. Remove the suffixes. Combine the partial results under the original key, <code>wal</code>. This technique, salting, requires another aggregation step.<sup class="src"><a href="#src-6" title="Detect and handle data skew on AWS Glue (AWS Big Data Blog)">6</a></sup></span></div>
   <div class="lc-row"><span class="lc-k">Diagnosis</span><span>A task that runs long after its peers is a <span class="gloss" data-gloss="straggler">straggler</span>. Check input size, spill, and execution time in Spark’s UI. Use these measurements to distinguish skew from a slow worker or other causes.<sup class="src"><a href="#src-7" title="Skew and spill (Databricks on AWS documentation)">7</a></sup></span></div>
 </div>
 
@@ -165,7 +183,17 @@
 <!-- ============================================================ -->
 <h2 id="worked-example">Trace two records through the shuffle</h2>
 
-<p class="keep-in-present">Keep both occurrences of <code>wal</code> in the first record. Predict the number of emitted pairs before advancing. Identify the values that must reach the same group. Changing partition numbers must not change final word counts.</p>
+<p class="keep-in-present">Return to the same two records. The trace represents each word occurrence as a pair, <code>(word, 1)</code>. The word is the key, and <code>1</code> means one occurrence. A <strong>mapper</strong> produces these pairs from an input record.</p>
+
+<ol>
+  <li><strong>Map:</strong> <code>“WAL, wal!”</code> produces <code>(wal, 1), (wal, 1)</code>. <code>“Page wal.”</code> produces <code>(page, 1), (wal, 1)</code>.</li>
+  <li><strong>Shuffle:</strong> Send the three <code>wal</code> pairs to the same partition. Group their values as <code>wal: [1, 1, 1]</code>. Keep <code>page: [1]</code> in its own group.</li>
+  <li><strong>Reduce:</strong> Add each group’s values. The results are <code>wal: 3</code> and <code>page: 1</code>.</li>
+</ol>
+
+<p class="keep-in-present">The opening added local counts: <code>2 + 1 = 3</code>. This trace adds individual occurrences: <code>1 + 1 + 1 = 3</code>. Both give the same total. Lab 11’s graded mapper must emit one pair per occurrence. Combining local counts before sending them is a separate optimization.</p>
+
+<p class="keep-in-present">Use the trace to follow the four pairs through the code. Predict the next operation before advancing. Track both occurrences of <code>wal</code> from the first record. Changing partition numbers must not change final word counts.</p>
 <div data-teaching-trace="shuffle">
   <p><strong>Worked result:</strong> <code>WAL, wal!</code> and <code>Page wal.</code> emit four pairs. Grouping yields <code>wal: [1,1,1]</code> and <code>page: [1]</code>. Reduction returns counts 3 and 1, regardless of which bucket number owns each word.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
@@ -212,6 +240,8 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
 
 <p class="keep-in-present">Noor asks which operations can run next. Maya describes operations on partitioned collections. Spark records each operation’s input dependencies. Read the word-count code before the printed plan. Identify the shuffle where records move between partitions.</p>
 
+<p class="keep-in-present">Spark is an execution engine that schedules data-processing tasks across workers. An <span class="gloss" data-gloss="rdd">RDD (Resilient Distributed Dataset)</span> is a collection divided into partitions. In the code below, <code>lines</code> is the input RDD. A <strong>transformation</strong> describes a new collection from an existing one. An <strong>action</strong>, such as <code>collect()</code>, requests a result and starts the required computation.</p>
+
 <h3 class="new-slide" data-kicker="Spark">Word count in Spark is three chained calls and one shuffle</h3>
 
 <pre><code class="language-python">counts = (lines                                       # an RDD, split into 4 partitions
@@ -222,6 +252,8 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
 counts.collect()                                      # NOW it runs</code></pre>
 
 <h3 class="new-slide" data-kicker="Spark">Shuffle dependencies create stage boundaries</h3>
+
+<p class="keep-in-present">Spark represents dependencies as a <strong>DAG (directed acyclic graph)</strong>. Arrows show which earlier results an operation needs. The graph has no cycles, so an operation cannot depend on its own output.</p>
 
 <p class="keep-in-present">A narrow dependency connects an output partition to a limited set of parent partitions. Spark can pipeline <code>map</code> and <code>filter</code> without a shuffle. A shuffle redistributes records, often to group equal keys for joins or aggregation. Shuffles separate execution <span class="gloss" data-gloss="stage">stages</span>. Inspect the DAG. The stage count is not the number of transformation calls.<sup class="src"><a href="#src-12" title="Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing (Zaharia et al., NSDI 2012)">12</a></sup></p>
 
