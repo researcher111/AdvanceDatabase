@@ -1115,11 +1115,11 @@ window.CourseClarityCaptions = {
       "Group each key’s values at its assigned worker before reduction. Moving records requires work."
     ],
     "reduce-sees-the-complete-group": [
-      "Count each meal in the lunch orders. Use lowercase words and treat punctuation as separators.",
-      "Keep three (pizza, 1) pairs and one (salad, 1) pair.",
-      "Route equal words to their common owner using a compatible partition rule.",
-      "Reduce complete groups: pizza = 3 and salad = 1.",
-      "Change the partition count, keep the totals. Bucket numbering and output order may change."
+      "Each map call handles one order. Predict the (meal, 1) pairs it produces.",
+      "Map emits one (meal, 1) pair per occurrence. It keeps repeated requests.",
+      "Shuffle gathers values for the same meal from every order into one group.",
+      "Reduce adds each complete group: pizza = 3 and salad = 1.",
+      "Map and reduce produce the same totals when the number of partitions changes."
     ],
     "reduce-network-bytes-early": [
       "Each mapper holds four local occurrences of log.",

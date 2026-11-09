@@ -387,8 +387,8 @@
     });
   }
 
-  use(13,'reduce-sees-the-complete-group',(d,s)=>{
-    label(d,'mappers',230,219,'Map each order');label(d,'shuffle',685,219,'Group by key');label(d,'reduce',1090,219,'Reduce');
+  const mapreduceScene=use(13,'reduce-sees-the-complete-group',(d,s)=>{
+    label(d,'mappers',230,219,'Map each order');label(d,'shuffle',685,219,'Shuffle by meal');label(d,'reduce',1090,219,'Reduce: sum');
     card(d,'doc0',55,260,330,94,'Group order 0','“Pizza, pizza!”');card(d,'doc1',55,434,330,94,'Group order 1','“Salad pizza.”');
     if(s>=1){
       const entries=[['pizza',0],['pizza',0],['salad',1],['pizza',1]];
@@ -399,8 +399,15 @@
     }
     if(s>=2){label(d,'owner0',850,328,'P0: pizza',P.blue,25);label(d,'owner1',850,557,'P1: salad',P.green,25);}
     if(s>=3){d.arrow('sum-pizza',936,343,994,343,P.blue,3);d.box('pizza-total',1005,311,190,64,'pizza = 3',P.blueLight,P.blue,28);d.arrow('sum-salad',936,557,994,557,P.green,3);d.box('salad-total',1005,525,190,64,'salad = 1',P.greenLight,P.green,28);}
-    foot(d,s===4?'Toy ownership: pizza → P0, salad → P1. Workers must use the same partition function.':'Every occurrence survives mapping. The shuffle groups equal words before adding their counts.');
+    foot(d,[
+      'Input: one record per group order. Each meal name becomes a key.',
+      'Map: each order → (meal, 1) pairs. Repeated meals produce repeated pairs.',
+      'Shuffle: collect all values for each meal. No totals are computed yet.',
+      'Reduce: add each complete group to produce one total per meal.',
+      'The runtime assigns work and performs shuffle. You supply map and reduce functions.'
+    ][s]);
   });
+  if(mapreduceScene)mapreduceScene.title='MapReduce: map, shuffle, reduce';
 
   use(14,'read-the-newest-visible-value',(d,s)=>{
     const labels=['SSTable A','SSTable B',s>=3?'SSTable C (flushed)':'Memtable'],vals=['old @ 5','new @ 8','DELETE @ 9'];
@@ -520,12 +527,12 @@
     'Load block 7 into frame 0. Point to the frame number and its separate resident block label.',
     'This replacement illustration assumes frame 0 is eligible. Load block 8 into that frame. Block 7 remains stored in the file.'
   ]);
-  cues(13,'reduce-sees-the-complete-group',['Lunch orders','Map both orders','Shuffle by word','Reduce complete groups','Check the meal totals'],[
-    'Read the two fictional club lunch orders. Each meal type uses one word, and each mention requests one meal. Ask students to predict the count.',
-    'Follow the four emitted pairs. Each repeated occurrence retains its own stable card rather than disappearing into a set.',
-    'Move the three pizza cards to P0 and the salad card to P1. A real partition can hold multiple different keys, each with its own value group.',
-    'Add the values within each key group. The final totals sum to four, preserving all mapped occurrences.',
-    'The word totals must stay the same even if partition numbers or output order change. The toy owner labels are illustrative. Python hash bucket numbers can vary.'
+  cues(13,'reduce-sees-the-complete-group',['Lunch orders','Map: emit pairs','Shuffle: group values','Reduce: sum each group','Separate functions from execution'],[
+    'The runtime assigns input records to tasks. Map transforms each record into pairs. Splitting the input into tasks is a separate responsibility. Read the two fictional club lunch orders. Each mention requests one meal. Predict the pairs for each order before advancing.',
+    'Apply map separately to each order. Convert letters to lowercase and treat punctuation as separators. Emit (meal, 1) for each occurrence, preserving repeats. The meal name is the key, and the value 1 represents one requested meal. Mapping does not combine the two orders.',
+    'The runtime performs the shuffle. Move the three pizza cards to P0 and the salad card to P1. Gather all values for each meal before computing its total. P0 and P1 label the example partitions. A real partition can contain several keys, each with its own value group.',
+    'Call reduce for each meal key and its complete group of values. For pizza, sum [1, 1, 1] to obtain 3. For salad, sum [1] to obtain 1. Emit one (meal, total) pair per group. Map created occurrences, shuffle gathered matching keys, and reduce calculated the totals.',
+    'You write the map and reduce functions. The runtime assigns input records to tasks, schedules execution, and performs the shuffle. A different partition count can change placement and scheduling, but must preserve the meal totals. The toy owner labels are illustrative. Python hash bucket numbers can vary.'
   ]);
   // Add a prediction before each worked example’s first reveal.
   const tracePredictions=[

@@ -88,7 +88,7 @@
       },
     },
     {
-      label: 'Phase 2 · shuffle — route each pair to the partition selected by its key’s hash.',
+      label: 'Phase 2 · shuffle, routing — route each pair to the partition selected by its key’s hash.',
       render() {
         const parts = [[], []];
         for (const d of DOCS) for (const w of d.split(' ')) parts[partOf(w)].push(w);
@@ -99,7 +99,7 @@
       },
     },
     {
-      label: 'Phase 3 · group — inside each partition, values collect per key: {word: [1, 1, …]}',
+      label: 'Phase 3 · shuffle, grouping — inside each partition, values collect per key: {word: [1, 1, …]}',
       render() {
         const parts = [{}, {}];
         for (const d of DOCS) for (const w of d.split(' ')) {
