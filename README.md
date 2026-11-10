@@ -12,8 +12,9 @@ Lab 9 moves to October 29.
 November 3 is Election Day, with no class. Lab 10 moves to November 5.
 [Lecture 13](lectures/lecture-13/distributed.html) focuses on MapReduce on November 10, with a short Spark and Ray preview.
 A detailed [Spark and Ray lecture](lectures/lecture-13/spark-ray.html) meets
-November 12. Lab 11 meets November 17 and is due November 24. Bigtable meets
-November 19, and graph databases meet November 24. Project deadlines remain unchanged.
+November 12. Lab 11 meets November 17 and is due December 1 at class start. Bigtable meets
+November 19. This course has no class November 24. Graph databases and Quiz 11 meet December 1.
+Project deadlines remain unchanged.
 
 There are 13 required lecture decks, including Lecture 13B, and 10 required labs. Lectures 7–9 and Lab 7
 are optional bonus material, linked at the end of the course catalog and schedule.
@@ -24,14 +25,14 @@ local DuckDB database from the bundled 60,000-trip NYC taxi sample, then guides
 students through editable SQL, charts, competing explanations, and follow-up
 questions. See the page for setup and optional discovery practice.
 
-[The discovery bureau](lectures/discovery/index.html) has two scheduled workshops
-(Dec 1 and Dec 3). The city, weather, and planet cases remain optional practice.
-The planet workshop leaves room for the additional Spark and Ray lecture in the teaching sequence.
+[The discovery bureau](lectures/discovery/index.html) has one scheduled workshop
+(December 3). The city, weather, planet, and source-tracing cases remain optional practice.
+The December 1 graph lecture replaces the source-tracing workshop and project rehearsal.
 
 Students query already-hosted ClickHouse taxi/weather tables, NASA's exoplanet
 archive, and Wikidata, then apply the same evidence workflow to their projects.
-No new account or database server is required. The question swap remains due November 19. The outline retains rehearsal time
-and includes timed teaching beats, four verified queries,
+No new account or database server is required. The question swap remains due November 19.
+The outline includes timed teaching beats, four verified queries,
 dated result snapshots, revealable charts, and instructor setup notes.
 
 Refresh snapshots during class preparation with
