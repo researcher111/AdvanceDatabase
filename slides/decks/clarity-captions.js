@@ -1139,10 +1139,10 @@ window.CourseClarityCaptions = {
       "The correct average is 60 total minutes divided by 3 deliveries: 20 minutes."
     ],
     "rerun-maps-when-local-files-disappear": [
-      "M0 finished, but R0 still needs its local file. Stored input remains available for another execution.",
-      "The worker fails before R0 fetches M0’s region. M0’s completed output is now unavailable.",
-      "A deterministic map produces the same outputs from the same input. The master assigns M0 to another worker.",
-      "R0 reads the replacement region. Recovery restores the missing contribution without adding a new order."
+      "Maya’s laptop processes group 0’s saved order. Map task M0 writes two pizza values into a file saved only on that laptop.",
+      "Maya’s laptop fails before R0 receives the tally file. The original order remains available in the shared club folder.",
+      "Maya borrows another laptop and repeats M0 using the saved order. The same map code recreates both pizza values.",
+      "R0 reads the replacement file and combines both groups’ pizza values. The final count stays 3. Recounting creates no new order."
     ],
     "count-one-logical-task-contribution": [
       "M0 names one assigned input task. An attempt is one execution of that task.",

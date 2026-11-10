@@ -639,21 +639,38 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <h2 id="recovery" data-slide="12" data-scene="rerun-maps-when-local-files-disappear">12 · Rerun maps when local files disappear</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=12&amp;b=1">Open slide 12 ↗</a></p>
 
-<p>Return to the lunch orders. M0 has produced its two pizza pairs. Its machine fails before the pizza reducer fetches them.</p>
-<p>The original design keeps input in a <strong>shared file system</strong> that multiple workers can access. Replication keeps copies on different machines. The worker’s local intermediate file has no such protection. Losing that worker can make its map output inaccessible while another input copy remains readable. <a href="#src-10">[10]</a></p>
-<p><strong>Deterministic</strong> means the same inputs produce the same outputs. Our map function follows fixed rules, so rereading the same order reproduces the same pairs. Predict which data the replacement worker needs before it can rerun M0.</p>
-<p>The coordinator reruns map tasks whose local outputs became inaccessible. Reducers that still need those contributions fetch replacement output. Completed reduce output resides in the shared file system, so it survives this individual worker failure.</p>
+<div class="story-scene" id="recovery-story">
+  <p class="story-label">A fictional club-lunch example</p>
+  <p>At the club table, Maya opens group 0’s order: <code>“Pizza, pizza!”</code>. The original order is saved in a shared club folder. She makes two pizza tally marks in a temporary file saved only on her laptop.</p>
+  <p>Before Noor receives that tally file, Maya’s laptop stops working. Noor already has group 1’s single pizza request. She still needs the two requests from group 0 to finish the total.</p>
+  <p>Noor asks: <q>The original order is still in our shared folder. Can we recreate the missing tally?</q></p>
+</div>
+<p>Maya borrows another laptop, opens the saved order, and makes the same two tally marks. Noor can now add group 0’s two pizzas to group 1’s one pizza: <code>2 + 1 = 3</code>. Repeating the count restores the missing tally. The club still has the same orders. The salad total stays 1.</p>
+
+<h3 id="recovery-files">Which file disappeared?</h3>
+<p>In MapReduce, <strong>M0</strong> names the map task that reads group 0’s order. A worker program runs that task on a machine. Its <strong>local file</strong> is stored on that machine. The temporary tally represents M0’s <strong>intermediate output</strong>: two <code>(pizza, 1)</code> pairs.</p>
+<p>The original Google design stores input in a <strong>shared file system</strong>, which multiple workers can access. <strong>Replication</strong> keeps copies on different machines. Here, a copy of the order remains available after the worker fails. M0’s local intermediate file has no spare copy. <a href="#src-10">[10]</a></p>
+<table id="recovery-files-table">
+  <thead><tr><th>Data</th><th>Where it is stored</th><th>After Maya’s laptop fails</th></tr></thead>
+  <tbody>
+    <tr><td>Original order: <code>“Pizza, pizza!”</code></td><td>Shared storage, with a copy on another machine</td><td>Still readable</td></tr>
+    <tr><td>Temporary tally: two <code>(pizza, 1)</code> pairs</td><td>Only on the worker’s local disk</td><td>Unavailable to the reducer</td></tr>
+  </tbody>
+</table>
+<p><strong>R0</strong> names the reduce task that adds the pizza contributions. <strong>M1</strong> is the map task for group 1. R0 already has M1’s single pizza value. It cannot finish the correct total until it receives M0’s two values.</p>
+<p>The <strong>coordinator</strong> assigns tasks to workers. The paper calls it the <strong>master</strong>. After the worker fails, it assigns M0 to another worker. That worker reads the saved order and recreates the missing file. R0 then fetches that replacement file. The framework performs these steps automatically.</p>
 <div class="lecture-walkthrough" data-lecture-scene="rerun-maps-when-local-files-disappear"></div>
 <ol>
-  <li><strong>Completed map:</strong> M0’s local file contains <code>[1, 1]</code>. R0 already has M1’s <code>[1]</code> but still needs M0.</li>
-  <li><strong>Worker failure:</strong> M0’s local output becomes inaccessible before R0 fetches it.</li>
-  <li><strong>Replacement task:</strong> the master assigns M0 to another worker, which reads the same available input.</li>
-  <li><strong>Replacement output:</strong> R0 fetches M0’s new <code>[1, 1]</code> and calculates <code>2 + 1 = 3</code> pizzas.</li>
+  <li><strong>Save the tally:</strong> M0’s local file contains the pizza values <code>[1, 1]</code>. R0 already has M1’s <code>[1]</code>.</li>
+  <li><strong>Lose access to the laptop:</strong> M0’s file becomes inaccessible before R0 fetches it. The saved order remains readable.</li>
+  <li><strong>Recreate the tally:</strong> another worker runs M0 again, reading the same order and emitting the same two pairs.</li>
+  <li><strong>Finish the total:</strong> R0 fetches M0’s new <code>[1, 1]</code> and calculates <code>2 + 1 = 3</code> pizzas.</li>
 </ol>
-<p>Available input and deterministic map code let the replacement reproduce the missing pairs. Finishing M0 did not copy its intermediate file to another machine. The rerun restores a missing contribution. It does not create another lunch order.</p>
+<p><strong>Deterministic</strong> means the same inputs produce the same outputs. Our map function follows fixed rules, so reading <code>“Pizza, pizza!”</code> again produces the same two pairs. Recovery requires both the available input and the code needed to reproduce those pairs.</p>
+<p><strong>Finishing the calculation does not guarantee that its file remains available.</strong> The framework reruns completed map tasks whose local output became inaccessible. Reducers that still need that output fetch its replacement. Completed reduce output is stored in the shared file system and survives this individual worker failure. <a href="#src-10">[10]</a></p>
 <div class="exercise learning-check" id="recovery-input-check">
   <span class="ex-label">Check what makes recovery possible</span>
-  <p>Could rerunning M0 recover the count if every copy of its original input had also disappeared?</p>
+  <p>Maya loses her tally file, and every saved copy of group 0’s order also disappears. Could rerunning M0 recover the count?</p>
   <details><summary>Check your explanation</summary><p>No. The map function needs the original order. A retry restores missing intermediate output only when the required input remains available.</p></details>
 </div>
 <p>A rerun restores lost contributions. If multiple attempts produce output for M0, the framework must also prevent the extra attempt from increasing the pizza total.</p>
@@ -861,9 +878,9 @@ document that supports the claim it is attached to.</p>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=partitions-20261110"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
-<script src="../../slides/decks/lectures-11-15.js?v=delivery-records-20261110"></script>
-<script src="../../slides/decks/teaching-notes.js?v=delivery-records-20261110"></script>
-<script src="../../slides/decks/clarity-captions.js?v=delivery-records-20261110"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=recovery-story-20261110"></script>
+<script src="../../slides/decks/teaching-notes.js?v=recovery-story-20261110"></script>
+<script src="../../slides/decks/clarity-captions.js?v=recovery-story-20261110"></script>
 <script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
 <script src="../../slides/decks/clarity-diagrams.js?v=mapreduce-20261109"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
