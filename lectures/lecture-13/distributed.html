@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
-<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
+<link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=partitions-20261110">
 <link rel="stylesheet" href="styles.css?v=8">
 <link rel="stylesheet" href="slide-walkthroughs.css?v=1">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
@@ -369,6 +369,12 @@ partitions[0]["pizza"] = [1]
 print(partitions)
 # [{'pizza': [1]}, {}]</code></pre>
 <p>The expression <code>[{} for _ in range(n)]</code> runs <code>{}</code> once per partition, creating a new dictionary each time. The variable <code>_</code> holds a loop number that we do not use. Now partition 0 contains pizza, and partition 1 remains empty.</p>
+<figure class="partition-reference-diagram" id="partition-dictionary-visual">
+  <div class="partition-reference-scroll" tabindex="0" role="region" aria-label="Shared and separate partition dictionaries; scroll horizontally on a small screen">
+    <img src="diagrams/partition-dictionaries.svg" width="760" height="870" alt="With list multiplication, partitions 0 and 1 both point to dictionary A, containing pizza. With a new dictionary per partition, partition 0 points to A containing pizza, while partition 1 points to empty dictionary B.">
+  </div>
+  <figcaption>Each arrow means “points to this dictionary.” Both cases show the state after <code>partitions[0]["pizza"] = [1]</code>. Follow partition 1’s arrow: does it reach the changed dictionary or a separate empty dictionary?</figcaption>
+</figure>
 <details><summary>Check yourself: with separate dictionaries, what changes when you add salad to partition 1?</summary>
 <p>After <code>partitions[1]["salad"] = [1]</code>, partition 1 contains salad. Partition 0 still contains only pizza. Each partition keeps its own key groups.</p>
 </details>
@@ -525,8 +531,17 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 <h2 id="average-partials" data-slide="9" data-scene="preserve-sum-and-count">9 · Preserve sum and count</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
 
-<p>Consider a separate toy example: the average, also called the <strong>mean</strong>, of three delivery times. Add the times, then divide by the number of deliveries.</p>
-<p>M0 holds delivery times of 10 and 10 minutes. M1 holds one delivery time of 40 minutes. M0 therefore represents two deliveries, while M1 represents one.</p>
+<p>Consider a separate toy example: three completed food deliveries. Each input record stores how many minutes one delivery took. We want the average delivery time, also called the <strong>mean</strong>. Add the three delivery times, then divide by three.</p>
+<p>The system assigns these records to two map tasks, named <strong>M0</strong> and <strong>M1</strong>. M0 reads two records: delivery A took 10 minutes, and delivery B also took 10 minutes. M1 reads one record: delivery C took 40 minutes. These durations describe the food deliveries, not the time the map tasks take to run.</p>
+<table id="delivery-records">
+  <thead><tr><th>Delivery record</th><th>Time the delivery took</th><th>Map task that reads it</th></tr></thead>
+  <tbody>
+    <tr><td>A</td><td>10 minutes</td><td>M0</td></tr>
+    <tr><td>B</td><td>10 minutes</td><td>M0</td></tr>
+    <tr><td>C</td><td>40 minutes</td><td>M1</td></tr>
+  </tbody>
+</table>
+<p>M0 can calculate an average for its two deliveries. M1 can calculate an average for its one delivery. Can we combine those two averages to find the average across all three deliveries?</p>
 <div class="lecture-walkthrough" data-lecture-scene="preserve-sum-and-count"></div>
 <table id="average-inputs">
   <thead><tr><th>Input portion</th><th>Delivery times</th><th>Local average</th></tr></thead>
@@ -846,9 +861,9 @@ document that supports the claim it is attached to.</p>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=partitions-20261110"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
-<script src="../../slides/decks/lectures-11-15.js?v=mapreduce-clear-20261109"></script>
-<script src="../../slides/decks/teaching-notes.js?v=mapreduce-clear-20261109"></script>
-<script src="../../slides/decks/clarity-captions.js?v=mapreduce-clear-20261109"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=delivery-records-20261110"></script>
+<script src="../../slides/decks/teaching-notes.js?v=delivery-records-20261110"></script>
+<script src="../../slides/decks/clarity-captions.js?v=delivery-records-20261110"></script>
 <script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
 <script src="../../slides/decks/clarity-diagrams.js?v=mapreduce-20261109"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>

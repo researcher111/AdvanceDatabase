@@ -1133,7 +1133,7 @@ window.CourseClarityCaptions = {
       "Re-execute lost work and control accepted task outputs. Preserve the same count when placement and attempts change."
     ],
     "preserve-sum-and-count": [
-      "A new toy task averages delivery times. One group has two deliveries. The other group has one.",
+      "Each record describes one completed food delivery. M0 reads A and B, each 10 minutes. M1 reads C, which took 40 minutes.",
       "Averaging 10 and 40 gives 25 minutes. This incorrectly gives the unequal groups equal weight.",
       "Represent each partial result as (sum, count), then add the sums and counts separately.",
       "The correct average is 60 total minutes divided by 3 deliveries: 20 minutes."
