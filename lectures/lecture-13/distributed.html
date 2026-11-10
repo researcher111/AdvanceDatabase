@@ -352,6 +352,28 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
   <p>Enable JavaScript to step through the code and intermediate state.</p>
 </div>
 
+<section id="partition-dictionaries" aria-labelledby="partition-dictionaries-title">
+<h4 id="partition-dictionaries-title">Python detail: give each partition its own dictionary</h4>
+<p>Each partition needs a separate dictionary to store its key groups. In Python, <code>{}</code> creates an empty dictionary. The list <code>partitions</code> holds the dictionaries, with positions numbered from zero.</p>
+<p>Suppose we want two partitions. This code writes one pizza value into partition 0. Predict what partition 1 will contain.</p>
+<pre><code class="language-python">partitions = [{}] * 2
+partitions[0]["pizza"] = [1]
+print(partitions)
+# [{'pizza': [1]}, {'pizza': [1]}]</code></pre>
+<p><strong>Why does pizza appear in both?</strong> The expression <code>[{}] * 2</code> creates one dictionary and two list entries that point to it. Both entries show the same dictionary, so a change through either entry appears through both. Python does not copy the dictionary.</p>
+<p>This breaks the partition rule: pizza was assigned to partition 0, but partition 1 now shows pizza too. The same problem occurs with <code>[{}] * n</code> whenever <code>n</code> is greater than one.</p>
+<p><strong>Create a new dictionary for each partition:</strong></p>
+<pre><code class="language-python">n = 2
+partitions = [{} for _ in range(n)]
+partitions[0]["pizza"] = [1]
+print(partitions)
+# [{'pizza': [1]}, {}]</code></pre>
+<p>The expression <code>[{} for _ in range(n)]</code> runs <code>{}</code> once per partition, creating a new dictionary each time. The variable <code>_</code> holds a loop number that we do not use. Now partition 0 contains pizza, and partition 1 remains empty.</p>
+<details><summary>Check yourself: with separate dictionaries, what changes when you add salad to partition 1?</summary>
+<p>After <code>partitions[1]["salad"] = [1]</code>, partition 1 contains salad. Partition 0 still contains only pizza. Each partition keeps its own key groups.</p>
+</details>
+</section>
+
 <p><strong>Lab connection:</strong> <a href="../../labs/lab-11/sparkray.html#worked-example">Lab 11’s graded Part A runs in one Python process</a>. Its mapper must emit one pair per occurrence. Its shuffle must retain every value and group matching keys. Its reducer adds each group’s values.</p>
 
 <p class="keep-in-present">On a cluster, workers must use the same partition rule so equal keys reach the same destination. Python can choose a different string-hash seed for each process. A seed configures the hash calculation. Lab 11 avoids this issue by running its graded implementation in one process.</p>
@@ -822,7 +844,7 @@ document that supports the claim it is attached to.</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="../../slides/_shared/visuals.js"></script>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
-<script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
+<script src="../../labs/_shared/teaching-traces.js?v=partitions-20261110"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
 <script src="../../slides/decks/lectures-11-15.js?v=mapreduce-clear-20261109"></script>
 <script src="../../slides/decks/teaching-notes.js?v=mapreduce-clear-20261109"></script>

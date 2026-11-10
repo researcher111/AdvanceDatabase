@@ -335,8 +335,8 @@
       frame('Reduce each complete group', [7, 8], [['pizza total', 'sum([1,1,1]) = 3'], ['salad total', 'sum([1]) = 1'], ['sum of counts', '4']], 'Reduce receives one meal name and all its grouped values. reduce_counts adds those values and emits one total for that meal. Each group can be reduced independently after its values have been collected.'),
       frame('Distinguish counts from output order', [7, 8], [['result as a dictionary', '{pizza: 3, salad: 1}'], ['partition labels', 'may change across runs'], ['word totals', 'must stay the same']], 'The runner visits partitions in bucket order and sorts keys inside each bucket. That does not promise one global order. Compare counts by key, or explicitly sort the final results.')
     ],
-    question: 'Why is [{}] * n a bug when constructing the partitions?',
-    answer: 'It repeats references to one dictionary. Adding to one partition changes the same dictionary seen by every partition. Create a new dictionary for each bucket, for example with a comprehension, and check routing with more than one partition.'
+    question: 'If pizza belongs in partition 0, should adding a pizza value also change partition 1? Why?',
+    answer: 'No. Each partition needs its own dictionary. Adding pizza to partition 0 must leave partition 1 unchanged. If both list entries point to one dictionary, both show the change. The Python example below shows how to avoid this mistake.'
   });
   add('lsm', {
     title: 'A tombstone must hide an older value',

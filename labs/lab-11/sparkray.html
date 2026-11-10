@@ -130,6 +130,27 @@ Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vecto
   <p><strong>Worked result:</strong> The map emits four pairs. Shuffle groups three values under pizza and one under salad. Reduction gives <code>{"pizza": 3, "salad": 1}</code>, independent of bucket numbering.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
 </div>
+<section id="partition-dictionaries" aria-labelledby="partition-dictionaries-title">
+<h3 id="partition-dictionaries-title">Python detail: give each partition its own dictionary</h3>
+<p>Each partition needs a separate dictionary to store its key groups. In Python, <code>{}</code> creates an empty dictionary. The list <code>partitions</code> holds the dictionaries, with positions numbered from zero.</p>
+<p>Suppose we want two partitions. This code writes one pizza value into partition 0. Predict what partition 1 will contain.</p>
+<pre><code class="language-python">partitions = [{}] * 2
+partitions[0]["pizza"] = [1]
+print(partitions)
+# [{'pizza': [1]}, {'pizza': [1]}]</code></pre>
+<p><strong>Why does pizza appear in both?</strong> The expression <code>[{}] * 2</code> creates one dictionary and two list entries that point to it. Both entries show the same dictionary, so a change through either entry appears through both. Python does not copy the dictionary.</p>
+<p>This breaks the partition rule: pizza was assigned to partition 0, but partition 1 now shows pizza too. The same problem occurs with <code>[{}] * n</code> whenever <code>n</code> is greater than one.</p>
+<p><strong>Create a new dictionary for each partition:</strong></p>
+<pre><code class="language-python">n = 2
+partitions = [{} for _ in range(n)]
+partitions[0]["pizza"] = [1]
+print(partitions)
+# [{'pizza': [1]}, {}]</code></pre>
+<p>The expression <code>[{} for _ in range(n)]</code> runs <code>{}</code> once per partition, creating a new dictionary each time. The variable <code>_</code> holds a loop number that we do not use. Now partition 0 contains pizza, and partition 1 remains empty.</p>
+<details><summary>Check yourself: with separate dictionaries, what changes when you add salad to partition 1?</summary>
+<p>After <code>partitions[1]["salad"] = [1]</code>, partition 1 contains salad. Partition 0 still contains only pizza. Each partition keeps its own key groups.</p>
+</details>
+</section>
 <p><strong>Implementation checkpoints:</strong> create each partition dictionary separately. Preserve all duplicate occurrences in <code>map_words</code> and <code>shuffle</code>. Test with more than one partition. One bucket hides routing errors. The graded implementation runs sequentially, while optional Spark and Ray exercises add actual scheduling.</p>
 
 <!-- ============================================================ -->
@@ -336,7 +357,7 @@ OFFLINE group, and that is the whole grade. Parts 2 and 3 are for class discussi
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}], ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']});"></script>
-<script src="../_shared/teaching-traces.js?v=ste-20261015"></script>
+<script src="../_shared/teaching-traces.js?v=partitions-20261110"></script>
 <script src="../_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>
