@@ -7,90 +7,100 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=bigtable-clear-20261110">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
+<link rel="stylesheet" href="../lecture-13/slide-walkthroughs.css?v=1">
 </head>
-<body>
+<body class="bigtable-reading" data-lecture-deck="14">
 
 <aside class="toc">
   <div class="toc-title">Lecture 14</div>
   <p><a href="../../slides/lecture-14.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">The question we will trace</a></li>
-    <li><a href="#problem">B+ tree writes can become a storage bottleneck</a></li>
-    <li><a href="#model">Bigtable stores a sparse, sorted map</a></li>
-    <li><a href="#tablets">Tablets divide the sorted key space</a></li>
-    <li><a href="#lsm">The LSM write path buffers and flushes updates</a></li>
-    <li><a href="#try-it">Run the write path</a></li>
-    <li><a href="#worked-example">Trace a delete through older sorted files</a></li>
-    <li><a href="#reads">Use filters, indexes, and compaction to reduce reads</a></li>
-    <li><a href="#lsm-vs-btree">Compare B+ tree and LSM costs</a></li>
-    <li><a href="#cap">During a network partition, consistency and availability conflict</a></li>
+    <li><a href="#plan">Starting point and class plan</a></li>
+    <li><a href="#problem">1 · Organize writes into sorted batches</a></li>
+    <li><a href="#model">2 · Locate a value with row, column, and time</a></li>
+    <li><a href="#sparse">3 · Store present cells and selected versions</a></li>
+    <li><a href="#tablets">4 · Assign each row range to a tablet server</a></li>
+    <li><a href="#hotspot">5 · Explain why a split can leave a hotspot</a></li>
+    <li><a href="#lsm">6 · Protect a write with a durable log</a></li>
+    <li><a href="#memtable">7 · Keep recent writes in a sorted memtable</a></li>
+    <li><a href="#flush">8 · Flush a frozen memtable to an SSTable</a></li>
+    <li><a href="#versions">9 · Choose the newest visible record</a></li>
+    <li><a href="#compaction">10 · Merge sorted files without changing answers</a></li>
+    <li><a href="#deletes">11 · Keep a deletion marker until removal is safe</a></li>
+    <li><a href="#bloom">12 · Use a Bloom filter to rule out files</a></li>
+    <li><a href="#reads">13 · Find a block and reuse its cached copy</a></li>
+    <li><a href="#lsm-vs-btree">14 · Compare the full storage workload</a></li>
+    <li><a href="#cap">15 · Explain the choice during a network failure</a></li>
+    <li><a href="#recap">16 · Return to the deleted key</a></li>
     <li><a href="#descendants">Related storage systems</a></li>
-    <li><a href="#recap">Return to the opening question</a></li>
+    <li><a href="#prepare">Prepare for the next class</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#sources">Sources</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
-
 <button type="button" id="present-toggle" class="present-toggle" title="Toggle presentation mode (P)">
-  <span class="present-icon">◧</span>
-  <span class="present-label">Present</span>
+  <span class="present-icon">◧</span><span class="present-label">Present</span>
 </button>
-
 <main>
-
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 14 · Thursday November 19, 2026</div>
   <h1>Bigtable, LSM Trees &amp; NoSQL</h1>
   <div class="subtitle">The old value is still in a file. How does a later update or delete win?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
-
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p class="lede">Maya opens an immutable sorted file and finds <code>k = old</code>. The team has since written a new value and then deleted the key. Noor points to the old record: <q>If we can’t change this file, what stops that value coming back?</q></p>
-  <p>They lay out three records in sequence order: <code>old@5</code>, <code>new@8</code>, and <code>DELETE@9</code>. Maya reaches for the eraser. Noor stops her: <q>First show which record a current read must see.</q></p>
+  <p>Maya keeps a student club’s records in an ordered notebook. When a batch is complete, she copies it onto sealed pages.</p>
+  <p>She can read those pages, but she cannot edit their entries. New changes go into her current notebook.</p>
+  <p>One sealed page still says <code>k = old</code>. Here, <code>k</code> is a record’s label, or <strong>key</strong>. The team has since written a new value and then deleted that key.</p>
+  <p>Noor asks: <q>If we can’t change this file, what stops that value coming back?</q> Maya reaches for the eraser.</p>
+  <p>Noor stops her: <q>First show which record a current read must see.</q> We will follow the same key from an old value to a new value and a deletion.</p>
 </div>
-
-<p class="keep-in-present">An LSM engine buffers updates, flushes immutable sorted files, and merges them later. Reads must resolve versions across those structures. Bigtable combines this storage pattern with logging, caching, and range partitioning across servers. We will trace one key before comparing the read, write, and maintenance costs.</p>
-
 <div class="cite">
   Companion reading: Chang et&nbsp;al., <a href="https://research.google/pubs/pub27898/"><em>Bigtable: A Distributed Storage System for Structured Data</em></a> (OSDI 2006) ·
   O'Neil et&nbsp;al., <a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf"><em>The Log-Structured Merge-Tree</em></a> (1996, an earlier description of the storage design<sup class="src"><a href="#src-2" title="The Log-Structured Merge-Tree (LSM-Tree)">2</a></sup>) ·
   RocksDB's <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Overview">architecture overview</a> (the modern production LSM).
 </div>
 
-<p class="glossary-hint">Terms with dotted underlines, such as <span class="gloss-demo">this one</span>, have definitions. Hover over a term or tap it to show its definition below the sentence.</p>
+
+<h2 id="plan">Starting point and class plan</h2>
+<p><strong>Starting knowledge:</strong> keys and values, B+ tree leaf pages, and the difference between memory and durable storage. Memory holds working data but can lose it during a crash. Durable storage retains data across the failures its protocol promises to survive.</p>
+<p><strong>RAM</strong> means random-access memory, the working memory in these diagrams. <strong>I/O</strong> means input/output, such as reading or writing stored data.</p>
+<p><strong>Goal:</strong> Explain where Bigtable sends a row, how a write survives a crash, and why deleting a key does not immediately erase every older record.</p>
+<div class="callout note"><span class="label">Class plan</span>
+  <p>Start with <strong>Quiz 10</strong>, a 10-minute quiz on MapReduce, Spark, and Ray. Then study Bigtable and storage for workloads with many writes.</p>
+  <p>The numbered sections follow the slide sequence. Each diagram has its own controls and explanation. The reading includes the information needed to follow each example.</p>
+</div>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>A program changes a value only in memory, then the computer crashes. What information would let another process restore that change?</p><details><summary>Check your explanation</summary><p>It needs a surviving record of the change. Saving recovery information before reporting success lets the engine rebuild changes lost from memory.</p></details></div>
+<p class="glossary-hint">Dotted terms have extra definitions. Hover over a term or tap it to show its definition below the sentence.</p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
   <div id="glossary-content" class="glossary-content"></div>
 </div>
 
-<!-- ============================================================ -->
-<h2 id="plan">The question we will trace</h2>
-
-<div class="exercise learning-check">
-  <span class="ex-label">Start with what you already know</span>
-  <p>In microdb, why must recovery information survive a crash before an update is considered durable? If an old file cannot be edited, is forgetting a key in memory enough to delete it permanently?</p>
-  <details><summary>Check your explanation</summary><p>A durable log can reconstruct an update lost from memory. Forgetting a key in memory leaves older file records intact. A deletion needs a newer record that hides those older values until safe reclamation is possible.</p></details>
+<h2 id="problem" data-slide="1" data-scene="organize-writes-differently">1 · Organize writes into sorted batches</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=1&amp;b=1">Open slide 1 ↗</a></p>
+<p>A web crawler collects pages from many sites. Updating all those records can change many different B+ tree leaf pages.</p>
+<p>A <strong>dirty page</strong> is a memory copy changed since its last storage write. The <strong>buffer pool</strong> holds working copies of storage pages in memory. It can combine updates before writing dirty pages. However, scattered keys can still require writes to many separate storage locations.</p>
+<p>A <strong>log-structured merge-tree</strong>, or <strong>LSM tree</strong>, organizes updates into batches. It records changes in a log and keeps recent entries sorted in memory. It then writes each completed batch as a sorted file.</p>
+<p>A <strong>log</strong> is an ordered record of changes used for recovery. <strong>Sequential output</strong> writes a stream of data instead of repeatedly updating scattered locations. A <strong>sorted run</strong> is a sequence of entries ordered by key.</p>
+<p>A <strong>flush</strong> writes a memory batch to storage. <strong>Compaction</strong> merges existing sorted files into new sorted files. Later sections explain how each operation preserves reads.</p>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
+<table>
+  <thead><tr><th>Notebook comparison</th><th>Storage mechanism</th></tr></thead>
+  <tbody>
+    <tr><td>Current ordered notebook</td><td>The <strong>memtable</strong> holds recent writes in memory, sorted by key.</td></tr>
+    <tr><td>Sealed pages</td><td>A completed sorted file is <strong>immutable</strong>: later writes do not edit its entries.</td></tr>
+    <tr><td>Copying several sealed batches into one</td><td>Compaction merges records and removes obsolete versions only when safe.</td></tr>
+  </tbody>
+</table>
 </div>
-
-<p class="keep-in-present"><strong>Quiz 10</strong> first (MapReduce, Spark &amp; Ray, 10 min), then LSM trees and storage for write-heavy workloads.</p>
-
-<p class="keep-in-present">A large crawler generates a steady stream of writes across a growing key space. B+ tree buffering can combine updates, but scattered dirty pages still create pressure on storage. LSM engines organize the write path around sequential output and background merging. The question is how much read and compaction work that choice adds.</p>
-
-
-<p class="keep-in-present"><strong>B+ trees and LSM trees organize updates differently.</strong> B+ trees update pages in place. LSM trees buffer updates and merge sorted files. Each design changes the work for writes, reads, and maintenance.</p>
-
-<!-- ============================================================ -->
-<h2 id="problem">B+ tree writes can become a storage bottleneck</h2>
-
-<p class="keep-in-present">The B+ tree updates the leaf that contains a key. Writes to scattered keys can dirty many pages. Reducing scattered writes can add later compaction work. It can also increase the number of files that a read must check. Compare these costs before selecting a design.</p>
-
-<h3 class="new-slide" data-kicker="Write-heavy storage">Sequential output can reduce scattered writes</h3>
-
+<p>The notebook explains organization. It does not make memory durable or decide which old records are safe to remove. Recovery and version rules supply those guarantees.</p>
+<div class="lecture-walkthrough" data-lecture-scene="organize-writes-differently"></div>
+<p><strong>The essential tradeoff:</strong> batching can reduce scattered writes, but reads may need several files and merging adds storage work.</p>
 <pre class="equation"><code>Writes: sequential output can reduce scattered storage operations.
 Reads:  sorted files and indexes help locate a key or scan a range.
 
@@ -99,50 +109,67 @@ LSM tree: buffer updates, flush sorted files, and merge them with compaction.
 
 The LSM design reduces some write costs while adding read and compaction work.</code></pre>
 
-<!-- ============================================================ -->
-<h2 id="model">Bigtable stores a sparse, sorted map</h2>
-
-<p class="keep-in-present">Before tracing how an update reaches storage, identify the value being updated. Bigtable names a cell by its row and column, and identifies a version by its timestamp. Its tablet server must then persist and retrieve the bytes at that address.</p>
-
-<p class="keep-in-present">The Bigtable paper describes a “sparse, distributed, persistent, multidimensional sorted map.” A value is addressed by three coordinates: row key, column name, and timestamp:<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></p>
-
+<h2 id="model" data-slide="2" data-scene="a-multidimensional-map">2 · Locate a value with row, column, and time</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=2&amp;b=1">Open slide 2 ↗</a></p>
+<p><strong>Bigtable</strong> distributes an ordered map of records across servers. This lecture explains the original 2006 design and its storage mechanisms. Modern products can add interfaces and guarantees beyond that paper.</p>
+<p>A <strong>row key</strong> names a row. A <strong>column</strong> names a field within that row. The intersection of one row and column is a <strong>cell</strong>.</p>
+<p>A <strong>column family</strong> is a declared group of related columns. A <strong>qualifier</strong> names a column within that family. In <code>anchor:cnnsi.com</code>, <code>anchor</code> is the family and <code>cnnsi.com</code> is the qualifier.</p>
+<p>A <strong>timestamp</strong> identifies one version of a cell. A <strong>version</strong> is a value saved for that cell at a particular timestamp. The application can interpret these timestamps as page-fetch times, for example.</p>
+<p>Bigtable stores each value as bytes. The application decides whether those bytes represent text, an image, or another format.</p>
+<div class="lecture-walkthrough" data-lecture-scene="a-multidimensional-map"></div>
+<p>The paper describes a “sparse, distributed, persistent, multidimensional sorted map.” Its address combines the row, column, and timestamp. A <strong>retention policy</strong> specifies which versions to keep. The next section explains sparse storage and retention. <a href="#src-1">[1]</a></p>
 <pre class="equation"><code>(row_key, column_family:qualifier, timestamp) → bytes
 
 row_key    "com.cnn.www"      · reversed domains group related rows in key order
 column     "anchor:cnnsi.com" · declared family, dynamic qualifier
 timestamp  a cell version    · reads select versions under the retention policy</code></pre>
+<p>Rows follow row-key order. A <strong>prefix</strong> is the beginning of a key. Reversing domain components puts related addresses under a shared prefix, such as <code>com.cnn</code>. A <strong>range scan</strong> reads keys between chosen bounds in that order.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Two values share a row and column but have different timestamps. Did we create another row?</p><details><summary>Check your explanation</summary><p>No. We stored two versions of one cell. A read can request a particular timestamp or the newest retained version.</p></details></div>
 
-<p class="keep-in-present">The row key is a string, and rows follow key order. Related prefixes, such as reversed domain names, group related rows. A column name contains a declared family and a qualifier, such as <code>anchor:cnnsi.com</code>. Only populated cells require storage. The timestamp identifies a cell version. Reads can select versions, usually starting with the newest.</p><p>Each value is a byte string. The application defines how to interpret it.</p>
-
-<h3 class="new-slide" data-kicker="The data model">Compare Bigtable’s data model with relational tables</h3>
-
+<h2 id="sparse" data-slide="3" data-scene="sparse-cells-and-versions">3 · Store present cells and selected versions</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=3&amp;b=1">Open slide 3 ↗</a></p>
+<p><strong>Sparse</strong> means the system stores present cells without reserving a fixed value slot for every absent cell. Different rows can have different qualifiers within the same declared family.</p>
+<p>The diagram starts with three rows and three columns. A later step adds a fourth column. Colored cells contain values. Empty boxes show possible positions, not allocated empty records.</p>
+<p>A new qualifier can appear in one row without adding a value to every other row. Column names and other bookkeeping still consume storage.</p>
+<p>A <strong>retention policy</strong> states which cell versions to keep. For example, a family can retain the latest versions or versions younger than a chosen age. Each retained version consumes storage.</p>
+<div class="lecture-walkthrough" data-lecture-scene="sparse-cells-and-versions"></div>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
-  <thead><tr><th>Model choice</th><th>Effect</th><th>Related course concept</th></tr></thead>
+  <thead><tr><th>Original Bigtable choice</th><th>Meaning and limit</th></tr></thead>
   <tbody>
-    <tr><td>rows sorted by key, always</td><td>range scans + natural range partitioning</td><td>B+ tree leaves. Lab 8’s folder partitions.</td></tr>
-    <tr><td><span class="gloss" data-gloss="wide-column">sparse columns</span>, no fixed row width</td><td>a million anchor columns, zero storage for absent ones</td><td>the null-bitmap discussion, taken to its limit</td></tr>
-    <tr><td>versions instead of overwrites</td><td>Reads select cell versions by timestamp. This does not provide a transactionally consistent snapshot across rows.</td><td>Lecture 8’s versioned records. Cell timestamps do not provide all MVCC transaction rules.</td></tr>
-    <tr><td>no joins, no SQL, single-row transactions only<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></td><td>Single-row atomic updates avoid distributed transactions across rows. Range scans can still contact several tablets.</td><td>a restricted operation set makes some distributed tasks simpler, while the application must handle work such as joins</td></tr>
+    <tr><td>Sorted rows</td><td>Nearby row keys support ordered scans and contiguous row ranges.</td></tr>
+    <tr><td>Sparse cells</td><td>Absent cells need no fixed value slots. This differs from microdb’s fixed record layout.</td></tr>
+    <tr><td>Timestamped cell versions</td><td>Versions can be selected and retained. Cell timestamps alone do not create a consistent transaction view across rows.</td></tr>
+    <tr><td>Atomic operations within one row</td><td><strong>Atomic</strong> means the operation takes effect as a whole. The original design does not supply general transactions across rows.</td></tr>
+    <tr><td>A nonrelational interface</td><td>The original interface does not provide SQL joins. Applications must arrange that work separately. <a href="#src-1">[1]</a></td></tr>
   </tbody>
 </table>
-
-<!-- ============================================================ -->
-<h2 id="tablets">Tablets divide the sorted key space</h2>
-
-<p class="keep-in-present">B+ tree leaves cover ordered key ranges. Similarly, Bigtable divides its sorted row-key space into intervals. A tablet is one interval assigned to a server. It is not a copy of the complete table. Trace increasing keys before assuming another split distributes their writes.</p>
-
-<div class="layer-card">
-  <div class="lc-row"><span class="lc-k">The unit</span><span>A tablet holds a contiguous range of row keys. The original paper describes tablets of roughly 100–200 MB. Tablets let the system assign different ranges to different servers.</span></div>
-  <div class="lc-row"><span class="lc-k">The machinery</span><span>A master assigns tablets to tablet servers. Tablets split as they grow, and their assignments can change to balance load or recover from a server failure.<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Why recovery works</span><span>The original design stores durable files and commit logs in GFS, the replicated Google File System. If a tablet server fails, another server can open its files and replay its log. Replay restores committed writes not yet in an SSTable.<sup class="src"><a href="#src-3" title="The Google File System (SOSP 2003)">3</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Key design</span><span>Monotonically increasing timestamp prefixes direct new writes toward the end of the key space, potentially overloading the final tablet. Choose keys with both write distribution and required scans in mind. Reversed domain names, for example, group pages from the same domain.</span></div>
 </div>
+<p><strong>NoSQL</strong> is a broad label for systems with data models or interfaces outside the traditional relational model. The label does not specify a storage engine or transaction guarantee.</p>
 
-<h3 class="new-slide" data-kicker="Tablets">See how row keys distribute writes</h3>
+<h2 id="tablets" data-slide="4" data-scene="tablets-separate-placement-from-storage">4 · Assign each row range to a tablet server</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=4&amp;b=1">Open slide 4 ↗</a></p>
+<p>A <strong>tablet</strong> is a contiguous range of row keys managed as one unit. A <strong>tablet server</strong> is a process that serves reads and writes for assigned tablets. One server can serve several tablets.</p>
+<p>The system finds the tablet whose boundaries contain the requested row key. It then sends the request to that tablet’s assigned server.</p>
+<p>In the diagram’s simplified alphabetic ranges, <code>kim</code> belongs to <code>h–m</code>. A scan from <code>dee</code> through <code>kim</code> needs both <code>a–g</code> and <code>h–m</code>. The original design maintains location information so clients can find the correct server.</p>
+<p>A <strong>master</strong> coordinates tablet assignments. It can assign tablets to another server after failure or when balancing work. The original paper describes tablets of roughly <strong>100–200 MB</strong>. <a href="#src-1">[1]</a></p>
+<p><strong>Partitioning</strong> divides data into portions. <strong>Replication</strong> keeps multiple copies of data. A tablet is one portion of the table, not a copy of the whole table.</p>
+<div class="lecture-walkthrough" data-lecture-scene="tablets-separate-placement-from-storage"></div>
+<p>The original design stores files and recovery logs in the <strong>Google File System</strong>, or <strong>GFS</strong>. GFS replicates stored data across machines. Losing a tablet server therefore need not destroy its durable files. <a href="#src-3">[3]</a></p>
+<p>The replacement server opens those files and <strong>replays</strong> the log: it applies saved changes to rebuild lost memory state. Section 6 explains the required write ordering. Reassignment and recovery still take time.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Why does assigning a tablet to a new server differ from making another durable copy?</p><details><summary>Check your explanation</summary><p>Assignment changes who serves the row range. Replication creates another stored copy. Both can help recovery, but they solve different problems.</p></details></div>
 
+<h2 id="hotspot" data-slide="5" data-scene="splitting-cannot-fix-a-moving-hotspot">5 · Explain why a split can leave a hotspot</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=5&amp;b=1">Open slide 5 ↗</a></p>
+<p>A <strong>hotspot</strong> is a range that receives much more traffic than other ranges. Row-key design determines which tablet receives each new write.</p>
+<p>Keys that begin with increasing timestamps keep moving toward the end of the ordered key space.</p>
+<p>The diagram uses numeric intervals. In <code>[75, 100)</code>, the left boundary is included and the right boundary is excluded. Key <code>99</code> belongs to that interval.</p>
+<p>A <strong>tablet split</strong> divides one range into two adjacent ranges. Splitting the last range reduces its size. However, the next increasing keys still reach the new last range.</p>
+<div class="lecture-walkthrough" data-lecture-scene="splitting-cannot-fix-a-moving-hotspot"></div>
+<p>These counts are an illustrative workload, not measured Bigtable throughput. The example with distributed user IDs spreads writes by assumption. Actual user IDs can also be uneven.</p>
 <div class="viz" id="viz-tablet">
   <div class="viz-title">one sorted key space, four tablets · pick a key design, send writes</div>
-  <p class="viz-description">Each box is a tablet: a contiguous key range on a server. Send a burst of writes with each key design. Inspect their destinations. Split a heavily used tablet. Send more writes to check whether the split improves distribution.</p>
+  <p class="viz-description">Each box is a tablet: a contiguous key range on a server. Each interval includes its left boundary and excludes its right boundary. Send a burst of writes with each key design. Inspect their destinations. Split a heavily used tablet. Send more writes to check whether the split improves distribution.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="tb-user">write 12 rows · user-id keys</button>
     <button type="button" class="btn primary" id="tb-time">write 12 rows · timestamp keys</button>
@@ -153,12 +180,66 @@ timestamp  a cell version    · reads select versions under the retention policy
   <div id="tb-stage"></div>
   <p class="viz-caption">With increasing timestamp keys, splitting the last tablet creates a new final tablet that receives the next writes. Splitting reduces tablet size but does not spread this write pattern. Distributing prefixes can help balance writes, though it may make range scans contact more tablets.</p>
 </div>
+<p>A hash prefix can spread writes across ranges. Here, a hash is a repeatable function that maps a key to a numeric value. This can make one logical range scan contact more tablets.</p>
+<p><strong>Choose keys for both writes and reads.</strong> Reversed domains group related pages, but a heavily used domain can still create a hotspot.</p>
 
-<!-- ============================================================ -->
-<h2 id="lsm">The LSM write path buffers and flushes updates</h2>
+<h2 id="lsm" data-slide="6" data-scene="the-log-protects-memory">6 · Protect a write with a durable log</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=6&amp;b=1">Open slide 6 ↗</a></p>
+<p>A <strong>write-ahead log</strong>, or <strong>WAL</strong>, records changes before later storage actions depend on them. For the durable write shown here, the engine makes the log record durable before reporting success.</p>
+<p><strong>Append</strong> means add a record at the end of the log. <strong>Sync</strong> means request the persistence required by the durability protocol. An <strong>acknowledgment</strong>, abbreviated <code>ack</code>, tells the caller the write succeeded.</p>
+<p>Follow <code>k2 = v3</code>. The engine appends its recovery record, makes that record durable, and updates the sorted memtable. It then acknowledges success.</p>
+<div class="lecture-walkthrough" data-lecture-scene="the-log-protects-memory"></div>
+<p>If the server crashes before the memory batch reaches a sorted file, recovery replays the log. The new process can restore <code>k2 = v3</code>.</p>
+<p>This is a <strong>redo</strong> use of a log: recovery reapplies a recorded update. It differs from microdb’s physical undo protocol, which restores earlier values. The lab’s ordering rules cannot be copied unchanged into this design.</p>
+<p>Engines can share one persistence operation across several writes. They can also offer weaker durability settings. Our trace assumes the acknowledged write has durable recovery information.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>The caller received success, but the update never reached a sorted file. What must recovery still be able to read?</p><details><summary>Check your explanation</summary><p>The durable log record. Losing the memtable is recoverable if that record and the required older stored data survive.</p></details></div>
 
-<p class="keep-in-present">A memtable is like a sorted notebook. An SSTable is like a sealed group of sorted pages. New entries enter the notebook. A flush creates a file, and compaction merges files. This analogy explains the organization. The log provides durability.</p>
+<h2 id="memtable" data-slide="7" data-scene="the-memtable-stays-ordered">7 · Keep recent writes in a sorted memtable</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=7&amp;b=1">Open slide 7 ↗</a></p>
+<p>The <span class="gloss" data-gloss="memtable">memtable</span> holds recent entries in memory, sorted by key. Arrival order can differ from key order.</p>
+<p>The example receives <code>k8, k2, k5, k1, k7</code>. Its ordered structure keeps <code>k1, k2, k5, k7, k8</code>. That order lets a flush write the entries sequentially.</p>
+<div class="lecture-walkthrough" data-lecture-scene="the-memtable-stays-ordered"></div>
+<p>A later <code>k2</code> write changes its newest value. This simple drawing keeps one current value per key in memory. Production engines can retain older versions for reads that require earlier views.</p>
+<p>The notebook analogy applies to key order. A real memtable uses an ordered data structure. Ordinary dictionary insertion order does not automatically sort keys.</p>
 
+<h2 id="flush" data-slide="8" data-scene="freeze-a-sorted-file">8 · Flush a frozen memtable to an SSTable</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=8&amp;b=1">Open slide 8 ↗</a></p>
+<p>An <strong>SSTable</strong>, short for <strong>Sorted String Table</strong>, is an immutable file of sorted key-value entries. It also has an index that helps locate data within the file.</p>
+<p>At its size threshold, the engine <strong>freezes</strong> the current memtable: it stops changing that batch. A flush writes the frozen entries to an SSTable. New writes enter another active memtable.</p>
+<div class="lecture-walkthrough" data-lecture-scene="freeze-a-sorted-file"></div>
+<p>The frozen batch can remain readable while the file is written. A later update goes into active memory and eventually another file. It does not edit the older SSTable.</p>
+<p>The notebook has now become sealed pages. Those pages can coexist with a newer notebook entry for the same key. The next section explains which record a read selects.</p>
+
+<h2 id="versions" data-slide="9" data-scene="read-the-newest-visible-value">9 · Choose the newest visible record</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
+<p>Return to <code>k</code>. The toy trace assigns each change an increasing <strong>sequence number</strong>, which records its order. <code>old@5</code> means the old value was written at sequence 5.</p>
+<p>A <strong>snapshot</strong> is a retained view used by a read. In this toy model, snapshot 8 admits records numbered 8 or earlier. A record is <strong>visible</strong> when the chosen view permits the read to use it.</p>
+<p>A <strong>tombstone</strong> is a deletion marker stored as a newer record. <code>DELETE@9</code> means the key is absent from sequence 9 onward, until another update.</p>
+<p><strong>Keep two kinds of time separate.</strong> These update numbers explain a generic LSM version rule. Bigtable’s application cell timestamps do not automatically provide a transactionally consistent snapshot across rows.</p>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
+<table>
+  <thead><tr><th>Read view</th><th>Visible records for <code>k</code></th><th>Newest visible record</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>Snapshot 5</td><td><code>old@5</code></td><td><code>old@5</code></td><td><code>old</code></td></tr>
+    <tr><td>Snapshot 8</td><td><code>old@5</code>, <code>new@8</code></td><td><code>new@8</code></td><td><code>new</code></td></tr>
+    <tr><td>Snapshot 9</td><td><code>old@5</code>, <code>new@8</code>, <code>DELETE@9</code></td><td><code>DELETE@9</code></td><td>Absent</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The animation first adds the three records. It then previews a <strong>partial compaction</strong>: a merge that includes only some files. The final merge includes all older records and assumes no retained snapshot needs them.</p>
+<div class="lecture-walkthrough" data-lecture-scene="read-the-newest-visible-value"></div>
+<p><strong>A read must resolve versions across relevant structures.</strong> The original Bigtable paper describes a merged view of the memtable and SSTables. File location alone does not determine which version wins. <a href="#src-1">[1]</a></p>
+<p>Our simpler latest-value widget searches memory and files from newest to oldest. That shortcut depends on its version ordering. General engines use their file organization, timestamps, and visibility rules.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Snapshot 8 remains active after DELETE@9 arrives. Can the engine erase new@8 immediately?</p><details><summary>Check your explanation</summary><p>No. Snapshot 8 must still return new. The engine must preserve the information needed for that earlier view.</p></details></div>
+
+<h2 id="compaction" data-slide="10" data-scene="merge-sorted-runs">10 · Merge sorted files without changing answers</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=10&amp;b=1">Open slide 10 ↗</a></p>
+<p><span class="gloss" data-gloss="compaction">Compaction</span> merges sorted files and writes new sorted output. It can reduce the number of files a read checks and reclaim obsolete versions.</p>
+<p>A <strong>merge cursor</strong> marks the next unread entry in each input. Compare those entries, output the next key, and advance the corresponding cursor.</p>
+<p>At duplicate <code>k2</code>, this current-value example keeps <code>k2:v2</code> instead of <code>k2:v1</code>. Its output keys are <code>k1, k2, k4, k7, k8</code>.</p>
+<div class="lecture-walkthrough" data-lecture-scene="merge-sorted-runs"></div>
+<p>Actual compaction must also retain versions needed by active snapshots. It must retain tombstones while older values could reappear. Sequential merging still reads and rewrites stored bytes.</p>
+<p>Here is the complete write path. Each line now names a mechanism already introduced.</p>
 <pre class="equation"><code>write(k, v):   1. append a log record       recovery information
                2. update the memtable      sorted state in memory
 
@@ -166,17 +247,13 @@ memtable full: flush an SSTable            immutable sorted entries and an index
 
 background:    compact selected SSTables   merge entries; remove obsolete versions
                                           and tombstones only when safe</code></pre>
-
-<p class="keep-in-present">The WAL, SSTable flushes, and compaction outputs favor sequential I/O. This reduces scattered in-place writes, but a key can appear in several runs at once. Reads must find the newest visible version, and compaction must keep the number of runs manageable.</p>
-
-<!-- ============================================================ -->
-<h2 id="try-it">Run the write path</h2>
-
-<p>This example has a 6-entry memtable. Write keys. Observe the SSTables created by flushes. <span class="gloss" data-gloss="compaction">Compact</span> the files. Look up keys to inspect the search path.</p>
-
+<h3 id="try-it">Run the write path</h3>
+<p>This widget flushes when the memtable contains <strong>6 distinct keys</strong>. Updating a key already in memory does not add another slot. Write 6 keys performs six write calls, so it need not fill all six slots.</p>
+<p>The widget sorts string keys, so <code>k12</code> comes before <code>k2</code>. The slide diagrams use numeric order for their short key labels.</p>
+<p>The label <strong>L0</strong> means level 0, the initial group of sorted files in LevelDB-style storage. <a href="#src-9">[9]</a> This is modern LSM terminology. The original Bigtable paper uses minor, merging, and major compaction for its flush and merge operations. <a href="#src-1">[1]</a></p>
 <div class="viz" id="viz-lsm">
   <div class="viz-title">LSM engine · memtable (cap 6) → L0 SSTables → compaction</div>
-  <p class="viz-description">Each write enters the sorted memtable in RAM. At 6 entries, the widget flushes it to an immutable SSTable. Compact merges all displayed SSTables into one and keeps the newest value of each key. A lookup highlights the structures it checks, starting with the newest data. The widget omits WAL persistence so it can focus on flushes and compaction.</p>
+  <p class="viz-description">Each write enters the sorted memtable in RAM. At 6 distinct keys, the widget flushes the memtable to an immutable SSTable. Compact merges all displayed SSTables into one and keeps the newest value of each key. A lookup highlights the structures it checks, starting with the newest data. The widget omits WAL persistence so it can focus on flushes and compaction.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="lsm-w1">Write 1 key</button>
     <button type="button" class="btn primary" id="lsm-w6">Write 6 keys</button>
@@ -192,34 +269,32 @@ background:    compact selected SSTables   merge entries; remove obsolete versio
   <div id="lsm-stage"></div>
   <p class="viz-caption">Write about 20 keys without compaction. Run a lookup. The lookup can check the memtable and several SSTables. Compact the files. Repeat the lookup to compare the number of files searched. Actual engines schedule partial compactions and use indexes and filters to avoid unnecessary reads.</p>
 </div>
+<p>The widget merges all displayed files and keeps the newest value per key. It omits persistent logging, deletes, and retained snapshots. The delete trace below supplies the missing safety case.</p>
 
-<!-- ============================================================ -->
-<h2 id="worked-example">Trace a delete through older sorted files</h2>
-
-<p class="keep-in-present">Return to the three opening records. Predict the result at snapshot 9 before revealing the delete. A partial compaction merges two files while an older file still contains a value for the key. Can that compaction safely remove the deletion marker?</p>
+<h2 id="deletes" data-slide="11" data-scene="deletion-must-hide-older-values">11 · Keep a deletion marker until removal is safe</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=11&amp;b=1">Open slide 11 ↗</a></p>
+<p>Deleting an in-memory entry does not remove an older value from an immutable file. A later lookup could otherwise find that older value and incorrectly return it.</p>
+<p>The engine writes a newer tombstone. A current read that selects the tombstone returns absent. It must not continue looking for an older value to return.</p>
+<div class="lecture-walkthrough" data-lecture-scene="deletion-must-hide-older-values"></div>
+<h3 id="worked-example">Trace a delete through older sorted files</h3>
+<p>SSTable A holds <code>old@5</code>. B holds <code>new@8</code>. C holds the flushed <code>DELETE@9</code>. A partial compaction merges B and C while A remains outside that merge.</p>
+<p>If the output drops the tombstone, a later read can find A’s old value. Therefore, the merged output must keep <code>DELETE@9</code>.</p>
+<p>The walkthrough starts earlier, with <code>DELETE@9</code> still in memory. It then flushes that record to C before the partial merge.</p>
 <div data-teaching-trace="lsm">
   <p><strong>Worked result:</strong> At snapshot 9, DELETE@9 is the newest visible record. The read returns absent despite older values at 8 and 5. A partial compaction must retain the tombstone while an older value could reappear.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
 </div>
-<p><strong>Connection to earlier lectures:</strong> WAL protects updates before flush, sorted files support ordered access, and snapshots can require retaining old versions. Compaction must preserve those contracts while reclaiming storage.</p>
+<p>Safe removal requires checking every older value that could reappear and every retained read view. In replicated systems, repair and retention rules can add further constraints.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>A complete merge includes A, B, and C, but snapshot 8 is still active. Is removing every record for k safe?</p><details><summary>Check your explanation</summary><p>No. Including every file prevents an outside value from reappearing, but snapshot 8 still needs new@8. Both conditions matter.</p></details></div>
 
-<!-- ============================================================ -->
-<h2 id="reads">Use filters, indexes, and compaction to reduce reads</h2>
-
-<p class="keep-in-present">The version rule determines the correct answer. Finding that version also requires work. Filters rule out files. Indexes locate blocks. Caches reuse blocks. Compaction reduces the sorted files that a read must check.</p>
-
-<h3 class="new-slide" data-kicker="The read path">Three ways to avoid unnecessary file reads</h3>
-
-<div class="layer-card">
-  <div class="lc-row"><span class="lc-k">Bloom filters</span><span>An SSTable’s <span class="gloss" data-gloss="bloom">Bloom filter</span> answers “definitely absent” or “possibly present.” An absent result lets the engine skip the file. A possible match still needs checking because the filter can have false positives. Filter size and hash count control the false-positive rate. Correctly maintained filters have no false negatives.<sup class="src"><a href="#src-4" title="RocksDB Bloom Filter (RocksDB wiki)">4</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Sparse indexes + caches</span><span>An SSTable index stores selected keys and block offsets. Searching that smaller index identifies which block may contain the key. A block cache can then satisfy frequently repeated reads without accessing storage.<sup class="src"><a href="#src-1" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)">1</a></sup></span></div>
-  <div class="lc-row"><span class="lc-k">Compaction itself</span><span>Compaction merges sorted files and removes obsolete entries when safe. It must retain versions required by snapshots and deletion markers needed to hide older values. Removing entries that are no longer needed reduces the number of files or versions a lookup must check. The exact overlap rules depend on the compaction strategy. Merging also consumes CPU and storage bandwidth, so more aggressive compaction has a cost.</span></div>
-</div>
-
-<h3 class="new-slide" data-kicker="The read path">Build a Bloom filter</h3>
-
-<p>This example uses 32 bits and 3 hash functions per key. Insert keys. Query keys that you did not insert. Continue until the filter returns "maybe here" for an absent key. This is a false positive.</p>
-
+<h2 id="bloom" data-slide="12" data-scene="a-one-sided-membership-test">12 · Use a Bloom filter to rule out files</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=12&amp;b=1">Open slide 12 ↗</a></p>
+<p>A missing key can force a read to check several files. A <strong>Bloom filter</strong> is a compact membership test that can rule out a file before reading its entries.</p>
+<p>A <strong>bit</strong> stores either 0 or 1. Our filter has <strong>32 bits</strong> and <strong>3 hash functions</strong>. Each function chooses a bit position from the key.</p>
+<p>Insertion sets the key’s chosen bits to 1. A query checks those same positions. Any zero proves absence, because insertion would have set that bit.</p>
+<p>All ones mean <strong>possibly present</strong>. Other keys can set those same bits. A <strong>false positive</strong> occurs when an absent key passes this test.</p>
+<div class="lecture-walkthrough" data-lecture-scene="a-one-sided-membership-test"></div>
+<p>The diagram inserts <code>k1</code> through <code>k6</code>. Query <code>k7</code> has a required zero and can skip the file. Query <code>k17</code> finds all required bits set, but the key is absent.</p>
 <div class="viz" id="viz-bloom">
   <div class="viz-title">Bloom filter · 32 bits, 3 hashes · look for a false positive</div>
   <p class="viz-description">An insertion sets 3 bits for each key. Hover over a bit to see which keys set it. A query checks the same 3 bits. Any zero means <em>definitely absent</em>, so the engine can skip the SSTable. Three ones mean only <em>maybe here</em>.</p>
@@ -234,36 +309,59 @@ background:    compact selected SSTables   merge entries; remove obsolete versio
   <div class="bloom-msg" id="bloom-msg">The filter starts empty, so every key is definitely absent without reading an SSTable.</div>
   <p class="viz-caption">If an absent key’s three bits are all set by other keys, the filter returns “possibly present.” The engine may then read a file unnecessarily. An inserted key cannot produce “definitely absent,” because inserting it set the same bits that its query checks. Real systems size filters for a chosen false-positive rate.</p>
 </div>
+<p>A correctly maintained Bloom filter has no <strong>false negatives</strong>: it does not report an inserted key as absent. A false positive costs another check, not a lost result. <a href="#src-4">[4]</a></p>
+<p>Do not clear shared bits to delete one key from an ordinary Bloom filter. Another inserted key can depend on those bits. Filter size and hash count affect the false-positive rate.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>The filter says possibly present. Can the read return a value without checking the stored entries?</p><details><summary>Check your explanation</summary><p>No. The filter stores membership evidence, not the value or its visibility. The engine must inspect the candidate data.</p></details></div>
 
-<!-- ============================================================ -->
-<h2 id="lsm-vs-btree">Compare B+ tree and LSM costs</h2>
-
-<p class="keep-in-present">Maya can explain why the deleted key stays absent. Noor now asks what the design costs under their workload. Compare the operations you need, including the background work that keeps future reads manageable.</p>
-
-<p class="key-fact keep-in-present"><strong>Different update paths, different costs:</strong> B+ trees update the page containing a key. LSM trees collect updates in memory, write sorted files, and merge them later.</p>
-
+<h2 id="reads" data-slide="13" data-scene="skip-files-then-find-a-block">13 · Find a block and reuse its cached copy</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=13&amp;b=1">Open slide 13 ↗</a></p>
+<p>A <strong>block</strong> is a chunk of file data read as a unit. A <strong>sparse index</strong> records selected boundary keys and the blocks where their ranges begin.</p>
+<p>For the diagram’s query <code>k9</code>, the index entries are <code>k1 → 0</code>, <code>k8 → 1</code>, and <code>k16 → 2</code>. Under the example’s numeric key order, <code>k9</code> falls between <code>k8</code> and <code>k16</code>. The engine searches block 1.</p>
+<p>A <strong>block cache</strong> keeps recently read blocks in memory. If a needed block is cached, the engine can inspect that copy without another storage read.</p>
+<div class="lecture-walkthrough" data-lecture-scene="skip-files-then-find-a-block"></div>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
-  <thead><tr><th></th><th>B+ tree (microdb, Postgres, MySQL)</th><th>LSM (Bigtable, Cassandra, RocksDB)</th></tr></thead>
+  <thead><tr><th>Mechanism</th><th>Question answered</th><th>Work avoided</th></tr></thead>
   <tbody>
-    <tr><td>write path</td><td>An update descends to the key’s leaf page and changes it in place. Updates can affect scattered pages. The buffer pool batches dirty-page writes.</td><td>A write enters the WAL and memtable. WAL, flush, and compaction output favor sequential I/O.</td></tr>
-    <tr><td>read path</td><td>An index lookup descends from root to leaf. Fetching the row can require another access, depending on storage layout.</td><td>A read checks the memtable and up to K SSTables, newest first. Bloom filters can exclude most SSTables without a disk read.</td></tr>
-    <tr><td>background cost</td><td>Page splits and dirty-page flushes. Engines can also require version cleanup or space reclamation.</td><td>background compaction rewrites data and must keep pace with the workload</td></tr>
-    <tr><td>range scans</td><td>excellent: leaf pages are linked, so a scan walks sibling leaves in key order</td><td>good: a scan merges K sorted runs, one per SSTable plus the memtable, in a single pass</td></tr>
-    <tr><td>often useful for</td><td>read-heavy, point-lookup OLTP</td><td>write-heavy: ingest, events, time series, crawls</td></tr>
+    <tr><td>Bloom filter</td><td>Can this file contain the key?</td><td>Checking a file that is definitely absent</td></tr>
+    <tr><td>Sparse index</td><td>Which block could contain it?</td><td>Scanning unrelated blocks</td></tr>
+    <tr><td>Block cache</td><td>Is that block already in memory?</td><td>Reading the same block from storage again</td></tr>
+    <tr><td>Compaction</td><td>Can files be merged safely?</td><td>Some future file and version checks</td></tr>
   </tbody>
 </table>
+</div>
+<p>The filter can skip a file. Otherwise, the engine locates a candidate block and uses a cached copy when available. It still checks actual entries and applies the version rule.</p>
+<p>Illustrations use numeric order for labels such as <code>k8</code> and <code>k16</code>. Real Bigtable row keys use byte-string order. Applications can pad numeric components when they need numeric order to match key order.</p>
 
-<p class="keep-in-present">Both designs maintain sorted data. A B+ tree updates pages as writes arrive. An LSM tree groups buffered writes into sorted files and later merges those files. Neither is faster for every workload. Compare read latency, write throughput, memory use, and maintenance cost for the required operations.</p>
+<h2 id="lsm-vs-btree" data-slide="14" data-scene="the-read-write-space-budget">14 · Compare the full storage workload</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=14&amp;b=1">Open slide 14 ↗</a></p>
+<p><strong>Read amplification</strong> is extra work needed to answer a logical read, such as searching several files for one key. <strong>Write amplification</strong> is stored data written or rewritten relative to the application’s writes. <strong>Space amplification</strong> is extra storage beyond the live data, including retained obsolete versions.</p>
+<p>Compaction can reduce read and space costs by doing more write work. If incoming writes outpace compaction, extra files and pending maintenance can accumulate.</p>
+<div class="lecture-walkthrough" data-lecture-scene="the-read-write-space-budget"></div>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
+<table>
+  <thead><tr><th>Operation</th><th>B+ tree organization</th><th>LSM organization</th></tr></thead>
+  <tbody>
+    <tr><td>Write</td><td>Change the page for the key. The buffer pool can batch dirty-page writes.</td><td>Log and buffer changes. Flush sorted files and merge them later.</td></tr>
+    <tr><td>Point lookup</td><td>Follow the index to a leaf. Depending on the layout, fetching the row can need another access.</td><td>Resolve the key across relevant memory structures and files. Filters and indexes can reduce file accesses.</td></tr>
+    <tr><td>Range scan</td><td>Read leaf pages in key order.</td><td>Merge relevant sorted runs and resolve duplicate versions.</td></tr>
+    <tr><td>Maintenance</td><td>Split pages, write dirty pages, and perform the engine’s required cleanup.</td><td>Read and rewrite files during compaction. Preserve required versions and deletions.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Both designs maintain sorted data and can support transactions. B+ tree engines appear in systems such as microdb, PostgreSQL, and MySQL. Bigtable, Cassandra, and RocksDB use related LSM techniques.</p>
+<p><strong>Choose using the full workload.</strong> Compare read response time, writes completed per second, memory, storage space, and maintenance under the required durability settings. Neither design is faster for every workload.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>A test times only log appends and ends before any compaction. Does it establish sustained LSM write performance?</p><details><summary>Check your explanation</summary><p>No. Sustained performance also requires flush and compaction to keep up. Include their costs and the required read workload.</p></details></div>
 
-<!-- ============================================================ -->
-<h2 id="cap">During a network partition, consistency and availability conflict</h2>
-
-<p class="keep-in-present">Durable storage on one server is only part of the story. Two replicas lose communication after one sees a completed update. Predict what the isolated replica can know before naming the consistency and availability guarantees.</p>
-
-<h3 class="new-slide" data-kicker="Replication and CAP">CAP</h3>
-
-<p class="keep-in-present">CAP refers to consistency, availability, and network partitions. Here, consistency means linearizability: operations behave as if there were one current copy. Availability means every request to a nonfailed node eventually receives a non-error response. During a partition, some nodes cannot exchange messages. The theorem says that a system cannot guarantee both properties for all requests while that partition persists.</p>
-
+<h2 id="cap" data-slide="15" data-scene="a-network-partition-forces-a-choice">15 · Explain the choice during a network failure</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=15&amp;b=1">Open slide 15 ↗</a></p>
+<p>A <strong>replica</strong> is another copy of data. A <strong>network partition</strong> is a communication failure that prevents some machines from exchanging messages. This differs from a data partition, which divides records into portions.</p>
+<p>Imagine Maya and Noor each keep a copy of the club’s record. Both copies show <code>v1</code>. Maya records <code>v2</code> and confirms the write, but Noor’s copy cannot receive it.</p>
+<p>A caller then asks Noor for the current value. Noor cannot infer <code>v2</code> from silence. This copy analogy explains missing information, not a particular replication protocol.</p>
+<p><strong>Linearizability</strong> requires operations to behave like one current copy while respecting completed operations. In this example, a read begun after the completed <code>v2</code> write cannot correctly return the earlier <code>v1</code>.</p>
+<p><strong>CAP</strong> names consistency, availability, and network partitions. <strong>CAP availability</strong> requires every request to a nonfailed node to eventually receive a non-error response. Waiting indefinitely or rejecting that read sacrifices this guarantee.</p>
+<div class="lecture-walkthrough" data-lecture-scene="a-network-partition-forces-a-choice"></div>
+<p>During a partition, a system cannot guarantee both linearizability and availability for all requests. Some systems continue on one side while another side rejects requests. <a href="#src-5">[5]</a></p>
 <pre class="equation"><code>During a network partition, both guarantees cannot hold for all requests:
 
   Consistency (linearizability): operations behave as if there were one current copy.
@@ -275,49 +373,49 @@ Preserving the second can allow replicas to disagree until communication recover
 Bigtable, HBase, Spanner: examples that prioritize strong consistency.
 Dynamo, Cassandra, Riak: designs that support availability-oriented choices.
 Exact guarantees depend on the operation and configuration.</code><sup class="src"><a href="#src-5" title="CAP Twelve Years Later: How the 'Rules' Have Changed (Eric Brewer, IEEE Computer 2012)">5</a></sup><sup class="src"><a href="#src-6" title="Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)">6</a></sup></pre>
+<p>The product names above summarize design directions, not every modern configuration. In original Bigtable, atomicity concerns operations within a row. Choose a guarantee for the operation before applying a system label.</p>
+<p><strong>Reconciliation</strong> brings copies into agreement after communication returns, using the system’s conflict rules. <strong>Eventual consistency</strong> allows temporary disagreement but promises convergence if updates stop and communication and reconciliation continue.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Noor returns v1 immediately after the completed v2 write. Which guarantee fails in this trace?</p><details><summary>Check your explanation</summary><p>Linearizability fails because the read misses an earlier completed write. Returning an answer promptly does not establish that the answer reflects the current value.</p></details></div>
 
-<!-- ============================================================ -->
-<h2 id="descendants">Related storage systems</h2>
-
-<p class="keep-in-present">Bigtable and Dynamo influenced distributed storage systems with different priorities. Bigtable emphasizes a sorted data model and storage layout. Dynamo emphasizes availability and replication. Later systems combine and extend these ideas.</p>
-
-<h3 class="new-slide" data-kicker="The descendants">Related implementations</h3>
-
-<table>
-  <thead><tr><th>System</th><th>Lineage</th><th>One-line identity</th></tr></thead>
-  <tbody>
-    <tr><td>HBase</td><td>inspired by Bigtable</td><td>a distributed wide-column store built on Hadoop’s HDFS</td></tr>
-    <tr><td>Cassandra</td><td>Bigtable's engine × Dynamo's replication</td><td>A masterless AP wide-column store with configurable consistency per query.<sup class="src"><a href="#src-7" title="Apache Cassandra documentation: Architecture overview and Dynamo">7</a></sup></td></tr>
-    <tr><td>DynamoDB</td><td>a managed key-value service with a different design from the original Dynamo paper</td><td>AWS's managed key-value store: pay-per-request, single-digit-ms<sup class="src"><a href="#src-8" title="Amazon DynamoDB product page">8</a></sup></td></tr>
-    <tr><td>RocksDB / LevelDB</td><td>embedded key-value engines using related LSM techniques<sup class="src"><a href="#src-9" title="LevelDB implementation notes (doc/impl.md)">9</a></sup></td><td>LSM libraries used by systems such as Kafka Streams and Flink. CockroachDB uses the related Pebble engine.<sup class="src"><a href="#src-10" title="Cockroach Labs blog: Introducing Pebble, a RocksDB-inspired key-value store written in Go; Kafka Streams config docs">10</a></sup></td></tr>
-    <tr><td>Spanner</td><td>Bigtable's successor</td><td>A globally distributed database with SQL, replicated data, and transactions. TrueTime exposes clock uncertainty.<sup class="src"><a href="#src-11" title="Spanner: Google's Globally-Distributed Database (OSDI 2012)">11</a></sup></td></tr>
-  </tbody>
-</table>
-
-<p class="keep-in-present">Spanner shows that distributed scale can coexist with a relational interface and transactions. Its design adds replication, transaction coordination, and a clock-uncertainty API. The storage layout, query language, and transaction model are related design choices, but one does not uniquely determine the others.</p>
-
-<div class="callout note">
-  <span class="label">Case study · Discord's trillion messages, 2023<sup class="src"><a href="#src-12" title="How Discord Stores Trillions of Messages (Discord Engineering blog)">12</a></sup></span>
-  <p class="keep-in-present">Discord’s 2023 engineering report describes <span class="gloss" data-gloss="hotspot">hot partitions</span>, expensive maintenance, and garbage-collection pauses in its Cassandra message store. The team moved to ScyllaDB in May 2022. It also introduced Rust data services to control database traffic. Both stores use LSM techniques, but their implementations and supporting services differ. Data structures alone do not determine performance. Workload distribution and resource management also affect latency.<sup class="src"><a href="#src-12" title="How Discord Stores Trillions of Messages (Discord Engineering blog)">12</a></sup></p>
-</div>
-
-<!-- ============================================================ -->
-<h2 id="recap">Return to the opening question</h2>
-
-<div class="exercise learning-check">
-  <span class="ex-label">Explain it to a teammate</span>
-  <p>SSTable A still holds <code>old@5</code>. A compaction merges only B’s <code>new@8</code> and C’s <code>DELETE@9</code>. Can it simply drop both records because the key is deleted?</p>
-  <details><summary>Check your explanation</summary><p>No. Removing the tombstone could expose A’s old value in a later current read. Retain the deletion marker while that value can reappear. Also retain versions that required snapshots need. Deletion alone does not establish that reclamation is safe.</p></details>
-</div>
-
-<p class="keep-in-present">Return to <code>k</code>. Old bytes can remain, but a current read uses the newest visible record. The engine logs updates, buffers them, and flushes sorted files. Reads resolve versions across those structures. Compaction must preserve correct results while reclaiming storage.</p>
-
+<h2 id="recap" data-slide="16" data-scene="trace-an-acknowledged-write">16 · Return to the deleted key</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=16&amp;b=1">Open slide 16 ↗</a></p>
+<p>Return to <code>k</code>. Old bytes can remain in files, but a current read must use the newest visible record. A deletion marker is a record that wins that comparison.</p>
+<div class="lecture-walkthrough" data-lecture-scene="trace-an-acknowledged-write"></div>
+<p>The log protects acknowledged updates. The memtable orders recent entries. A flush creates sorted files, and compaction merges them while preserving required reads.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>SSTable A still holds old@5. A compaction merges only B’s new@8 and C’s DELETE@9. Can it simply drop both records?</p><details><summary>Check your explanation</summary><p>No. Removing the tombstone could expose A’s old value in a later current read. Retain the marker while that value can reappear. Also preserve versions that required snapshots need.</p></details></div>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Now all files are included and no retained snapshot needs k. What two checks make removing its tombstone safe in this toy trace?</p><details><summary>Check your explanation</summary><p>No older value remains outside the merge to reappear, and no retained read view needs the removed records. Deletion alone was not enough.</p></details></div>
 <ul class="recap-list">
-  <li>Bigtable combines logging, sorted records, range partitioning, and caching across servers. Row-key design affects which records are stored together and where writes go.</li>
-  <li>An LSM engine buffers writes, flushes immutable SSTables, and compacts them. Filters, sparse indexes, and caching help reads avoid unnecessary file access.</li>
-  <li>During a network partition, a system cannot guarantee both linearizable results and a non-error response to every request at every nonfailed node. Choose behavior that fits the application’s requirements.</li>
+  <li>Bigtable assigns ordered row ranges to tablet servers. Key design determines where writes go and which ranges a scan needs.</li>
+  <li>LSM storage reduces some write costs through batching. Reads and compaction must still resolve all relevant versions correctly.</li>
+  <li>Filters, indexes, and caches avoid different kinds of read work. They do not replace the version rule.</li>
+  <li>During network failure, another durable copy may still lack the latest completed update. Replication needs explicit read and write guarantees.</li>
 </ul>
 
+<h2 id="descendants">Related storage systems</h2>
+<p>This comparison extends the main lecture. An <strong>embedded engine</strong> is a library used inside an application process. A <strong>managed service</strong> runs the database infrastructure for its users.</p>
+<p>Bigtable emphasizes ordered data and its placement across servers. The original Dynamo paper emphasizes replication and availability. Later systems combine these ideas in different ways. <a href="#src-6">[6]</a></p>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
+<table>
+  <thead><tr><th>System</th><th>Connection to this lecture</th></tr></thead>
+  <tbody>
+    <tr><td>HBase</td><td>A Bigtable-inspired store with column families. It uses Hadoop’s distributed file system, HDFS, for stored files. <a href="https://hbase.apache.org/">Apache HBase overview</a>.</td></tr>
+    <tr><td>Cassandra</td><td>Combines related sorted storage with Dynamo-inspired replication. Configurable consistency controls how many replicas must participate in an operation. <a href="#src-7">[7]</a></td></tr>
+    <tr><td>DynamoDB</td><td>A managed key-value and document service. It has a different design from the original Dynamo paper. <a href="#src-8">[8]</a></td></tr>
+    <tr><td>RocksDB / LevelDB</td><td>Embedded key-value engines using related LSM techniques. <a href="#src-9">[9]</a> RocksDB supplies storage for systems such as <a href="https://kafka.apache.org/44/configuration/kafka-streams-configs/">Kafka Streams</a> and <a href="https://nightlies.apache.org/flink/flink-docs-stable/docs/ops/state/state_backends/">Flink</a>.</td></tr>
+    <tr><td>Pebble</td><td>CockroachDB’s related LSM engine, introduced as its default in version 20.2 in fall 2020. <a href="#src-10">[10]</a></td></tr>
+    <tr><td>Spanner</td><td>A later Google system with replicated data and transactions across distributed data. Its TrueTime interface reports clock uncertainty. <a href="#src-11">[11]</a></td></tr>
+  </tbody>
+</table>
+</div>
+<p>Spanner shows that distributed storage can coexist with a relational interface and transactions. A query language, storage layout, and transaction model are related choices. One choice does not uniquely determine the others.</p>
+<div class="callout note">
+  <span class="label">Case study · Discord’s trillion messages, 2023</span>
+  <p>Discord’s 2023 engineering report describes hot partitions and costly maintenance in its Cassandra message store. Automatic memory cleanup, or <strong>garbage collection</strong>, also caused pauses.</p>
+  <p>The team moved to ScyllaDB in May 2022. It also introduced Rust data services to control database traffic.</p>
+  <p>Both stores use LSM techniques, but their implementations and supporting services differ. Workload distribution and resource management also affect response time. <a href="#src-12">[12]</a></p>
+</div>
+
+<h2 id="prepare">Prepare for the next class</h2>
 <p class="keep-in-present"><strong>Tuesday November 24:</strong> study graph databases and review course connections. Quiz 11 on Bigtable, LSM, and NoSQL starts the class. The retrieval milestone was due November 12. The project question swap is due November 19. The final project workshop is December 3.</p>
 
 <p class="keep-in-present"><strong>B+ trees and LSM trees trade read work for write work.</strong> B+ trees update pages in place, while LSM trees buffer writes and merge sorted files. Caching, batching, and compaction determine the actual I/O cost.</p>
@@ -329,7 +427,7 @@ Exact guarantees depend on the operation and configuration.</code><sup class="sr
   <li><strong>Bring</strong> project evaluation numbers to the December 3 workshop. Prepare one proposed Quiz 11 question.</li>
 </ul>
 
-<!-- ============================================================ -->
+
 <h2 id="faq">FAQ</h2>
 
 <h3 class="keep-in-present">Is Postgres/MySQL "obsolete" for big workloads then?</h3>
@@ -344,11 +442,7 @@ Exact guarantees depend on the operation and configuration.</code><sup class="sr
 <h3 class="keep-in-present">Could microdb grow an LSM engine?</h3>
 <p class="keep-in-present">Yes, as an optional extension. Retain the logging layer. Replace updates to existing record pages with a sorted memtable and immutable files. Add a merge operation for compaction. Implement version and deletion handling. Compare write throughput and read cost with the existing engine.</p><p>Any improvement depends on the workload and implementation.</p>
 
-<footer>
-  DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
-</footer>
 
-<!-- ============================================================ -->
 <h2 id="sources">Sources</h2>
 <p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
 document that supports the claim it is attached to.</p>
@@ -369,13 +463,24 @@ document that supports the claim it is attached to.</p>
   <li id="src-14"><a href="https://chromium.googlesource.com/chromium/src/+/main/content/browser/indexed_db/docs/README.md">Chromium IndexedDB backing store documentation</a></li>
 </ol>
 
-</main>
 
+<footer>DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science</footer>
+</main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
-<script src="../../labs/_shared/lab-base.js?v=14"></script>
-<script src="viz.js?v=ste-20261015"></script>
+<script src="../../slides/_shared/visuals.js"></script>
+<script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
+<script src="../../slides/_shared/trace-scenes.js?v=3"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=mapreduce-clear-20261109"></script>
+<script src="../../slides/decks/teaching-notes.js?v=bigtable-clear-20261110"></script>
+<script src="../../slides/decks/clarity-captions.js?v=bigtable-clear-20261110"></script>
+<script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
+<script src="../../slides/decks/clarity-diagrams.js?v=bigtable-clear-20261110"></script>
+<script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
+<script src="../lecture-13/slide-walkthroughs.js?v=2"></script>
+<script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>
+<script src="viz.js?v=bigtable-clear-20261110"></script>
 <script src="../../labs/_shared/teaching-trace.js?v=1"></script>
 </body>
 </html>

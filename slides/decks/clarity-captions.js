@@ -1163,99 +1163,99 @@ window.CourseClarityCaptions = {
   },
   "14": {
     "organize-writes-differently": [
-      "Maya opens SSTable A: k = old at sequence 5. The file is immutable.",
-      "A newer record in B has k = new at sequence 8. The old bytes still exist.",
-      "DELETE at sequence 9 makes a current read return absent. Keep its tombstone while old values could reappear."
+      "Maya keeps an old record in a sealed file. The key k labels that record.",
+      "A later record says k = new. Which value should a current read return?",
+      "A later DELETE k means the record is absent. How can the engine keep the old file without returning its value?"
     ],
     "a-multidimensional-map": [
-      "Choose the row key before deciding where to store the row.",
-      "The family and qualifier identify a column within that row.",
-      "A timestamp identifies a cell version. The application interprets the cell’s bytes."
+      "A row key names one row. Bigtable stores rows in key order.",
+      "A column name combines a declared family and a qualifier that names a column within that family.",
+      "A timestamp selects a cell version. The value is bytes that the application interprets."
     ],
     "sparse-cells-and-versions": [
-      "Store present cells without allocating every missing cell.",
-      "Add a qualifier to one row without filling that column in every row.",
-      "Keep the versions required by the retention policy. Each version uses storage."
+      "A cell is one row–column intersection. Sparse storage omits cells with no stored value.",
+      "Add anchor:school only to r2. Other rows do not need a reserved value for that column.",
+      "A retention policy specifies which versions to keep. Here the same cell has versions t3, t2, and t1."
     ],
     "tablets-separate-placement-from-storage": [
-      "Cut the sorted key space into contiguous tablet ranges.",
-      "Assign each range to a serving tablet server.",
-      "In the original Bigtable design, replicated storage holds the durable files.",
-      "Another server can take over a tablet while its files stay in shared storage."
+      "A tablet is a contiguous range of row keys. Together, these ranges divide the table.",
+      "A tablet server handles reads and writes for its assigned ranges.",
+      "The Google File System (GFS) keeps replicated copies of the durable log and data files.",
+      "The master assigns the failed server’s tablet to another server. Recovery loads its files and replays its logged updates."
     ],
     "splitting-cannot-fix-a-moving-hotspot": [
-      "Writes with distributed prefixes can reach several ranges.",
-      "Increasing timestamps put new writes at the tail of the key space.",
-      "Split the hot range and predict where the next increasing key lands.",
-      "It still goes to the rightmost range. A smaller tablet does not change that write pattern."
+      "A hotspot is a range receiving much more work than others. These toy writes initially reach four ranges equally.",
+      "Increasing timestamp keys send all twelve new writes to the newest range.",
+      "Split that range into two disjoint intervals. Predict where the next key, 99, belongs.",
+      "Key 99 still reaches the newest interval. Splitting a range does not change the incoming key pattern."
     ],
     "the-log-protects-memory": [
-      "Follow the write for k2 before it enters memory.",
-      "Record the recovery information in the log.",
-      "For a durable write, sync the required log record before acknowledging success.",
-      "The memtable holds the update. The durable log can restore it after RAM is lost."
+      "A write-ahead log (WAL) records an update so recovery can repeat it after a crash.",
+      "Append the recovery record to the log before relying on the memory copy.",
+      "Make the required log record durable: it must survive the failures covered by the storage contract.",
+      "Update the ordered memory buffer, then acknowledge success. The durable log can rebuild this buffer after a crash."
     ],
     "the-memtable-stays-ordered": [
-      "Entries arrive out of order: k8, k2, k5, k1, k7.",
-      "Like an ordered notebook, the memtable keeps entries sorted for writing to a file.",
-      "A later k2 record changes its newest visible value without editing an old file."
+      "A memtable is an ordered memory buffer for recent writes. These keys arrive out of order.",
+      "Like entries in an ordered notebook, the memtable keeps keys sorted for a later file write.",
+      "A later k2 record changes its current value. The simplified view shows only that value. Some readers need retained versions."
     ],
     "freeze-a-sorted-file": [
-      "The active memtable reaches its size threshold.",
-      "Freeze this notebook of entries so its contents stop changing.",
-      "Seal the sorted batch into an immutable SSTable.",
-      "Use a new active memtable for incoming writes while the old batch is flushed."
+      "A flush copies buffered entries into a sorted string table (SSTable), an immutable file whose existing entries stay unchanged.",
+      "Freeze this batch: stop changing its entries, but keep it readable.",
+      "Write a sorted string table (SSTable): an immutable file of sorted entries. Immutable means its existing entries are not edited.",
+      "Accept incoming writes in a new active memtable while the frozen batch finishes its flush."
     ],
     "read-the-newest-visible-value": [
-      "Read k from A: old at sequence 5.",
-      "A visible record at sequence 8 in B overrides it.",
-      "The visible deletion at sequence 9 makes the current result absent.",
-      "Merge B and C, but keep DELETE@9 while A still contains old@5.",
-      "Here all older versions are included and no active snapshot needs them, so these records can be removed."
+      "The toy sequence number orders updates. At sequence 5, the newest visible record says k = old.",
+      "A read at sequence 8 includes the newer record in B, so it returns new.",
+      "A tombstone is a deletion marker. DELETE at sequence 9 makes the current result absent.",
+      "Compaction merges sorted files. Merge B and C, but keep DELETE@9 because A still contains old@5.",
+      "A snapshot preserves an earlier read view. Remove these records only when no required view needs them and older values cannot reappear."
     ],
     "merge-sorted-runs": [
-      "Two sealed sorted batches can overlap in keys and versions.",
-      "Advance their merge cursors in key order.",
-      "This current-value view keeps k2:v2. Real compaction also retains versions that active snapshots need.",
-      "Write one sorted output. Sequential merging still consumes read and write bandwidth."
+      "A sorted run is a batch of entries in key order. These two file runs contain different versions of k2.",
+      "A merge cursor marks the next unread entry. Repeatedly take the smaller next key.",
+      "This current-value example keeps k2:v2. An engine must also retain versions needed by its read and retention rules.",
+      "Write one sorted output. Sequential merging still reads input bytes and writes output bytes."
     ],
     "deletion-must-hide-older-values": [
-      "Return to the opening problem: the old file still holds k2 = v1.",
-      "Write a newer tombstone instead of altering the immutable file.",
-      "A current read honors the visible tombstone and returns absent.",
-      "Drop the tombstone only when older values cannot reappear and required snapshots remain valid."
+      "Return to the opening puzzle: the old file still holds k2 = v1.",
+      "Write a newer tombstone, a deletion marker, instead of editing the old file.",
+      "The current read honors the newest visible marker and returns absent.",
+      "Remove the marker only when older values cannot reappear and required snapshots remain valid."
     ],
     "a-one-sided-membership-test": [
-      "Begin with zero bits and predict an absent query.",
-      "Insertion sets the selected bits for each key.",
+      "A Bloom filter summarizes possible membership using bits, each either 0 or 1.",
+      "A hash function maps each key to bit positions. Insertion sets those bits to 1.",
       "Any required zero bit proves absence, so the file can be skipped.",
       "If every required bit is 1, the key might be present. Search the file to find out.",
-      "A false positive sends us to a file that does not contain the key."
+      "A false positive means the filter says “possibly present” for an absent key. The extra file check still returns absent."
     ],
     "skip-files-then-find-a-block": [
-      "Use a negative Bloom-filter result to rule out a file.",
-      "For a possible match, use the sparse index to choose a candidate block.",
-      "Search that block and resolve its visible record.",
-      "Reuse a cached block when available. Each layer avoids a different kind of work."
+      "A Bloom filter can skip an absent file. A possible match still needs an actual lookup.",
+      "A block groups stored entries. A sparse index stores selected keys and block locations. For k9, choose the block beginning at k8.",
+      "A block is a stored group of entries. Search block 1, whose keys start at k8 and end before k16.",
+      "A block cache keeps recently read blocks in memory. Reusing block 1 avoids another storage read."
     ],
     "the-read-write-space-budget": [
-      "A B+ tree modifies searchable pages as updates arrive.",
-      "An LSM buffers entries and writes immutable sorted runs.",
-      "Compaction reads the sorted runs and writes their merged output.",
-      "Choose from measured reads, writes, space, and durability needs, not the SQL or NoSQL label."
+      "A B+ tree updates searchable pages. Nearby updates can share page writes.",
+      "An LSM tree is a log-structured merge tree: it buffers writes and stores sorted runs that it later merges.",
+      "Compaction adds reads, writes, and temporary storage. If it falls behind, runs accumulate and incoming writes may slow down.",
+      "Choose a starting design from the required reads, writes, storage space, and durability. Measure the complete workload."
     ],
     "a-network-partition-forces-a-choice": [
-      "Both replicas begin with v1.",
-      "Replica 1 receives a completed v2 write. Communication with replica 2 is interrupted.",
-      "An isolated replica can wait rather than serve a value missing that completed write.",
-      "Returning v1 stays responsive but is not linearizable in this example.",
-      "After communication resumes, use the system’s conflict rules to reconcile."
+      "A replica is another copy of data. Both copies begin with v1.",
+      "A network partition interrupts communication. Replica 1 completes a v2 write that replica 2 cannot learn about.",
+      "Linearizability requires this later read to respect the completed write. Replica 2 cannot safely return v1.",
+      "Availability requires each request to a non-failed node to eventually return a non-error response. Returning stale v1 sacrifices linearizability here.",
+      "Reconciliation makes copies agree after communication resumes. Its conflict rules depend on the system."
     ],
     "trace-an-acknowledged-write": [
-      "Return to k: sync its recovery log record before acknowledging a durable write.",
-      "Buffer its ordered record, including a deletion when needed.",
-      "Flush immutable sorted files and merge them without exposing obsolete records.",
-      "A read checks the memtable and stored files to find the newest visible record."
+      "Return to key k. Make its recovery log record durable before acknowledging the write.",
+      "Place its update in the ordered memtable. A deletion also needs a record.",
+      "Flush sorted files, then compact them without exposing obsolete values.",
+      "A current read returns absent after DELETE@9. Explain why keeping old@5 in a file does not change that result."
     ]
   },
   "15": {

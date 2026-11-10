@@ -248,10 +248,10 @@
   let tablets, writeSeq;
   function reset() {
     tablets = [
-      { label: 'a — g', count: 0, last: false },
-      { label: 'h — m', count: 0, last: false },
-      { label: 'n — s', count: 0, last: false },
-      { label: 't — …', count: 0, last: true },
+      { lo: 0, hi: 25, count: 0 },
+      { lo: 25, hi: 50, count: 0 },
+      { lo: 50, hi: 75, count: 0 },
+      { lo: 75, hi: 100, count: 0 },
     ];
     writeSeq = 0;
     msg.textContent = 'Four tablets, four servers, empty. Choose a key design.';
@@ -259,15 +259,15 @@
   }
 
   function writeUser() {
-    // user-id keys: effectively uniform over the key space
+    // Model a workload whose user IDs are spread across the current ranges.
     const landed = [];
     for (let i = 0; i < 12; i++) {
-      const t = (writeSeq * 7 + i * 5) % tablets.length;   // deterministic spread
+      const t = writeSeq % tablets.length;
       tablets[t].count++;
       landed.push(t);
       writeSeq++;
     }
-    msg.textContent = 'The example user-id keys are spread across the key ranges, so every tablet received writes.';
+    msg.textContent = 'These toy user-ID writes cycle across the current ranges. Real user-ID traffic can be uneven.';
     render(new Set(landed));
   }
 
@@ -285,12 +285,16 @@
     if (hot.count === 0) { msg.textContent = 'No writes have arrived yet. Send a burst of writes first.'; return; }
     const i = tablets.indexOf(hot);
     const half = Math.floor(hot.count / 2);
-    const [lo, hi] = hot.label.split(' — ');
+    const mid = hot.hi - hot.lo > 1 ? Math.ceil((hot.lo + hot.hi) / 2) : (hot.lo + hot.hi) / 2;
     tablets.splice(i, 1,
-      { label: `${lo} — ·`, count: hot.count - half, last: false },
-      { label: `· — ${hi}`, count: half, last: hot.last });
-    msg.textContent = `Split "${hot.label}" into two tablets. One moved to a new server. Send another timestamp-key burst to check the write distribution.`;
+      { lo: hot.lo, hi: mid, count: hot.count - half },
+      { lo: mid, hi: hot.hi, count: half });
+    msg.textContent = `Split ${rangeLabel(hot)} into two adjacent ranges. This model divides the existing count equally. Send another timestamp-key burst.`;
     render(new Set([i, i + 1]));
+  }
+
+  function rangeLabel(t) {
+    return `[${String(t.lo).padStart(2, '0')}, ${t.hi})`;
   }
 
   function render(justHit) {
@@ -298,7 +302,7 @@
     stage.innerHTML = '<div class="tb-row">' + tablets.map((t, i) => {
       const hot = t.count >= 12 && t.count === Math.max(...tablets.map(x => x.count));
       return `<div class="tb-tablet${hot ? ' hot' : ''}${justHit && justHit.has(i) ? ' hit' : ''}">` +
-        `<div class="tb-range">${t.label}</div>` +
+        `<div class="tb-range">${rangeLabel(t)}</div>` +
         `<div class="tb-fill-track"><div class="tb-fill" style="height:${(100 * t.count / max).toFixed(0)}%"></div></div>` +
         `<div class="tb-count">${t.count} write${t.count === 1 ? '' : 's'}${hot ? ' · HOT' : ''}</div>` +
         `</div>`;

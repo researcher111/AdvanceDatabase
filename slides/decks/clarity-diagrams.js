@@ -282,8 +282,8 @@
   }
 
   const lsmOpening=use(14,'organize-writes-differently',(d,s)=>{
-    label(d,'opening-question',640,230,'The old bytes remain. Which record determines the read?',P.ink,29);
-    const xs=[240,640,1040],names=['SSTable A','SSTable B','Memtable'],values=['old @ 5','new @ 8','DELETE @ 9'];
+    label(d,'opening-question',640,230,'The old record remains. What should Noor report now?',P.ink,29);
+    const xs=[240,640,1040],names=['Sealed file A','Later file B','Latest record'],values=['k = old','k = new','DELETE k'];
     xs.forEach((x,i)=>{
       if(i>s)return;
       label(d,'file-name-'+i,x,318,names[i],P.muted,26);
@@ -292,17 +292,69 @@
       if(i<s)d.arrow('newer-'+i,x+170,403,x+230,403,P.green,3);
     });
     label(d,'current-result',640,548,'Current read: '+['old','new','absent'][s],s===2?P.orange:P.green,34);
-    foot(d,'Same key k · sequence numbers order the toy updates · files remain immutable');
+    label(d,'fictional-note',640,596,'Fictional investigation · sealed files keep their entries unchanged',P.muted,23);
+    foot(d,'LSM = log-structured merge tree · collect writes, then merge sorted files');
   });
   if(lsmOpening){
     lsmOpening.states=['An older file','A newer value','A visible deletion'];
-    lsmOpening.teaching.builds=[
-      'Calibrate using WAL and buffer-pool memory from microdb. In the fictional debugging session, Maya opens an immutable file with old@5. Ask how an engine can update a key without editing these bytes.',
-      'Reveal new@8 in another file. Ask which record a current read should honor. Link the coming design to an ordered notebook that is sealed into immutable sorted pages.',
-      'Reveal DELETE@9. Noor asks what stops the old value returning. Keep the three records in view: the deletion is the newest record. Compaction must keep it while an older value could still reappear.'
-    ];
-    lsmOpening.teaching.reference='The opening follows the same old@5, new@8, DELETE@9 sequence as the worked trace. It motivates immutable runs, read-version resolution, and safe tombstone reclamation. The later discussion connects this storage choice to Bigtable’s address model, tablets, and durable logging.';
+    lsmOpening.teaching.reference='The opening uses plain records before naming the storage structures. Later, the worked trace assigns update sequence numbers 5, 8, and 9. The same old, new, and deleted states motivate read rules and safe removal of old records.';
   }
+
+  use(14,'a-multidimensional-map',(d,s)=>{
+    label(d,'address',640,218,['Choose a row','Then choose a column in that row','(row, family:qualifier, timestamp) → value'][s],P.ink,31);
+    const titles=['Row key','Column name','Version timestamp'],values=['com.cnn.www','anchor:example','2026-11-10'];
+    titles.forEach((title,i)=>{if(i<=s)card(d,'coordinate-'+i,65+i*420,280,310,112,title,values[i],i===s);});
+    label(d,'row-order',220,442,'Rows stay in key order.',P.muted,23);
+    if(s>=1){label(d,'family',640,438,'anchor = declared family',P.green,23);label(d,'qualifier',640,471,'example = qualifier',P.green,23);}
+    if(s>=2){label(d,'time-label',1060,438,'One version of this cell',P.orange,23);d.arrow('value-arrow',640,493,640,530,P.green,3);d.box('cell-value',360,543,560,65,'Value bytes: “example link text”',P.greenLight,P.green,27);}
+    foot(d,s===0?'Related reversed hostnames share a prefix: com.cnn.www and com.cnn.sports.':s===1?'A cell is one row–column intersection. A family must exist before its qualifiers are used.':'Each timestamp selects one stored version. The application interprets its value bytes.');
+  });
+  use(14,'sparse-cells-and-versions',(d,s)=>{
+    const xs=[350,580,810,1040],columns=['anchor:example','anchor:news','contents:','anchor:school'];
+    const cells=[[0,0],[0,2],[1,1],[2,0],[2,2]];
+    for(let c=0;c<(s>0?4:3);c++){
+      label(d,'column-'+c,xs[c],249,columns[c],c===3?P.orange:P.muted,23);
+      for(let r=0;r<3;r++){
+        const filled=cells.some(([rr,cc])=>rr===r&&cc===c)||(s>0&&r===1&&c===3);
+        const selected=s>0&&r===1&&c===3;
+        d.box('cell-'+r+'-'+c,xs[c]-100,281+r*91,200,66,filled?'value':'',selected?P.orangeLight:filled?P.greenLight:P.white,selected?P.orange:filled?P.green:P.line,26);
+      }
+    }
+    ['r1','r2','r3'].forEach((row,r)=>label(d,'row-'+r,155,323+r*91,row,P.ink,29));
+    if(s===0)label(d,'missing',1050,386,'No stored cell',P.muted,25);
+    if(s>=1)label(d,'new-column',1040,586,'New qualifier in r2',P.orange,24);
+    if(s===2){
+      d.path('versions-path','M 1144 405 L 1210 405 L 1210 540 L 615 540','none',P.orange,3);
+      d.arrow('versions-arrow',615,540,615,552,P.orange,3);
+      ['t3: new','t2: prior','t1: old'].forEach((v,i)=>d.box('version-'+i,350+i*180,552,165,59,v,i===0?P.orangeLight:P.white,P.orange,24));
+    }
+    foot(d,s===2?'Three versions of one cell · a retention policy decides which versions remain':'Empty positions show missing cells; they do not reserve fixed-width slots in storage.');
+  });
+  use(14,'splitting-cannot-fix-a-moving-hotspot',(d,s)=>{
+    const counts=s===0?[3,3,3,3]:s===1?[0,0,0,12]:s===2?[0,0,0,6,6]:[0,0,0,6,18];
+    const ranges=counts.length===4?['[00,25)','[25,50)','[50,75)','[75,100)']:['[00,25)','[25,50)','[50,75)','[75,88)','[88,100)'];
+    label(d,'interval-rule',640,217,'[a,b) includes a and excludes b · increasing timestamp keys →',P.ink,27);
+    const w=counts.length===4?225:190,gap=25,start=(1280-counts.length*w-(counts.length-1)*gap)/2;
+    counts.forEach((n,i)=>{
+      const x=start+i*(w+gap),hot=s>0&&i===counts.length-1;
+      label(d,'range-'+i,x+w/2,280,ranges[i],hot?P.orange:P.muted,26);
+      d.rect('tablet-'+i,x,305,w,260,P.white,P.line,10,2);
+      if(n)d.rect('load-'+i,x+24,545-n*11,w-48,n*11,hot?P.orangeLight:P.greenLight,hot?P.orange:P.green,5,2);
+      label(d,'count-'+i,x+w/2,600,n+' writes',hot?P.orange:P.ink,27);
+    });
+    foot(d,s>=2?'Key 99 belongs to [88,100). These counts are a toy load model, not measured throughput.':'Four disjoint tablet ranges · each key belongs to the interval that contains it');
+  });
+  use(14,'the-log-protects-memory',(d,s)=>{
+    label(d,'wal-expansion',640,223,'WAL = write-ahead log · recovery can repeat the stored update',P.ink,27);
+    card(d,'request',70,300,280,120,'Write request','k2 = v3',s===0);
+    card(d,'log',500,300,280,120,'Recovery log',s>=2?'durable record':'append k2 = v3',s===1||s===2);
+    card(d,'memory',930,300,280,120,'Memory buffer',s===3?'contains k2 = v3':'not updated yet',s===3);
+    d.arrow('to-log',370,360,480,360,P.orange,4);
+    if(s===3)d.arrow('to-memory',800,360,910,360,P.orange,4);
+    if(s>=2){d.box('durable-boundary',485,472,310,70,'Required log is durable',P.greenLight,P.green,25);}
+    if(s===3)d.box('ack',940,472,260,70,'Success reply',P.greenLight,P.green,27);
+    foot(d,s===3?'Crash after success: replay the durable log to rebuild the lost memory buffer.':'Memory can disappear after a crash. The durable log supplies recovery information.');
+  });
 
   function repeatModel(d,s,question,labels){
     label(d,'return-question',640,236,question,P.ink,30);
@@ -403,15 +455,61 @@
   });
   if(mapreduceScene)mapreduceScene.title='MapReduce: map, shuffle, reduce';
 
-  use(14,'read-the-newest-visible-value',(d,s)=>{
+  const lsmRead=use(14,'read-the-newest-visible-value',(d,s)=>{
     const labels=['SSTable A','SSTable B',s>=3?'SSTable C (flushed)':'Memtable'],vals=['old @ 5','new @ 8','DELETE @ 9'];
-    label(d,'versions',640,215,'Versions of the same key k · higher sequence is newer');
+    label(d,'versions',640,215,s<3?'Same key k · toy sequence numbers order these updates':'Compaction = merging sorted files',P.ink,28);
     labels.forEach((l,i)=>{if(i<=Math.min(s,2)){const removed=s===4;card(d,'version-'+i,90+i*400,267,300,122,l,removed?'safe to remove':vals[i],!removed&&i===Math.min(s,2));if(removed)d.line('remove-'+i,116+i*400,298,362+i*400,361,P.muted,3);}});
     if(s<3){const x=240+Math.min(s,2)*400;d.arrow('read',x,408,640,497,P.orange,4);d.box('read-result',380,515,520,72,s===0?'Read at 5 → old':s===1?'Read at 8 → new':'Read at 9 → absent',s===2?P.redLight:P.greenLight,s===2?P.red:P.green,29);}
     if(s===3){d.rect('merge-region',467,247,760,167,'none',P.orange,10,3);d.arrow('merge',850,431,850,485,P.orange,4);d.box('merge-output',585,500,535,78,'Merged output keeps DELETE @ 9',P.orangeLight,P.orange,26);label(d,'remaining',235,494,'A still holds old @ 5',P.red,25);}
     if(s===4){d.box('safe-output',340,479,600,100,'Safe output for k: no record',P.greenLight,P.green,30);}
-    foot(d,s===4?'All older versions are included, and no active snapshot needs them.':s===3?'Dropping the tombstone now would let old @ 5 reappear.':'A current read selects the highest visible sequence, including deletion records.');
+    foot(d,s===4?'All older versions are included, and no active snapshot needs them.':s===3?'Dropping the tombstone now would let old @ 5 reappear.':s===2?'A tombstone is a deletion marker. The newest visible marker makes k absent.':'Visible means included by the read’s boundary. Higher sequence means a later update here.');
   });
+  if(lsmRead){
+    lsmRead.teaching.idea='A read uses the newest record allowed by its boundary. A deletion marker can win while older bytes remain.';
+    lsmRead.teaching.question='Why must the merge keep DELETE@9 while file A still has old@5?';
+    lsmRead.teaching.answer='Removing the deletion marker would let a later read find old@5. Keep it until older values cannot reappear and required read views remain valid.';
+    lsmRead.teaching.builds=[
+      'Define the toy sequence as an update-order number. A read boundary determines which updates the read includes. Visible means included by that boundary. At boundary 5, read old@5. This toy number is separate from a Bigtable cell timestamp.',
+      'Advance the read boundary to 8. File B has new@8, so it determines the result. Ask why the old bytes can remain in file A without determining this read.',
+      'Define tombstone as a deletion marker. At boundary 9, DELETE@9 is visible and newer than the other records. The current result is absent. The marker does not erase the old bytes.',
+      'Define compaction as merging sorted files into new files. The deletion has been flushed to C. Merge B and C while A remains outside the merge. Predict the result if the marker were dropped. A later read could return old@5.',
+      'Define snapshot as a retained earlier read view. Now include all older versions and assume no active snapshot needs them. The records can be removed safely. The following slides explain merging and deletion in more detail.'
+    ];
+    lsmRead.teaching.context='This is the existing deterministic shared trace: old@5, new@8, DELETE@9, a partial merge, then safe removal. It illustrates a general LSM version rule. It does not claim these sequence numbers are the original Bigtable timestamp API.';
+  }
+  use(14,'skip-files-then-find-a-block',(d,s)=>{
+    label(d,'lookup-key',640,218,'Lookup: k9',P.ink,31);
+    card(d,'filter',70,290,280,117,'Bloom filter','possibly present',s===0);
+    if(s>=1){
+      d.arrow('to-index',370,350,440,350,P.green,3);
+      d.table('sparse-index',460,283,[165,145],[['first key','block'],['k1','0'],['k8','1'],['k16','2']],{rowHeight:61,fontSize:25,highlightRows:[2]});
+      label(d,'bound',615,574,'k8 ≤ k9 < k16',P.orange,26);
+    }
+    if(s>=2){
+      d.arrow('to-block',788,420,855,420,P.orange,3);
+      card(d,'block',875,330,330,120,'Block 1','k8 · k9 · k12',true);
+      label(d,'found',1040,489,'Inspect entries: k9 is present.',P.green,22);
+    }
+    if(s>=3)d.box('cached-block',905,542,270,65,'Memory copy cached',P.greenLight,P.green,25);
+    foot(d,'Toy numeric key order · filter skips files; index chooses blocks; cache reuses bytes.');
+  });
+  const capScene=use(14,'a-network-partition-forces-a-choice',(d,s)=>{
+    const xs=[290,990];
+    xs.forEach((x,i)=>{
+      card(d,'replica-'+i,x-170,314,340,148,'Replica '+(i+1),(i===0&&s>0)||s===4?'v2':'v1',i===0&&s>0);
+      label(d,'copy-'+i,x,507,'A copy of the same data',P.muted,24);
+    });
+    d.line('network',475,387,805,387,s>0&&s<4?P.red:P.green,4,s>0&&s<4?'12 12':'');
+    if(s>0&&s<4){d.path('cut','M610,353 L670,421 M670,353 L610,421','none',P.red,5);label(d,'partition-label',640,573,'Network partition: communication interrupted',P.red,27);}
+    if(s>=2&&s<4){
+      d.arrow('read-request',990,263,990,298,P.orange,3);
+      label(d,'read-result',990,233,s===2?'Later read: wait or refuse':'Later read returns stale v1',s===2?P.red:P.orange,25);
+    }
+    if(s===4){d.arrow('reconcile',475,547,805,547,P.green,4);label(d,'reconcile-label',640,595,'Reconcile: bring the copies into agreement',P.green,26);}
+    foot(d,s===3?'This response misses a completed write. It is not linearizable.':s===2?'A wait or error does not complete the requested read with a value.':s===4?'Generic two-copy example · the system must define its reconciliation rules.':'A network partition is a broken connection, not a row range such as a tablet.');
+  });
+
+  if(capScene)capScene.states=['Replicas agree','Communication cut; v2 completes','Wait','Serve stale','Reconcile'];
 
   const graphNodes={ada:[180,385],ben:[390,260],cyd:[390,505],dee:[620,260],eli:[620,505],fay:[825,385]};
   const graphEdges=[['ada','ben'],['ada','cyd'],['ben','dee'],['ben','ada'],['cyd','dee'],['cyd','eli'],['dee','eli'],['eli','fay'],['fay','ada']];
@@ -511,7 +609,6 @@
     distributionOpening.states=['One reader misses the window','Parallel reads add capacity','Recover a lost result'];
     distributionOpening.sources=[mapreducePaper,...distributionOpening.sources.filter(src=>src!==mapreducePaper)];
   }
-  repair(14,'a-network-partition-forces-a-choice',(d,s)=>{if(s===4)item(d,'response').text='v2';});
   repair(15,'finish-with-measured-decisions',(d,s)=>{if(s===3){item(d,'dates').attrs.y=691;item(d,'dates').attrs['font-size']=27;}});
 
   // Revisit the same deposits and reader/writer schedule rather than mixing
@@ -560,7 +657,7 @@
   const tracePredictions=[
     [12,'keep-the-source-identity','Predict which source the integer position selects before following the result.'],
     [13,'reduce-sees-the-complete-group','Predict how many occurrences must survive and which values share a key group.'],
-    [14,'read-the-newest-visible-value','State the read snapshot, then predict the visible record before resolving versions.'],
+    [14,'read-the-newest-visible-value','Name the read boundary, then predict which included update is newest.'],
     [15,'paths-are-not-unique-vertices','State whether the question asks for walks or distinct people before counting.']
   ];
   for(const [id,sceneId,prediction] of tracePredictions){

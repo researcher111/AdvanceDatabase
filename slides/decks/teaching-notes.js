@@ -2113,166 +2113,175 @@
   },
   "14": {
     "organize-writes-differently": {
-      "idea": "An immutable file can retain an old value while a newer visible record determines the read.",
-      "question": "If old@5 remains after DELETE@9, should a current read return the old value?",
-      "answer": "No. The newer visible tombstone suppresses the old value. It must survive until older records and snapshot requirements are accounted for.",
+      "idea": "A newer record can determine a read while an older record remains in a file.",
+      "question": "If the newest record deletes k, should a current read return the older value?",
+      "answer": "No. A current read must honor the deletion even while the old file still exists.",
       "builds": [
-        "Calibrate with WAL and immutable files. In the fictional investigation, old@5 is still present after new@8 and DELETE@9. Ask which record should win before discussing the storage layout. Recall scattered B+ tree page updates.",
-        "Introduce sequential logging on the write path.",
-        "Show sorted runs and ask where future read and merge costs arise."
-      ]
+        "Label this a fictional investigation. Maya has a sealed page of club records. Explain that k labels one record. A sealed file keeps its entries unchanged. Ask how she could record a correction without changing that page.",
+        "Place a newer record beside the old one. Ask which value Noor should report now. A later record can replace the current answer without erasing the old bytes.",
+        "Add DELETE k. Ask why reading the oldest file alone would be wrong. Keep this question open until the read and deletion traces explain the rule."
+      ],
+      "context": "The sealed-page analogy explains unchanged records. It does not explain machine failures, sorting, or concurrent readers. Later diagrams supply those mechanisms. LSM means log-structured merge tree: a storage organization that buffers writes and later merges sorted batches. Bigtable uses this approach. It reduces scattered writes but adds later read and merge work."
     },
     "a-multidimensional-map": {
-      "idea": "The original Bigtable model addresses cells by row, column, and version.",
-      "question": "Why reverse a domain name in an ordered row key?",
-      "answer": "Related domains then share a prefix, helping prefix-local scans.",
+      "idea": "Bigtable locates a value by row, column, and timestamp.",
+      "question": "What does each coordinate in (com.cnn.www, anchor:example, time) select?",
+      "answer": "The row key selects a row. The family and qualifier select a column. The timestamp selects its version.",
       "builds": [
-        "Identify a cell by its row key before asking where it is stored. Connect the sorted keys to familiar B+ tree ranges. The key names the row but does not specify a physical file location.",
-        "Separate declared column families from qualifiers.",
-        "Add the version timestamp and qualify its difference from a cross-row transaction snapshot."
-      ]
+        "Recall a labeled spreadsheet row, then name the row key. Bigtable orders row keys like dictionary entries. Reversing hostname components makes related domains share an ordered prefix. The key is a logical name, not a physical file address.",
+        "Define a column family as a declared group of columns. Define the qualifier as a name within that family. In anchor:example, anchor is the family and example is the qualifier. The qualifier can be introduced when a value arrives.",
+        "Define a cell as one row–column intersection. A timestamp labels one version of that cell. Bytes are the stored value; the application decides their meaning. Ask which coordinate changes when only the value receives a new version."
+      ],
+      "context": "This is the 2006 Bigtable model. Its timestamps are 64-bit integers. Clients can supply them; server-assigned timestamps use microseconds. Single-row operations are atomic. Cell versions alone do not provide a transaction snapshot across rows. The later toy sequence numbers describe update order, not Bigtable timestamp assignment."
     },
     "sparse-cells-and-versions": {
-      "idea": "Sparse storage can omit absent cells and retain multiple versions of present cells.",
-      "question": "Does a missing qualifier require a fixed-width reservation in every row?",
-      "answer": "No. Sparse cells can be omitted, although metadata and stored versions still consume space.",
+      "idea": "Sparse storage omits missing cells and can retain several versions of a present cell.",
+      "question": "Does adding anchor:school to r2 require a value in that column for every row?",
+      "answer": "No. Only r2 needs that stored cell. Other rows can omit it.",
       "builds": [
-        "Ask what is absent versus present before explaining sparse storage. Keep cell versions distinct from a full transaction snapshot. Identify the absent cells in the sparse table.",
-        "Add a qualifier only to the row that needs it.",
-        "Add another cell version and discuss retention and the requested timestamp."
+        "Read the row and column labels before looking at the colored cells. Each filled cell has a stored value. An empty diagram position means no stored cell, not a fixed-width empty slot on disk.",
+        "Add anchor:school only to r2. Ask which other rows must change. None need to acquire this value. Metadata still costs space.",
+        "Show three versions of that one cell. Define retention policy as rules deciding which versions remain stored. The original paper supports keeping the last n versions or versions younger than an age limit."
       ]
     },
     "tablets-separate-placement-from-storage": {
-      "idea": "Tablet placement and durable storage ownership are separate parts of the architecture.",
-      "question": "Why can a tablet server fail without losing the stored data?",
-      "answer": "In the original architecture, replicated GFS holds the logs and SSTables. Reassignment and replay can rebuild service.",
+      "idea": "A tablet is a range of rows assigned to a serving process; durable files are stored separately.",
+      "question": "Why can a replacement server recover a tablet after its previous server fails?",
+      "answer": "The replicated storage system still holds the log and data files. The replacement loads files and repeats logged updates.",
       "builds": [
-        "Link tablets to assigned intervals in an ordered key space. Ask why the serving owner can change while replicated durable files remain available. Divide the ordered keys into contiguous tablet ranges.",
-        "Assign those ranges to tablet servers.",
-        "Locate durable files separately from server caches and active state.",
-        "Reassign a tablet and identify the recovery work that remains."
+        "Recall range partitioning from Lecture 13. Define a tablet as a contiguous row-key range. A key belongs to the interval that contains it. Each tablet includes the rows and their columns and versions.",
+        "A tablet server is a process that answers reads and writes for assigned tablets. The master is the coordinator that assigns these ranges. This diagram shows one tablet per server for simplicity; a server can manage many tablets.",
+        "Expand GFS as Google File System. It stores replicated copies of durable logs and data files. Replication means keeping additional copies. It protects stored data; dividing rows into tablets distributes serving work.",
+        "Fail server 1 and move its tablet to server 2. Identify the file loading and log replay still required. The reassignment arrow changes the serving owner. It does not copy the entire table through the master."
       ]
     },
     "splitting-cannot-fix-a-moving-hotspot": {
-      "idea": "Splitting a range does not remove a hotspot created by ever-increasing keys.",
-      "question": "Where does the next timestamp-prefixed burst go after the hot tablet splits?",
-      "answer": "The burst goes to the newest range again. Splitting reduces the old range’s size, but the increasing timestamps still target its new end.",
+      "idea": "Splitting a range cannot remove a hotspot caused by continually increasing keys.",
+      "question": "After splitting [75,100), which new interval receives key 99?",
+      "answer": "The interval [88,100) receives it. It contains 99 and remains the newest interval.",
       "builds": [
-        "Predict the destination of the next timestamp key after a split. The incoming pattern, not just the tablet’s size, creates the hotspot. Begin with distributed writes.",
-        "Send increasing timestamps to the tail.",
-        "Split the hot range.",
-        "Send another burst and discuss the locality tradeoff of a hash prefix or new key order."
-      ]
+        "Define a hotspot as a range receiving much more work than others. The labels use a simplified timestamp number line. In [00,25), include 00 and exclude 25. Identify where keys 24 and 25 belong.",
+        "Send twelve writes with increasing timestamp keys into the newest range. Ask whether equal range widths imply equal work. The answer is no.",
+        "Split [75,100) into [75,88) and [88,100). Keep the existing six-and-six counts. Predict the destination of key 99 before the next build.",
+        "The new burst increases the last count from 6 to 18. The old adjacent interval stays at 6. A hash prefix can spread writes, but one time-range query may then contact multiple ranges."
+      ],
+      "context": "The displayed counts are a deterministic toy load model, not measured Bigtable throughput. Numeric timestamps represent ordered keys. Actual key encoding must preserve the intended ordering. A split changes tablet size; the incoming key pattern still determines its load."
     },
     "the-log-protects-memory": {
-      "idea": "A durable log can rebuild writes lost from the memtable after a crash.",
-      "question": "What fails if the engine acknowledges only a RAM update before crashing?",
-      "answer": "The acknowledged write can be lost unless its recovery information is durable elsewhere.",
+      "idea": "A durable recovery log can rebuild updates lost from memory after a crash.",
+      "question": "What can recovery do after the success reply if the memory buffer disappears?",
+      "answer": "It can replay the durable update record to rebuild the buffer.",
       "builds": [
-        "Return to the recovery contract: what would a crash after acknowledgment lose if only RAM held the update? Trace the log’s durability boundary. Receive a write under the engine's durability contract.",
-        "Append its recovery record.",
-        "Make the required log progress durable before acknowledgement.",
-        "Update memory and explain how replay can reconstruct it."
-      ]
+        "Define write-ahead log, or WAL, as recovery records stored before the system relies on changed memory. RAM is working memory; losing power can erase it. Acknowledgment is the success reply sent to the caller.",
+        "Append means add at the end. The redo record describes an update that recovery can repeat. The original Bigtable paper calls this a commit log.",
+        "Explain the durability boundary: the required log bytes must survive the failures covered by the storage contract. The original design stores the log in GFS. Memory alone does not satisfy this requirement.",
+        "Put the update into the ordered memory buffer and send the acknowledgment. The next slide names this buffer the memtable. Place a crash after acknowledgment and predict how recovery reconstructs it."
+      ],
+      "context": "This is a redo-style write path. The course lab uses a different physical undo/FORCE protocol. A durable log entry is separate from a later data-file flush. Settings determine when writes are durable and whether several writes share synchronization work."
     },
     "the-memtable-stays-ordered": {
-      "idea": "An ordered memtable prepares incoming writes for a sequential sorted flush.",
-      "question": "Why keep keys sorted in memory even if they arrive out of order?",
-      "answer": "The later flush can stream them to disk in key order.",
+      "idea": "A memtable keeps recent updates ordered so a flush can stream sorted entries.",
+      "question": "Why sort keys in memory if they arrived in another order?",
+      "answer": "The later flush can write them sequentially in key order.",
       "builds": [
-        "Link the memtable to an ordered notebook. Entries arrive unsorted, but keeping them ordered prepares the eventual sorted output. Show the arrival order of the keys.",
-        "Insert each into the ordered memory structure.",
-        "Update k2 and distinguish the simple latest-value view from snapshot version retention."
-      ]
+        "Define memtable before tracing the arrivals. It is an ordered memory structure for recent writes. Read k8, k2, k5, k1, k7 in arrival order, then predict their sorted order.",
+        "Use an ordered notebook as an analogy. Entries are kept in key order so the engine can copy them as one sorted batch. A real implementation uses an ordered data structure.",
+        "Update k2. The simplified diagram shows its current value. Some engines keep additional versions for reads that need an earlier view. Distinguish this logical update from editing an existing stored file."
+      ],
+      "context": "The notebook analogy explains ordering and freezing a batch. It does not model hardware durability or the internal cost of an ordered data structure. JavaScript object iteration is not the ordered memtable mechanism."
     },
     "freeze-a-sorted-file": {
-      "idea": "A frozen memtable becomes an immutable sorted file while new writes use active memory.",
-      "question": "Where does a later update to k2 go after this file is written?",
-      "answer": "Into the active memtable, and eventually a newer file.",
+      "idea": "A frozen memtable remains readable while its entries are written into an immutable sorted file.",
+      "question": "Where does an update arriving during the frozen batch’s flush go?",
+      "answer": "It goes into a new active memtable. The frozen batch stays unchanged.",
       "builds": [
-        "Link the immutable run to sealed sorted pages. Ask where the next update must go when those pages cannot be edited. Fill the active memory structure.",
-        "Freeze it while keeping its contents readable.",
-        "Flush its sorted entries sequentially to a file.",
-        "Accept later writes in a new active memtable."
-      ]
+        "Define flush as copying buffered entries into a stored file. The size threshold starts this operation. The lecture widget reaches capacity at six distinct keys, not necessarily six write calls.",
+        "Freeze the batch: stop accepting updates into it. Keep it available to readers until the file becomes available. Compare sealing one notebook and opening another.",
+        "Expand SSTable as sorted string table. It is an immutable sorted file with an index for locating blocks. Immutable means existing entries are not modified in place. A block is a group of entries read as one storage unit.",
+        "Accept k9 in the active buffer. In a real system, this can overlap the old batch’s flush. Ask how a later k2 update can become current without changing the older SSTable."
+      ],
+      "context": "The visual sequence separates overlapping activities so their roles are clear. It does not require writes to wait for the whole flush. SSTable keys and values are byte strings, not necessarily human-readable text."
     },
     "merge-sorted-runs": {
-      "idea": "Compaction merges sorted runs while respecting version-retention rules.",
-      "question": "Is merging free just because its input reads are sequential?",
-      "answer": "No. It rewrites output and consumes bandwidth, and retained versions affect what may be discarded.",
+      "idea": "Compaction merges sorted files while keeping every version still required by readers or retention rules.",
+      "question": "Which k2 version belongs in this current-value output, and why can a real engine retain more?",
+      "answer": "The example keeps k2:v2. Real read and retention rules may require additional versions.",
       "builds": [
-        "Place two immutable sorted files side by side. Ask how merging them could make later lookups cheaper while retaining every version still needed by a reader.",
-        "Choose the next key from their merge cursors.",
-        "Resolve duplicate k2 versions under the visibility and retention rules.",
-        "Write the merged output and account for the background work."
-      ]
+        "Define a sorted run as a batch in key order. Two runs can contain the same key. Compaction merges such runs into new sorted output. Predict the first output key.",
+        "Define cursor as the position of the next unread entry. Compare the two next keys, copy the smaller key, and advance that cursor. Ask students to repeat these steps.",
+        "At duplicate k2, use v2 in this current-value example. The engine must also honor retained snapshots and version policies. Do not erase needed history merely because one version is newer.",
+        "Write k1, k2, k4, k7, k8 in order. Sorted inputs allow sequential reads, but the output still consumes bandwidth and space. Ask where the cost moved when the earlier write avoided editing an old file."
+      ],
+      "context": "The course widget merges all disk runs. Production compaction policies select files differently. The memtable remains a separate input to later reads."
     },
     "deletion-must-hide-older-values": {
-      "idea": "A deletion marker prevents older stored values from reappearing.",
-      "question": "Why not simply remove the newest k2 entry?",
-      "answer": "A read could then discover the older k2 value. A tombstone must hide it until safe reclamation.",
+      "idea": "A tombstone makes deletion visible while older stored values still exist.",
+      "question": "What goes wrong if the newer deletion marker disappears but the old value remains?",
+      "answer": "A later read can find the old value and return it again.",
       "builds": [
-        "Return explicitly to the opening old file. Ask why removing a marker could expose bytes that were never edited. Locate the old value in an earlier file.",
-        "Write a tombstone as the newer record.",
-        "Stop the lookup at the tombstone.",
-        "Remove the tombstone only when older values cannot reappear and no active snapshot still needs the retained history."
-      ]
+        "Return to the sealed-page puzzle. Locate the older k2:v1. Predict what a reader would find if there were no later record.",
+        "Define tombstone again as a deletion marker. Write it as the newer record. The old file remains immutable.",
+        "A current read must honor the visible marker and return absent. Absence is the logical result even though the physical old bytes remain.",
+        "Remove old records and their marker only when older values cannot reappear and required snapshots remain valid. A snapshot is a retained read view. Ask why merging only some files can make removal unsafe."
+      ],
+      "context": "Compaction is not automatic permission to discard every tombstone. Other systems can also require replica-repair or retention conditions. Keep this generic LSM safety rule separate from any one product’s deletion API."
     },
     "a-one-sided-membership-test": {
-      "idea": "A Bloom filter can prove absence, while a possible match still requires checking data.",
-      "question": "What does a zero among the query's required bits prove?",
-      "answer": "A missing bit establishes absence if insertion was correct and operations are supported. All set bits indicate only possible presence.",
+      "idea": "A Bloom filter rules out absent keys; a possible match still needs a data lookup.",
+      "question": "Why can an absent key have all its selected bits set to 1?",
+      "answer": "Other inserted keys can share those bit positions. This false positive costs an extra lookup but must not change the answer.",
       "builds": [
-        "Before naming the filter, ask what a one-sided answer can prove. Distinguish definite absence from the work of checking a possible match. Begin with empty bits.",
-        "Insert k1 through k6 using the three deterministic hashes.",
-        "Show the zero bit that proves k7 absent.",
-        "Show a possible match whose bits are all set.",
-        "Check uninserted k17 and explain the false positive's extra file lookup."
+        "Define a bit as 0 or 1. A Bloom filter is a compact membership summary made from bits. It can answer definitely absent or possibly present. Begin with all bits zero.",
+        "A hash function deterministically maps a key to a bit position. Three such functions choose this example’s positions. Insert k1 through k6 by setting the selected bits to 1. Different keys can share a bit.",
+        "Query k7 using the same functions. A selected zero proves absence when insertions are correct and shared bits have not been cleared. Predict whether the file needs a lookup.",
+        "Query k17. Every selected bit is 1, but these bits can have come from other keys. Ask whether membership is now proven.",
+        "Inspect the file and find no k17. Name this a false positive. It causes extra work rather than a wrong query result. Ordinary Bloom filters cannot delete a key by clearing its shared bits."
       ]
     },
     "skip-files-then-find-a-block": {
-      "idea": "Filters, sparse indexes, and caches eliminate work at different levels.",
-      "question": "Does a Bloom-filter match prove the key exists?",
-      "answer": "No. The engine still locates the candidate block and checks its entries and visible versions.",
+      "idea": "Filters, sparse indexes, and block caches avoid different levels of read work.",
+      "question": "For k9, why does the index choose block 1 rather than block 2?",
+      "answer": "Block 1 begins at k8, and block 2 begins at k16. Key k9 lies between those boundaries.",
       "builds": [
-        "Walk down the levels of skipped work: file, block, storage read. Ask what each structure can and cannot prove. Use the filter to skip a definitely absent file.",
-        "Use the sparse index to locate a candidate block.",
-        "Read and inspect that block.",
-        "Reuse a cached block to avoid another storage read."
+        "Keep the requested key k9 visible. A negative Bloom result would skip the file. The drawn positive result only permits a lookup; it does not prove k9 exists.",
+        "Define sparse index as selected keys paired with block locations. Here each selected key is a block’s first key. Find the greatest indexed key no greater than k9: k8. These toy keys use numeric suffix order. Actual Bigtable row keys use byte-string order; numeric components need an order-preserving encoding.",
+        "Load block 1 and compare its actual entries. The block covers keys from k8 up to, but not including, k16. Finding the candidate block alone does not prove that every intervening key exists.",
+        "Define a cache as memory holding a reusable copy. A block cache can supply block 1 on the next request without another storage read. State each layer’s job: rule out a file, choose a block, reuse its bytes."
       ]
     },
     "the-read-write-space-budget": {
-      "idea": "Compare read work, write work, storage space, and durability requirements for the expected workload.",
-      "question": "Why is fast log append alone insufficient for sustained LSM write performance?",
-      "answer": "Compaction must keep up with incoming writes. Otherwise files accumulate and writes may have to slow down.",
+      "idea": "A storage choice must account for its whole read, write, space, and durability workload.",
+      "question": "Why can a fast log append fail to sustain a high incoming write rate?",
+      "answer": "Compaction must keep up. Otherwise runs accumulate, increase later work, and can force incoming writes to slow down.",
       "builds": [
-        "Noor asks what other work the fast write path creates. Compare reads, writes, space, and durability, including background maintenance. Begin with how B+ trees organize pages and can batch writes.",
-        "Identify sorted LSM memory and files.",
-        "Account for compaction's read, write, and space pressure.",
-        "Choose a starting design from workload requirements and testable costs."
+        "Recall searchable B+ tree pages. Nearby updates can share page writes. Ask which pages a scattered update pattern changes.",
+        "Expand LSM as log-structured merge tree. Its sorted memory and files make batches sequential, while compaction reorganizes them. The term names a storage organization, not a SQL interface or transaction guarantee.",
+        "Count input reads, output writes, and temporary space during compaction. Define bandwidth as bytes processed per unit of time. Fast logging does not eliminate this later work.",
+        "Give steady event ingestion, frequent point lookups, and range-heavy mixed requests. Ask students to name the required operations and propose a measurement. Choose an initial design from these requirements, then test it."
       ]
     },
     "a-network-partition-forces-a-choice": {
-      "idea": "During a network partition, a replica may be unable to learn that another replica accepted a write.",
-      "question": "What can replica 2 infer about v2 from silence alone?",
-      "answer": "Silence does not tell replica 2 whether v2 was written. To preserve linearizability, the system may need to refuse the isolated read.",
+      "idea": "An isolated replica cannot always answer a read both responsively and consistently with completed writes.",
+      "question": "After v2 completes elsewhere, can replica 2 safely return v1 for this later read?",
+      "answer": "No, if linearizability is required. It must learn the write or decline to complete that read under this partition.",
       "builds": [
-        "Now cut the link between replicas. Ask what the isolated replica can know before naming guarantees. Explain the concrete choice at the request. Begin with agreeing replicas.",
-        "Write v2 at replica 1 and interrupt communication.",
-        "Consider waiting or refusing the isolated request.",
-        "Consider serving v1 and state the consistency consequence.",
-        "Restore communication and discuss reconciliation under the system's contract."
-      ]
+        "A replica is another copy of data. Begin with both copies at v1. A network partition means communication is interrupted; it is different from partitioning rows among tablets.",
+        "Complete v2 at replica 1 while communication is interrupted. Then request a read at replica 2. Ask what its silence from replica 1 proves. It cannot distinguish a completed write from no write.",
+        "Define linearizability: operations appear in one order that respects completed operations in real time. This later read must respect v2. Waiting or returning an error does not complete the required read.",
+        "Define CAP availability: every request to a non-failed node must eventually complete with a non-error response for the requested operation. Returning v1 is responsive, but violates linearizability here. No timeout duration resolves the missing knowledge.",
+        "Reconciliation means bringing copies into agreement using the system’s rules after communication resumes. Name CAP: consistency, availability, and partition tolerance. Under a network partition, a system cannot guarantee both defined properties for every request."
+      ],
+      "context": "This is a generic two-replica thought experiment, not Bigtable’s exact read protocol. Some systems keep serving one side while rejecting the other. A product label alone does not determine every operation’s behavior."
     },
     "trace-an-acknowledged-write": {
-      "idea": "An acknowledged LSM write moves through logging, memory, sorted files, and later lookup.",
-      "question": "Why must a compaction retain DELETE@9 while an unmerged file still holds old@5?",
-      "answer": "Dropping the marker could expose the old value again. Cover the older versions and required snapshots before reclaiming it.",
+      "idea": "Logging, ordered buffering, sorted files, and version rules together explain the current read.",
+      "question": "Why must the merge retain DELETE@9 while another file still contains old@5?",
+      "answer": "Dropping the marker could expose the old value again. The merge must cover older values and respect required read views.",
       "builds": [
-        "Return to key k. Identify the durable log record that would let the engine rebuild its write after a crash.",
-        "Place the write in ordered memory.",
-        "Flush it into a sorted file and account for later compaction.",
-        "Repeat log, buffer, flush, resolve on k. Ask why the old file can remain while the current read returns no value. State the safety condition for compaction."
+        "Return to the fictional key k. Ask students to name the stored information that can recover an acknowledged update after memory loss. The durable log contains its recovery record.",
+        "Place the record in the ordered memtable. Ask what changes when the record is a deletion. It still needs an ordered record describing the deletion.",
+        "Flush a sorted file and account for later compaction. Repeat why an SSTable stays unchanged while its logical value can become obsolete.",
+        "Return absent after DELETE@9. Ask students to explain this result without saying that every old byte was erased. Transfer the mechanism to another key: what must remain if an old file has not joined the merge?"
       ]
     }
   },

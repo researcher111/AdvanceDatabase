@@ -108,13 +108,16 @@ fs.mkdirSync(output,{recursive:true});
     assert(await page.evaluate(()=>window.movingPair===document.querySelector('[data-key="pair-0-label"]')),'shuffle preserves the animated DOM object');
     await page.emulateMedia({reducedMotion:'reduce'});
    }
-   if(id===13||id==='13b'){
-    // Both readings embed their own deck scenes without loading full slide players.
+   if(id===13||id==='13b'||id===14){
+    // These readings embed their own deck scenes without loading full slide players.
     const reading=await context.newPage();
     await reading.route(/^https?:\/\//,route=>route.abort()); // All diagram assets are local.
-    const readingFile=id===13?'distributed.html':'spark-ray.html';
-    await reading.goto(pathToFileURL(path.join(root,'lectures/lecture-13',readingFile)).href);
+    const readingFile=id===14?'lecture-14/bigtable.html':id===13?'lecture-13/distributed.html':'lecture-13/spark-ray.html';
+    await reading.goto(pathToFileURL(path.join(root,'lectures',readingFile)).href);
     const widgets=reading.locator('.lecture-walkthrough');
+    if(id===14){
+     assert.equal(scenes.length,16,'Bigtable retains all sixteen lecture scenes');
+    }
     assert.deepEqual(await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.lectureScene)),scenes.map(s=>s.id));
     assert.equal(await reading.locator('.lecture-walkthrough[data-walkthrough-ready="true"]').count(),scenes.length);
     if(id==='13b'){
@@ -154,10 +157,97 @@ fs.mkdirSync(output,{recursive:true});
      assert(await widget.locator('[data-action="previous"]').isDisabled());
     }
     if(id===13)assert.equal(await reading.locator('[data-lecture-scene="preview-spark-and-ray"] .lw-screen a').getAttribute('href'),pathToFileURL(path.join(root,'slides/lecture-13b.html')).href);
-    else assert.equal(await reading.locator('[data-lecture-scene="same-orders-two-runtimes"] .lw-screen a').getAttribute('href'),'https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/');
+    else if(id==='13b')assert.equal(await reading.locator('[data-lecture-scene="same-orders-two-runtimes"] .lw-screen a').getAttribute('href'),'https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/');
+    if(id===14){
+     // A range split redistributes existing rows, but increasing keys still target the tail.
+     const tabletCounts=()=>reading.locator('#tb-stage .tb-count').evaluateAll(nodes=>nodes.map(n=>Number.parseInt(n.textContent,10)));
+     await reading.locator('#tb-reset').click();
+     await reading.locator('#tb-user').click();
+     assert.deepEqual(await tabletCounts(),[3,3,3,3],'the distributed toy keys reach all four ranges');
+     await reading.locator('#tb-reset').click();
+     await reading.locator('#tb-time').click();
+     assert.deepEqual(await tabletCounts(),[0,0,0,12]);
+     await reading.locator('#tb-split').click();
+     assert.deepEqual(await tabletCounts(),[0,0,0,6,6],'split preserves all twelve existing writes');
+     await reading.locator('#tb-time').click();
+     assert.deepEqual(await tabletCounts(),[0,0,0,6,18],'the next increasing-key burst still reaches only the final range');
+
+     // Capacity counts distinct keys. Rewrites do not consume another slot.
+     await reading.locator('#lsm-reset').click();
+     let flushes=0,writes=0,rewriteSeen=false;
+     while((flushes<2||!rewriteSeen)&&writes<60){
+      const beforeKeys=await reading.locator('#lsm-stage .mem .lsm-kv').allTextContents();
+      await reading.locator('#lsm-w1').click();writes++;
+      const afterKeys=await reading.locator('#lsm-stage .mem .lsm-kv').allTextContents();
+      const newFlushes=await reading.locator('#lsm-stage .sst').count();
+      if(newFlushes>flushes){
+       const fileKeys=await reading.locator('#lsm-stage .sst').first().locator('.lsm-kv').allTextContents();
+       assert.equal(fileKeys.length,6,'a flush contains exactly six distinct keys');
+       assert.equal(new Set(fileKeys.map(kv=>kv.split('=')[0])).size,6);
+       assert.equal(afterKeys.length,0,'flush leaves a new empty memtable');
+      }else{
+       assert(afterKeys.length<6,'a full memtable is flushed');
+       if(beforeKeys.length&&afterKeys.length===beforeKeys.length){
+        rewriteSeen=true;
+        assert.notDeepEqual(afterKeys,beforeKeys,'rewriting a resident key changes its value without adding a slot');
+       }
+      }
+      flushes=newFlushes;
+     }
+     assert(flushes>=2,'the write widget creates multiple sorted files');
+     assert(rewriteSeen,'the deterministic example includes a resident-key rewrite');
+     const diskEntries=await reading.locator('#lsm-stage .sst .lsm-kv').allTextContents();
+     const latest=new Map();
+     for(const entry of diskEntries){
+      const [key,value]=entry.split('='),version=Number(value.slice(1));
+      latest.set(key,Math.max(latest.get(key)||0,version));
+     }
+     await reading.locator('#lsm-key').fill('k99');await reading.locator('#lsm-get').click();
+     assert.match(await reading.locator('#lsm-get-msg').textContent(),new RegExp(`checked ${flushes+1} structures.*not present`));
+     await reading.locator('#lsm-compact').click();
+     assert.equal(await reading.locator('#lsm-stage .sst').count(),1);
+     const compacted=await reading.locator('#lsm-stage .sst .lsm-kv').allTextContents();
+     assert.deepEqual(compacted,[...latest].sort(([a],[b])=>a.localeCompare(b)).map(([key,version])=>`${key}=v${version}`),'compaction keeps each key and its newest value');
+     await reading.locator('#lsm-get').click();
+     assert.match(await reading.locator('#lsm-get-msg').textContent(),/checked 2 structures.*not present/,'compaction reduces the absent-key search');
+
+     // An absent key can pass the filter, but an inserted key cannot be rejected.
+     await reading.locator('#bloom-reset').click();await reading.locator('#bloom-seed').click();
+     await reading.locator('#bloom-key').fill('k7');await reading.locator('#bloom-qry').click();
+     assert.match(await reading.locator('#bloom-msg').textContent(),/definitely absent/);
+     await reading.locator('#bloom-key').fill('k17');await reading.locator('#bloom-qry').click();
+     assert.match(await reading.locator('#bloom-msg').textContent(),/false positive/);
+     for(const key of ['k1','k2','k3','k4','k5','k6']){
+      await reading.locator('#bloom-key').fill(key);await reading.locator('#bloom-qry').click();
+      assert.match(await reading.locator('#bloom-msg').textContent(),/confirms that the key is present/);
+     }
+
+     // The shared delete trace keeps the marker until the older file is covered.
+     const trace=reading.locator('[data-teaching-trace="lsm"]');
+     if(!(await trace.locator('[data-trace-action="reset"]').isDisabled()))await trace.locator('[data-trace-action="reset"]').click();
+     const states=[];
+     for(let step=0;step<5;step++){
+      assert.equal(await trace.getAttribute('data-trace-step'),String(step));
+      states.push(await trace.locator('.trace-table').textContent());
+      if(step<4)await trace.locator('[data-trace-action="next"]').click();
+     }
+     assert.match(states[2],/read at snapshot 9absent/);
+     assert.match(states[3],/older file Astill contains old @ 5/);
+     assert.match(states[3],/keep in merged outputDELETE @ 9/);
+     assert.match(states[4],/safe output for kno record/);
+     assert(await trace.locator('[data-trace-action="next"]').isDisabled());
+     await trace.locator('[data-trace-action="reset"]').click();
+    }
     // Keyboard controls remain local even while the reading's presentation mode is active.
     const first=widgets.first();
-    await reading.evaluate(()=>localStorage.setItem('lab.presentationSlide','1'));
+    await first.evaluate(root=>{
+     let section=0;
+     for(const element of document.querySelector('main').children){
+      if(element===root)break;
+      if((element.tagName==='H2'&&element.id)||element.classList.contains('new-slide'))section++;
+     }
+     localStorage.setItem('lab.presentationSlide',String(section));
+    });
     await reading.locator('#present-toggle').click();await reading.keyboard.press('a');
     const readingPosition=await reading.locator('#present-counter').textContent();
     await first.locator('[data-action="next"]').focus();await reading.keyboard.press('ArrowRight');
