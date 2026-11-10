@@ -5,7 +5,7 @@
   const GLOSSARY = {
     'self-join-chain': {
       title: 'Self-join chain',
-      body: "<p>A sequence of joins that repeatedly matches a relationship table to the previous result. Each step adds one hop. Without intermediate deduplication, multiple paths to the same node can produce multiple rows. The widget compares that path enumeration with a traversal that records each visited node.</p>",
+      body: "<p>A sequence of joins that repeatedly matches a relationship table to the previous result. Each step adds one hop. Here, a walk follows edges and can revisit nodes or edges. Without intermediate deduplication, multiple walks to the same node can produce multiple rows. The widget compares walk enumeration with a traversal that records each visited node.</p>",
     },
     'recursive-cte': {
       title: 'Recursive CTE',
@@ -40,6 +40,12 @@
 (function () {
   const svg = document.getElementById('walk-svg');
   if (!svg) return;
+  svg.setAttribute('role', 'group');
+  svg.setAttribute('aria-label', 'Directed follows graph. Select a student as the starting person.');
+  svg.parentElement.setAttribute('tabindex', '0');
+  svg.parentElement.setAttribute('role', 'region');
+  svg.parentElement.setAttribute('aria-label', 'Graph diagram. Scroll horizontally on a narrow screen.');
+  document.getElementById('walk-msg').setAttribute('role', 'status');
 
   const NODES = {
     ada: [90, 80], ben: [300, 50], cyd: [250, 220],
@@ -100,7 +106,13 @@
     for (const [a, b] of EDGES) {
       const hot = st.walked.has(a + '>' + b);
       const [x1, y1, x2, y2] = shorten(NODES[a][0], NODES[a][1], NODES[b][0], NODES[b][1], 26);
-      html += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+      // Opposing edges use separate curves so both arrowheads stay visible.
+      const reverse = OUT[b].includes(a);
+      const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+      const route = reverse
+        ? `M${x1},${y1} Q${(x1 + x2) / 2 - dy / len * 28},${(y1 + y2) / 2 + dx / len * 28} ${x2},${y2}`
+        : `M${x1},${y1} L${x2},${y2}`;
+      html += `<path data-edge="${a}>${b}" data-walked="${hot}" d="${route}" fill="none"
         stroke="${hot ? '#b14a2e' : '#8a8375'}" stroke-width="${hot ? 2.5 : 1.2}"
         marker-end="url(#walk-arrow${hot ? '-hot' : ''})"/>`;
     }
@@ -110,7 +122,8 @@
       const reached = h !== undefined;
       const fill = name === start ? '#b14a2e' : reached ? '#fde0d2' : '#f0eee5';
       const stroke = reached ? '#b14a2e' : '#8a8375';
-      html += `<g class="walk-node" data-name="${name}" style="cursor:pointer">
+      html += `<g class="walk-node" data-name="${name}" role="button" tabindex="0"
+        aria-label="Start at ${name}" aria-pressed="${name === start}">
         <circle cx="${x}" cy="${y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
         <text x="${x}" y="${y + 4}" text-anchor="middle" font-size="13"
           font-family="ui-monospace, monospace" fill="${name === start ? '#fff' : '#1f1d1a'}">${name}</text>` +
@@ -119,16 +132,30 @@
         `</g>`;
     }
     svg.innerHTML = html;
-    svg.querySelectorAll('.walk-node').forEach(g =>
-      g.addEventListener('click', () => { start = g.dataset.name; depth = 0; render(); }));
+    svg.querySelectorAll('.walk-node').forEach(g => {
+      function select(keepFocus) {
+        start = g.dataset.name;
+        depth = 0;
+        render();
+        if (keepFocus) svg.querySelector(`[data-name="${start}"]`).focus();
+      }
+      g.addEventListener('click', () => select(false));
+      g.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        select(true);
+      });
+    });
 
     const reachedNames = Object.keys(st.hop).filter(n => n !== start).sort();
     document.getElementById('walk-msg').textContent =
-      depth === 0 ? `start: ${start} — click another student to move the start`
+      depth === 0 ? `start: ${start} — select another student to move the start`
                   : `depth ${depth} from ${start}: {${reachedNames.join(', ') || 'nobody'}}`;
     document.getElementById('walk-stats').innerHTML = depth === 0 ? '' :
-      `<span><strong>${st.edgeVisits}</strong> edge visits (traversal — each node expanded once)</span> · ` +
-      `<span><strong>${st.joinRows}</strong> rows matched (path-enumerating join chain — duplicates included)</span>`;
+      `<span><strong>${st.edgeVisits}</strong> edge visits (traversal — each node expanded at most once)</span> · ` +
+      `<span><strong>${st.joinRows}</strong> rows matched (walk-enumerating join chain — duplicates included)</span>`;
+    document.getElementById('walk-step').disabled = depth >= 5;
   }
 
   document.getElementById('walk-step').addEventListener('click', () => {

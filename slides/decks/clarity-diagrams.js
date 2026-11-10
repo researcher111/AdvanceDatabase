@@ -513,18 +513,172 @@
 
   const graphNodes={ada:[180,385],ben:[390,260],cyd:[390,505],dee:[620,260],eli:[620,505],fay:[825,385]};
   const graphEdges=[['ada','ben'],['ada','cyd'],['ben','dee'],['ben','ada'],['cyd','dee'],['cyd','eli'],['dee','eli'],['eli','fay'],['fay','ada']];
-  use(15,'paths-are-not-unique-vertices',(d,s)=>{
-    graphEdges.forEach(([from,to],i)=>{
-      const [x,y]=graphNodes[from],[xx,yy]=graphNodes[to],a=Math.atan2(yy-y,xx-x),hot=s===0?from==='ada':s===1||s===2?['ben','cyd'].includes(from):['dee','eli'].includes(from);
-      if(from==='fay'){d.path('edge-'+i,'M 825 420 L 825 595 L 180 595 L 180 430','none',P.line,2);d.arrow('edge-tip-'+i,180,455,180,430,P.line,2);}
-      else{const offset=from==='ben'&&to==='ada'?15:0;d.arrow('edge-'+i,x+45*Math.cos(a),y+45*Math.sin(a)+offset,xx-45*Math.cos(a),yy-45*Math.sin(a)+offset,hot?P.orange:P.line,hot?4:2);}
+  function graphPicture(d,{frontier=[],visited=[],edges=[],showEdges=true}={}){
+    if(showEdges)graphEdges.forEach(([from,to],i)=>{
+      const [x,y]=graphNodes[from],[xx,yy]=graphNodes[to],a=Math.atan2(yy-y,xx-x),hot=edges.includes(from+'>'+to),color=hot?P.orange:P.line,width=hot?4:2;
+      if(from==='fay'){
+        d.path('edge-'+i,'M 825 430 L 825 591 L 180 591 L 180 436','none',color,width);
+        d.arrow('edge-tip-'+i,180,461,180,434,color,width);
+      }else if(from==='ben'&&to==='ada'){
+        d.path('edge-'+i,'M 347 263 Q 205 253 183 330','none',color,width);
+        d.arrow('edge-tip-'+i,189,312,183,339,color,width);
+      }else d.arrow('edge-'+i,x+47*Math.cos(a),y+47*Math.sin(a),xx-47*Math.cos(a),yy-47*Math.sin(a),color,width);
     });
+    Object.entries(graphNodes).forEach(([name,[x,y]])=>{
+      const active=frontier.includes(name),seen=visited.includes(name);
+      d.circle('person-'+name,x,y,44,active?P.orangeLight:seen?P.greenLight:P.white,active?P.orange:seen?P.green:P.line,3);
+      label(d,'person-label-'+name,x,y+8,name,P.ink,26);
+    });
+  }
+  use(15,'the-path-is-the-answer',(d,s)=>{
+    graphPicture(d,{showEdges:s>0,frontier:s===0?['ada']:s===2?['fay']:[],visited:s===2?['ada','cyd','eli']:[],edges:s===2?['ada>cyd','cyd>eli','eli>fay']:[]});
+    card(d,'question',922,248,305,125,'Maya asks','Who can ada reach?');
+    if(s===1){label(d,'direction-1',1074,435,'ada → ben',P.green,30);label(d,'direction-2',1074,483,'ben → ada',P.green,30);}
+    if(s===2){label(d,'route-one',1074,422,'ada → cyd',P.orange,29);label(d,'route-two',1074,469,'→ eli → fay',P.orange,29);label(d,'endpoint',1074,550,'One endpoint: fay',P.green,25);}
+    foot(d,s===0?'Fictional classroom graph · a circle is a node, also called a vertex':s===1?'Each arrow means follows. A directed edge can only be followed in its shown direction.':'This route crosses three edges. One hop means crossing one edge.');
+  });
+  use(15,'property-graph',(d,s)=>{
+    [300,980].forEach((x,i)=>{d.circle('node-'+i,x,360,76,P.greenLight,P.green,3);label(d,'node-name-'+i,x,370,i?'ben':'ada',P.ink,36);label(d,'node-label-'+i,x,240,'Label: Student',P.green,27);});
+    if(s>=1){d.arrow('follows',395,360,885,360,P.blue,5);label(d,'type',640,310,'Type: Follows',P.blue,30);}
+    if(s>=2){
+      card(d,'node-property',145,492,310,91,'Node property','gpa: 39',true);
+      d.line('node-property-link',300,448,300,480,P.orange,3);
+      card(d,'edge-property',490,492,300,91,'Edge property','since: 2026',true);
+      d.line('edge-property-link',640,378,640,480,P.orange,3);
+    }
+    foot(d,s===2?'GPA is stored in tenths: 39 means 3.9. The since property is illustrative.':'A property graph stores entities, typed relationships, and their named values.');
+  });
+  use(15,'one-hop',(d,s)=>{
+    graphPicture(d,{frontier:s===0?['ada']:['ben','cyd'],visited:s>0?['ada']:[],edges:s>0?['ada>ben','ada>cyd']:[]});
+    card(d,'one-hop-question',922,249,305,117,'One outgoing hop','Who does ada follow?');
+    if(s>=1){d.box('one-hop-result',942,418,265,70,'{ben, cyd}',P.greenLight,P.green,29);}
+    if(s===2){label(d,'incoming-heading',1074,547,'Who follows ada?',P.muted,24);label(d,'incoming-result',1074,584,'{ben, fay}',P.blue,29);}
+    foot(d,'Outgoing and incoming edges answer different questions. Direction changes the result.');
+  });
+  use(15,'two-hops-with-exclusions',(d,s)=>{
+    graphPicture(d,{frontier:s===2?['dee','eli']:[],visited:['ada','ben','cyd'],edges:['ada>ben','ada>cyd','ben>dee','ben>ada','cyd>dee','cyd>eli']});
+    label(d,'candidate-heading',1074,224,s===2?'Distinct result':'Two-hop endpoints',P.ink,27);
+    if(s<2){
+      [['dee','ben'],['ada','ben'],['dee','cyd'],['eli','cyd']].forEach(([end,via],i)=>{
+        const removed=s===1&&end==='ada';
+        d.box('candidate-'+i,932,264+i*77,285,58,end+' via '+via,removed?P.redLight:P.white,removed?P.red:P.line,26);
+        if(removed)d.line('remove-start',952,293+i*77,1197,293+i*77,P.red,3);
+      });
+    }else{
+      d.box('distinct-dee',942,310,265,75,'dee',P.greenLight,P.green,31);
+      d.box('distinct-eli',942,418,265,75,'eli',P.greenLight,P.green,31);
+      label(d,'exclude-neighbors',1074,566,'Exclude direct ben, cyd',P.muted,23);
+    }
+    foot(d,s===0?'Two routes reach dee: ada → ben → dee and ada → cyd → dee.':s===1?'Remove the starting person. Keep both dee rows until the output is deduplicated.':'Direct neighbors do not occur in these candidates. The query still specifies that exclusion.');
+  });
+  use(15,'breadth-first-reachability',(d,s)=>{
+    const layers=[['ada'],['ben','cyd'],['dee','eli'],['fay']],visited=layers.slice(0,s+1).flat();
+    const expanded=s===0?[]:s===1?['ada']:s===2?['ben','cyd']:['dee','eli'];
+    graphPicture(d,{frontier:layers[s],visited,edges:graphEdges.filter(([from])=>expanded.includes(from)).map(e=>e.join('>'))});
+    card(d,'frontier',922,224,305,113,'Frontier at distance '+s,layers[s].join(', '),true);
+    d.rect('visited',922,372,305,149,P.greenLight,P.green,9,2);
+    label(d,'visited-title',1074,405,'Visited so far',P.green,26);
+    const lines=s===0?['ada']:s===1?['ada, ben, cyd']:s===2?['ada, ben, cyd,','dee, eli']:['ada, ben, cyd,','dee, eli, fay'];
+    lines.forEach((text,i)=>label(d,'visited-'+i,1074,446+i*34,text,P.ink,25));
+    label(d,'edge-checks',1074,575,[0,2,6,8][s]+' edges examined',P.muted,24);
+    foot(d,'Orange nodes: frontier · orange edges: last expansion · counter: all rounds');
+  });
+  const graphCounts=use(15,'paths-are-not-unique-vertices',(d,s)=>{
     const frontier=s===0?['ben','cyd']:s<=2?['dee','eli']:s===3?['fay']:['ben','cyd','dee','eli','fay'];
-    Object.entries(graphNodes).forEach(([name,[x,y]])=>{d.circle('person-'+name,x,y,44,frontier.includes(name)?P.greenLight:P.white,frontier.includes(name)?P.green:P.line,3);label(d,'person-label-'+name,x,y,name,P.ink,26);});
+    const expanded=s===0?['ada']:s<=2?['ben','cyd']:['dee','eli'];
+    graphPicture(d,{frontier,visited:['ada'],edges:graphEdges.filter(([from])=>expanded.includes(from)).map(e=>e.join('>'))});
     const lines=[['Walk endpoints','ben, cyd','BFS frontier','ben, cyd'],['Walk endpoints','dee, ada, dee, eli','BFS frontier','dee, eli'],['Visited people','ada, ben, cyd,','dee, eli','6 edges examined'],['Depth 3 walks: 5','All walk rows: 11','BFS frontier: fay','8 edges examined'],['Within 3 hops','11 walk rows','5 unique people','Different results']][s];
     d.rect('result-panel',922,237,305,353,P.white,P.line,10,2);
     lines.forEach((t,i)=>label(d,'result-line-'+i,1074,285+i*83,t,i===0?P.ink:P.green,i===1?23:24));
-    foot(d,'Directed edges · walks may revisit nodes · BFS adds only previously unvisited endpoints');
+    foot(d,s===2?'Cycle: ada → ben → ada. Visited prevents adding ada to the frontier again.':'Walks can repeat nodes or edges. Distinct reachability adds each newly discovered person once.');
+  });
+  if(graphCounts)Object.assign(graphCounts.teaching,{
+    idea:'Walk rows, edge inspections, and distinct people measure different things. State the required result before comparing work.',
+    question:'Do eleven walk rows and eight BFS edge visits prove that SQL is slower?',
+    answer:'No. The counts describe different operations and different outputs. Match the result requirements and count comparable work before measuring runtime.',
+    builds:[
+      'Define a walk as a sequence of connected edges that can repeat nodes or edges. The first round produces ben and cyd. A distinct-person search discovers the same two people. Predict the next endpoints before advancing.',
+      'List four two-hop walks: ada → ben → dee, ada → ben → ada, ada → cyd → dee, and ada → cyd → eli. Their endpoints are dee, ada, dee, eli. The two dee entries represent different walks to one person.',
+      'Define a cycle as a route returning to a node already on that route. The walk ada → ben → ada contains a cycle. BFS has already visited ada. Its new frontier contains dee and eli only once. Six outgoing edges have been examined so far.',
+      'At depth three, walk enumeration produces five more rows. Across depths one through three, the total is 2 + 4 + 5 = 11. The visited search examines eight outgoing edges and discovers five other people. Fay is at the bound, so its outgoing edge is not expanded.',
+      'Specify whether the result needs walks, distinct reachable people, or one shortest path. SQL can deduplicate during recursion when the query requires it. A final DISTINCT alone need not prevent repeated intermediate work. These toy counters are not an elapsed-time benchmark.'
+    ],
+    context:'This preserves the shared six-person, nine-edge trace. A shortest simple route, walk enumeration, and distinct reachability have different repeat rules. The example compares mechanisms while keeping their outputs explicit.'
+  });
+  use(15,'the-query-draws-a-shape',(d,s)=>{
+    if(s<2){
+      d.circle('a',220,350,65,P.orangeLight,P.orange,3);d.circle('b',1060,350,65,P.greenLight,P.green,3);
+      label(d,'a-name',220,362,'a',P.ink,38);label(d,'b-name',1060,362,'b',P.ink,38);
+      d.arrow('edge-pattern',310,350,970,350,P.green,5);
+      label(d,'pattern',640,292,s===0?'[:Follows]':'[:Follows*1..3]',P.green,38);
+      label(d,'node-variables',640,437,'a and b are node variables',P.muted,26);
+      if(s===0)label(d,'one-edge',640,508,'MATCH (a)-[:Follows]->(b)',P.ink,31);
+      else{
+        label(d,'exclude-source',640,505,"WHERE b.name <> 'ada'",P.ink,28);
+        label(d,'distinct',640,560,'RETURN DISTINCT b.name',P.ink,28);
+      }
+    }else{
+      label(d,'cte-title',640,224,'WITH RECURSIVE: seed → repeated edge joins',P.ink,31);
+      const names=['Seed','Depth 1','Depth 2','Depth 3'],details=['(ada, 0)','2 walk rows','4 walk rows','5 walk rows'];
+      names.forEach((name,i)=>{card(d,'round-'+i,60+i*310,300,230,116,name,details[i],i===0);if(i<3)d.arrow('round-arrow-'+i,300+i*310,358,355+i*310,358,P.green,3);});
+      label(d,'cte-rule',640,486,'UNION ALL keeps the repeated walk rows. Stop after depth 3.',P.muted,26);
+      d.box('cte-result',235,543,810,62,'Exclude ada, then DISTINCT → ben, cyd, dee, eli, fay',P.greenLight,P.green,26);
+    }
+    foot(d,s===2?'The seed is not a walk row. The three expansion rounds contain 2 + 4 + 5 = 11 rows.':'Cypher describes a pattern. SQL recursion can express traversal too. Match the repeat rules.');
+  });
+  use(15,'find-the-shortest-path',(d,s)=>{
+    const frontier=s===0?['ben','cyd']:s===1?['dee','eli']:['fay'];
+    graphPicture(d,{frontier,visited:s===0?['ada']:s===1?['ada','ben','cyd']:['ada','ben','cyd','dee','eli'],edges:s===3?['ada>cyd','cyd>eli','eli>fay']:s===0?['ada>ben','ada>cyd']:s===1?['ben>dee','cyd>eli']:['eli>fay']});
+    label(d,'predecessor-heading',1074,224,s===3?'Reconstruct backward':'First discovery links',P.ink,25);
+    if(s<3){
+      const pairs=[['ben','ada'],['cyd','ada'],['dee','ben'],['eli','cyd'],['fay','eli']];
+      pairs.slice(0,s===0?2:s===1?4:5).forEach(([child,parent],i)=>d.box('predecessor-'+child,939,262+i*62,270,49,child+' ← '+parent,P.white,P.line,26));
+    }else{
+      ['fay ← eli','eli ← cyd','cyd ← ada'].forEach((text,i)=>d.box('backtrack-'+i,939,278+i*84,270,61,text,P.orangeLight,P.orange,28));
+      label(d,'minimum-hops',1074,568,'Minimum: 3 hops',P.green,27);
+    }
+    foot(d,s===3?'Returned route: ada → cyd → eli → fay. Equal-cost edges make minimum hops the goal.':'A predecessor records who first discovered a node. It lets the search rebuild a route.');
+  });
+  use(15,'a-supernode-is-skew-again',(d,s)=>{
+    const count=s===0?5:30,limit=s===2?8:count;
+    label(d,'degree',640,222,s===2?'Expansion budget: 30 → 8':'Outgoing degree: '+count,P.ink,30);
+    for(let i=0;i<count;i++){
+      const angle=i*2*Math.PI/count,dx=Math.cos(angle)*430,dy=Math.sin(angle)*160,length=Math.hypot(dx,dy),ux=dx/length,uy=dy/length;
+      const color=i<limit?P.orange:P.line;
+      d.arrow('outgoing-'+i,640+ux*82,430+uy*82,640+dx-ux*19,430+dy-uy*19,color,i<limit?3:2);
+      d.circle('neighbor-'+i,640+dx,430+dy,14,i<limit?P.greenLight:P.white,i<limit?P.green:P.line,2);
+    }
+    d.circle('hub',640,430,70,P.orangeLight,P.orange,3);label(d,'hub-label',640,441,'hub',P.orange,31);
+    foot(d,s===2?'Eight inspected edges leave 22 possible next steps unexplored. This is a toy limit.':'Stored adjacency locates the list. Expanding the list still inspects its outgoing edges.');
+  });
+  use(15,'connections-augment-similarity',(d,s)=>{
+    label(d,'retrieval-question',640,216,'Why must logging happen before a dirty page is written?',P.ink,29);
+    d.rect('log-passage',55,274,420,174,P.greenLight,P.green,9,2);
+    label(d,'log-source',265,307,'Source ID: log-notes',P.green,27);
+    ['WAL records recovery','information before a changed','page reaches storage.'].forEach((line,i)=>label(d,'log-text-'+i,265,352+i*34,line,P.ink,24));
+    if(s===0){
+      card(d,'wal-definition',580,278,630,123,'WAL = write-ahead log','It stores changes needed for recovery.');
+      card(d,'dirty-definition',580,464,630,123,'Dirty page = changed memory copy','Those changes have not reached storage.');
+    }
+    if(s>=1){
+      d.arrow('mention-link',489,358,565,358,P.green,3);
+      d.circle('wal',650,358,70,P.orangeLight,P.orange,3);label(d,'wal-name',650,369,'WAL',P.orange,32);
+      label(d,'wal-expanded',650,473,'write-ahead log',P.muted,24);
+    }
+    if(s>=2){
+      d.circle('buffer',1065,358,92,P.blueLight,P.blue,3);label(d,'buffer-name',1065,369,'buffer pool',P.blue,27);
+      d.arrow('relation',735,358,956,358,P.orange,4);
+      label(d,'relation-label',855,285,'protects page writes',P.orange,23);
+    }
+    if(s>=3){
+      d.rect('buffer-passage',815,491,410,127,P.blueLight,P.blue,9,2);
+      label(d,'buffer-source',1020,521,'Source ID: buffer-notes',P.blue,25);
+      label(d,'buffer-text-1',1020,558,'A dirty page has changes',P.ink,24);
+      label(d,'buffer-text-2',1020,591,'not yet written to storage.',P.ink,24);
+      d.arrow('source-link',1065,463,1065,480,P.blue,3);
+      d.box('retained-evidence',70,532,690,65,'Evidence IDs: log-notes + buffer-notes',P.greenLight,P.green,27);
+    }
+    foot(d,'Illustrative passages and relation · preserve source IDs and check the added text.');
   });
 
   use(4,'lecture-04-scene-02',(d,s)=>{

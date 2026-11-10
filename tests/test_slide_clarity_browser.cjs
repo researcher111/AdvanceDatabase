@@ -108,16 +108,17 @@ fs.mkdirSync(output,{recursive:true});
     assert(await page.evaluate(()=>window.movingPair===document.querySelector('[data-key="pair-0-label"]')),'shuffle preserves the animated DOM object');
     await page.emulateMedia({reducedMotion:'reduce'});
    }
-   if(id===13||id==='13b'||id===14){
+   if(id===13||id==='13b'||id===14||id===15){
     // These readings embed their own deck scenes without loading full slide players.
     const reading=await context.newPage();
     await reading.route(/^https?:\/\//,route=>route.abort()); // All diagram assets are local.
-    const readingFile=id===14?'lecture-14/bigtable.html':id===13?'lecture-13/distributed.html':'lecture-13/spark-ray.html';
+    const readingFile=id===15?'lecture-15/graphs.html':id===14?'lecture-14/bigtable.html':id===13?'lecture-13/distributed.html':'lecture-13/spark-ray.html';
     await reading.goto(pathToFileURL(path.join(root,'lectures',readingFile)).href);
     const widgets=reading.locator('.lecture-walkthrough');
     if(id===14){
      assert.equal(scenes.length,16,'Bigtable retains all sixteen lecture scenes');
     }
+    if(id===15)assert.equal(scenes.length,16,'Graphs retains all sixteen lecture scenes');
     assert.deepEqual(await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.lectureScene)),scenes.map(s=>s.id));
     assert.equal(await reading.locator('.lecture-walkthrough[data-walkthrough-ready="true"]').count(),scenes.length);
     if(id==='13b'){
@@ -156,7 +157,13 @@ fs.mkdirSync(output,{recursive:true});
      assert.equal(await widget.getAttribute('data-step'),'0');
      assert(await widget.locator('[data-action="previous"]').isDisabled());
     }
-    if(id===13)assert.equal(await reading.locator('[data-lecture-scene="preview-spark-and-ray"] .lw-screen a').getAttribute('href'),pathToFileURL(path.join(root,'slides/lecture-13b.html')).href);
+    if(id===13){
+     assert.equal(await reading.locator('[data-lecture-scene="preview-spark-and-ray"] .lw-screen a').getAttribute('href'),pathToFileURL(path.join(root,'slides/lecture-13b.html')).href);
+     const overview=reading.locator('#mapreduce-overview');
+     assert(await overview.isVisible(),'the complete MapReduce overview is visible without opening a disclosure');
+     assert.equal(await overview.locator('img').getAttribute('src'),'diagrams/mapreduce-lunch.svg');
+     assert(await overview.evaluate(figure=>!figure.closest('details')&&Boolean(figure.compareDocumentPosition(document.querySelector('[data-lecture-scene="reduce-sees-the-complete-group"]'))&Node.DOCUMENT_POSITION_FOLLOWING)),'the overview precedes its animated walkthrough');
+    }
     else if(id==='13b')assert.equal(await reading.locator('[data-lecture-scene="same-orders-two-runtimes"] .lw-screen a').getAttribute('href'),'https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/');
     if(id===14){
      // A range split redistributes existing rows, but increasing keys still target the tail.
@@ -238,6 +245,81 @@ fs.mkdirSync(output,{recursive:true});
      assert(await trace.locator('[data-trace-action="next"]').isDisabled());
      await trace.locator('[data-trace-action="reset"]').click();
     }
+    if(id===15){
+     // Enumerate the independent course fixture, then derive shortest distances.
+     // A BFS expands precisely those sources whose distance is below the bound.
+     const follows={ada:['ben','cyd'],ben:['dee','ada'],cyd:['dee','eli'],dee:['eli'],eli:['fay'],fay:['ada']};
+     function expectedGraph(start,depth){
+      let endpoints=[start],rows=0;
+      const distance=new Map([[start,0]]);
+      for(let hop=1;hop<=depth;hop++){
+       endpoints=endpoints.flatMap(name=>follows[name]);rows+=endpoints.length;
+       for(const name of endpoints)if(!distance.has(name))distance.set(name,hop);
+      }
+      const edges=Object.entries(follows).flatMap(([from,to])=>
+       (distance.get(from)??Infinity)<depth?to.map(name=>`${from}>${name}`):[]).sort();
+      const reached=[...distance.keys()].filter(name=>name!==start).sort();
+      return{distance,rows,edges,reached};
+     }
+     assert.deepEqual(expectedGraph('ada',3).reached,['ben','cyd','dee','eli','fay']);
+     assert.equal(expectedGraph('ada',3).rows,11);
+     assert.equal(expectedGraph('ada',3).edges.length,8);
+     assert.equal(await reading.locator('#walk-svg [data-edge]').count(),9,'all directed follows edges remain visible');
+     const opposing=await reading.locator('#walk-svg [data-edge]').evaluateAll(nodes=>nodes.filter(n=>['ada>ben','ben>ada'].includes(n.dataset.edge)).map(n=>n.getAttribute('d')));
+     assert.equal(opposing.length,2);
+     assert(opposing.every(route=>route.includes('Q')),'opposing arrows have distinct curved routes');
+     assert.notEqual(opposing[0],opposing[1]);
+     for(const [index,start]of Object.keys(follows).entries()){
+      const node=reading.locator(`#walk-svg [data-name="${start}"]`);
+      await node.focus();await reading.keyboard.press(index%2?'Space':'Enter');
+      assert.equal(await node.getAttribute('aria-pressed'),'true','keyboard selection changes the start');
+      assert.equal(await reading.evaluate(()=>document.activeElement.dataset.name),start,'selection preserves keyboard focus');
+      for(let depth=0;depth<=5;depth++){
+       const expected=expectedGraph(start,depth);
+       const actual=await reading.locator('#walk-svg').evaluate(svg=>({
+        edges:[...svg.querySelectorAll('[data-walked="true"]')].map(node=>node.dataset.edge).sort(),
+        hops:[...svg.querySelectorAll('.walk-node')].map(node=>({name:node.dataset.name,text:node.textContent.trim()}))
+       }));
+       assert.deepEqual(actual.edges,expected.edges,`${start}: examined outgoing edges at depth ${depth}`);
+       for(const {name,text}of actual.hops){
+        const hop=expected.distance.get(name);
+        if(hop>0)assert(text.includes(`hop ${hop}`),`${name}: shortest hop count`);
+        else assert(!text.includes('hop '),'unreached nodes and the start have no hop label');
+       }
+       const message=await reading.locator('#walk-msg').textContent();
+       if(depth===0){
+        assert(message.startsWith(`start: ${start}`));
+        assert.equal(await reading.locator('#walk-stats').textContent(),'');
+       }else{
+        assert.equal(message,`depth ${depth} from ${start}: {${expected.reached.join(', ')||'nobody'}}`);
+        assert.deepEqual(await reading.locator('#walk-stats strong').allTextContents(),[String(expected.edges.length),String(expected.rows)]);
+       }
+       if(depth<5)await reading.locator('#walk-step').click();
+      }
+      assert(await reading.locator('#walk-step').isDisabled(),'the depth bound disables further expansion');
+      await reading.locator('#walk-reset').click();
+      assert(!(await reading.locator('#walk-step').isDisabled()),'reset restores expansion');
+      assert((await reading.locator('#walk-msg').textContent()).startsWith(`start: ${start}`),'reset retains the selected starting person');
+     }
+     await reading.locator('#walk-svg [data-name="ada"]').click();
+     assert.equal(await reading.locator('#walk-svg [aria-pressed="true"]').getAttribute('data-name'),'ada','pointer selection still works');
+
+     const trace=reading.locator('[data-teaching-trace="graph"]');
+     if(!(await trace.locator('[data-trace-action="reset"]').isDisabled()))await trace.locator('[data-trace-action="reset"]').click();
+     const states=[];
+     for(let step=0;step<5;step++){
+      assert.equal(await trace.getAttribute('data-trace-step'),String(step));
+      states.push(await trace.locator('.trace-table').textContent());
+      if(step<4)await trace.locator('[data-trace-action="next"]').click();
+     }
+     assert.match(states[1],/path endpoints\[dee, ada, dee, eli\]/);
+     assert.match(states[2],/frontier at depth 2\[dee, eli\]/);
+     assert.match(states[3],/BFS edge visits total8/);
+     assert.match(states[3],/walk rows over depths 1–32 \+ 4 \+ 5 = 11/);
+     assert.match(states[4],/distinct people count5/);
+     assert(await trace.locator('[data-trace-action="next"]').isDisabled());
+     await trace.locator('[data-trace-action="reset"]').click();
+    }
     // Keyboard controls remain local even while the reading's presentation mode is active.
     const first=widgets.first();
     await first.evaluate(root=>{
@@ -269,6 +351,15 @@ fs.mkdirSync(output,{recursive:true});
       return{localScroll:viewport.scrollWidth>viewport.clientWidth,buttons:[...r.querySelectorAll('button')].every(b=>{const box=b.getBoundingClientRect();return box.height>=44&&box.x>=0&&box.right<=innerWidth;})};
      }));
      assert(mobile.every(s=>s.localScroll&&s.buttons),'diagrams scroll locally and controls remain usable');
+     if(id===15){
+      const graphMobile=await reading.locator('.walk-svg-wrap').evaluate(wrap=>({
+       localScroll:wrap.scrollWidth>wrap.clientWidth,
+       targets:[...wrap.querySelectorAll('.walk-node circle')].every(circle=>{
+        const rect=circle.getBoundingClientRect();return rect.width>=44&&rect.height>=44;
+       })
+      }));
+      assert(graphMobile.localScroll&&graphMobile.targets,'the graph scrolls locally and keeps student targets at least 44 pixels');
+     }
      await widgets.nth(6).screenshot({path:path.join(output,'lecture-'+id+'-inline-'+width+'.png')});
     }
     const beforePrint=await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.step));

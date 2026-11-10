@@ -1260,94 +1260,94 @@ window.CourseClarityCaptions = {
   },
   "15": {
     "the-path-is-the-answer": [
-      "Maya’s drawing starts with people. Ask which result the question needs.",
-      "Directed relationships connect them. Two routes can end at the same person.",
-      "A route to fay goes through cyd and eli. A path and a distinct endpoint are different results."
+      "A graph represents things as nodes and their connections as edges. Here each node represents one student.",
+      "Each arrow means “follows.” Its direction matters: ada follows ben, and ben also follows ada.",
+      "The route ada → cyd → eli → fay reaches one endpoint, fay. Distinct people means each person appears once."
     ],
     "property-graph": [
-      "Map intersections to nodes: each represents an entity.",
-      "Map directed routes to typed edges such as Follows.",
-      "Attach properties to the entity or relationship they describe. The diagram’s since value is a teaching example."
+      "A node is one entity, such as a student. A label names its category, such as Student.",
+      "An edge is a relationship between two nodes. Its type, Follows, names that relationship.",
+      "A property is a named value. The gpa property describes ada. The since property describes the Follows relationship."
     ],
     "store-adjacency-at-write-time": [
-      "A relational edge table names each source and destination.",
-      "Resolve ada’s outgoing relationships to ben and cyd.",
-      "Store references to neighbors so queries can follow them. Update those references when edges change."
+      "In an edge table, src is the source and dst is the destination. Matching src = ada finds two outgoing neighbors.",
+      "Adjacency means direct connection. Resolve each endpoint’s identity when creating an edge.",
+      "An adjacency list stores a node’s neighbors. Reading ada’s list returns ben and cyd. Edge changes must maintain that list."
     ],
     "one-hop": [
-      "Start at ada and keep edge direction explicit.",
-      "Follow its outgoing edges to ben and cyd.",
-      "Return {ben, cyd}. Incoming neighbors would answer a different question."
+      "One hop follows one edge. Start at ada and predict the outgoing neighbors.",
+      "Expand means inspect outgoing edges and their destinations. Ada’s two outgoing edges reach ben and cyd.",
+      "Return {ben, cyd}. Reversing the question asks who follows ada and returns {ben, fay}."
     ],
     "two-hops-with-exclusions": [
-      "Two-edge routes can return to ada or reach dee twice.",
-      "Exclude the start if the question asks for other people.",
-      "Exclude existing neighbors and deduplicate endpoints to obtain {dee, eli}."
+      "An endpoint is where a route ends. Four two-hop routes end at dee, ada, dee, and eli.",
+      "Exclude ada because the query asks for other people. Two remaining routes still reach dee.",
+      "Exclude people already followed directly. Remove repeated endpoint names to return the distinct people {dee, eli}."
     ],
     "breadth-first-reachability": [
-      "For reachability, initialize ada as visited and in the frontier.",
-      "Discover previously unvisited ben and cyd at distance 1.",
-      "Discover dee and eli at distance 2.",
-      "Discover fay at distance 3. Previously visited people do not enter the frontier again."
+      "BFS means breadth-first search. The frontier holds nodes to expand next. Visited records all nodes already discovered.",
+      "Expand ada. Add unseen ben and cyd to visited and the next frontier, at distance 1.",
+      "Expand ben and cyd. Add dee and eli once each. Ada is already visited, and the second route to dee adds nothing.",
+      "Expand dee and eli. Discover fay at distance 3. Stop at the bound without expanding fay."
     ],
     "paths-are-not-unique-vertices": [
-      "At one hop, both methods reach ben and cyd. Predict the next endpoints.",
-      "Four two-hop walks end at dee, ada, dee, and eli. dee is still one person.",
-      "For reachability, keep only the new frontier and track visited people.",
-      "Through depth 3: eleven walk rows versus eight BFS edge visits and five other people.",
-      "Specify the required result: walks, distinct reachable people, or a shortest path. Their work can differ."
+      "A walk follows edges and may repeat nodes or edges. At one hop, both methods reach ben and cyd.",
+      "Four two-hop walks end at dee, ada, dee, and eli. Two copies of dee represent routes, not two people.",
+      "A cycle returns to a node earlier on the same walk. Reachability skips revisiting ada and retains only newly discovered people.",
+      "Through depth 3: eleven walk rows versus eight BFS edge visits and five other people. These count different things.",
+      "Choose the required result before comparing work: walks, distinct reachable people, or one shortest path."
     ],
     "the-query-draws-a-shape": [
-      "Draw the requested directed relationship before writing query syntax.",
-      "The depth range limits path length. Exclusions and DISTINCT determine the final endpoints.",
-      "SQL recursion can express traversal too. Match cycle and duplicate rules before timing either query."
+      "Cypher is a graph query language. Parentheses name nodes, brackets name an edge type, and the arrow gives direction.",
+      "The *1..3 range requests one to three edges. DISTINCT keeps each output name once. The WHERE condition excludes ada.",
+      "A recursive common table expression (CTE) repeats an SQL query step. Start with ada, then join each round to outgoing edges."
     ],
     "find-the-shortest-path": [
-      "Start a shortest-route search at ada.",
-      "As the search visits each person, remember who led to them so we can rebuild the route.",
-      "Reach fay under the search’s stopping rule.",
-      "Reconstruct ada → cyd → eli → fay, a shortest route of three directed edges here."
+      "A shortest path here uses the fewest edges. BFS explores one hop before two, then three.",
+      "A predecessor is the node that first discovered another node. Record cyd as eli’s predecessor.",
+      "Fay is first discovered at distance 3, through eli. Equal-cost edges make this the minimum hop count.",
+      "Follow predecessors backward: fay ← eli ← cyd ← ada. Reverse that sequence to return the route."
     ],
     "a-supernode-is-skew-again": [
-      "A small neighbor list is easy to locate and inspect.",
-      "Expanding all thirty neighbors still takes work, even with stored links.",
-      "Inspecting only eight reduces work but changes coverage. This query budget is hypothetical."
+      "A node’s outgoing degree counts its outgoing edges. This example begins with five neighbors.",
+      "A supernode has unusually many connections. Expanding thirty neighbors still requires thirty edge inspections.",
+      "An expansion budget limits inspected edges. Inspecting only eight of thirty can omit valid results. This budget is illustrative."
     ],
     "choose-a-graph-workload": [
-      "A fixed shallow relationship can fit a relational join plan.",
-      "Path operators can follow a variable number of edges when the query needs those routes.",
-      "Whole-graph analytics is another workload. Compare equivalent results and maintenance costs."
+      "A workload is the set of operations a system must support. A fixed one-edge relationship often fits a relational join.",
+      "A variable-depth query follows different numbers of edges. Graph path syntax can make these requests convenient.",
+      "Whole-graph analytics repeatedly processes much of the graph. Choose for the result and workload, not the database label."
     ],
     "connections-augment-similarity": [
-      "Return to RAG: retrieve nearby passages as starting evidence.",
-      "Identify entities in those passages, such as WAL and buffers.",
-      "Follow a justified relationship to find potentially connected evidence.",
-      "Keep the source ID with each added passage. Some linked passages may be irrelevant."
+      "Retrieval-augmented generation (RAG) retrieves passages before generating an answer. Begin with a passage found by vector similarity.",
+      "An entity is a named thing or concept. Identify WAL, the write-ahead log, in the retrieved passage.",
+      "Follow an illustrative relation from WAL to the buffer pool, which holds working copies of stored pages.",
+      "Add the connected passage with its source ID. A graph connection suggests evidence. Reading the passage establishes its relevance."
     ],
     "does-graph-expansion-help": [
-      "Keep vector-only retrieval as the baseline for the same questions.",
-      "Add relationship neighbors. Predict one question that benefits and one question that becomes harder to answer.",
-      "Measure support, noise, and latency. These drawn checkmarks are hypothetical, not project results."
+      "A baseline is the comparison system. Keep vector-only retrieval as the baseline on the same saved evaluation questions.",
+      "Add relationship neighbors. Predict one question that gains useful evidence and one that gains irrelevant text.",
+      "Check answer support, irrelevant text, and response time. The checkmarks are hypothetical outcomes, not measured project results."
     ],
     "five-mechanisms-recur": [
-      "Ask where bytes are stored and which reads a cache can reuse.",
-      "Ask which maintained structure lets a query skip work.",
-      "Ask how the system restores lost data. Lineage replays transformations. WAL supports transaction recovery.",
-      "Ask which plan turns the requested result into operations.",
-      "Ask which worker holds each partition and whether one worker has most of the work."
+      "A cache keeps reusable data nearby. Ask which storage reads its contents avoid.",
+      "An index maintains a search structure. Ask which data the query can skip.",
+      "A log stores recovery information. Spark lineage records a recomputation recipe. It is not a write-ahead log.",
+      "An execution plan specifies operations and their dependencies. Ask which inputs each operation needs.",
+      "A partition is a portion of data. Ask who holds it and whether the workload is balanced."
     ],
     "read-a-new-system": [
-      "Find the blocks and caches in the unfamiliar system.",
-      "Identify the access paths and the updates needed to maintain them.",
-      "Trace an acknowledged write through its failure and recovery rules.",
-      "Follow the query’s steps and identify which inputs each step needs.",
-      "Check how data is divided among workers before choosing a benchmark for your workload."
+      "A storage block is a chunk read or written as a unit. Find its contents and cached copies.",
+      "An access path is a way to locate records. Identify its read savings and its maintenance costs.",
+      "An acknowledged write has received a success reply. Ask which failures that reply promises to survive.",
+      "Follow the query’s operations. Identify data movement and any step that must wait for another result.",
+      "A benchmark runs a defined workload and measures its costs. Match required results before comparing systems."
     ],
     "finish-with-measured-decisions": [
-      "State the opening question and its required result.",
-      "Show evidence from the same workload under the compared configurations.",
-      "Explain the decision that follows from those results. The plotted points illustrate the comparison.",
-      "Compare configurations on the same required result, explain the measurements, and show one diagnosed failure."
+      "Return to Maya’s question. State whether the required result contains routes or distinct people.",
+      "Show evidence from the same workload under the compared configurations. Explain what each measured counter counts.",
+      "Connect the result to a design decision. These plotted points illustrate a comparison. They are not project measurements.",
+      "Compare at least two configurations and explain one diagnosed failure. Use your project’s evidence to defend the choice."
     ]
   }
 };

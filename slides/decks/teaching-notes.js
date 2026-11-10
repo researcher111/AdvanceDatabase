@@ -2287,162 +2287,171 @@
   },
   "15": {
     "the-path-is-the-answer": {
-      "idea": "A graph query can ask for the path connecting records.",
-      "question": "If two routes end at Dee, does a query for distinct reachable people need two copies of Dee?",
-      "answer": "No. A query for distinct people returns Dee once. A query for routes can return both paths. Decide which result is required first.",
+      "idea": "Choose whether the result needs routes or distinct people before counting.",
+      "question": "Two routes reach dee. How many copies belong in a list of distinct people?",
+      "answer": "One. Different routes can reach the same person. A route result can retain both connections.",
       "builds": [
-        "Calibrate with the src/dst join students know. Introduce Maya’s whiteboard: two routes can end at Dee. Ask whether the result requires routes or distinct people before tracing a route to Fay. Identify the familiar student records as nodes.",
-        "Add directed follows relationships and ask a one-hop question.",
-        "Reveal ada to cyd to eli to fay and distinguish a path from a matching row."
-      ]
+        "Use the fictional student-club scene. A student is a node, also called a vertex. A directed edge is an arrow showing who follows whom. Ask what one arrow means before tracing several arrows.",
+        "Read ada → ben as ada follows ben. Point out the separate reverse arrow. Compare the drawing with one-way routes on a map. Direction limits which next step is allowed.",
+        "Trace ada → cyd → eli → fay. A hop crosses one edge, so this route has three hops. Ask whether the answer needs the route or only fay’s name. Distinct means keeping each output person once."
+      ],
+      "context": "The map analogy explains direction and connected routes. It does not model storage or guarantee performance. A simple path has no repeated nodes. Query languages can use path for broader patterns with specified repeat rules. The later walk trace makes repeats explicit."
     },
     "property-graph": {
-      "idea": "A property graph attaches named values to nodes and typed relationships.",
-      "question": "Where would the fact since 2026 belong?",
-      "answer": "On the Follows relationship, because it describes the connection rather than either endpoint alone.",
+      "idea": "Properties belong to the node or relationship that they describe.",
+      "question": "Does since: 2026 describe ada, ben, or their Follows relationship?",
+      "answer": "It describes that relationship. A different relationship can have another since value.",
       "builds": [
-        "Link to a directed campus map: intersections are nodes, routes are edges. Map properties to the thing they describe and state that storage alone does not choose query semantics. Identify the nodes.",
-        "Add direction and a type to the edges.",
-        "Place the illustrative properties on the appropriate node or relationship."
-      ]
+        "Define entity as a thing represented in the data. Use the Student label to identify the category. Show ada and ben as two nodes from the six-person graph.",
+        "Define the relationship type Follows. Read its direction from ada to ben. A type is a category, not the identity of one particular edge.",
+        "Define property as a named value. Attach gpa: 39 to ada and since: 2026 to the relationship. The course stores GPA in tenths, so 39 represents 3.9. Ask where a second follow date would belong."
+      ],
+      "context": "The since property illustrates the graph model. The supplied Kuzu demo stores student GPA but does not add since. A property-graph model does not prescribe one storage format or traversal algorithm."
     },
     "store-adjacency-at-write-time": {
-      "idea": "Maintained adjacency makes later neighbor expansion direct.",
-      "question": "How would a relational edge table find ada's neighbors?",
-      "answer": "Match src using an index or scan. Stored adjacency maintains the neighbor relationship for later reads.",
+      "idea": "Stored adjacency organizes direct neighbors for later expansion.",
+      "question": "Does a stored neighbor list make an edge free to add or remove?",
+      "answer": "No. The write must maintain the list. Faster neighbor access can require extra maintenance.",
       "builds": [
-        "Find ada’s outgoing edges by matching src in the relational edge table. Then compare how a stored adjacency list can point directly to the same neighbors.",
-        "Resolve endpoints while creating a relationship.",
-        "Store and read the neighbor list, accounting for its write-time maintenance."
-      ]
+        "Define src as source and dst as destination. Match ada against src in the displayed edge table. An index can locate matching rows, or a scan can inspect them. Both return ben and cyd.",
+        "Define adjacency as direct connection. Resolve the named endpoints to stored node identities. The graph engine can then save references to the destination nodes.",
+        "Read ada’s adjacency list as its outgoing neighbors. Explain what must change when an edge is added or removed. The table and list describe the same relationships."
+      ],
+      "context": "Neighbor references need not be literal memory pointers. Disk layout, compression, caching, and engine design affect access cost. A relational index on src can also support efficient expansion."
     },
     "one-hop": {
-      "idea": "A one-hop query follows edges in the direction specified by the query.",
+      "idea": "Direction determines which neighbors a one-hop query returns.",
       "question": "Who does ada follow, and who follows ada?",
       "answer": "Ada follows ben and cyd. Ben and fay follow ada.",
       "builds": [
-        "Keep the first query to one outgoing hop. Ask how reversing direction would change the result before returning the endpoints. Start at ada and predict the outgoing neighbors.",
-        "Expand the outgoing edges.",
-        "Return ben and cyd, then contrast the reversed-direction question."
+        "Define hop as one edge crossing. Start at ada. Ask students to list outgoing arrows without following a second edge.",
+        "Define expansion as inspecting a node’s selected edges and destinations. Follow ada’s two outgoing edges. Keep the incoming arrows separate.",
+        "Return ben and cyd. Reverse the question and identify ben and fay from incoming edges. The stored graph is unchanged, but the query direction changes."
       ]
     },
     "two-hops-with-exclusions": {
-      "idea": "Two-hop paths can produce repeated endpoints that need explicit exclusions and deduplication.",
-      "question": "What distinct endpoints remain after excluding ada and existing neighbors?",
-      "answer": "Dee and eli. Dee is reached by two paths but is one person.",
+      "idea": "Repeated routes can produce duplicate endpoints that the query must handle explicitly.",
+      "question": "Which distinct two-hop endpoints remain after excluding ada and existing neighbors?",
+      "answer": "Dee and eli. Two routes reach dee, but the requested people list contains dee once.",
       "builds": [
-        "Predict the two-hop list before exclusions. Let the class point at Dee twice and explain why DISTINCT people needs only one Dee. Enumerate dee, ada, dee, and eli as raw two-hop endpoints.",
-        "Remove the starting node ada.",
-        "Exclude existing neighbors and return distinct dee and eli."
+        "Define endpoint as the final node of a route. Enumerate ada → ben → dee, ada → ben → ada, ada → cyd → dee, and ada → cyd → eli. The endpoint list is dee, ada, dee, eli.",
+        "Remove ada because the query asks for other people. Keep both dee rows for now. Ask which exclusion removed the returning route.",
+        "Exclude direct neighbors ben and cyd, although neither appears in this candidate list. Deduplicate means remove repeated output values. Keep one dee and one eli. Changing the dataset can make the direct-neighbor exclusion matter."
       ]
     },
     "breadth-first-reachability": {
-      "idea": "Breadth-first search discovers unvisited nodes in layers of increasing hop distance.",
-      "question": "Which new nodes enter successive frontiers from ada?",
-      "answer": "Ben and cyd, then dee and eli, then fay.",
+      "idea": "BFS discovers each reachable node once, in increasing hop distance.",
+      "question": "Why does the second route to dee not add another frontier entry?",
+      "answer": "Dee is already in visited after the first discovery. A distinct-reachability search expands each discovered node once.",
       "builds": [
-        "Use the map’s frontier as a picture before naming the algorithm. Ask which previously unvisited people belong to each distance layer. Begin with ada in the frontier and visited set.",
-        "Discover ben and cyd at distance one.",
-        "Discover dee and eli while skipping already visited nodes.",
-        "Discover fay at distance three and state the equal-edge-cost assumption."
-      ]
+        "Expand BFS as breadth-first search. Define frontier as the nodes waiting for the current expansion round. Define visited as every node already discovered. Initialize both with ada.",
+        "Expand ada’s outgoing edges. Mark ben and cyd visited when discovered, before the next round. Their distance is one edge from ada.",
+        "Expand ben and cyd. Ada was already visited. Mark dee on its first discovery and skip its second discovery. The next frontier is dee and eli.",
+        "Expand dee and eli. Eli is already visited, while fay is new. Fay’s distance is three. Stop at the requested depth without expanding fay. With equal-cost edges, these layers give minimum hop distance."
+      ],
+      "context": "The frontier answers what to expand next. The visited set prevents repeated node work. A weighted edge has a cost value. Unequal weights require an algorithm that minimizes total cost rather than hop count."
     },
     "the-query-draws-a-shape": {
-      "idea": "Graph patterns and recursive SQL can both express bounded traversal.",
-      "question": "How does the query remove ada and repeated endpoints?",
-      "answer": "Exclude b.name equal to ada and use DISTINCT for endpoint deduplication.",
+      "idea": "Cypher patterns and recursive SQL can express the same bounded endpoint question.",
+      "question": "Does DISTINCT at the end prevent repeated intermediate expansion?",
+      "answer": "No. It removes duplicate output values. The recursive step can still generate repeated walks before that final operation.",
       "builds": [
-        "Draw the bounded relationship first, then translate it into syntax. Keep SQL recursion in view and require equivalent duplicate and cycle rules. Read the single directed relationship pattern.",
-        "Extend it to one through three outgoing Follows edges.",
-        "Compare a recursive SQL base case and bounded iterative join."
-      ]
+        "Define Cypher as a graph query language. Read a and b as node variables. Read Follows as an edge type and the arrow as outgoing direction. MATCH requests data fitting that pattern.",
+        "Read *1..3 as one through three edges. WHERE excludes ada from the endpoints. DISTINCT returns each remaining name once. ORDER BY controls the displayed ordering.",
+        "Expand CTE as common table expression: a named query result within a query. A recursive CTE starts with a seed row and repeatedly applies a step to the current round. Here the seed is (ada, 0). Each step joins current names to follows.src and increases depth. The bound stops expansion after depth three."
+      ],
+      "context": "The shown SQL uses UNION ALL, so repeated walk rows remain during recursion. It produces 2, 4, and 5 nonseed rows across three rounds. Final DISTINCT returns ben, cyd, dee, eli, and fay after excluding ada. UNION compares complete rows, so (ada, 0) and (ada, 2) still differ. Match edge direction, depth, exclusions, and repeat rules before timing implementations. The companion Kuzu example uses its documented WALK semantics."
     },
     "find-the-shortest-path": {
-      "idea": "With equal-cost edges, BFS's first target discovery gives the minimum hop count.",
-      "question": "What is the shortest route from ada to fay here?",
-      "answer": "Ada to cyd to eli to fay, using three edges.",
+      "idea": "BFS gives a minimum-hop path when all edges have equal cost.",
+      "question": "Why is the first discovery of fay sufficient for minimum hop count here?",
+      "answer": "BFS completes shorter-distance layers before reaching distance three. No route with fewer edges reached fay.",
       "builds": [
-        "Now change the question from reachable people to a route. Ask why predecessor information is needed to reconstruct the connecting path. Expand the first frontier.",
-        "Expand the second frontier and retain predecessor links.",
-        "Discover fay and establish the minimum hop count.",
-        "Follow predecessors backward to reconstruct the path."
-      ]
+        "Change the requested result from a set of people to one route. State the equal-edge-cost assumption. Expand ada and record ben ← ada and cyd ← ada.",
+        "Define predecessor as the node that first discovered another node. Record dee ← ben and eli ← cyd. Another discovery order can choose another predecessor for dee. That choice does not affect the route to fay here.",
+        "Discover fay from eli at distance three. Stop the search once the required shortest-route result is established. Record fay ← eli.",
+        "Read the predecessor links backward from fay: fay, eli, cyd, ada. Reverse the sequence to return ada → cyd → eli → fay. Keeping only the reached set would lose this route information."
+      ],
+      "context": "The route has three directed edges. If edge weights differ, minimum hops need not minimize total cost. An edge weight represents that cost. The diagram explains BFS and predecessor reconstruction, not an exact claim about Kuzu’s internal implementation."
     },
     "a-supernode-is-skew-again": {
-      "idea": "A high-degree node can dominate traversal work even with direct adjacency access.",
-      "question": "Does cheap neighbor lookup make millions of neighbors cheap to expand?",
-      "answer": "No. The number of neighbors still dominates. Limiting expansion changes semantics and recall.",
+      "idea": "A large neighbor list still requires work even when it is easy to locate.",
+      "question": "Can checking only eight of thirty outgoing edges preserve every valid answer?",
+      "answer": "Not in general. An omitted edge can lead to a required result. State the limit and measure what it misses.",
       "builds": [
-        "Link this high-degree hub back to Lecture 13’s hot key. Direct lookup does not remove the cost of inspecting a large neighbor set. Expand an ordinary-degree node.",
-        "Increase degree and compare the volume of work.",
-        "Apply the illustrative expansion budget and discuss what it omits."
-      ]
+        "Define outgoing degree as the number of outgoing edges. Inspect the five neighbors in the first drawing. The list location and the list length are different costs.",
+        "Define supernode as a node with unusually many connections. Increase the example to thirty neighbors. Link this uneven workload to a hot key from distributed aggregation.",
+        "Define an expansion budget as a limit on edges inspected. The example inspects eight and skips twenty-two. Ask which result guarantee is lost. More selective conditions, specialized indexes, or partitioned adjacency can address different workloads."
+      ],
+      "context": "The five-to-thirty example and thirty-to-eight budget are illustrative. They are not throughput measurements or recommended settings. Limited expansion can omit reachable people or useful evidence."
     },
     "choose-a-graph-workload": {
-      "idea": "Identify the traversal depth. Determine whether queries inspect a few paths or the complete graph. Choose a tool for that workload.",
-      "question": "Does a graph engine automatically outperform relational execution on every relationship query?",
-      "answer": "No. Compare equivalent semantics and include the cost of maintaining the relationships.",
+      "idea": "Choose a starting tool from the query shape, required result, and maintenance costs.",
+      "question": "Does storing data as a graph automatically make a one-join lookup faster?",
+      "answer": "No. Relational indexes and joins can already fit that workload. Compare equivalent queries and measured costs.",
       "builds": [
-        "Ask whether the workload benefits enough from a graph store to justify maintaining another copy of the data. Start with a shallow department join that relational operators already handle.",
-        "Consider unknown-depth dependency paths in a graph query engine.",
-        "Consider whole-graph iterative analytics in a graph-compute framework."
+        "Define workload as the operations and updates the system must handle. A department lookup follows one fixed relationship. Relational joins naturally express this case.",
+        "A dependency chain can have an unknown number of edges. Graph query syntax can make bounded or variable-depth routes easier to express. State the stopping rule before searching.",
+        "Whole-graph analytics processes much of the graph repeatedly. PageRank, for example, updates node importance scores using links between nodes. A graph-compute framework may fit that workload. Include the cost of maintaining another copy of the relationships."
       ]
     },
     "connections-augment-similarity": {
-      "idea": "Entity relationships can add connected evidence to similarity-based retrieval.",
-      "question": "Why might a WAL-and-buffer-pool question need more than one similar passage?",
-      "answer": "Its answer may depend on a relationship explained across sources, which graph expansion can help connect.",
+      "idea": "A graph can suggest additional passages while each passage keeps its source identity.",
+      "question": "Does a graph edge prove that the added passage supports the answer?",
+      "answer": "No. Check the entity identity, relationship evidence, and passage content. Preserve the source ID for that check.",
       "builds": [
-        "Return to the evidence question from Lecture 12. Ask what a connection could add that a single similarity score omits. Retrieve nearby passages as starting evidence.",
-        "Identify named entities in those passages.",
-        "Follow a relevant one-hop relationship.",
-        "Combine the connected and vector evidence, then check entity and edge correctness."
-      ]
+        "Expand RAG as retrieval-augmented generation: retrieve passages before generating an answer. Ask why logging must happen before writing a dirty page. Start with log-notes from vector similarity. A vector is a numeric representation used to compare passages.",
+        "Define entity as a named thing or concept. Identify WAL, the write-ahead log, in log-notes. A link from the passage to WAL records that mention. Entity extraction can make mistakes.",
+        "Follow the illustrative protects page writes edge to buffer pool. A buffer pool holds working copies of stored pages. A dirty page has changes not yet written to storage. Verify the relationship rather than treating a graph edge as proof.",
+        "Add buffer-notes and keep both source IDs. The new passage explains dirty pages, while log-notes explains the recovery ordering. Check whether both help answer the question. Relevance and truth still require reading the evidence."
+      ],
+      "context": "The passage text and relationship are teaching examples, not measured retrieval results. This is a simple one-hop evidence extension. Microsoft GraphRAG also builds graph communities and summaries, so this example is not its complete pipeline."
     },
     "does-graph-expansion-help": {
-      "idea": "Graph expansion should be measured against a vector-only retrieval baseline.",
-      "question": "When could expansion make retrieval worse?",
-      "answer": "Ambiguous entities or high-degree hubs can introduce irrelevant evidence and extra latency.",
+      "idea": "Compare graph expansion against a saved baseline on the same evaluation questions.",
+      "question": "When can adding neighbors make an answer worse?",
+      "answer": "Ambiguous entities or high-degree hubs can add irrelevant text and response time. More retrieved text does not guarantee better evidence.",
       "builds": [
-        "Save the vector-only results. Ask for one question that extra graph neighbors might help and another for which those neighbors could add irrelevant evidence.",
-        "Add relationship neighbors and predict a helped and a harmed question.",
-        "Compare support, noise, context size, and latency on the same held-out questions."
+        "Define baseline as the configuration used for comparison. Keep vector-only retrieval and the same held-out evaluation questions. Held-out means those questions were not used to tune the system.",
+        "Add graph neighbors. Predict one question helped by the extra relationship and one harmed by ambiguity or irrelevant text. Keep source IDs attached to each passage.",
+        "Define answer support as whether the cited evidence justifies the answer. Count irrelevant passages and measure response time and context size. The checkmarks are hypothetical outcomes. Report improvements and regressions using actual project results."
       ]
     },
     "five-mechanisms-recur": {
-      "idea": "Caches, indexes, logs, plans, and partitions recur across systems, but their guarantees differ.",
-      "question": "Is Spark lineage the same mechanism as a write-ahead log?",
-      "answer": "No. Lineage records a recomputation recipe. WAL records information for transaction durability and recovery.",
+      "idea": "The same mechanisms recur, but each must be tied to its actual guarantee.",
+      "question": "Does Spark lineage provide the same guarantee as a write-ahead log?",
+      "answer": "No. Lineage records how to recompute output. A write-ahead log stores recovery information required by a storage protocol.",
       "builds": [
-        "Ask what each earlier mechanism guarantees. A cache reuses bytes. An index narrows search. A log supports recovery. Identify caches in buffer pools and SSTable block reads.",
-        "Identify indexes in B+ trees, IVF, and adjacency.",
-        "Identify durable logs and contrast them with lineage.",
-        "Identify plans in iterators, Spark, and graph queries.",
-        "Identify partitions in shuffle, tablets, and vector lists."
+        "Define cache as a saved nearby copy used to avoid repeated work. Identify the buffer pool and SSTable block cache. A cached page is not automatically a cached query answer.",
+        "Define index as a maintained structure that narrows search. Connect B+ tree lookups, vector candidate lists, and graph adjacency to the work each avoids.",
+        "Define log as recorded recovery information. Contrast it with lineage, a recipe for recomputing data. Ask what each can reconstruct after its supported failure.",
+        "Define execution plan as operations and their input dependencies. Connect iterators, Spark stages, and graph query operators. A query language alone does not determine that plan.",
+        "Define partition as a portion of a dataset. Connect shuffle partitions, tablets, and vector lists. Ask whether equal data sizes imply equal work."
       ]
     },
     "read-a-new-system": {
-      "idea": "Concrete architecture questions make an unfamiliar database easier to evaluate.",
-      "question": "What evidence should follow a product's architectural claims?",
-      "answer": "A workload-specific benchmark with equivalent results and measurements of the relevant costs and failures.",
+      "idea": "Concrete questions expose the work and guarantees behind an unfamiliar system.",
+      "question": "What should follow a product’s claim that its architecture is faster?",
+      "answer": "A benchmark with the required results, representative operations, and relevant failure and cost measurements.",
       "builds": [
-        "Apply the course’s questions to an unfamiliar system. Start with what one block contains and how the system reads or writes it. The next steps ask how it skips work, survives failure, executes queries, and assigns data to workers.",
-        "Ask how it skips data for the workload.",
-        "Ask which data or recovery log records are durable when the client receives a successful write reply.",
-        "Ask how it turns queries into execution.",
-        "Ask how it partitions data and requests, then choose a benchmark."
+        "Define block as a chunk read or written as a unit. Ask what it contains and which cached copies can avoid storage access.",
+        "Define access path as a way to locate records. Ask how the system skips irrelevant data and maintains that organization during updates.",
+        "Define acknowledgment as a success reply. Ask which data or recovery records must survive after that reply. State the failures covered by the promise.",
+        "Follow the plan from inputs to output. Identify data movement, dependencies, and any step that holds a large intermediate result.",
+        "Define benchmark as a repeatable workload used to measure system behavior. Ask how data and work are divided among workers. Then compare configurations that return the same required results."
       ]
     },
     "finish-with-measured-decisions": {
-      "idea": "A useful project explanation connects a measured result to a design decision.",
-      "question": "What result requirement and experiment explain one design choice in your project?",
-      "answer": "Compare both configurations on the same workload and required results. Show the measurements behind the choice and one failure whose cause you identified.",
+      "idea": "A project decision needs a stated result requirement and evidence from comparable experiments.",
+      "question": "What measured result changed one project decision, and what failure can you explain?",
+      "answer": "Name the required result, compare at least two configurations on the same workload, and connect the measurements to the choice.",
       "builds": [
-        "State the question the project answers and what a correct result contains. Ask another student to explain one observed failure and the experiment that identified its cause.",
-        "Present the evidence behind a comparison.",
-        "Explain the decision changed by that evidence.",
-        "Compare two configurations on the same workload and required result. Explain which measurements support the choice, then show one observed failure and how its cause was identified."
-      ]
+        "Return to the opening graph question. Distinguish routes from distinct people. Ask a student to explain why repeated routes do not require repeated people in that answer.",
+        "Return to the eight edge visits and eleven walk rows. They count different work for different outputs. Then name the comparable measurements used in the project.",
+        "Read the axes as response time and quality. The three drawn points are schematic, not provided measurements. Ask which real result changed the team’s design choice.",
+        "Compare at least two configurations. Explain one observed failure and the experiment that identified its cause. Remind students of the December 3 workshop, December 7 report at 11:59 pm, and December 8 presentations. Each presentation has eight minutes plus a live demo and questions."
+      ],
+      "context": "Keep the project requirements unchanged. Report claims using measured evidence. State limits and failed cases so another team can assess the choice."
     }
   }
 
