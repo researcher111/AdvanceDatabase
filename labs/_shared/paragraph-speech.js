@@ -1,5 +1,6 @@
 /* Read one paragraph on request using the browser's Web Speech API.
-   Opt in with <main data-paragraph-speech>. No autoplay or external library. */
+   Opt in with <main data-paragraph-speech>. No autoplay or external library.
+   Set data-speech-preview on that element to customize the voice sample. */
 (function () {
   'use strict';
 
@@ -185,6 +186,10 @@
       '<div class="speech-voice-help">Try a few voices and choose the one you prefer. Your choice is saved in this browser. For more voices on a Mac, open System Settings → Accessibility → Read &amp; Speak (Spoken Content on older versions). <a href="https://support.apple.com/guide/mac-help/change-the-voice-your-mac-uses-to-speak-text-mchlp2290/mac">Apple’s voice guide</a>.</div>';
     const help = root.querySelector('.paragraph-speech-help');
     if (help) help.after(settings); else root.prepend(settings);
+    // Keep native control keys from triggering the reading's slide shortcuts.
+    settings.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') event.stopPropagation();
+    });
     const voiceSelect = settings.querySelector('.speech-voice');
     const rateSelect = settings.querySelector('.speech-rate');
     previewButton = settings.querySelector('.speech-preview');
@@ -216,7 +221,8 @@
     rateSelect.addEventListener('change', savePreferences);
     previewButton.addEventListener('click', () => {
       notice.hidden = true;
-      reader.read(previewButton, 'Follow one batch of taxi rides. DuckDB selects the data, and the neural network predicts a fare for each ride.', pageLang);
+      const previewText = root.dataset.speechPreview || 'Follow one batch of taxi rides. DuckDB selects the data, and the neural network predicts a fare for each ride.';
+      reader.read(previewButton, previewText, pageLang);
     });
     window.speechSynthesis.addEventListener('voiceschanged', updateVoices);
     updateVoices();
@@ -254,7 +260,7 @@
     const button = event.target.closest('.paragraph-speech');
     if (!button || !root.contains(button)) return;
     if (!reader) {
-      showError('Read-aloud is not available in this browser. Open the lab in a browser with speech synthesis support.');
+      showError('Read-aloud is not available in this browser. Open this page in a browser with speech synthesis support.');
       return;
     }
     notice.hidden = true;
