@@ -12,8 +12,8 @@ Lab 9 moves to October 29.
 November 3 is Election Day, with no class. Lab 10 moves to November 5.
 [Lecture 13](lectures/lecture-13/distributed.html) focuses on MapReduce on November 10, with a short Spark and Ray preview.
 A detailed [Spark and Ray lecture](lectures/lecture-13/spark-ray.html) meets
-November 12. Lab 11 meets November 17 and is due December 1 at class start. Bigtable meets
-November 19. This course has no class November 24. Graph databases and Quiz 11 meet December 1.
+November 12. Bigtable and Quiz 10 meet November 17. Lab 11 meets November 19
+and is due December 1 at class start. This course has no class November 24. Graph databases and Quiz 11 meet December 1.
 Project deadlines remain unchanged.
 
 There are 13 required lecture decks, including Lecture 13B, and 10 required labs. Lectures 7–9 and Lab 7

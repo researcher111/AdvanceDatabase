@@ -58,8 +58,8 @@ class RevisedScheduleTests(unittest.TestCase):
             ('Thu Nov 5', 'lab-10/microrag.html'),
             ('Tue Nov 10', 'lecture-13/distributed.html'),
             ('Thu Nov 12', 'lecture-13/spark-ray.html'),
-            ('Tue Nov 17', 'lab-11/sparkray.html'),
-            ('Thu Nov 19', 'lecture-14/bigtable.html'),
+            ('Tue Nov 17', 'lecture-14/bigtable.html'),
+            ('Thu Nov 19', 'lab-11/sparkray.html'),
             ('Tue Dec 1', 'lecture-15/graphs.html'),
         ]:
             self.assertIn(resource,dates[date])
@@ -74,7 +74,7 @@ class RevisedScheduleTests(unittest.TestCase):
         self.assertIn('Midterm exam',dates['Thu Oct 22'])
         self.assertIn('Lectures 1–6 and Labs 1–6',dates['Thu Oct 22'])
         self.assertEqual(re.findall(r'Quiz (\d+) ·',main),[str(i) for i in range(1,12)])
-        for date,quiz in [('Tue Nov 10',9),('Thu Nov 19',10),('Tue Dec 1',11)]:
+        for date,quiz in [('Tue Nov 10',9),('Tue Nov 17',10),('Tue Dec 1',11)]:
             self.assertIn(f'Quiz {quiz} ·',dates[date])
         for date,text in [('Tue Oct 20','Lab 8'),('Thu Nov 5','Lab 9'),('Thu Nov 12','Lab 10'),('Tue Dec 1','Lab 11')]:
             self.assertIn(text,dates[date].split('<td class="due">')[1])
@@ -85,7 +85,7 @@ class RevisedScheduleTests(unittest.TestCase):
         for file, date, deadline in [
             ('labs/lab-09/microvector.html', 'Thursday October 29, 2026', 'Thursday Nov 5 at class start'),
             ('labs/lab-10/microrag.html', 'Thursday November 5, 2026', 'Thursday Nov 12 at class start'),
-            ('labs/lab-11/sparkray.html', 'Tuesday November 17, 2026', 'Tuesday Dec 1 at class start'),
+            ('labs/lab-11/sparkray.html', 'Thursday November 19, 2026', 'Tuesday Dec 1 at class start'),
         ]:
             page=(ROOT/file).read_text()
             self.assertIn(date,page);self.assertIn(deadline,page)
@@ -94,7 +94,7 @@ class RevisedScheduleTests(unittest.TestCase):
         deck=(ROOT/'slides/decks/lectures-11-15.js').read_text()
         for number, name, slug, date, iso in [
             (13,'MapReduce and distributed execution','distributed','Tuesday November 10, 2026','2026-11-10'),
-            (14,'Bigtable and LSM trees','bigtable','Thursday November 19, 2026','2026-11-19'),
+            (14,'Bigtable and LSM trees','bigtable','Tuesday November 17, 2026','2026-11-17'),
             (15,'Graphs and course synthesis','graphs','Tuesday December 1, 2026','2026-12-01'),
         ]:
             self.assertIn(date,(ROOT/f'lectures/lecture-{number}/{slug}.html').read_text())
