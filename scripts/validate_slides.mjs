@@ -7,15 +7,15 @@ const requested=process.argv.slice(2).map(parseId);
 const lectureIds=requested.length?requested:[...Array.from({length:13},(_,i)=>i+1),'13b',14,15];
 const groups=[...new Set(lectureIds.map(id=>id<=5?'01-05':id<=10?'06-10':'11-15'))];
 const context=vm.createContext({window:{},console});
-for(const p of ['slides/_shared/visuals.js','labs/_shared/rag-measurements.js','labs/_shared/teaching-traces.js','slides/_shared/trace-scenes.js',...groups.map(g=>'slides/decks/lectures-'+g+'.js'),'slides/decks/spark-ray.js','slides/decks/teaching-notes.js','slides/decks/storage-choices.js','slides/decks/btree-growth.js','slides/decks/btree-clarity.js','slides/decks/clarity-captions.js','slides/decks/clarity-layout.js','slides/decks/clarity-diagrams.js','slides/decks/bigtable-code.js','lectures/lecture-11/embedding-walkthrough.js','slides/decks/embedding-walkthrough.js','slides/decks/hnsw-walkthrough.js','slides/decks/course-clarity.js'])vm.runInContext(fs.readFileSync(p,'utf8'),context,{filename:p});
+for(const p of ['slides/_shared/visuals.js','labs/_shared/rag-measurements.js','labs/_shared/teaching-traces.js','slides/_shared/trace-scenes.js',...groups.map(g=>'slides/decks/lectures-'+g+'.js'),'slides/decks/spark-ray.js','slides/decks/spark-program.js','slides/decks/teaching-notes.js','slides/decks/storage-choices.js','slides/decks/btree-growth.js','slides/decks/btree-clarity.js','slides/decks/clarity-captions.js','slides/decks/clarity-layout.js','slides/decks/clarity-diagrams.js','slides/decks/bigtable-code.js','lectures/lecture-11/embedding-walkthrough.js','slides/decks/embedding-walkthrough.js','slides/decks/hnsw-walkthrough.js','slides/decks/course-clarity.js'])vm.runInContext(fs.readFileSync(p,'utf8'),context,{filename:p});
 const {COURSE_DECKS:decks,DeckViz:V}=context.window;
 let scenes=0,builds=0,animated=0;const warnings=[];
 for(const id of lectureIds){
   const deck=decks[id];assert(deck,`Lecture ${id} exists`);assert.equal(deck.id,id);
   assert.equal(deck.scenes.reduce((n,s)=>n+s.minutes,0),60,`Lecture ${id}: 60 teaching minutes`);
   if(deck.discussionMinutes)assert.equal(deck.discussion.reduce((n,s)=>n+s.minutes,0),deck.discussionMinutes,`Lecture ${id}: discussion timing`);
-  // Lecture 10 includes the PyTorch example, managed-ML SQL, and final resources within 60 minutes.
-  const maxScenes=id===10?23:20;
+  // Lectures 10 and 13B include detailed code walkthroughs within the same teaching period.
+  const maxScenes=id==='13b'?26:id===10?23:20;
   assert(deck.scenes.length>=14&&deck.scenes.length<=maxScenes,`Lecture ${id}: 14–${maxScenes} scenes`);
   assert(fs.existsSync(deck.source),`Lecture ${id}: source exists`);
   const ids=new Set();

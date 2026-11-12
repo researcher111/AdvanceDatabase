@@ -22,18 +22,26 @@
     <li><a href="#spark-map">4 · flatMap and map keep every occurrence</a></li>
     <li><a href="#spark-combine">5 · Combine local counts before sending them</a></li>
     <li><a href="#spark-stages">6 · Spark combines counts before and after the shuffle</a></li>
-    <li><a href="#spark-tasks">7 · Partitions, tasks, and workers differ</a></li>
-    <li><a href="#reuse">8 · Cache reusable data and rebuild lost output</a></li>
-    <li><a href="#spark-skew">9 · A frequent key can delay a stage</a></li>
-    <li><a href="#dataframes">10 · Use DataFrames for structured operations</a></li>
-    <li><a href="#ray-model">11 · Ray task calls return result references</a></li>
-    <li><a href="#ray-wait">12 · Submit independent work before waiting</a></li>
-    <li><a href="#dependencies">13 · A result reference expresses a dependency</a></li>
-    <li><a href="#shared-input">14 · Put a reusable input in the object store</a></li>
-    <li><a href="#actors">15 · An actor keeps state between calls</a></li>
-    <li><a href="#failure">16 · A retry can repeat an external effect</a></li>
-    <li><a href="#measure">17 · Parallel work still has overhead</a></li>
-    <li><a href="#choose">18 · Choose who should coordinate the work</a></li>
+    <li><a href="#spark-code-imports">7 · Read the program description and imports</a></li>
+    <li><a href="#spark-code-tokenize">8 · Extract every meal name</a></li>
+    <li><a href="#spark-code-options">9 · Read the optional --plan flag</a></li>
+    <li><a href="#spark-code-input">10 · Start Spark and divide the input</a></li>
+    <li><a href="#spark-code-transformations">11 · Build the count one transformation at a time</a></li>
+    <li><a href="#spark-code-results">12 · Inspect the plan and collect the result</a></li>
+    <li><a href="#spark-plan-visual">13 · Read the plan across the shuffle</a></li>
+    <li><a href="#spark-code-entry-cleanup">14 · Follow the entry point and cleanup</a></li>
+    <li><a href="#spark-tasks">15 · Partitions, tasks, and workers differ</a></li>
+    <li><a href="#reuse">16 · Cache reusable data and rebuild lost output</a></li>
+    <li><a href="#spark-skew">17 · A frequent key can delay a stage</a></li>
+    <li><a href="#dataframes">18 · Use DataFrames for structured operations</a></li>
+    <li><a href="#ray-model">19 · Ray task calls return result references</a></li>
+    <li><a href="#ray-wait">20 · Submit independent work before waiting</a></li>
+    <li><a href="#dependencies">21 · A result reference expresses a dependency</a></li>
+    <li><a href="#shared-input">22 · Put a reusable input in the object store</a></li>
+    <li><a href="#actors">23 · An actor keeps state between calls</a></li>
+    <li><a href="#failure">24 · A retry can repeat an external effect</a></li>
+    <li><a href="#measure">25 · Parallel work still has overhead</a></li>
+    <li><a href="#choose">26 · Choose who should coordinate the work</a></li>
     <li><a href="#transfer">Closing investigation</a></li>
     <li><a href="#lab">Prepare for Lab 11</a></li>
     <li><a href="#faq">Questions about engine choice</a></li>
@@ -175,11 +183,204 @@
 </figure>
 </details>
 <p>Shuffle work includes converting records into bytes, transferring them, and possibly reading or writing disk files. Simple final arithmetic does not make those costs disappear.</p>
-<h3 id="spark-code">Run the complete Spark example</h3>
-<p><code>SparkContext</code> is the program’s connection to Spark’s RDD execution system. <code>parallelize(orders, numSlices=2)</code> creates an RDD from the Python list with two input partitions.</p>
-<p>The <code>add</code> function adds two values. <code>reduceByKey(add, numPartitions=2)</code> requests two result partitions. That count is separate from the input partition count, even though both are two here.</p>
+<h3 id="spark-code">Walk through the Spark program line by line</h3>
+<p>The next eight sections connect the complete program to its execution. Seven parts explain its source lines, and one diagram explains the printed dependency plan.</p>
+<p>The program stays unchanged. Read the short parts first, then use the complete copy and download below section 14.</p>
+
+<h2 id="spark-code-imports" data-slide="7" data-scene="spark-code-imports">7 · Read the program description and imports</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=7&amp;b=1">Open slide 7 ↗</a></p>
+<p>Return to the two lunch orders. We will read the complete program in short parts and track what each line does.</p>
+<p>The line numbers refer to the unchanged downloadable file. A <strong>module</strong> is a Python file. An <strong>import</strong> makes names from another module available.</p>
+<p class="code-source-lines">Source lines 1–6. Indentation matches the complete program.</p>
+<pre><code class="language-python">"""Count a tiny lunch fixture with Spark on this computer."""
+import argparse
+import re
+from operator import add
+
+from pyspark import SparkContext</code></pre>
+
+<p><strong>Line 1:</strong> the opening triple-quoted string describes this module. Python stores it in <code>__doc__</code>. It does not print a message or start Spark.</p>
+<p><strong>Line 2:</strong> <code>argparse</code> reads options typed after the script name. This program uses it for the optional <code>--plan</code> flag.</p>
+<p><strong>Line 3:</strong> <code>re</code> supplies functions that search text using patterns. The helper uses it to extract meal names.</p>
+<p><strong>Line 4:</strong> <code>from operator import add</code> makes the function <code>add</code> available directly. For example, <code>add(2, 1)</code> returns <code>3</code>.</p>
+<p><strong>Line 6:</strong> <code>from pyspark import SparkContext</code> imports the class used to create the program’s Spark connection. Importing this name does not create a Spark context.</p>
+<p>Blank line 5 separates imports for readability. Blank lines elsewhere also add no work.</p>
+<p><strong>Predict:</strong> after these imports, have any lunch orders been counted? No. The program has only loaded the tools it will use.</p>
+<div class="lecture-walkthrough" data-lecture-scene="spark-code-imports"></div>
+
+<h2 id="spark-code-tokenize" data-slide="8" data-scene="spark-code-tokenize">8 · Extract every meal name</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=8&amp;b=1">Open slide 8 ↗</a></p>
+<p>The first order contains two pizza requests. The helper must preserve both, even though their spelling differs in capitalization and punctuation.</p>
+<p><strong>Predict before reading the result:</strong> what list should <code>split_order("Pizza, pizza!")</code> return?</p>
+<p class="code-source-lines">Source lines 9–11. Indentation matches the complete program.</p>
+<pre><code class="language-python">def split_order(order):
+    """Return one word per meal request, including repeats."""
+    return re.findall(r"[a-z]+", order.lower())</code></pre>
+
+<p><strong>Line 9:</strong> <code>def</code> defines a function named <code>split_order</code>. Its parameter <code>order</code> will receive one order string. Defining the function does not run its body.</p>
+<p><strong>Line 10:</strong> this docstring describes the helper. It is separate from the module description at line 1. It does not print or extract words.</p>
+<p><strong>Line 11, first operation:</strong> <code>order.lower()</code> produces the lowercase text <code>"pizza, pizza!"</code>. The original string remains unchanged.</p>
+<p><strong>Line 11, pattern:</strong> <code>[a-z]</code> matches one lowercase ASCII letter. The <code>+</code> means one or more consecutive matches. Thus, <code>[a-z]+</code> finds each run of letters between punctuation or spaces.</p>
+<p>The <code>r</code> prefix marks a raw string, which preserves backslashes in Python string notation. This particular pattern contains no backslashes.</p>
+<p><strong>Line 11, result:</strong> <code>re.findall(...)</code> returns every matching word in order. The <code>return</code> statement passes that list back to the caller.</p>
+<p>For the first order, the result is <code>["pizza", "pizza"]</code>. For the second, it is <code>["salad", "pizza"]</code>. Repeated words remain repeated requests.</p>
+<p>This small example uses English meal names made from ASCII letters. The pattern is not a general rule for every language or meal name.</p>
+<div class="lecture-walkthrough" data-lecture-scene="spark-code-tokenize"></div>
+
+<h2 id="spark-code-options" data-slide="9" data-scene="spark-code-options">9 · Read the optional --plan flag</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
+<p>Maya can run the count normally or request a description of its dependencies. A <strong>command-line option</strong> is a setting supplied when launching the script.</p>
+<p class="code-source-lines">Source lines 14–19. Indentation matches the complete program.</p>
+<pre><code class="language-python">def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--plan", action="store_true", help="Print the RDD dependencies."
+    )
+    args = parser.parse_args()</code></pre>
+
+<p><strong>Line 14:</strong> <code>def main():</code> groups the driver’s work into a function with no parameters. Its indented body runs when <code>main()</code> is called near the file’s end.</p>
+<p><strong>Line 15:</strong> <code>ArgumentParser</code> creates a parser for command-line options. <code>description=__doc__</code> uses the module’s opening description in its help text.</p>
+<p><strong>Lines 16–18:</strong> <code>add_argument(...)</code> declares one option. The opening parenthesis permits the call to span several lines. Line 18 closes that call.</p>
+<p><strong>Line 17, option name:</strong> <code>"--plan"</code> is the flag the user can type. <code>action="store_true"</code> makes its value <code>True</code> when supplied and <code>False</code> when omitted.</p>
+<p><strong>Line 17, help:</strong> <code>help=...</code> supplies the explanation shown by <code>python3 spark_lunch.py --help</code>.</p>
+<p><strong>Line 19:</strong> <code>parse_args()</code> reads the command-line arguments. It returns an object stored in <code>args</code>, whose <code>plan</code> attribute holds the flag value.</p>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Command-line flag examples; scroll horizontally if needed">
+<table><thead><tr><th>Command</th><th>Effect</th></tr></thead><tbody>
+<tr><td><code>python3 spark_lunch.py</code></td><td><code>args.plan</code> is <code>False</code>. Count the orders.</td></tr>
+<tr><td><code>python3 spark_lunch.py --plan</code></td><td><code>args.plan</code> is <code>True</code>. Print dependencies, then count the orders.</td></tr>
+<tr><td><code>python3 spark_lunch.py --help</code></td><td>Print help and exit before creating the Spark context.</td></tr>
+</tbody></table></div>
+<p><strong>Check:</strong> does <code>--plan</code> change a pizza count? No. It controls diagnostic output, not the input or counting rule. <a href="https://docs.python.org/3/library/argparse.html#action">Python’s argparse reference</a> describes these flag actions.</p>
+<div class="lecture-walkthrough" data-lecture-scene="spark-code-options"></div>
+
+<h2 id="spark-code-input" data-slide="10" data-scene="spark-code-input">10 · Start Spark and divide the input</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=10&amp;b=1">Open slide 10 ↗</a></p>
+<p>The command-line settings are ready. The driver can now create a Spark context and name the input records.</p>
+<p class="code-source-lines">Source lines 21–24. Indentation matches the complete program.</p>
+<pre><code class="language-python">    sc = SparkContext(master="local[2]", appName="Lunch counts")
+    try:
+        orders = ["Pizza, pizza!", "Salad pizza."]
+        source = sc.parallelize(orders, numSlices=2)</code></pre>
+
+<p><strong>Line 21:</strong> <code>SparkContext(...)</code> creates the connection to Spark’s RDD execution system. The variable <code>sc</code> keeps that context for later calls.</p>
+<p><code>master="local[2]"</code> runs locally with two execution threads. It does not request two computers. <code>appName="Lunch counts"</code> labels the application in Spark’s logs and interface.</p>
+<p><strong>Line 22:</strong> <code>try:</code> begins the work protected by the later <code>finally</code> cleanup. The indented statements belong to this block.</p>
+<p><strong>Line 23:</strong> <code>orders</code> is an ordinary Python list held by the driver. Its two elements are the two complete order strings.</p>
+<p><strong>Line 24:</strong> <code>sc.parallelize(...)</code> creates an RDD from that list. <code>numSlices=2</code> requests two input partitions. The variable <code>source</code> names this RDD.</p>
+<p>For these two records, partition 0 contains <code>"Pizza, pizza!"</code> and partition 1 contains <code>"Salad pizza."</code>. No word-extraction transformation has run yet.</p>
+<p><strong>Keep the settings separate:</strong> <code>local[2]</code> describes local execution capacity. <code>numSlices=2</code> describes the input’s partition count. They happen to use the same number here.</p>
+<div class="lecture-walkthrough" data-lecture-scene="spark-code-input"></div>
+
+<h2 id="spark-code-transformations" data-slide="11" data-scene="spark-code-transformations">11 · Build the count one transformation at a time</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=11&amp;b=1">Open slide 11 ↗</a></p>
+<p>Each assignment describes another collection. Follow the names from <code>source</code> to <code>meals</code>, <code>pairs</code>, and <code>counts</code>.</p>
+<p><strong>Predict:</strong> how many occurrence pairs must the four requested meals produce?</p>
+<p class="code-source-lines">Source lines 26–29. Indentation matches the complete program.</p>
+<pre><code class="language-python">        # These transformations describe work. They do not start the count.
+        meals = source.flatMap(split_order)
+        pairs = meals.map(lambda meal: (meal, 1))
+        counts = pairs.reduceByKey(add, numPartitions=2)</code></pre>
+
+<p><strong>Line 26:</strong> the comment explains the execution rule. A comment starts with <code>#</code> and does not execute. These transformations record work that an action will later request.</p>
+<p><strong>Line 27:</strong> <code>flatMap(split_order)</code> applies the helper to each order and places its returned words into one output collection. The function name is passed without parentheses because Spark will call it on each record.</p>
+<p>When evaluated, <code>meals</code> contains two pizza words from partition 0 and the salad and pizza words from partition 1. It contains four elements, not two lists.</p>
+<p><strong>Line 28:</strong> <code>map(...)</code> applies one function to each meal word. <code>lambda meal: (meal, 1)</code> is a short function that returns one pair. Its first item names the meal, and its second item represents one request.</p>
+<p>The four pairs are <code>("pizza", 1)</code>, <code>("pizza", 1)</code>, <code>("salad", 1)</code>, and <code>("pizza", 1)</code>. The repeated pizza pairs must remain.</p>
+<p><strong>Line 29:</strong> <code>reduceByKey(add, ...)</code> adds values with matching meal keys. Spark groups the contributions. The supplied function only tells Spark how to combine two values from the same key.</p>
+<p><code>add</code> and <code>lambda a, b: a + b</code> express the same addition here. In that lambda, <code>a</code> and <code>b</code> are integer counts for one meal. They are not meal names, partition numbers, or lists.</p>
+<p>Read the lambda as “take two values, <code>a</code> and <code>b</code>, and return <code>a + b</code>.” The expression after the colon supplies the returned value. This named function expresses the same rule:</p>
+<pre><code class="language-python">def combine_counts(a, b):
+    return a + b
+
+# Either line supplies the same addition rule to Spark.
+counts = pairs.reduceByKey(combine_counts)
+counts = pairs.reduceByKey(lambda a, b: a + b)</code></pre>
+<p>These two assignments are alternatives for comparison. Pass the function to Spark without calling it. Spark chooses two values from one key and calls that function during execution.</p>
+<p>For pizza, one local call receives <code>a = 1</code> and <code>b = 1</code>, then returns <code>2</code>. After the shuffle, combining <code>2</code> with the other partition’s <code>1</code> returns <code>3</code>.</p>
+<p>The value <code>2</code> still represents two pizza requests. Two received partial values therefore represent three requests. Counting the number of partial values would lose one request.</p>
+<p>Salad has one contribution, <code>1</code>. There is no second salad value to add in this fixture, so its total remains <code>1</code>.</p>
+<div class="exercise learning-check"><span class="ex-label">Trace one combining call</span><p>Spark passes <code>a = 2</code> and <code>b = 1</code> for pizza. What should <code>lambda a, b: a + b</code> return?</p><details><summary>Check your explanation</summary><p>It returns <code>3</code>. The values represent three requests, even though this call receives only two partial counts.</p></details></div>
+<p><code>numPartitions=2</code> requests two result partitions. This setting differs from line 24’s input partition count. The variable <code>counts</code> names another RDD, not an already computed Python dictionary.</p>
+<p>Changing this setting to <code>numPartitions=4</code> changes how result keys are partitioned and how their tasks are scheduled. It does not create four meal totals. Some partitions can be empty, and this setting does not promise a global result order.</p>
+<p><code>reduceByKey</code> remains a transformation. It describes the grouped count without starting it. Spark performs that work when an action such as <code>collect()</code> requests the result.</p>
+<p>When an action requests the result, pizza’s partial values <code>2</code> and <code>1</code> become <code>3</code>. Salad’s value remains <code>1</code>. The full flow in section 6 shows where these contributions meet.</p>
+<div class="lecture-walkthrough" data-lecture-scene="spark-code-transformations"></div>
+
+<h2 id="spark-code-results" data-slide="12" data-scene="spark-code-results">12 · Inspect the plan and collect the result</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=12&amp;b=1">Open slide 12 ↗</a></p>
+<p>The driver has described the count. It can inspect the dependencies before asking Spark to compute the result.</p>
+<p class="code-source-lines">Source lines 31–36. Indentation matches the complete program.</p>
+<pre><code class="language-python">        if args.plan:
+            print(counts.toDebugString().decode("utf-8"))
+
+        # collect starts the job and brings this small result to the driver.
+        totals = dict(sorted(counts.collect()))
+        print("Totals:", totals)</code></pre>
+
+<p><strong>Line 31:</strong> <code>if args.plan:</code> tests the parsed flag. Only a true value enters the indented diagnostic print statement.</p>
+<p><strong>Line 32, inside out:</strong> <code>counts.toDebugString()</code> describes this RDD and its dependencies. It returns bytes. <code>.decode("utf-8")</code> converts those bytes into readable text, and <code>print(...)</code> displays it.</p>
+<p>This diagnostic describes how the RDD depends on earlier RDDs. It does not request the meal totals. Exact names, identifiers, and source paths can vary. <a href="https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.RDD.toDebugString.html">Spark’s API reference</a> documents this output.</p>
+<p><strong>Line 34:</strong> the comment identifies the action and its destination. The result must be small enough to fit in the driver.</p>
+<p><strong>Predict before the reveal:</strong> which operation in line 35 requests Spark execution? Does sorting perform the distributed count?</p>
+<p><strong>Line 35, first:</strong> <code>counts.collect()</code> requests computation and returns the resulting pairs to the driver. Spark performs the transformations and shuffle needed for those totals.</p>
+<p><strong>Line 35, next:</strong> <code>sorted(...)</code> orders the returned pairs locally, so pizza appears before salad here. The original <code>collect()</code> order is not guaranteed.</p>
+<p><strong>Line 35, last:</strong> <code>dict(...)</code> converts the sorted pairs into a Python dictionary. It does not add the counts. Spark has already produced one total per meal key.</p>
+<p><strong>Line 36:</strong> <code>print("Totals:", totals)</code> displays <code>Totals: {'pizza': 3, 'salad': 1}</code>. Startup messages can vary, but these two counts must remain the same.</p>
+<div class="lecture-walkthrough" data-lecture-scene="spark-code-results"></div>
+
+<h2 id="spark-plan-visual" data-slide="13" data-scene="spark-plan-visual">13 · Read the plan across the shuffle</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=13&amp;b=1">Open slide 13 ↗</a></p>
+<p>Run <code>python3 spark_lunch.py --plan</code> to inspect the RDD dependency display. A <strong>dependency</strong> identifies an earlier collection needed to produce a later collection.</p>
+<p>The input appears near the bottom of this display. Trace upward from <code>ParallelCollectionRDD</code> toward the final result. <code>ShuffledRDD</code> marks the redistribution dependency.</p>
+<p>The following display comes from this program running with PySpark 4.0.1. It omits source locations and empty storage markers to emphasize the dependencies:</p>
+<pre class="equation"><code>(2) PythonRDD[5]
+ |  MapPartitionsRDD[4]
+ |  ShuffledRDD[3]
+ +-(2) PairwiseRDD[2]
+    |  PythonRDD[1]
+    |  ParallelCollectionRDD[0]</code></pre>
+<p>Start with <code>ParallelCollectionRDD[0]</code>, which holds the input orders. The lower Python and pair RDDs prepare the partial counts before the shuffle. The upper RDDs combine received counts into the final totals.</p>
+<p><code>ShuffledRDD[3]</code> marks the shuffle dependency. The indented branch beneath it identifies the earlier RDDs that supply its data. Follow that branch upward to connect local counting with the final addition.</p>
+<p>The printed partition count, such as <code>(2)</code>, describes partitions for that RDD. It does not count machines. RDD identifiers, file paths, and source line numbers identify plan objects and code locations. They do not measure elapsed time.</p>
+<p><a href="spark_lunch_plan.txt" download>Download the recorded dependency display and totals</a>. Local file paths in that capture are shortened to <code>spark_lunch.py</code>. RDD identifiers, source locations, and displayed implementation details can vary across runs or Spark versions.</p>
+<p>Like <a href="../lecture-09/optimizer.html#query-contract">microdb’s query-operator tree</a>, this display connects a result to the inputs and operations it needs. Recall the query that selects student names where <code>gpa &gt; 35</code>:</p>
+<pre class="equation"><code>ProjectScan: keep name
+    ↑
+SelectScan: keep rows with gpa &gt; 35
+    ↑
+TableScan: read students</code></pre>
+<p>Read the data flow upward from the source in both diagrams. Microdb’s nodes represent query operators. Spark’s nodes describe RDD dependencies, including redistribution across a shuffle.</p>
+<p>Spark can run several Python functions together within a stage. Therefore, the printed display need not contain one RDD node for each Python line.</p>
+<p><code>toDebugString()</code> describes RDD dependencies. It is not a SQL optimizer’s cost report or a runtime timing profile. Use measured task and stage statistics to investigate execution time.</p>
+<p><strong>Check:</strong> find the input, follow its data toward the result, and identify the shuffle boundary. The optional Lab 11 example below preserves a complete printed dependency display.</p>
+<div class="lecture-walkthrough" data-lecture-scene="spark-plan-visual"></div>
+
+<h2 id="spark-code-entry-cleanup" data-slide="14" data-scene="spark-code-entry-cleanup">14 · Follow the entry point and cleanup</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=14&amp;b=1">Open slide 14 ↗</a></p>
+<p>The bottom of the file explains how <code>main</code> starts. The preceding <code>finally</code> block explains how its Spark resources are released.</p>
+<p class="code-source-lines">Source lines 37–42. Indentation matches the complete program.</p>
+<pre><code class="language-python">    finally:
+        sc.stop()
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+
+<p><strong>Line 37:</strong> <code>finally:</code> belongs to the <code>try</code> block at line 22. Python enters it when that block finishes normally or exits because of an exception.</p>
+<p><strong>Line 38:</strong> <code>sc.stop()</code> releases this Spark context’s resources. The context was created before entering <code>try</code>. This cleanup does not guarantee execution after forced process termination.</p>
+<p><strong>Line 41:</strong> <code>__name__</code> identifies how Python loaded this file. Its value is <code>"__main__"</code> when the file runs as the program. The equality test guards the call below.</p>
+<p><strong>Line 42:</strong> <code>main()</code> calls the function defined at line 14. Importing this file from another module does not enter this guarded call.</p>
+<p><strong>Source order differs from execution order.</strong> Python first loads imports and defines the functions. The bottom guard then calls <code>main</code>. That call parses options, creates the context, and describes the RDD transformations.</p>
+<p>When <code>collect()</code> requests the count, Spark’s tasks run <code>split_order</code> on their input records. The driver receives and prints the totals, then runs <code>finally</code> cleanup.</p>
+<div class="exercise learning-check"><span class="ex-label">Predict a changed order</span><p>Replace the second input with <code>"Salad, salad!"</code>. What dictionary should the same program produce?</p><details><summary>Check your explanation</summary><p>It should produce <code>{'pizza': 2, 'salad': 2}</code>. The helper preserves both words in each order. Spark groups matching keys, and the driver formats the resulting totals.</p></details></div>
+<div class="lecture-walkthrough" data-lecture-scene="spark-code-entry-cleanup"></div>
+
+<h3 id="spark-run">Run the complete Spark example</h3>
 <p>Predict the final dictionary and identify the action before running the program.</p>
 <p><a href="spark_lunch.py" download>Download spark_lunch.py</a>. Install <code>pyspark</code> and a Java version supported by that installation. Then run <code>python3 spark_lunch.py</code>. See the <a href="https://spark.apache.org/docs/latest/api/python/getting_started/install.html">PySpark installation requirements</a>.</p>
+<p>Use <code>python3 spark_lunch.py --help</code> to inspect the available command-line options.</p>
+<details id="spark-complete-program">
+<summary>Complete unchanged program: spark_lunch.py</summary>
 <pre id="spark-source"><code class="language-python">&quot;&quot;&quot;Count a tiny lunch fixture with Spark on this computer.&quot;&quot;&quot;
 import argparse
 import re
@@ -222,6 +423,7 @@ def main():
 
 if __name__ == &quot;__main__&quot;:
     main()</code></pre>
+</details>
 <p><strong>Expected output:</strong> <code>Totals: {'pizza': 3, 'salad': 1}</code>. Startup logs can vary. This toy input explains execution, not a performance advantage.</p>
 <p><strong>Inspect the plan:</strong> run <code>python3 spark_lunch.py --plan</code>. Find <code>ShuffledRDD</code>, which identifies the redistribution dependency. Its surrounding dependencies connect work before and after the shuffle.</p>
 <details id="spark-corpus-example">
@@ -232,7 +434,7 @@ if __name__ == &quot;__main__&quot;:
   <pre><code class="language-python">counts = (lines                                       # an RDD, split into 4 partitions
     .flatMap(lambda t: re.findall(r"[a-z]+", t.lower()))   # your map_words
     .map(lambda word: (word, 1))
-    .reduceByKey(lambda a, b: a + b))                 # your shuffle + reduce, one call<sup class="src"><a href="distributed.html#src-11" title="RDD Programming Guide (Apache Spark documentation)">11</a></sup>
+    .reduceByKey(lambda a, b: a + b))                 # your shuffle + reduce, one call
 
 counts.collect()                                      # NOW it runs</code></pre>
   <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span><span class="t-mute">        # Part B, on the 4,000 arXiv abstracts</span>
@@ -243,12 +445,16 @@ counts.collect()                                      # NOW it runs</code></pre>
  +-(4) PairwiseRDD[2] at reduceByKey at spark_wordcount.py:37 []
     |  PythonRDD[1] at reduceByKey at spark_wordcount.py:37 []
     |  ParallelCollectionRDD[0] at readRDDFromFile at PythonRDD.scala:326 []</code></pre>
+  <p>The <code>reduceByKey(lambda a, b: a + b)</code> call uses the same combining rule as the lunch program’s <code>reduceByKey(add, ...)</code>. <sup class="src"><a href="distributed.html#src-11" title="RDD Programming Guide (Apache Spark documentation)">11</a></sup></p>
+  <p>For one word key, <code>a</code> and <code>b</code> are two counts to combine. Spark can pass partial sums as well as original ones. The lambda returns their sum, while Spark handles grouping and the shuffle.</p>
+  <p>For example, three pizza occurrences become three pairs with value <code>1</code>. Combining <code>1 + 1</code> returns <code>2</code>, then combining <code>2 + 1</code> returns <code>3</code>. The result is one <code>("pizza", 3)</code> pair. See <a href="#spark-code-transformations">the animated reducer trace in section 11</a>.</p>
+  <p>The comment about four partitions describes the input <code>lines</code> RDD. It does not mean four words or four final totals. <code>reduceByKey</code> still describes work, and <code>collect()</code> requests execution.</p>
   <p>Start at <code>ParallelCollectionRDD</code>, the input collection at the bottom. Read upward toward the result. Find <code>ShuffledRDD</code>, which marks the redistribution step. That shuffle separates the work into stages.</p>
   <p>The printed identifiers and source line numbers can vary between Spark versions. The shuffle boundary is the feature to explain.</p>
 </details>
 
-<h2 id="spark-tasks" data-slide="7" data-scene="spark-partitions-tasks">7 · Partitions, tasks, and workers differ</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=7&amp;b=1">Open slide 7 ↗</a></p>
+<h2 id="spark-tasks" data-slide="15" data-scene="spark-partitions-tasks">15 · Partitions, tasks, and workers differ</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=15&amp;b=1">Open slide 15 ↗</a></p>
 <p>Now use a separate scheduling example with four partitions and two execution slots. An <strong>execution slot</strong> represents capacity to run one task at a time in this illustration. It is not another partition or a required separate computer.</p>
 <p>In a stage, Spark schedules one task for each required partition. Two slots can run at most two of these tasks together. Four ready tasks therefore need at least two waves. Actual task durations can differ.</p>
 <p>In a dependency, <strong>parent</strong> means the input collection, and <strong>child</strong> means the collection produced from it. A <strong>narrow dependency</strong> lets each parent partition contribute to at most one child partition. Our <code>flatMap</code> and <code>map</code> keep each order’s processing within its partition. They can run together in one task without a shuffle between them.</p>
@@ -269,8 +475,8 @@ counts.collect()                                      # NOW it runs</code></pre>
   <details><summary>Check your explanation</summary><p>No. There are still only two keys, and some result partitions can be empty. Available resources limit overlap. More tasks also add scheduling costs. The totals must remain pizza 3 and salad 1.</p></details>
 </div>
 
-<h2 id="reuse" data-slide="8" data-scene="spark-cache-recompute">8 · Cache reusable data and rebuild lost output</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=8&amp;b=1">Open slide 8 ↗</a></p>
+<h2 id="reuse" data-slide="16" data-scene="spark-cache-recompute">16 · Cache reusable data and rebuild lost output</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=16&amp;b=1">Open slide 16 ↗</a></p>
 <p>Maya wants two reports from the same cleaned orders. The <code>meals</code> RDD contains the lowercase meal names extracted from both orders. Repeating that extraction for every report may waste work.</p>
 <p><strong>Persistence</strong> asks Spark to retain computed partitions for reuse. <code>meals.persist()</code> marks that intention. It does not immediately compute the records. <code>cache()</code> is a convenient way to request the default persistence behavior.</p>
 <p>An action computes the partitions it needs and saves them according to the selected storage policy. A later action can reuse the retained values. <code>meals.unpersist()</code> releases them when they are no longer useful. <a href="#src-persist">[7]</a></p>
@@ -290,8 +496,8 @@ meals.unpersist()       # Release the retained partitions.</code></pre>
   <details><summary>Check your explanation</summary><p>No. Lineage records operations and dependencies, not a backup of unavailable input. Rebuilding requires an available source or another saved copy.</p></details>
 </div>
 
-<h2 id="spark-skew" data-slide="9" data-scene="spark-skew">9 · A frequent key can delay a stage</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
+<h2 id="spark-skew" data-slide="17" data-scene="spark-skew">17 · A frequent key can delay a stage</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=17&amp;b=1">Open slide 17 ↗</a></p>
 <p>Consider a larger, hypothetical order collection. <strong>Skew</strong> means work is distributed unevenly. A <strong>hot key</strong> accounts for much of the data or activity. Many pizza requests can concentrate work at one destination.</p>
 <p>One task may then remain busy after others finish. The stage waits for the required task to complete. The diagram’s bars show a possible imbalance, not measured durations.</p>
 <div class="lecture-walkthrough" data-lecture-scene="spark-skew"></div>
@@ -303,8 +509,8 @@ meals.unpersist()       # Release the retained partitions.</code></pre>
   <details><summary>Check your explanation</summary><p>No. Compare input sizes, processing time, spill, and resource use. A slow machine can delay a task even when its input is small.</p></details>
 </div>
 
-<h2 id="dataframes" data-slide="10" data-scene="spark-dataframe-rdd">10 · Use DataFrames for structured operations</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=10&amp;b=1">Open slide 10 ↗</a></p>
+<h2 id="dataframes" data-slide="18" data-scene="spark-dataframe-rdd">18 · Use DataFrames for structured operations</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=18&amp;b=1">Open slide 18 ↗</a></p>
 <p>We used RDDs to expose the execution mechanism. For table queries, Spark can also understand the structure of the requested operations.</p>
 <p>A <strong>DataFrame</strong> represents records as named columns. Its <strong>schema</strong> specifies column names and types. <strong>Relational operations</strong> include familiar SQL filters, joins, and grouped counts. Spark SQL can use their structure to choose an execution plan. <a href="#src-sql">[5]</a></p>
 <p>Suppose splitting the orders into words has already produced a <code>meals</code> table. Its four rows contain pizza, pizza, salad, and pizza.</p>
@@ -331,8 +537,8 @@ spark.stop()</code></pre>
 <p><code>explain()</code> displays the execution plan. Look for <strong>partial aggregation</strong>, which counts local rows, an <code>Exchange</code>, and final aggregation. An <strong>exchange</strong> redistributes data. Final aggregation combines the received partial counts. Exact labels depend on the Spark version and configuration. <a href="#src-explain">[6]</a></p>
 <p>Structured expressions tell Spark which columns and operations are involved. An arbitrary Python function can hide those details. This gives Spark more planning information, but does not guarantee that every DataFrame program runs faster.</p>
 
-<h2 id="ray-model" data-slide="11" data-scene="ray-task-results">11 · Ray task calls return result references</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=11&amp;b=1">Open slide 11 ↗</a></p>
+<h2 id="ray-model" data-slide="19" data-scene="ray-task-results">19 · Ray task calls return result references</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=19&amp;b=1">Open slide 19 ↗</a></p>
 <p>Maya now gives each helper one order to count independently. Each helper returns a dictionary. Her program must add matching counts from those dictionaries.</p>
 <p>A <strong>Ray task</strong> is a function call that Ray schedules on a worker process. The <code>@ray.remote</code> annotation makes a function available for those scheduled calls. <strong>Remote</strong> means Ray chooses where to execute the call. It can still run on the same computer.</p>
 <p><code>count_order.remote(order)</code> submits work and returns an <strong>ObjectRef</strong>: a reference identifying a result that may still be pending. Like a claim ticket, the reference identifies something you can retrieve later. It is not the result dictionary.</p>
@@ -393,8 +599,8 @@ if __name__ == &quot;__main__&quot;:
 <p>The code uses two local CPU resources for scheduling on one computer. These tiny tasks explain execution and may cost more to schedule than to run.</p>
 <p>The merge loop adds counts instead of replacing dictionary entries. An ordinary dictionary update could replace pizza’s first contribution with its second, losing part of the total.</p>
 
-<h2 id="ray-wait" data-slide="12" data-scene="ray-submit-before-wait">12 · Submit independent work before waiting</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=12&amp;b=1">Open slide 12 ↗</a></p>
+<h2 id="ray-wait" data-slide="20" data-scene="ray-submit-before-wait">20 · Submit independent work before waiting</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=20&amp;b=1">Open slide 20 ↗</a></p>
 <p>Both orders can be counted independently. The driver can still prevent overlap if it waits after each submission.</p>
 <p>Here, <strong>blocking</strong> means the driver cannot proceed past the wait until the result arrives. <strong>Concurrency</strong> means calls can remain in progress during overlapping periods. Actual simultaneous execution also requires enough resources.</p>
 <pre><code class="language-python"># This driver waits before submitting the next order.
@@ -439,8 +645,8 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
   <p>Submit the tasks before waiting for their results. This permits overlap when resources are available. The optional lab check verifies that the submission loop does not wait after each task. <a href="#src-wait">[9]</a></p>
 </details>
 
-<h2 id="dependencies" data-slide="13" data-scene="ray-dependency-references">13 · A result reference expresses a dependency</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=13&amp;b=1">Open slide 13 ↗</a></p>
+<h2 id="dependencies" data-slide="21" data-scene="ray-dependency-references">21 · A result reference expresses a dependency</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=21&amp;b=1">Open slide 21 ↗</a></p>
 <p>Now change the task: a second function must summarize the first function’s count dictionary. It cannot summarize a value that does not exist yet.</p>
 <p>The first task is the <strong>producer</strong> of that value. The second is its <strong>consumer</strong>. Pass the producer’s reference directly as an argument to the consumer:</p>
 <p>Reuse <code>count_order</code> from the Ray example in an initialized Ray session. Define <code>summarize</code> to add the values in one count dictionary:</p>
@@ -461,8 +667,8 @@ print(ray.get(second_ref))  # 2 meal requests</code></pre>
   <details><summary>Check your explanation</summary><p>Yes. Ray records the dependency. The consumer’s function waits to execute until its required value is available.</p></details>
 </div>
 
-<h2 id="shared-input" data-slide="14" data-scene="ray-put-shared-input">14 · Put a reusable input in the object store</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=14&amp;b=1">Open slide 14 ↗</a></p>
+<h2 id="shared-input" data-slide="22" data-scene="ray-put-shared-input">22 · Put a reusable input in the object store</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=22&amp;b=1">Open slide 22 ↗</a></p>
 <p>Extend the lunch application to check orders against a large menu. This is a separate teaching example. Both checking tasks need the same menu, but receive different orders.</p>
 <p>Ray’s <strong>object store</strong> holds values that tasks can retrieve through references. <code>ray.put(data)</code> stores a value and returns an ObjectRef. For the menu, save that reference as <code>menu_ref</code>.</p>
 <p>Pass <code>menu_ref</code> directly to each checking task. Each task receives the menu value after Ray resolves the reference. Reusing the reference avoids repeatedly submitting the same large value. Data may still need transfer to another machine. <a href="#src-objects">[10]</a></p>
@@ -481,8 +687,8 @@ print(ray.get([first_ref, second_ref]))  # [True, True]</code></pre>
 <p>Ray’s stored objects are <strong>immutable</strong>: a stored value does not change in place. A shared reference therefore does not create a dictionary that all tasks can edit together. It identifies a stored value.</p>
 <p><strong>Lab connection:</strong> several nearest-neighbor tasks need the same vector collection. A reference can identify that input while each task receives a different query ID. Two short lunch strings do not need this optimization.</p>
 
-<h2 id="actors" data-slide="15" data-scene="ray-stateful-actor">15 · An actor keeps state between calls</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=15&amp;b=1">Open slide 15 ↗</a></p>
+<h2 id="actors" data-slide="23" data-scene="ray-stateful-actor">23 · An actor keeps state between calls</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=23&amp;b=1">Open slide 23 ↗</a></p>
 <p>The club collects another order. Maya wants one helper to remember the running totals between calls.</p>
 <p>A Python <strong>class</strong> defines how an object stores data and responds to calls. An <strong>instance</strong> is one object created from that class. Its stored values are its <strong>state</strong>. A <strong>method</strong> is a function called on that object.</p>
 <p>A Ray <strong>actor</strong> keeps a class instance in a worker process. Its methods can read and change that instance’s state. This is <strong>mutable state</strong>: values can change between calls. <a href="#src-actors">[11]</a></p>
@@ -515,8 +721,8 @@ finally:
 <p>One actor can become a <strong>bottleneck</strong>: its serial methods limit how quickly all updates finish. Multiple actors have separate states. Ray also supports explicit concurrency modes with different ordering rules.</p>
 <p>Use an actor for state that should remain with a worker, such as a loaded model or running totals. Use independent tasks when calls need no shared mutable state. Keeping state between calls does not ensure that it survives a worker failure.</p>
 
-<h2 id="failure" data-slide="16" data-scene="retries-and-side-effects">16 · A retry can repeat an external effect</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=16&amp;b=1">Open slide 16 ↗</a></p>
+<h2 id="failure" data-slide="24" data-scene="retries-and-side-effects">24 · A retry can repeat an external effect</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=24&amp;b=1">Open slide 24 ↗</a></p>
 <p>A <strong>retry</strong> executes assigned work again after a failure. Each execution is an <strong>attempt</strong>. Our <code>count_order</code> function returns counts without changing another system.</p>
 <p>A <strong>pure function</strong> returns a result determined by its input and changes no external state. Repeating our pure count can reproduce <code>{'pizza': 2}</code>. A <strong>side effect</strong> changes something outside the returned result, such as appending a receipt to a file.</p>
 <p>Suppose a task appends that receipt, then its worker fails before reporting completion. The next attempt may append the receipt again. Receiving one successful task result does not prove the receipt was written only once.</p>
@@ -550,8 +756,8 @@ finally:
   <details><summary>Check your explanation</summary><p>It retains pizza 4. Both calls change the state. Running methods one at a time does not identify two calls as one intended order.</p></details>
 </div>
 
-<h2 id="measure" data-slide="17" data-scene="measure-overhead">17 · Parallel work still has overhead</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=17&amp;b=1">Open slide 17 ↗</a></p>
+<h2 id="measure" data-slide="25" data-scene="measure-overhead">25 · Parallel work still has overhead</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=25&amp;b=1">Open slide 25 ↗</a></p>
 <p><strong>Overhead</strong> is work needed to coordinate a computation, beyond its useful calculation. Starting workers, scheduling tasks, and collecting results all take time.</p>
 <p><strong>Serialization</strong> converts Python values into bytes for storage or transfer. Receiving workers may convert those bytes back into usable values. These conversions and data movement add costs even when the counting function is short.</p>
 <div class="lecture-walkthrough" data-lecture-scene="measure-overhead"></div>
@@ -567,8 +773,8 @@ finally:
 <p>A <strong>cold run</strong> includes first-time setup or loading. A <strong>warm run</strong> can reuse an initialized runtime or available data. State which costs your measurement includes instead of comparing unlike runs.</p>
 <p>Our lunch inputs establish correct totals. They do not establish a measured speedup. Lab 11 provides a larger workload for that investigation.</p>
 
-<h2 id="choose" data-slide="18" data-scene="choose-and-transfer">18 · Choose who should coordinate the work</h2>
-<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=18&amp;b=1">Open slide 18 ↗</a></p>
+<h2 id="choose" data-slide="26" data-scene="choose-and-transfer">26 · Choose who should coordinate the work</h2>
+<p class="slide-reference"><a href="../../slides/lecture-13b.html#s=26&amp;b=1">Open slide 26 ↗</a></p>
 <p>Return to the same two orders and their required totals. The choice depends on the work and its constraints, not a product name alone.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
@@ -645,6 +851,7 @@ finally:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../slides/_shared/visuals.js"></script>
 <script src="../../slides/decks/spark-ray.js?v=full-spark-flow-20261112"></script>
+<script src="../../slides/decks/spark-program.js?v=line-by-line-20261112"></script>
 <script src="slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/paragraph-speech.js?v=spark-ray-speech-20261112"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>
