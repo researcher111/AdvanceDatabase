@@ -21,7 +21,7 @@
     <li><a href="#spark-plan">3 · RDD transformations describe work</a></li>
     <li><a href="#spark-map">4 · flatMap and map keep every occurrence</a></li>
     <li><a href="#spark-combine">5 · Combine local counts before sending them</a></li>
-    <li><a href="#spark-stages">6 · The shuffle separates two stages</a></li>
+    <li><a href="#spark-stages">6 · Spark combines counts before and after the shuffle</a></li>
     <li><a href="#spark-tasks">7 · Partitions, tasks, and workers differ</a></li>
     <li><a href="#reuse">8 · Cache reusable data and rebuild lost output</a></li>
     <li><a href="#spark-skew">9 · A frequent key can delay a stage</a></li>
@@ -158,13 +158,14 @@
 <p>Integer addition is <strong>associative</strong>: regrouping additions preserves the sum. It is also <strong>commutative</strong>: changing their order preserves the sum. These properties let Spark combine partial counts in different groups and orders.</p>
 <p>Other calculations need enough information in each partial result. For an average, retain <code>(sum, count)</code>, merge both fields, then divide. <a href="distributed.html#average-partials">Lecture 13’s delivery example</a> shows why averaging unequal groups’ averages loses information.</p>
 
-<h2 id="spark-stages" data-slide="6" data-scene="spark-shuffle-stages">6 · The shuffle separates two stages</h2>
+<h2 id="spark-stages" data-slide="6" data-scene="spark-shuffle-stages">6 · Spark combines counts before and after the shuffle</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13b.html#s=6&amp;b=1">Open slide 6 ↗</a></p>
 <p>Partition 0 knows two pizza requests. Partition 1 knows a third. The <strong>shuffle</strong> redistributes contributions by key so the final calculation can include both partitions.</p>
 <p>A <strong>stage</strong> groups partition tasks whose operations can run without a shuffle between them. A shuffle separates stages. A Spark <strong>job</strong> is the computation requested by an action. The driver divides that job into stages and schedules their tasks. <a href="#src-cluster">[1]</a></p>
 <p>Stage 0 extracts words, creates pairs, and adds matching local values. The shuffle brings pizza values <code>2</code> and <code>1</code> together. Stage 1 adds them to produce pizza <code>3</code>. Salad’s single value produces <code>1</code>.</p>
 <div class="lecture-walkthrough" data-lecture-scene="spark-shuffle-stages"></div>
-<p>The figure gives each meal a separate destination for clarity. In an actual run, two keys can share a partition while retaining separate value groups. Each key still needs its complete total.</p>
+<p>The complete flow keeps both input orders, all four occurrence pairs, and the three local contributions visible beside the final groups. Follow the blue routes to account for all three pizza requests.</p>
+<p>The final boxes show key groups. In an actual run, two keys can share a partition while retaining separate value groups. Each key still needs its complete total.</p>
 <details class="static-reference"><summary>Static diagram of the complete Spark count</summary>
 <figure class="mr-overview">
   <div class="mr-diagram-scroll" tabindex="0" role="region" aria-label="Spark execution diagram; scroll horizontally if needed">
@@ -643,7 +644,7 @@ finally:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../slides/_shared/visuals.js"></script>
-<script src="../../slides/decks/spark-ray.js?v=visible-code-20261112"></script>
+<script src="../../slides/decks/spark-ray.js?v=full-spark-flow-20261112"></script>
 <script src="slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/paragraph-speech.js?v=spark-ray-speech-20261112"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>

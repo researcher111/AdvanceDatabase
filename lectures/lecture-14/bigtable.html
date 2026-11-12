@@ -70,6 +70,7 @@
 <p><strong>Starting knowledge:</strong> keys and values, B+ tree leaf pages, and the difference between memory and durable storage. Memory holds working data but can lose it during a crash. Durable storage retains data across the failures its protocol promises to survive.</p>
 <p><strong>RAM</strong> means random-access memory, the working memory in these diagrams. <strong>I/O</strong> means input/output, such as reading or writing stored data.</p>
 <p><strong>Goal:</strong> Explain where Bigtable sends a row, how a write survives a crash, and why deleting a key does not immediately erase every older record.</p>
+<p><strong>Code labels:</strong> Teaching Python snippets illustrate small algorithms. Engine pseudocode names required storage guarantees. Neither is a Bigtable client API. Separate examples start with their own data, while later fragments identify the helpers they reuse.</p>
 <div class="callout note"><span class="label">Class plan</span>
   <p>Start with <strong>Quiz 10</strong>, a 10-minute quiz on MapReduce, Spark, and Ray. Then study Bigtable and storage for workloads with many writes.</p>
   <p>The numbered sections follow the slide sequence. Each diagram has its own controls and explanation. The reading includes the information needed to follow each example.</p>
@@ -116,6 +117,16 @@ The LSM design reduces some write costs while adding read and compaction work.</
 <p>A <strong>column family</strong> is a declared group of related columns. A <strong>qualifier</strong> names a column within that family. In <code>anchor:cnnsi.com</code>, <code>anchor</code> is the family and <code>cnnsi.com</code> is the qualifier.</p>
 <p>A <strong>timestamp</strong> identifies one version of a cell. A <strong>version</strong> is a value saved for that cell at a particular timestamp. The application can interpret these timestamps as page-fetch times, for example.</p>
 <p>Bigtable stores each value as bytes. The application decides whether those bytes represent text, an image, or another format.</p>
+<p><strong>Teaching Python:</strong> a tuple groups the three coordinates into one dictionary key. The prefix <code>b</code> creates a byte string. This model stores and retrieves one addressed value:</p>
+<pre><code class="language-python">cells = {}
+row = "com.cnn.www"
+column = "anchor:example"
+timestamp = 1  # One illustrative version
+
+address = (row, column, timestamp)
+cells[address] = b"example link text"
+value = cells[address]</code></pre>
+<p>The illustrative timestamp <code>1</code> names one version. Real Bigtable timestamps are integers that an application can interpret as times. This dictionary models addressing. It does not implement sorted rows, declared families, persistence, or transactions.</p>
 <div class="lecture-walkthrough" data-lecture-scene="a-multidimensional-map"></div>
 <p>The paper describes a “sparse, distributed, persistent, multidimensional sorted map.” Its address combines the row, column, and timestamp. A <strong>retention policy</strong> specifies which versions to keep. The next section explains sparse storage and retention. <a href="#src-1">[1]</a></p>
 <pre class="equation"><code>(row_key, column_family:qualifier, timestamp) → bytes
@@ -129,9 +140,22 @@ timestamp  a cell version    · reads select versions under the retention policy
 <h2 id="sparse" data-slide="3" data-scene="sparse-cells-and-versions">3 · Store present cells and selected versions</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=3&amp;b=1">Open slide 3 ↗</a></p>
 <p><strong>Sparse</strong> means the system stores present cells without reserving a fixed value slot for every absent cell. Different rows can have different qualifiers within the same declared family.</p>
-<p>The diagram starts with three rows and three columns. A later step adds a fourth column. Colored cells contain values. Empty boxes show possible positions, not allocated empty records.</p>
+<p>The example starts with three rows and three columns. A later step adds a fourth column in row <code>r2</code>. Missing cells have no dictionary entry.</p>
 <p>A new qualifier can appear in one row without adding a value to every other row. Column names and other bookkeeping still consume storage.</p>
 <p>A <strong>retention policy</strong> states which cell versions to keep. For example, a family can retain the latest versions or versions younger than a chosen age. Each retained version consumes storage.</p>
+<p><strong>Teaching Python:</strong> start a separate dictionary containing five present cells. Then add <code>anchor:school</code> to <code>r2</code> and retain three versions of that cell:</p>
+<pre><code class="language-python">cells = {
+    ("r1", "anchor:example", 1): b"link",
+    ("r1", "contents:", 1): b"page",
+    ("r2", "anchor:news", 1): b"news",
+    ("r3", "anchor:example", 1): b"link",
+    ("r3", "contents:", 1): b"page",
+}
+
+cells[("r2", "anchor:school", 1)] = b"old"
+cells[("r2", "anchor:school", 2)] = b"prior"
+cells[("r2", "anchor:school", 3)] = b"new"</code></pre>
+<p>The last three assignments use different timestamp coordinates, so they create separate entries. They do not replace each other or create cells in other rows. This dictionary keeps every version. A real retention policy can remove versions when its rules permit.</p>
 <div class="lecture-walkthrough" data-lecture-scene="sparse-cells-and-versions"></div>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
@@ -151,9 +175,22 @@ timestamp  a cell version    · reads select versions under the retention policy
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=4&amp;b=1">Open slide 4 ↗</a></p>
 <p>A <strong>tablet</strong> is a contiguous range of row keys managed as one unit. A <strong>tablet server</strong> is a process that serves reads and writes for assigned tablets. One server can serve several tablets.</p>
 <p>The system finds the tablet whose boundaries contain the requested row key. It then sends the request to that tablet’s assigned server.</p>
-<p>In the diagram’s simplified alphabetic ranges, <code>kim</code> belongs to <code>h–m</code>. A scan from <code>dee</code> through <code>kim</code> needs both <code>a–g</code> and <code>h–m</code>. The original design maintains location information so clients can find the correct server.</p>
+<p>The short labels <code>a–g</code> and <code>h–m</code> describe the first two alphabetic ranges. Code uses exact boundaries: the second range starts at <code>h</code> and stops before <code>n</code>. Thus, <code>kim</code> belongs to <code>[h, n)</code>. A scan from <code>dee</code> through <code>kim</code> crosses both ranges. The original design maintains location information so clients can find the correct server.</p>
 <p>A <strong>master</strong> coordinates tablet assignments. It can assign tablets to another server after failure or when balancing work. The original paper describes tablets of roughly <strong>100–200 MB</strong>. <a href="#src-1">[1]</a></p>
 <p><strong>Partitioning</strong> divides data into portions. <strong>Replication</strong> keeps multiple copies of data. A tablet is one portion of the table, not a copy of the whole table.</p>
+<p><strong>Teaching Python:</strong> <code>bisect_right</code> counts the sorted boundaries no greater than the requested row key. For <code>kim</code>, it returns tablet number <code>1</code>. The <code>servers</code> list maps that number to its serving process:</p>
+<pre><code class="language-python">from bisect import bisect_right
+
+bounds = ["h", "n", "t"]
+row = "kim"
+tablet = bisect_right(bounds, row)
+servers = ["S0", "S1", "S2", "S3"]
+
+server = servers[tablet]</code></pre>
+<p>The result is <code>server == "S1"</code>. After S1 fails, the toy directory can name S2 as the replacement:</p>
+<pre><code class="language-python">servers[1] = "S2"
+server = servers[tablet]  # "S2"</code></pre>
+<p>Changing the list models only the assignment. The real system must coordinate ownership and recover the tablet before the replacement serves requests.</p>
 <div class="lecture-walkthrough" data-lecture-scene="tablets-separate-placement-from-storage"></div>
 <p>The original design stores files and recovery logs in the <strong>Google File System</strong>, or <strong>GFS</strong>. GFS replicates stored data across machines. Losing a tablet server therefore need not destroy its durable files. <a href="#src-3">[3]</a></p>
 <p>The replacement server opens those files and <strong>replays</strong> the log: it applies saved changes to rebuild lost memory state. Section 6 explains the required write ordering. Reassignment and recovery still take time.</p>
@@ -165,6 +202,9 @@ timestamp  a cell version    · reads select versions under the retention policy
 <p>Keys that begin with increasing timestamps keep moving toward the end of the ordered key space.</p>
 <p>The diagram uses numeric intervals. In <code>[75, 100)</code>, the left boundary is included and the right boundary is excluded. Key <code>99</code> belongs to that interval.</p>
 <p>A <strong>tablet split</strong> divides one range into two adjacent ranges. Splitting the last range reduces its size. However, the next increasing keys still reach the new last range.</p>
+<p><strong>Teaching Python:</strong> reuse <code>bisect_right</code> from the preceding section with numeric boundaries. Key <code>99</code> reaches the final tablet before and after the split:</p>
+<pre><code class="language-python">before = bisect_right([25, 50, 75], 99)      # Tablet 3
+after = bisect_right([25, 50, 75, 88], 99)  # Tablet 4</code></pre>
 <div class="lecture-walkthrough" data-lecture-scene="splitting-cannot-fix-a-moving-hotspot"></div>
 <p>These counts are an illustrative workload, not measured Bigtable throughput. The example with distributed user IDs spreads writes by assumption. Actual user IDs can also be uneven.</p>
 <div class="viz" id="viz-tablet">
@@ -188,6 +228,15 @@ timestamp  a cell version    · reads select versions under the retention policy
 <p>A <strong>write-ahead log</strong>, or <strong>WAL</strong>, records changes before later storage actions depend on them. For the durable write shown here, the engine makes the log record durable before reporting success.</p>
 <p><strong>Append</strong> means add a record at the end of the log. <strong>Sync</strong> means request the persistence required by the durability protocol. An <strong>acknowledgment</strong>, abbreviated <code>ack</code>, tells the caller the write succeeded.</p>
 <p>Follow <code>k2 = v3</code>. The engine appends its recovery record, makes that record durable, and updates the sorted memtable. It then acknowledges success.</p>
+<p><strong>Engine pseudocode:</strong> each helper below names a required storage operation. These names are not functions supplied by a Python library:</p>
+<pre><code class="language-text">record = ("k2", "v3")
+
+append_log(record)
+sync_log()  # Wait for required durability.
+
+memtable.put("k2", "v3")
+reply_success()</code></pre>
+<p><code>append_log</code> records recovery information. <code>sync_log</code> waits for the required durability before memory changes and the success reply. This trace omits error handling. A list append or buffered file write alone does not supply that durability guarantee.</p>
 <div class="lecture-walkthrough" data-lecture-scene="the-log-protects-memory"></div>
 <p>If the server crashes before the memory batch reaches a sorted file, recovery replays the log. The new process can restore <code>k2 = v3</code>.</p>
 <p>This is a <strong>redo</strong> use of a log: recovery reapplies a recorded update. It differs from microdb’s physical undo protocol, which restores earlier values. The lab’s ordering rules cannot be copied unchanged into this design.</p>
@@ -198,6 +247,19 @@ timestamp  a cell version    · reads select versions under the retention policy
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=7&amp;b=1">Open slide 7 ↗</a></p>
 <p>The <span class="gloss" data-gloss="memtable">memtable</span> holds recent entries in memory, sorted by key. Arrival order can differ from key order.</p>
 <p>The example receives <code>k8, k2, k5, k1, k7</code>. Its ordered structure keeps <code>k1, k2, k5, k7, k8</code>. That order lets a flush write the entries sequentially.</p>
+<p><strong>Teaching Python:</strong> the integers below represent the suffixes of <code>k8</code>, <code>k2</code>, and the other short labels. The <code>keys</code> list records their order. The <code>values</code> dictionary holds each key’s current value:</p>
+<pre><code class="language-python">from bisect import insort
+keys = []
+values = {}
+
+for key in [8, 2, 5, 1, 7]:
+    insort(keys, key)
+    values[key] = "v1"
+
+values[2] = "v2"
+rows = [(key, values[key]) for key in keys]</code></pre>
+<p><code>insort</code> inserts each arriving key at its sorted position. The five initial keys are distinct. Updating <code>values[2]</code> changes the value without inserting that key again.</p>
+<p>The final expression pairs each ordered key with its current value. This list model explains ordering, not production memtable performance. Real Bigtable row keys use byte-string order.</p>
 <div class="lecture-walkthrough" data-lecture-scene="the-memtable-stays-ordered"></div>
 <p>A later <code>k2</code> write changes its newest value. This simple drawing keeps one current value per key in memory. Production engines can retain older versions for reads that require earlier views.</p>
 <p>The notebook analogy applies to key order. A real memtable uses an ordered data structure. Ordinary dictionary insertion order does not automatically sort keys.</p>
@@ -206,6 +268,17 @@ timestamp  a cell version    · reads select versions under the retention policy
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=8&amp;b=1">Open slide 8 ↗</a></p>
 <p>An <strong>SSTable</strong>, short for <strong>Sorted String Table</strong>, is an immutable file of sorted key-value entries. It also has an index that helps locate data within the file.</p>
 <p>At its size threshold, the engine <strong>freezes</strong> the current memtable: it stops changing that batch. A flush writes the frozen entries to an SSTable. New writes enter another active memtable.</p>
+<p><strong>Engine pseudocode:</strong> <code>active</code> names the current ordered memtable. The old batch becomes frozen while a new object accepts writes:</p>
+<pre><code class="language-text">frozen = active
+active = new_memtable()
+
+# Background flush of the frozen batch:
+file = write_sstable(frozen.entries())
+make_durable(file)
+publish(file)
+retire_when_no_readers(frozen)</code></pre>
+<p><code>write_sstable</code> writes ordered entries. <code>make_durable</code> establishes the required storage guarantee. <code>publish</code> installs the file where readers can find it. These helpers stand for storage and coordination work, not Python library calls.</p>
+<p>Retire the frozen batch only after readers no longer need it. New writes follow the WAL protocol and can proceed while the background flush runs. This fragment does not discard the recovery log.</p>
 <div class="lecture-walkthrough" data-lecture-scene="freeze-a-sorted-file"></div>
 <p>The frozen batch can remain readable while the file is written. A later update goes into active memory and eventually another file. It does not edit the older SSTable.</p>
 <p>The notebook has now become sealed pages. Those pages can coexist with a newer notebook entry for the same key. The next section explains which record a read selects.</p>
@@ -226,7 +299,23 @@ timestamp  a cell version    · reads select versions under the retention policy
   </tbody>
 </table>
 </div>
-<p>The animation first adds the three records. It then previews a <strong>partial compaction</strong>: a merge that includes only some files. The final merge includes all older records and assumes no retained snapshot needs them.</p>
+<p>The animation advances the read boundary across the three records. It then previews a <strong>partial compaction</strong>: a merge that includes only some files. The final merge includes all older records and assumes no retained snapshot needs them.</p>
+<p><strong>Teaching Python:</strong> each tuple contains a sequence number and a value for one key. <code>DELETE</code> is a distinct marker object. The result <code>None</code> means absent in this model:</p>
+<pre><code class="language-python">DELETE = object()  # A distinct marker.
+records = [(5, "old"), (8, "new"), (9, DELETE)]
+
+def read_at(records, snapshot):
+    visible = [(seq, value) for seq, value
+               in records if seq &lt;= snapshot]
+    if not visible:
+        return None
+    seq, value = max(visible, key=lambda r: r[0])
+    return None if value is DELETE else value</code></pre>
+<p>The filtering expression keeps records allowed by the snapshot. A <code>lambda</code> is a short function. Here, it selects tuple position <code>0</code>, the sequence number, so <code>max</code> chooses the newest visible record.</p>
+<p>The <code>is</code> comparison checks whether the selected value is the exact deletion marker. Once that marker wins, the function returns absence. It does not search for an older value.</p>
+<pre><code class="language-python">read_at(records, 5)  # "old"
+read_at(records, 8)  # "new"
+read_at(records, 9)  # None: absent</code></pre>
 <div class="lecture-walkthrough" data-lecture-scene="read-the-newest-visible-value"></div>
 <p><strong>A read must resolve versions across relevant structures.</strong> The original Bigtable paper describes a merged view of the memtable and SSTables. File location alone does not determine which version wins. <a href="#src-1">[1]</a></p>
 <p>Our simpler latest-value widget searches memory and files from newest to oldest. That shortcut depends on its version ordering. General engines use their file organization, timestamps, and visibility rules.</p>
@@ -237,6 +326,25 @@ timestamp  a cell version    · reads select versions under the retention policy
 <p><span class="gloss" data-gloss="compaction">Compaction</span> merges sorted files and writes new sorted output. It can reduce the number of files a read checks and reclaim obsolete versions.</p>
 <p>A <strong>merge cursor</strong> marks the next unread entry in each input. Compare those entries, output the next key, and advance the corresponding cursor.</p>
 <p>At duplicate <code>k2</code>, this current-value example keeps <code>k2:v2</code> instead of <code>k2:v1</code>. Its output keys are <code>k1, k2, k4, k7, k8</code>.</p>
+<p><strong>Teaching Python:</strong> each input triple contains an integer key suffix, a version number, and a value. These separate inputs match the diagram:</p>
+<pre><code class="language-python"># Each entry is (key, version, value).
+a = [(1, 1, "v1"), (2, 1, "v1"),
+     (7, 1, "v1")]
+b = [(2, 2, "v2"), (4, 1, "v1"),
+     (8, 1, "v1")]</code></pre>
+<p><code>heapq.merge</code> reads already sorted inputs in key order. It advances the input cursor that supplies the next entry. <code>groupby</code> gathers consecutive entries with the same key:</p>
+<pre><code class="language-python">from heapq import merge
+from itertools import groupby
+
+def compact_current(a, b):
+    merged = merge(a, b, key=lambda r: r[0])
+    groups = groupby(merged, key=lambda r: r[0])
+    return [max(group, key=lambda r: r[1])
+            for key, group in groups]
+
+output = compact_current(a, b)</code></pre>
+<p>The first two <code>lambda</code> expressions select the key at position <code>0</code>. The last selects the version at position <code>1</code>. Thus, <code>max</code> keeps version 2 for key 2.</p>
+<p>The output contains keys <code>1, 2, 4, 7, 8</code> in order. This function assumes no deletions and no retained snapshots. It is not a general compaction algorithm.</p>
 <div class="lecture-walkthrough" data-lecture-scene="merge-sorted-runs"></div>
 <p>Actual compaction must also retain versions needed by active snapshots. It must retain tombstones while older values could reappear. Sequential merging still reads and rewrites stored bytes.</p>
 <p>Here is the complete write path. Each line now names a mechanism already introduced.</p>
@@ -275,6 +383,19 @@ background:    compact selected SSTables   merge entries; remove obsolete versio
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=11&amp;b=1">Open slide 11 ↗</a></p>
 <p>Deleting an in-memory entry does not remove an older value from an immutable file. A later lookup could otherwise find that older value and incorrectly return it.</p>
 <p>The engine writes a newer tombstone. A current read that selects the tombstone returns absent. It must not continue looking for an older value to return.</p>
+<p><strong>Teaching Python:</strong> reuse <code>read_at</code> and the same <code>DELETE</code> marker from section 9. This separate example assigns sequences 1 and 2 to records for <code>k2</code>:</p>
+<pre><code class="language-python">old_file = [(1, "v1")]  # Records for k2.
+newer = [(2, DELETE)]
+result = read_at(old_file + newer, 2)</code></pre>
+<p><code>result</code> is <code>None</code>, meaning absent. The old tuple still exists, but the newer marker determines the read.</p>
+<p><strong>Engine pseudocode:</strong> removal requires proof about older records and required read views. These predicates name the checks a real engine must establish:</p>
+<pre><code class="language-text">if all_older_versions_are_covered(key) and (
+    no_required_read_needs_older_versions(key)
+):
+    remove_tombstone_and_covered_versions(key)
+else:
+    keep_tombstone(key)</code></pre>
+<p>If an older value remains outside the merge, the first condition fails. If a retained snapshot needs an older version, the second condition fails. Either failure prevents this removal.</p>
 <div class="lecture-walkthrough" data-lecture-scene="deletion-must-hide-older-values"></div>
 <h3 id="worked-example">Trace a delete through older sorted files</h3>
 <p>SSTable A holds <code>old@5</code>. B holds <code>new@8</code>. C holds the flushed <code>DELETE@9</code>. A partial compaction merges B and C while A remains outside that merge.</p>
@@ -293,6 +414,31 @@ background:    compact selected SSTables   merge entries; remove obsolete versio
 <p>A <strong>bit</strong> stores either 0 or 1. Our filter has <strong>32 bits</strong> and <strong>3 hash functions</strong>. Each function chooses a bit position from the key.</p>
 <p>Insertion sets the key’s chosen bits to 1. A query checks those same positions. Any zero proves absence, because insertion would have set that bit.</p>
 <p>All ones mean <strong>possibly present</strong>. Other keys can set those same bits. A <strong>false positive</strong> occurs when an absent key passes this test.</p>
+<p><strong>Teaching Python:</strong> these fixed functions reproduce the diagram’s bit positions. <code>ord</code> converts an ASCII character to its numeric code. <code>enumerate</code> supplies the character’s position. The remainder operation <code>% 32</code> keeps each result between 0 and 31:</p>
+<pre><code class="language-python">def hashes(key):
+    a = b = c = 0
+    for i, ch in enumerate(key):
+        n = ord(ch)
+        a = (31 * a + n) % 32
+        b = (17 * b + 7 * n) % 32
+        c = (13 * c + (i + 3) * n) % 32
+    return [a, b, c]
+
+bits = [0] * 32</code></pre>
+<p>Reuse <code>hashes</code> below. The set <code>stored</code> represents the keys actually in this toy file. <code>range(1, 7)</code> produces 1 through 6. Insertion sets every selected bit:</p>
+<pre><code class="language-python">stored = {f"k{i}" for i in range(1, 7)}
+bits = [0] * 32
+for key in stored:
+    for position in hashes(key):
+        bits[position] = 1
+
+def might_contain(key):
+    return all(bits[p] for p in hashes(key))
+
+possible = might_contain("k17")
+present = "k17" in stored</code></pre>
+<p><code>all</code> returns true only when every required bit is set. For <code>k7</code>, positions <code>12, 30, 9</code> include a zero, so <code>might_contain("k7")</code> returns false.</p>
+<p>For <code>k17</code>, positions <code>17, 21, 16</code> are all set. Therefore, <code>possible</code> is true but <code>present</code> is false. The set membership check represents inspecting actual file entries after the filter allows a lookup.</p>
 <div class="lecture-walkthrough" data-lecture-scene="a-one-sided-membership-test"></div>
 <p>The diagram inserts <code>k1</code> through <code>k6</code>. Query <code>k7</code> has a required zero and can skip the file. Query <code>k17</code> finds all required bits set, but the key is absent.</p>
 <div class="viz" id="viz-bloom">
@@ -318,6 +464,25 @@ background:    compact selected SSTables   merge entries; remove obsolete versio
 <p>A <strong>block</strong> is a chunk of file data read as a unit. A <strong>sparse index</strong> records selected boundary keys and the blocks where their ranges begin.</p>
 <p>For the diagram’s query <code>k9</code>, the index entries are <code>k1 → 0</code>, <code>k8 → 1</code>, and <code>k16 → 2</code>. Under the example’s numeric key order, <code>k9</code> falls between <code>k8</code> and <code>k16</code>. The engine searches block 1.</p>
 <p>A <strong>block cache</strong> keeps recently read blocks in memory. If a needed block is cached, the engine can inspect that copy without another storage read.</p>
+<p><strong>Teaching Python:</strong> integers represent the diagram’s numeric key suffixes. <code>bisect_right</code> finds the position after index boundaries no greater than the query. Subtracting one selects the preceding block start:</p>
+<pre><code class="language-python">from bisect import bisect_right
+first_keys = [1, 8, 16]
+key = 9
+block_id = bisect_right(first_keys, key) - 1
+
+disk = {1: {8: "v8", 9: "v9", 12: "v12"}}
+cache = {}
+def read_block(block_id):
+    if block_id not in cache:
+        cache[block_id] = disk[block_id]
+    return cache[block_id]</code></pre>
+<p>For key <code>9</code>, <code>block_id</code> is <code>1</code>. The <code>disk</code> dictionary stands in for stored blocks. It performs no storage I/O and includes only this example’s needed block.</p>
+<p>Continue with the same index, cache, and <code>read_block</code> function:</p>
+<pre><code class="language-python">block = read_block(block_id)
+value = block.get(key)
+again = read_block(block_id)</code></pre>
+<p>The first call loads block 1 into the toy cache. <code>block.get(key)</code> checks its entries and returns <code>"v9"</code>. The second call reuses the cached block.</p>
+<p>This query lies within the index’s covered range. A general lookup must also handle keys below the first boundary. The model omits cache eviction and version resolution inside blocks.</p>
 <div class="lecture-walkthrough" data-lecture-scene="skip-files-then-find-a-block"></div>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
@@ -478,6 +643,7 @@ document that supports the claim it is attached to.</p>
 <script src="../../slides/decks/clarity-captions.js?v=bigtable-clear-20261110"></script>
 <script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
 <script src="../../slides/decks/clarity-diagrams.js?v=bigtable-clear-20261110"></script>
+<script src="../../slides/decks/bigtable-code.js?v=visible-code-20261112"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
 <script src="../lecture-13/slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>

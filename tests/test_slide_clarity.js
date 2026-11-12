@@ -11,6 +11,7 @@ before.find(([id])=>id===11)[1].find(([id])=>id==='embedding')[1]=7;
 before.find(([id])=>id===11)[1].find(([id])=>id==='navigate-a-graph')[1]=10;
 const original6=JSON.stringify(decks[6].scenes.map(s=>Array.from({length:s.steps},(_,i)=>V.sceneDrawing(s,i))));
 ['clarity-captions','clarity-layout','clarity-diagrams'].forEach(f=>load('slides/decks/'+f+'.js'));
+load('slides/decks/bigtable-code.js');
 load('lectures/lecture-11/embedding-walkthrough.js');
 load('slides/decks/embedding-walkthrough.js');
 load('slides/decks/hnsw-walkthrough.js');

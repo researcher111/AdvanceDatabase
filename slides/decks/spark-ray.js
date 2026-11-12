@@ -216,34 +216,63 @@
       ],question:'Why does (pizza, 2) preserve both requests while a single (pizza, 1) does not?',answer:'The value 2 retains the combined contribution. The value 1 would discard one occurrence.'
     },[refs.reduce]);
 
-  scene('spark-shuffle-stages','The shuffle separates two stages',4,
+  scene('spark-shuffle-stages','Spark combines counts before and after the shuffle',4,
     ['Run partition-local operations','Move partial contributions','Sum each destination group'],[
       'A stage runs tasks without a shuffle between their operations. Stage 0 extracts words, attaches counts, and adds local values.',
       'The shuffle sends every contribution for pizza to its destination, including the partial value 2.',
       'Stage 1 combines the received values: pizza gets [2, 1], while salad gets [1].'
     ],(d,s)=>{
       codeLine(d,'shuffle-code',184,'pairs.reduceByKey(add, numPartitions=2).collect()');
-      d.rect('stage0',50,220,450,365,P.white,P.line,12,2);
-      d.rect('stage1',780,220,450,365,P.white,P.line,12,2);
-      label(d,'stage0-title',275,255,'Stage 0 · input tasks',28,P.blue);
-      label(d,'stage1-title',1005,255,'Stage 1 · output tasks',28,P.green);
-      box(d,'partial0',90,300,365,100,'From partition 0',['(pizza, 2)'],P.blue);
-      box(d,'partial1',90,435,365,125,'From partition 1',['(pizza, 1), (salad, 1)'],P.blue);
-      if(s>=1){
-        arrow(d,'shuffle0',470,350,805,350,P.orange);
-        arrow(d,'shuffle1',470,490,805,385,P.orange);
-        arrow(d,'shuffle2',470,510,805,505,P.green);
-        label(d,'shuffle-label',640,280,'SHUFFLE',25,P.orange);
-        box(d,'pizza',820,300,365,125,'pizza',s===2?['sum([2, 1]) = 3']:['[2, 1]'],P.blue);
-        box(d,'salad',820,455,365,100,'salad',s===2?['sum([1]) = 1']:['[1]'],P.green);
+      d.rect('stage0',35,220,750,390,P.white,P.line,12,2);
+      d.rect('stage1',1000,220,250,390,P.white,P.line,12,2);
+      label(d,'stage0-title',410,250,'Stage 0 · read and count locally',28,P.ink);
+      label(d,'stage1-title',1125,250,'Stage 1 · add',28,P.ink);
+      label(d,'input-heading',165,291,'Input partition',23,P.muted);
+      label(d,'pairs-heading',430,291,'flatMap → map',23,P.muted);
+      label(d,'combine-heading',680,291,'Local sum',23,P.muted);
+      label(d,'shuffle-label',890,291,'Shuffle',27,P.ink);
+      label(d,'output-heading',1125,291,'One total per key',23,P.muted);
+      for(let i=0;i<2;i++){
+        const y=i?475:325;
+        d.rect('input'+i,65,y,200,110,P.bg,P.line,8,2);
+        label(d,'input-name'+i,165,y+32,'Partition '+i,24,P.ink);
+        label(d,'input-order'+i,165,y+76,i?'“Salad pizza.”':'“Pizza, pizza!”',25,P.ink);
+        arrow(d,'input-to-pairs'+i,275,y+55,320,y+55,P.muted);
       }
-      foot(d,'Toy destination labels · Actual hash bucket numbers can differ');
+      d.rect('pairs0',330,325,200,110,P.blueLight,P.blue,8,2);
+      label(d,'pair0a',430,355,'(pizza, 1)',26);
+      label(d,'pair0b',430,405,'(pizza, 1)',26);
+      d.box('pair1a',330,475,200,52,'(salad, 1)',P.greenLight,P.green,26);
+      d.box('pair1b',330,533,200,52,'(pizza, 1)',P.blueLight,P.blue,26);
+      arrow(d,'local0',540,380,590,380,P.muted);
+      arrow(d,'local1a',540,501,590,501,P.muted);
+      arrow(d,'local1b',540,559,590,559,P.muted);
+      d.box('partial0',600,351,160,58,'(pizza, 2)',P.blueLight,P.blue,26);
+      d.box('partial1a',600,475,160,52,'(salad, 1)',P.greenLight,P.green,26);
+      d.box('partial1b',600,533,160,52,'(pizza, 1)',P.blueLight,P.blue,26);
+      if(s>=1){
+        d.path('shuffle0-curve','M 770 380 C 870 380 920 365 1010 365','none',P.blue,3);
+        arrow(d,'shuffle0',1010,365,1020,365,P.blue);
+        d.path('shuffle1-curve','M 770 559 C 880 559 900 410 1010 410','none',P.blue,3);
+        arrow(d,'shuffle1',1010,410,1020,410,P.blue);
+        // A background stroke keeps the crossing routes visually separate.
+        d.path('shuffle2-gap','M 770 501 C 870 501 920 535 1010 535','none',P.bg,11);
+        d.path('shuffle2-curve','M 770 501 C 870 501 920 535 1010 535','none',P.green,3);
+        arrow(d,'shuffle2',1010,535,1020,535,P.green);
+        d.rect('pizza',1025,328,200,110,P.blueLight,P.blue,8,2);
+        label(d,'pizza-title',1125,365,s===2?'pizza: 3':'pizza',30,P.blue);
+        label(d,'pizza-sum',1125,410,s===2?'2 + 1 = 3':'[2, 1]',27);
+        d.rect('salad',1025,475,200,110,P.greenLight,P.green,8,2);
+        label(d,'salad-title',1125,510,s===2?'salad: 1':'salad',30,P.green);
+        label(d,'salad-sum',1125,555,s===2?'1 = 1':'[1]',27);
+      }
+      foot(d,'Key groups shown · Different keys can share an output partition');
     },{
       idea:'A shuffle moves contributions between partitions and creates a scheduling boundary between stages.',
       builds:[
-        'An action starts a job: the computation needed for its requested result. A stage groups tasks that can run without a shuffle between their operations. Each input task can perform word extraction, pair creation, and local addition together. Running these steps together is called pipelining. Stage count is not the number of function calls.',
-        'Trace both pizza contributions across the boundary. They have values 2 and 1, not two single requests. The salad contribution remains separate. Shuffle can use network transfer and disk storage. Two keys can share a destination partition while keeping separate groups.',
-        'Compute the final sums only after their required contributions are available. The drawing uses one destination per meal for clarity. Spark chooses task placement and partition assignments. Each meal still needs every contribution for its total.'
+        'Follow both orders from left to right. flatMap extracts four words, and map makes four occurrence pairs. reduceByKey combines the two pizza pairs in partition 0 into (pizza, 2). Partition 1 retains one contribution for each meal. A stage groups tasks that run without a shuffle between their operations. Running these steps together is called pipelining. An action starts a job: the computation needed for its requested result. The visible collect call requests that work. Stage count is not the number of function calls.',
+        'Trace the two blue routes into the pizza group. Their values are 2 and 1, so they still represent three pizza requests. Trace the green route into the salad group. Predict the totals before the next reveal. Shuffle can use network transfer and disk storage. These boxes show key groups, not a required assignment of keys to separate workers. Different keys can share an output partition.',
+        'Add the values received by each group. Pizza gets 2 + 1 = 3, and salad gets 1. Return to the two input strings and account for all four requests. reduceByKey performs local and final addition. collect returns the two totals to the driver. Spark chooses task placement and partition assignments.'
       ],question:'What values must the pizza destination add?',answer:'It must add 2 from partition 0 and 1 from partition 1, producing 3.'
     },[refs.spark,refs.reduce]);
 
