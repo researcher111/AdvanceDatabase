@@ -564,8 +564,49 @@ totals = meals.groupBy("meal").count()
 totals.explain(mode="formatted")
 totals.show()
 spark.stop()</code></pre>
-<p>The answer remains pizza <code>3</code> and salad <code>1</code>. Row order is unspecified. <code>show()</code> requests execution and displays results.</p>
-<p><code>explain()</code> displays the execution plan. Look for <strong>partial aggregation</strong>, which counts local rows, an <code>Exchange</code>, and final aggregation. An <strong>exchange</strong> redistributes data. Final aggregation combines the received partial counts. Exact labels depend on the Spark version and configuration. <a href="#src-explain">[6]</a></p>
+<p>The <code>totals</code> DataFrame describes the grouped count. What steps will Spark use to produce pizza <code>3</code> and salad <code>1</code>?</p>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Parts of the explain call; scroll horizontally if needed">
+<table>
+  <thead><tr><th>Part of the call</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>totals</code></td><td>The DataFrame whose plan we want to inspect.</td></tr>
+    <tr><td><code>.explain(...)</code></td><td>Print information about Spark’s execution plan.</td></tr>
+    <tr><td><code>mode="formatted"</code></td><td>Print a physical-plan outline followed by numbered operator details.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>A <strong>physical execution plan</strong> describes the operations Spark plans to perform. Here, <code>formatted</code> selects the plan display format. It does not format the meal totals. <a href="#src-explain">[6]</a></p>
+<p>This captured PySpark 4.0.1 output starts with an outline:</p>
+<pre class="terminal"><code>== Physical Plan ==
+AdaptiveSparkPlan (5)
++- HashAggregate (4)
+   +- Exchange (3)
+      +- HashAggregate (2)
+         +- Scan ExistingRDD (1)</code></pre>
+<p>Each parenthesized number identifies an <strong>operator</strong>, one step in the plan, and links to its detail block. Here, <code>(2)</code> labels the local counting operator. In the earlier RDD dependency display, <code>(2)</code> instead meant two partitions.</p>
+<p>These selected detail lines identify the two counting steps. Other detail lines and operator blocks are omitted:</p>
+<pre class="terminal"><code>(2) HashAggregate
+Functions [1]: [partial_count(1)]
+
+(4) HashAggregate
+Functions [1]: [count(1)]</code></pre>
+<p>Read the outline from the bottom upward:</p>
+<ol>
+  <li><code>Scan ExistingRDD (1)</code> reads the meal rows.</li>
+  <li><code>HashAggregate (2)</code> counts each meal within each input partition. This produces <strong>partial counts</strong>.</li>
+  <li><code>Exchange (3)</code> shuffles those partial counts by meal, bringing equal meal keys together.</li>
+  <li><code>HashAggregate (4)</code> combines the partial counts into the final count for each meal.</li>
+</ol>
+<p><code>AdaptiveSparkPlan</code> can revise the plan during execution. The capture reports <code>isFinalPlan=false</code>, so this is the initial plan. The <a href="spark_dataframe_plan.txt">full captured plan</a> includes every detail block.</p>
+<p>Its <code>hashpartitioning(meal#0, 200)</code> uses an initial setting of 200 shuffle partitions. That setting does not mean 200 machines. Exact output and settings vary by Spark version and configuration.</p>
+<p>The separate <code>totals.show()</code> call requests execution and displays the result rows. This run printed:</p>
+<pre class="terminal"><code>+-----+-----+
+| meal|count|
++-----+-----+
+|pizza|    3|
+|salad|    1|
++-----+-----+</code></pre>
+<p>Row order is unspecified. The plan shows how Spark can compute the counts. The displayed rows contain the counts themselves.</p>
 <p>Structured expressions tell Spark which columns and operations are involved. An arbitrary Python function can hide those details. This gives Spark more planning information, but does not guarantee that every DataFrame program runs faster.</p>
 
 <h2 id="ray-model" data-slide="19" data-scene="ray-task-results">19 · Ray task calls return result references</h2>
@@ -881,7 +922,7 @@ finally:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../slides/_shared/visuals.js"></script>
-<script src="../../slides/decks/spark-ray.js?v=full-spark-flow-20261112"></script>
+<script src="../../slides/decks/spark-ray.js?v=formatted-explain-20261112"></script>
 <script src="../../slides/decks/spark-program.js?v=pythonrdd-context-20261112"></script>
 <script src="slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/paragraph-speech.js?v=spark-ray-speech-20261112"></script>

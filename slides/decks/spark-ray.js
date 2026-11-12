@@ -364,35 +364,88 @@
       ],question:'Does a long task prove that its partition has a frequent key?',answer:'No. Compare data sizes, spill, execution costs, and resource behavior before attributing the delay to skew.'
     },[refs.spark]);
 
+  function dfText(d,key,x,y,lines,size=23,gap=30){
+    lines.forEach((line,i)=>d.add(key+'-'+i,'text',{x,y:y+i*gap,fill:P.ink,'font-size':size,style:'font-family:ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre','xml:space':'preserve','text-anchor':'start','dominant-baseline':'middle'},line));
+  }
   scene('spark-dataframe-rdd','Use DataFrames for structured operations',3,
-    ['Expose the operation','Give Spark a relational plan','Keep RDDs for the mechanism'],[
+    ['Expose the operation','Describe grouped counts','Read the explain call','See the formatted plan','Trace the physical operations','Show the result rows'],[
       'A DataFrame is a table with named columns. Its schema specifies the column names and their types.',
-      'A grouping expression describes a table operation. Spark SQL can choose how to execute that operation.',
-      'The RDD example exposes partitions and combining. Choose the programming interface that fits the actual computation.'
+      'groupBy("meal").count() describes one count per meal. The variable totals names the resulting DataFrame.',
+      'explain prints the physical execution plan. mode="formatted" requests a plan outline and numbered details for its operators.',
+      'The outline shows how operators connect. Matching numbers link each operator to its details.',
+      'Read from the scan toward the final count: read rows, count locally, shuffle by meal, then combine partial counts.',
+      'show() requests execution and prints the meal totals. explain() displays how Spark plans to compute them.'
     ],(d,s)=>{
-      python(d,'Python · a separate DataFrame example',[
-        'from pyspark.sql import SparkSession',
-        'spark = (SparkSession.builder.master("local[2]")',
-        '         .appName("Lunch table").getOrCreate())',
-        'meals = spark.createDataFrame(',
-        '    [("pizza",), ("pizza",),',
-        '     ("salad",), ("pizza",)], ["meal"])','',
-        'totals = meals.groupBy("meal").count()',
-        'totals.explain(mode="formatted")',
-        'totals.show()'
-      ],s===0?[3,4,5]:s===1?[7,8]:[9]);
-      trace(d,'rows',210,'Column: meal (string)',['pizza, pizza, salad, pizza'],P.blue);
-      if(s>=1){arrow(d,'group',1035,315,1035,350);trace(d,'plan',360,'Group matching meals',['Count each group'],P.green);}
-      if(s===2)trace(d,'result',500,'show() requests the result',['pizza: 3 · salad: 1'],P.orange);
-      foot(d,'explain() displays the plan · show() displays rows · This meals variable is a DataFrame');
+      if(s===0||s===1||s===5){
+        python(d,'Python · a separate DataFrame example',[
+          'from pyspark.sql import SparkSession',
+          'spark = (SparkSession.builder.master("local[2]")',
+          '         .appName("Lunch table").getOrCreate())',
+          'meals = spark.createDataFrame(',
+          '    [("pizza",), ("pizza",),',
+          '     ("salad",), ("pizza",)], ["meal"])','',
+          'totals = meals.groupBy("meal").count()',
+          'totals.explain(mode="formatted")',
+          'totals.show()'
+        ],s===0?[3,4,5]:s===1?[7]:[9]);
+        trace(d,'rows',210,'Column: meal (string)',['pizza, pizza, salad, pizza'],P.blue);
+        if(s===1){arrow(d,'group',1035,315,1035,350);trace(d,'plan',360,'Group matching meals',['Count each group'],P.green);}
+        if(s===5){
+          d.rect('df-result',840,345,390,255,P.white,P.orange,10,2);
+          label(d,'df-result-title',1035,374,'show() prints these rows',25,P.orange);
+          dfText(d,'df-result-text',925,415,['+-----+-----+','| meal|count|','+-----+-----+','|pizza|    3|','|salad|    1|','+-----+-----+'],24,30);
+        }
+        foot(d,s===5?'Captured result · Row order can vary · explain() prints a plan, while show() prints rows':'This separate example uses DataFrames · Named columns expose structure to Spark SQL');
+      }else if(s===2){
+        codeLine(d,'df-explain-call',225,'totals.explain(mode="formatted")');
+        box(d,'df-total-name',65,305,340,230,'totals',['The grouped DataFrame','Columns: meal and count'],P.blue);
+        box(d,'df-explain-method',470,305,340,230,'.explain(...)',['Print the physical plan','The operations Spark will use'],P.green);
+        box(d,'df-explain-mode',875,305,340,230,'mode="formatted"',['Plan outline','+ numbered node details'],P.orange);
+        foot(d,'formatted chooses the plan layout · It does not format the meal totals');
+      }else if(s===3){
+        codeLine(d,'df-explain-call',185,'totals.explain(mode="formatted")');
+        d.rect('df-outline',45,220,600,370,P.white,P.line,10,2);
+        d.rect('df-details',680,220,555,370,P.white,P.line,10,2);
+        d.text('df-outline-title',65,250,'Plan outline',26,P.blue,'start',650);
+        d.text('df-details-title',700,250,'Numbered details · excerpt',26,P.green,'start',650);
+        const lines=['== Physical Plan ==','AdaptiveSparkPlan (5)','+- HashAggregate (4)','   +- Exchange (3)','      +- HashAggregate (2)','         +- Scan ExistingRDD (1)'];
+        d.rect('df-local-highlight',57,408,576,30,P.blueLight,'none',4);
+        d.rect('df-final-highlight',57,344,576,30,P.greenLight,'none',4);
+        dfText(d,'df-outline-text',70,295,lines,23,32);
+        d.text('df-read-up',345,545,'Read the input-to-result path upward ↑',22,P.blue);
+        dfText(d,'df-local-details',700,300,['(2) HashAggregate','Functions [1]: [partial_count(1)]'],23,34);
+        d.text('df-local-meaning',700,375,'Count rows within each input partition',22,P.blue,'start');
+        dfText(d,'df-final-details',700,430,['(4) HashAggregate','Functions [1]: [count(1)]'],23,34);
+        d.text('df-final-meaning',700,505,'Combine the received partial counts',22,P.green,'start');
+        d.text('df-adaptive-meaning',700,558,'AdaptiveSparkPlan can revise the plan.',22,P.muted,'start');
+        foot(d,'Here (2) identifies operator 2 · It is not the partition count from the earlier RDD display');
+      }else if(s===4){
+        codeLine(d,'df-group-call',205,'totals = meals.groupBy("meal").count()');
+        const ops=[
+          ['(1) Scan',['Read the meal rows','pizza, pizza','salad, pizza'],P.blue],
+          ['(2) HashAggregate',['Count within inputs','pizza: 2','pizza: 1 · salad: 1'],P.blue],
+          ['(3) Exchange',['Shuffle by meal','pizza values: 2, 1','salad value: 1'],P.orange],
+          ['(4) HashAggregate',['Finish each count','pizza: 3','salad: 1'],P.green]
+        ];
+        ops.forEach(([title,lines,color],i)=>{
+          const x=50+i*305;
+          box(d,'df-op-'+i,x,280,260,270,title,lines,color);
+          if(i<ops.length-1)arrow(d,'df-flow-'+i,x+270,415,x+295,415,P.muted);
+        });
+        foot(d,'HashAggregate keeps counts by meal key · Exchange brings matching meal keys together');
+      }
     },{
-      idea:'Structured expressions expose information that Spark SQL can use when planning execution.',
+      idea:'Formatted explain separates the physical plan outline from operator details. show requests and displays the result rows.',
       builds:[
         'Define schema as the named columns and their types. The diagram shows all four requests from the same fixture. A DataFrame represents structured data, even when its contents are spread across workers.',
-        'Read groupBy meal followed by count. Relational operations act on tables, such as filtering rows, joining tables, and grouping values. Spark’s optimizer chooses an execution plan for supported expressions. Named columns and types help it reason about those operations. An arbitrary Python function can conceal these details. The diagram states a result, not a universal performance guarantee.',
-        'Return to the RDD trace. We used it to expose map, partial aggregation, shuffle, and reduction. For ordinary structured joins and aggregations, a DataFrame is often the appropriate starting API. Measure the actual workload and inspect its plan.'
-      ],question:'Why might Spark optimize a column expression more easily than an arbitrary Python function?',answer:'The column expression exposes relational structure and types. An arbitrary Python function can hide how it uses or transforms its inputs.'
-    },[refs.sql]);
+        'Read groupBy meal followed by count. This expression describes a table containing one count per meal. totals here is a DataFrame, while the earlier RDD program used totals for a Python dictionary. Spark SQL can plan supported table operations using their column names and types. This extra information does not guarantee that every DataFrame program runs faster.',
+        'Read the call in three parts. totals identifies the DataFrame whose plan we want to inspect. explain prints its physical execution plan, meaning the concrete operations Spark plans to use. The formatted mode divides that output into a tree outline and numbered operator details. It changes the presentation of the plan, not the meal totals. This call does not request the final count rows.',
+        'Show the actual outline captured with Spark 4.0.1 before show ran. The two detail blocks are excerpts from that same output. Their numbers connect them to the matching HashAggregate nodes. partial_count counts rows locally, while the upper count combines partial results.\n\nIn this display, parenthesized numbers identify operators. The earlier RDD dependency display uses parenthesized numbers for partition counts. AdaptiveSparkPlan means Spark can revise parts of this plan using information collected during execution. The full capture says isFinalPlan=false because the adaptive plan was not finalized when explain ran. Other detail fields are omitted here for readability.',
+        'An operator is one processing step in the physical plan. Read Scan ExistingRDD as reading the rows created by createDataFrame. HashAggregate keeps a count for each meal key using a hash-based grouping structure. The lower instance produces partial counts within input partitions.\n\nExchange redistributes those partial counts by meal key. The upper HashAggregate combines received counts, including pizza 2 plus 1. This count has the same local-combine, shuffle, and final-combine mechanism as the RDD example. Spark SQL chooses the physical operators for the structured expression.',
+        'show requests execution and prints a small table of result rows. The captured output contains pizza 3 and salad 1. Row order is unspecified without an ordering expression. Ask whether explain(mode="formatted") would instead print this table. It would print the plan outline and details. Return to the distinction between inspecting the computation and requesting its rows.'
+      ],question:'Which call displays the meal totals, and what does formatted change?',answer:'show() requests and displays the rows. formatted changes explain output to a physical plan outline and numbered operator details.',
+      context:'Actual output captured with PySpark 4.0.1, Python 3.12, and Java 17. Default adaptive execution was enabled and spark.sql.shuffle.partitions was 200. Those settings can vary. The numbered outline and selected detail lines are preserved from the capture, with other detail fields omitted.'
+    },[refs.sql,'https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.explain.html','lectures/lecture-13/spark_dataframe_plan.txt']);
 
   scene('ray-task-results','Ray task calls return result references',4,
     ['Define a remote task','Submit both orders','Read completed results','Merge counts explicitly'],[

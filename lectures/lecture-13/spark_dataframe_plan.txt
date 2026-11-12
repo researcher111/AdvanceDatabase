@@ -1,0 +1,35 @@
+== Physical Plan ==
+AdaptiveSparkPlan (5)
++- HashAggregate (4)
+   +- Exchange (3)
+      +- HashAggregate (2)
+         +- Scan ExistingRDD (1)
+
+
+(1) Scan ExistingRDD
+Output [1]: [meal#0]
+Arguments: [meal#0], MapPartitionsRDD[4] at applySchemaToPythonRDD at NativeMethodAccessorImpl.java:0, ExistingRDD, UnknownPartitioning(0)
+
+(2) HashAggregate
+Input [1]: [meal#0]
+Keys [1]: [meal#0]
+Functions [1]: [partial_count(1)]
+Aggregate Attributes [1]: [count#4L]
+Results [2]: [meal#0, count#5L]
+
+(3) Exchange
+Input [2]: [meal#0, count#5L]
+Arguments: hashpartitioning(meal#0, 200), ENSURE_REQUIREMENTS, [plan_id=11]
+
+(4) HashAggregate
+Input [2]: [meal#0, count#5L]
+Keys [1]: [meal#0]
+Functions [1]: [count(1)]
+Aggregate Attributes [1]: [count(1)#3L]
+Results [2]: [meal#0, count(1)#3L AS count#1L]
+
+(5) AdaptiveSparkPlan
+Output [2]: [meal#0, count#1L]
+Arguments: isFinalPlan=false
+
+
