@@ -332,6 +332,11 @@ counts = pairs.reduceByKey(lambda a, b: a + b)</code></pre>
 
 <p><strong>Line 31:</strong> <code>if args.plan:</code> tests the parsed flag. Only a true value enters the indented diagnostic print statement.</p>
 <p><strong>Line 32, inside out:</strong> <code>counts.toDebugString()</code> describes this RDD and its dependencies. It returns bytes. <code>.decode("utf-8")</code> converts those bytes into readable text, and <code>print(...)</code> displays it.</p>
+<p>The terminal shows a dependency tree. These are its first three lines from our recorded run, with source locations and empty storage markers omitted:</p>
+<pre class="terminal"><code>(2) PythonRDD[5]
+ |  MapPartitionsRDD[4]
+ |  ShuffledRDD[3]</code></pre>
+<p>The remaining dependency lines continue below this excerpt. <a href="#spark-plan-visual">Section 13 shows the full tree</a>. This print displays the plan. The <code>Totals:</code> line appears later, after <code>collect()</code> runs and line 36 prints the result.</p>
 <p>This diagnostic describes how the RDD depends on earlier RDDs. It does not request the meal totals. Exact names, identifiers, and source paths can vary. <a href="https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.RDD.toDebugString.html">Spark’s API reference</a> documents this output.</p>
 <p><strong>Line 34:</strong> the comment identifies the action and its destination. The result must be small enough to fit in the driver.</p>
 <p><strong>Predict before the reveal:</strong> which operation in line 35 requests Spark execution? Does sorting perform the distributed count?</p>
@@ -864,7 +869,7 @@ finally:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../slides/_shared/visuals.js"></script>
 <script src="../../slides/decks/spark-ray.js?v=full-spark-flow-20261112"></script>
-<script src="../../slides/decks/spark-program.js?v=partition-counts-20261112"></script>
+<script src="../../slides/decks/spark-program.js?v=terminal-output-20261112"></script>
 <script src="slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/paragraph-speech.js?v=spark-ray-speech-20261112"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>
