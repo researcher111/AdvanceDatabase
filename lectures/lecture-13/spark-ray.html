@@ -357,9 +357,21 @@ counts = pairs.reduceByKey(lambda a, b: a + b)</code></pre>
  +-(2) PairwiseRDD[2]
     |  PythonRDD[1]
     |  ParallelCollectionRDD[0]</code></pre>
-<p>Start with <code>ParallelCollectionRDD[0]</code>, which holds the input orders. The lower Python and pair RDDs prepare the partial counts before the shuffle. The upper RDDs combine received counts into the final totals.</p>
+<p>Start with <code>ParallelCollectionRDD[0]</code>, which holds the input orders. Follow the data through the lower <code>PythonRDD[1]</code>, across the shuffle, and into the upper <code>PythonRDD[5]</code>.</p>
+<p>A <strong>PythonRDD</strong> represents partitioned data produced by running Python functions. Several chained Python operations can share one node in this plan. One node can therefore cover several lines of our program. <a href="https://spark.apache.org/docs/latest/api/python/_modules/pyspark/core/rdd.html">Spark’s implementation</a> connects these operations.</p>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Python work before and after the shuffle; scroll horizontally if needed">
+<table>
+  <thead><tr><th>Plan node</th><th>Work in our lunch example</th><th>Follow the pizza counts</th></tr></thead>
+  <tbody>
+    <tr><td><code>PythonRDD[1]</code><br>Before the shuffle</td><td>Extract words with <code>flatMap</code>, create <code>(meal, 1)</code> pairs with <code>map</code>, and add matching counts within each input partition.</td><td>Input partition 0 combines <code>1 + 1 → 2</code>. Input partition 1 contributes another <code>1</code>.</td></tr>
+    <tr><td><code>ShuffledRDD[3]</code><br>The shuffle</td><td>Redistribute contributions so values with the same meal key reach the same result partition.</td><td>Bring pizza’s partial values <code>2</code> and <code>1</code> together.</td></tr>
+    <tr><td><code>PythonRDD[5]</code><br>After the shuffle</td><td>Combine the received partial counts into one final total for each meal.</td><td>Add <code>2 + 1 → 3</code>, producing <code>("pizza", 3)</code>.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The lower <code>PythonRDD[1]</code> runs the same Python operations on each input partition. Its work also prepares the contributions for redistribution. The upper <code>PythonRDD[5]</code> finishes the count after matching contributions meet. Salad has one value, so its final total stays <code>1</code>.</p>
 <p><code>ShuffledRDD[3]</code> marks the shuffle dependency. The indented branch beneath it identifies the earlier RDDs that supply its data. Follow that branch upward to connect local counting with the final addition.</p>
-<p>The printed partition count, such as <code>(2)</code>, describes partitions for that RDD. It does not count machines. RDD identifiers, file paths, and source line numbers identify plan objects and code locations. They do not measure elapsed time.</p>
+<p>The bracketed numbers <code>[1]</code> and <code>[5]</code> identify the two RDDs. The parenthesized <code>(2)</code> gives the partition count for that RDD. Neither notation counts Python processes. File paths and source line numbers identify code locations. They do not measure elapsed time.</p>
 <p><a href="spark_lunch_plan.txt" download>Download the recorded dependency display and totals</a>. Local file paths in that capture are shortened to <code>spark_lunch.py</code>. RDD identifiers, source locations, and displayed implementation details can vary across runs or Spark versions.</p>
 <p>Like <a href="../lecture-09/optimizer.html#query-contract">microdb’s query-operator tree</a>, this display connects a result to the inputs and operations it needs. Recall the query that selects student names where <code>gpa &gt; 35</code>:</p>
 <pre class="equation"><code>ProjectScan: keep name
@@ -368,9 +380,10 @@ SelectScan: keep rows with gpa &gt; 35
     ↑
 TableScan: read students</code></pre>
 <p>Read the data flow upward from the source in both diagrams. Microdb’s nodes represent query operators. Spark’s nodes describe RDD dependencies, including redistribution across a shuffle.</p>
-<p>Spark can run several Python functions together within a stage. Therefore, the printed display need not contain one RDD node for each Python line.</p>
+<p>Return to the two PythonRDD nodes: the lower node performs local Python work, and the upper node finishes the grouped count. The shuffle connects them.</p>
 <p><code>toDebugString()</code> describes RDD dependencies. It is not a SQL optimizer’s cost report or a runtime timing profile. Use measured task and stage statistics to investigate execution time.</p>
 <p><strong>Check:</strong> find the input, follow its data toward the result, and identify the shuffle boundary. The optional Lab 11 example below preserves a complete printed dependency display.</p>
+<div class="exercise learning-check"><span class="ex-label">Locate the final addition</span><p>Which PythonRDD combines pizza’s partial counts <code>2</code> and <code>1</code> into <code>3</code>?</p><details><summary>Check your explanation</summary><p><code>PythonRDD[5]</code>, above the shuffle. The lower <code>PythonRDD[1]</code> prepared partial counts within each input partition.</p></details></div>
 <div class="lecture-walkthrough" data-lecture-scene="spark-plan-visual"></div>
 
 <h2 id="spark-code-entry-cleanup" data-slide="14" data-scene="spark-code-entry-cleanup">14 · Follow the entry point and cleanup</h2>
@@ -869,7 +882,7 @@ finally:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../slides/_shared/visuals.js"></script>
 <script src="../../slides/decks/spark-ray.js?v=full-spark-flow-20261112"></script>
-<script src="../../slides/decks/spark-program.js?v=terminal-output-20261112"></script>
+<script src="../../slides/decks/spark-program.js?v=pythonrdd-context-20261112"></script>
 <script src="slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/paragraph-speech.js?v=spark-ray-speech-20261112"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>

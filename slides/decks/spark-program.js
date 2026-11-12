@@ -164,27 +164,31 @@
   // This scene is placed here so the code above introduces the diagnostic method first.
   const planCaptions=[
     'Both layouts connect a result to the inputs it needs. Read from the bottom input toward the top result.',
-    'This is the captured --plan output with source locations omitted. Start at ParallelCollectionRDD and follow its dependents upward.',
+    'PythonRDD marks work done by Python functions. Start at the bottom input and follow the dependencies upward.',
+    'PythonRDD[1] extracts words, creates (meal, 1) pairs, and adds matching counts within each input partition.',
     'ShuffledRDD marks the redistribution dependency. Python work before and after that boundary runs in separate stages here.',
+    'PythonRDD[5] adds the partial counts received after the shuffle. For pizza, 2 + 1 produces the final total 3.',
     'The (2) markers count partitions. Bracketed numbers identify RDDs. Neither is a machine count or an elapsed time.'
   ];
-  const planStates=['Compare with microdb','Read the printed dependencies','Locate the stage boundary','Interpret the labels'];
+  const planStates=['Compare with microdb','Read the printed dependencies','Trace PythonRDD[1] before the shuffle','Locate the stage boundary','Trace PythonRDD[5] after the shuffle','Interpret the labels'];
   const planTeaching={idea:'The printed RDD dependencies connect the source collection to its result, with a shuffle boundary separating stages.',
     question:'Does each Python transformation require its own printed RDD node or stage?',
     answer:'No. Spark can pipeline Python transformations. The ShuffledRDD dependency identifies the redistribution boundary in this example.',
     context:'Captured by running the unchanged spark_lunch.py --plan with PySpark 4.0.1, Python 3.12.14, and Java 17. The slide omits source locations and empty storage-level suffixes. Identifiers and implementation wrappers can change across runs or versions.',
     builds:[
       'Recall the microdb example selecting name from students where gpa > 35. ProjectScan wraps SelectScan over TableScan. Its next calls pull rows from child operators. The arrows here show data dependencies from input to result. Spark’s RDD layout also connects input to output, but tracks partitioned collections. This RDD display is not Spark SQL’s optimized relational plan.',
-      'Read the captured output from ParallelCollectionRDD[0] upward. It identifies the source created by parallelize. PythonRDD and PairwiseRDD wrappers represent Python processing and shuffle preparation. The printed tree places the result at the top. Source paths were omitted for readability. The reading links to the captured terminal text.',
+      'Read the captured output from ParallelCollectionRDD[0] upward. It identifies the source created by parallelize. A PythonRDD represents a partitioned collection produced by running Python functions. Several chained operations can share one PythonRDD node.\n\nThe printed tree places the result at the top. Source paths were omitted for readability. The reading links to the captured terminal text.',
+      'Find the lower PythonRDD[1]. Its Python work includes flatMap(split_order), map to create occurrence pairs, and local addition for reduceByKey. Input partition 0 combines pizza values 1 and 1 into 2. Input partition 1 contributes pizza 1 and salad 1.\n\nThe same Python operations run on each input partition. Spark also prepares these contributions for redistribution. The one node covers several operations, so its identifier does not name one source line.',
       'Find ShuffledRDD[3]. Work below this dependency includes word extraction, pairs, and local combination. Work above it finishes the per-key combination. Spark can pipeline several Python transformations, so printed wrappers do not map one-to-one to source lines. collect requests the job but is not another RDD node in this tree.',
+      'Find the upper PythonRDD[5]. The shuffle has brought matching meal contributions together. This Python work merges the received partial counts. Pizza values 2 and 1 become 3. Salad has a single value, so its result remains 1.\n\nAsk which PythonRDD combines the final pizza contributions. The answer is PythonRDD[5], above the shuffle. Both PythonRDD nodes are parts of the same requested count.',
       'The parenthesized 2 describes partitions. RDD numbers in square brackets identify objects in the recorded dependency graph. They are not durations or machine identifiers. toDebugString explains dependencies, not measured performance. Use execution measurements separately. Ask students to connect the boundary back to the pizza values 2 and 1.'
     ].map((note,i)=>planCaptions[i]+'\n\n'+note)};
   function planBox(d,key,x,y,w,title,detail,color=P.green){d.rect(key,x,y,w,75,P.white,color,8,2);d.text(key+'-title',x+w/2,y+25,title,25,color,'middle',650);d.text(key+'-detail',x+w/2,y+55,detail,22,P.ink);}
-  parts.push({id:'spark-plan-visual',title:'Read the plan across the shuffle',minutes:2,kind:'visual',clarityNative:true,steps:4,states:planStates,clarityCaptions:planCaptions,
-    sources:['lectures/lecture-13/spark-ray.html#spark-plan-visual','lectures/lecture-13/spark_lunch_plan.txt','lectures/lecture-09/optimizer.html#query-contract','https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.RDD.toDebugString.html'],
+  parts.push({id:'spark-plan-visual',title:'Read the plan across the shuffle',minutes:2,kind:'visual',clarityNative:true,steps:planStates.length,states:planStates,clarityCaptions:planCaptions,
+    sources:['lectures/lecture-13/spark-ray.html#spark-plan-visual','lectures/lecture-13/spark_lunch_plan.txt','lectures/lecture-09/optimizer.html#query-contract','https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.RDD.toDebugString.html','https://spark.apache.org/docs/latest/api/python/_modules/pyspark/core/rdd.html'],
     teaching:planTeaching,notes:[planTeaching.idea,...planTeaching.builds,'Ask: '+planTeaching.question,'Expected answer: '+planTeaching.answer,planTeaching.context].join('\n\n'),
     draw(d,s){
-      header(d,'Read the plan across the shuffle',planCaptions[s],planStates[s],s,4);
+      header(d,'Read the plan across the shuffle',planCaptions[s],planStates[s],s,planStates.length);
       if(s===0){
         d.text('micro-title',330,210,'microdb · local operator tree',28,P.blue);
         d.text('spark-title',950,210,'Spark · RDD dependencies',28,P.green);
@@ -203,16 +207,22 @@
         const lines=['(2) PythonRDD[5]',' |  MapPartitionsRDD[4]',' |  ShuffledRDD[3]',' +-(2) PairwiseRDD[2]','    |  PythonRDD[1]','    |  ParallelCollectionRDD[0]'];
         lines.forEach((line,i)=>{
           const y=292+i*47;
-          if(s===2&&i===2)d.rect('plan-highlight',57,y-19,596,38,P.orangeLight,'none',4);
+          const focus=s===2?4:s===3?2:s===4?0:-1;
+          if(i===focus)d.rect('plan-highlight',57,y-19,596,38,s===2?P.blueLight:s===3?P.orangeLight:P.greenLight,'none',4);
           d.add('plan-text-'+i,'text',{x:70,y,fill:P.ink,'font-size':25,style:'font-family:ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre','xml:space':'preserve','text-anchor':'start','dominant-baseline':'middle'},line);
         });
         d.text('plan-bottom-up',350,565,'Read the input-to-result path upward ↑',23,P.blue);
-        planBox(d,'plan-final',735,230,490,'Stage 1 · finish each key','Add pizza 2 + 1 → 3');
+        planBox(d,'plan-final',735,230,490,'PythonRDD[5] · finish each key','Add pizza 2 + 1 → 3');
         planBox(d,'plan-shuffle',735,355,490,'ShuffledRDD[3]','Redistribute contributions',P.orange);
-        planBox(d,'plan-input',735,510,490,'Stage 0 · process input partitions','flatMap → map → local addition',P.blue);
+        planBox(d,'plan-input',735,510,490,'PythonRDD[1] · count locally','flatMap → map → local addition',P.blue);
         d.arrow('plan-up0',980,500,980,440,P.orange,3);d.arrow('plan-up1',980,345,980,315,P.green,3);
-        if(s===2)d.line('stage-boundary',700,470,1240,470,P.orange,3,'8 6');
-        d.text('plan-foot',640,645,s===3?'(2) = partitions · [3] = one RDD identifier · IDs and wrappers can vary by run and Spark version':'PySpark 4.0.1 capture · collect() triggers execution but is not an RDD node in this dependency display',22,P.muted);
+        if(s===3)d.line('stage-boundary',700,470,1240,470,P.orange,3,'8 6');
+        const foot=s===2?'Stage 0 · Input 0: pizza 1 + 1 → 2 · Input 1: pizza 1 and salad 1':
+          s===3?'Stage 0: Python work before the shuffle · Stage 1: Python work after the shuffle':
+          s===4?'Stage 1 · Pizza: 2 + 1 → 3 · Salad: one value stays 1 · One final total per meal':
+          s===5?'(2) = partitions · [1] and [5] = RDD identifiers · IDs can vary by run and Spark version':
+          'Several Python operations can share one PythonRDD node · collect() requests execution';
+        d.text('plan-foot',640,645,foot,22,P.muted);
       }
     }});
 
