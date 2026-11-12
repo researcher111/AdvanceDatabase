@@ -300,8 +300,21 @@ counts = pairs.reduceByKey(lambda a, b: a + b)</code></pre>
 <p>The value <code>2</code> still represents two pizza requests. Two received partial values therefore represent three requests. Counting the number of partial values would lose one request.</p>
 <p>Salad has one contribution, <code>1</code>. There is no second salad value to add in this fixture, so its total remains <code>1</code>.</p>
 <div class="exercise learning-check"><span class="ex-label">Trace one combining call</span><p>Spark passes <code>a = 2</code> and <code>b = 1</code> for pizza. What should <code>lambda a, b: a + b</code> return?</p><details><summary>Check your explanation</summary><p>It returns <code>3</code>. The values represent three requests, even though this call receives only two partial counts.</p></details></div>
-<p><code>numPartitions=2</code> requests two result partitions. This setting differs from line 24’s input partition count. The variable <code>counts</code> names another RDD, not an already computed Python dictionary.</p>
-<p>Changing this setting to <code>numPartitions=4</code> changes how result keys are partitioned and how their tasks are scheduled. It does not create four meal totals. Some partitions can be empty, and this setting does not promise a global result order.</p>
+<p><strong>Two settings divide different collections:</strong> <code>numSlices</code> divides the original orders. <code>numPartitions</code> chooses how many partitions hold the grouped result after the shuffle.</p>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Input and result partition settings; scroll horizontally if needed">
+<table>
+  <thead><tr><th>Setting</th><th>Which data does it divide?</th><th>In this program</th></tr></thead>
+  <tbody>
+    <tr><td><code>sc.parallelize(orders, numSlices=2)</code></td><td>The original order strings in <code>source</code>.</td><td>Two input partitions, each holding one order string.</td></tr>
+    <tr><td><code>pairs.reduceByKey(add, numPartitions=2)</code></td><td>The grouped result pairs in <code>counts</code>.</td><td>Two result partitions holding the meal totals. Different meals can share a partition.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>We chose <code>2</code> for both settings, but they do not have to match. Spark can shuffle contributions from two input partitions into one result partition. <a href="https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.SparkContext.parallelize.html">Input partition setting</a> · <a href="#src-reduce">Result partition setting [4]</a>.</p>
+<p><strong>What if we change only <code>numPartitions</code> to <code>1</code>?</strong> The original orders still occupy two input partitions. After the shuffle and addition, one result partition contains both <code>("pizza", 3)</code> and <code>("salad", 1)</code>.</p>
+<p>This comparison changes where the results are placed. It preserves both meal totals. The downloadable program keeps its original <code>numPartitions=2</code> setting.</p>
+<p>Choosing <code>numPartitions=4</code> would instead request four result partitions. With only two meal keys, some partitions would be empty. The number of result partitions does not determine the number of meal totals or their global order.</p>
+<p>The variable <code>counts</code> names another RDD, not an already computed Python dictionary.</p>
 <p><code>reduceByKey</code> remains a transformation. It describes the grouped count without starting it. Spark performs that work when an action such as <code>collect()</code> requests the result.</p>
 <p>When an action requests the result, pizza’s partial values <code>2</code> and <code>1</code> become <code>3</code>. Salad’s value remains <code>1</code>. The full flow in section 6 shows where these contributions meet.</p>
 <div class="lecture-walkthrough" data-lecture-scene="spark-code-transformations"></div>
@@ -851,7 +864,7 @@ finally:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../slides/_shared/visuals.js"></script>
 <script src="../../slides/decks/spark-ray.js?v=full-spark-flow-20261112"></script>
-<script src="../../slides/decks/spark-program.js?v=line-by-line-20261112"></script>
+<script src="../../slides/decks/spark-program.js?v=partition-counts-20261112"></script>
 <script src="slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/paragraph-speech.js?v=spark-ray-speech-20261112"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>

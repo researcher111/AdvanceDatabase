@@ -87,7 +87,7 @@
       programSource:{path:sourcePath,firstLine:first,lines:program.slice(first-1,last),activeLines:steps.map(s=>s.active)},
       sources:['lectures/lecture-13/spark-ray.html#'+id,sourcePath,'https://spark.apache.org/docs/latest/rdd-programming-guide.html'],
       teaching,notes:[teaching.idea,...teaching.builds,'Ask: '+question,'Expected answer: '+answer,teaching.context].join('\n\n'),
-      draw(d,s){const step=steps[s];header(d,title,step.caption,step.state,s,steps.length);code(d,first,last,step.active);cards(d,step.boxes,step.links);d.text('program-foot',640,650,step.foot||'The highlighted line is part of the unchanged program · Follow the values below',22,P.muted);}});
+      draw(d,s){const step=steps[s];header(d,title,step.caption,step.state,s,steps.length);code(d,first,last,step.active);if(step.draw)step.draw(d);else cards(d,step.boxes,step.links);d.text('program-foot',640,650,step.foot||'The highlighted line is part of the unchanged program · Follow the values below',22,P.muted);}});
   }
 
   part('spark-code-imports','Read the program description and imports',1,6,1,[
@@ -127,7 +127,25 @@
     {state:'Line 29 · identify the reducer’s arguments',active:[29],caption:'reduceByKey calls add on two values for the same key. lambda a, b: a + b is an equivalent function.',boxes:[card('Key selects a group','pizza'),card('Function arguments','a and b are count values'),card('Equivalent functions','add','lambda a, b: a + b')],note:'lambda defines a short function. a and b name its two inputs. The expression after the colon gives its returned value. Passing add or the lambda supplies a function for Spark to call later. The reducer does not receive the word as a or b. It does not receive partition numbers or the entire group as a list. It receives two values from one key’s group, and returns their combined value. The optional corpus example writes the same addition as a lambda.'},
     {state:'Line 29 · combine within partition 0',links:[0,1],active:[29],caption:'For partition 0’s two pizza requests, Spark can call add(1, 1). The returned partial count is 2.',boxes:[card('Two values for pizza','a = 1, b = 1'),card('Reducer call','add(1, 1) → 2'),card('Partial pair','("pizza", 2)')],note:'Local addition can reduce transferred pairs. This partial pair still represents two requests. The original ones are represented by the value 2 and are not sent again as extra contributions. This is an explanatory grouping, not a promised scheduling order.'},
     {state:'Line 29 · combine after the shuffle',links:[0,1],active:[29],caption:'The shuffle brings pizza’s partial values 2 and 1 together. add(2, 1) returns the final count 3.',boxes:[card('Pizza contributions','Partition 0: 2','Partition 1: 1'),card('Reducer call','a = 2, b = 1','a + b = 3'),card('One final pair','("pizza", 3)')],note:'Both inputs to this invocation are count values for pizza. A previous invocation can supply one of those values. Spark manages the regrouping and calls the supplied function to combine values. Addition permits different combining orders with the same total.'},
-    {state:'Line 29 · preserve a single value',links:[0],active:[29],caption:'Salad has one value, so its result stays 1. numPartitions=2 requests output partitions, not two meal totals.',boxes:[card('Salad group','One contribution: 1'),card('Result','("salad", 1)'),card('Output partition count','Two requested partitions','Keys may share one partition')],note:'A group with one value needs no addition to preserve that value. numPartitions is separate from the number of unique words. The optional example starts with four input partitions. That does not mean four word totals. No action has requested these results yet.'}
+    {state:'Line 29 · preserve a single value',links:[0],active:[29],caption:'Salad has one value, so its result stays 1. numPartitions=2 requests output partitions, not two meal totals.',boxes:[card('Salad group','One contribution: 1'),card('Result','("salad", 1)'),card('Output partition count','Two requested partitions','Keys may share one partition')],note:'A group with one value needs no addition to preserve that value. numSlices=2 divides the original orders into two input partitions. numPartitions=2 chooses two partitions for the grouped result after the shuffle. These settings divide different collections. They do not have to match. Different keys can share a result partition. No action has requested these results yet.'},
+    {state:'Line 29 · compare two inputs with one output',active:[29],caption:'What if only numPartitions changes to 1? The two input partitions stay. One result partition holds both meal totals.',foot:'What-if comparison · Original program: numPartitions=2 · Hypothetical change: numPartitions=1',note:'Keep line 24 unchanged, so numSlices remains 2. Imagine changing only line 29 to numPartitions=1. Both input partitions send their contributions to the single result partition. The addition still produces pizza 3 and salad 1. One partition can hold several keys. Ask whether choosing one result partition changes the pizza total. It does not. The highlighted source still shows the original program. This diagram illustrates the proposed change, not its original execution.',draw(d){
+      [0,1].forEach(i=>{
+        const y=475+i*75;
+        d.rect('comparison-input-'+i,45,y,360,65,P.white,P.blue,8,2);
+        d.text('comparison-label-'+i,225,y+19,'Input partition '+i,23,P.blue,'middle',650);
+        d.text('comparison-record-'+i,225,y+46,i===0?'"Pizza, pizza!"':'"Salad pizza."',23,P.ink);
+      });
+      d.rect('comparison-shuffle',495,495,270,100,P.white,P.orange,8,2);
+      d.text('comparison-shuffle-title',630,527,'Shuffle + add',25,P.orange,'middle',650);
+      d.text('comparison-shuffle-key',630,565,'Group by meal',23,P.ink);
+      d.arrow('comparison-route-0',415,507,485,530,P.blue,3);
+      d.arrow('comparison-route-1',415,582,485,560,P.blue,3);
+      d.arrow('comparison-route-out',775,545,825,545,P.green,3);
+      d.rect('comparison-result',835,475,400,140,P.white,P.green,8,2);
+      d.text('comparison-result-title',1035,503,'Result partition 0',25,P.green,'middle',650);
+      d.text('comparison-pizza',1035,547,'("pizza", 3)',23,P.ink);
+      d.text('comparison-salad',1035,585,'("salad", 1)',23,P.ink);
+    }}
   ],'In lambda a, b: a + b, what are a and b when pizza’s partial counts are 2 and 1?','They are the numeric values 2 and 1 for the same pizza key. The function returns 3. It does not count the number of pairs.');
 
   part('spark-code-results','Inspect the plan and collect the result',31,36,2,[
