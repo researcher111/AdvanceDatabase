@@ -41,6 +41,24 @@
   function foot(d,text){label(d,'body-foot',640,638,text,23,P.muted);}
   function order(d,key,x,y,title,text){box(d,key,x,y,305,125,title,[text],P.blue,false);}
   function arrow(d,key,x1,y1,x2,y2,color=P.green){d.arrow(key,x1,y1,x2,y2,color,3);}
+  // Python stays editable SVG text. Preserve indentation and highlight the current operation.
+  function python(d,title,lines,active=[]){
+    d.rect('python-panel',45,190,760,420,P.white,P.line,10,2);
+    d.text('python-title',65,219,title,22,P.muted,'start',650);
+    lines.forEach((line,i)=>{
+      const y=258+i*30;
+      if(active.includes(i))d.rect('python-highlight-'+i,57,y-14,736,28,P.orangeLight,'none',4);
+      d.add('python-line-'+i,'text',{x:68,y,fill:P.ink,'font-size':24,style:'font-family:ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre','xml:space':'preserve','text-anchor':'start','dominant-baseline':'middle'},line);
+    });
+  }
+  function trace(d,key,y,title,lines=[],color=P.green){
+    d.rect(key,840,y,390,55+lines.length*30,P.white,color,10,2);
+    label(d,key+'-title',1035,y+27,title,25,color);
+    lines.forEach((line,i)=>label(d,key+'-line-'+i,1035,y+64+i*30,line,23));
+  }
+  function codeLine(d,key,y,text){
+    d.add(key,'text',{x:640,y,fill:P.ink,'font-size':24,style:'font-family:ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre','xml:space':'preserve','text-anchor':'middle','dominant-baseline':'middle'},text);
+  }
   function scene(id,title,minutes,states,captions,draw,teaching,sources=[]){
     const builds=teaching.builds.map((cue,i)=>captions[i]+'\n\n'+cue);
     const sc={id,title,minutes,kind:'visual',steps:states.length,states,clarityNative:true,clarityCaptions:captions,
@@ -120,22 +138,36 @@
       'A transformation describes a new RDD without changing its input. Dependencies record which earlier data each operation needs.',
       'collect() is an action. It requests the result and starts the required computation.'
     ],(d,s)=>{
-      const xs=[65,365,665,965],names=['Input RDD','flatMap','map','reduceByKey'];
-      const lines=[['Two order records'],['Extract words'],['Attach count 1'],['Add matching keys']];
-      const visible=s?4:1;
-      for(let i=0;i<visible;i++){
-        box(d,'op'+i,xs[i],300,250,145,names[i],lines[i],i===3?P.orange:P.green,s===2);
-        if(i)arrow(d,'dep'+i,xs[i]-40,370,xs[i]-10,370,P.muted);
+      if(s===0){
+        python(d,'Python · create the input RDD',[
+          'from pyspark import SparkContext','',
+          'sc = SparkContext(',
+          '    master="local[2]", appName="Lunch counts")',
+          'orders = ["Pizza, pizza!", "Salad pizza."]','',
+          'source = sc.parallelize(orders, numSlices=2)'
+        ],[6]);
+        trace(d,'input0',240,'Input partition 0',['“Pizza, pizza!”'],P.blue);
+        trace(d,'input1',410,'Input partition 1',['“Salad pizza.”'],P.blue);
+        foot(d,'local[2]: two local execution threads · numSlices=2: two input partitions');
+      }else{
+        const lines=['import re','from operator import add','def split_order(order):',
+          '    return re.findall(r"[a-z]+", order.lower())','',
+          'meals = source.flatMap(split_order)',
+          'pairs = meals.map(lambda meal: (meal, 1))',
+          'counts = pairs.reduceByKey(add, numPartitions=2)'];
+        if(s===2)lines.push('','totals = dict(sorted(counts.collect()))');
+        python(d,s===1?'Python · describe the count':'Python · request the result',lines,s===1?[5,6,7]:[9]);
+        trace(d,'plan',210,'Recorded plan',['source → meals → pairs','→ counts'],P.blue);
+        arrow(d,'action',1035,340,1035,385,s===1?P.muted:P.orange);
+        trace(d,'plan-state',400,s===1?'No action yet':'collect() starts work',s===1?['No totals computed']:['pizza: 3','salad: 1'],s===1?P.muted:P.orange);
+        foot(d,'split_order extracts lowercase words · add sums two values · An action requests the result');
       }
-      if(s>=1)label(d,'plan-state',640,510,s===1?'Dependencies recorded · no result requested':'counts.collect() → request execution',30,s===1?P.muted:P.orange);
-      if(s===2)label(d,'action-result',640,570,'Result: [(pizza, 3), (salad, 1)]',28,P.green);
-      foot(d,'A dependency says which earlier data an operation needs');
     },{
       idea:'Spark records transformations and executes the required plan when an action requests results.',
       builds:[
-        'Expand RDD and identify its two example partitions. An RDD is a logical collection, not one large Python list held by the driver. Input reading has its own API details; focus on when the transformations run.',
-        'Follow the chain from orders to words, pairs, and grouped counts. flatMap extracts individual words, map attaches a count, and reduceByKey adds matching keys. Each box describes a new collection. The arrows record which earlier collection each step needs. Lazy evaluation means these transformations wait until an action needs their results. Ask whether writing the expressions has computed the totals.',
-        'Reveal collect. Define an action as a request that starts the computation needed for its result. Spark uses the recorded dependencies to schedule that work. The printed order of the two final pairs is not a correctness guarantee.'
+        'Expand RDD and identify its two example partitions. SparkContext connects this driver to Spark. local[2] requests two local execution threads, while numSlices=2 splits the list into two input partitions. Those settings describe different things. An RDD is a logical collection, not one large Python list held by the driver. These excerpts share variables across slides. The reading provides the complete script, including sc.stop() cleanup.',
+        'Read split_order first. re.findall extracts lowercase letter sequences, preserving repeated meal names. The imported add function sums two values. Follow the assignments from source to meals, pairs, and counts. A lambda is a short Python function. Here it returns one meal and its count of 1. flatMap extracts words, map attaches counts, and reduceByKey adds matching keys. Lazy evaluation means these transformations wait until an action needs their results. Ask whether writing these expressions has computed the totals.',
+        'Reveal collect. An action starts the computation needed for its result. Spark uses the recorded dependencies to schedule that work. collect does not promise key order. sorted orders the collected pairs for display, and dict turns those pairs into a dictionary. The counts establish correctness.'
       ],question:'Is reduceByKey an action because its name contains “reduce”?',answer:'No. reduceByKey defines another RDD. An action such as collect requests its result.'
     },[refs.spark]);
 
@@ -145,15 +177,15 @@
       'flatMap extracts words from each record and places those words in the output collection.',
       'map converts each word to (word, 1). Both pizza requests in order 0 remain present.'
     ],(d,s)=>{
-      const names=['Partition 0','Partition 1'];
-      const inputs=['“Pizza, pizza!”','“Salad pizza.”'];
-      for(let i=0;i<2;i++){
-        const y=260+i*175;
-        box(d,'input'+i,65,y,320,130,names[i],[inputs[i]],P.blue,false);
-        if(s>=1){arrow(d,'words-arrow'+i,405,y+65,505,y+65);box(d,'words'+i,525,y,290,130,'flatMap',i?['salad, pizza']:['pizza, pizza']);}
-        if(s>=2){arrow(d,'pairs-arrow'+i,835,y+65,905,y+65,P.orange);box(d,'pairs'+i,925,y,290,130,'map',i?['(salad, 1)','(pizza, 1)']:['(pizza, 1)','(pizza, 1)'],P.orange);}
-      }
-      foot(d,'Normalization: lowercase letters · punctuation separates words');
+      python(d,'Python · one record → words → pairs',[
+        'def split_order(order):',
+        '    return re.findall(r"[a-z]+", order.lower())','',
+        'meals = source.flatMap(split_order)','',
+        'pairs = meals.map(lambda meal: (meal, 1))'
+      ],s===0?[]:s===1?[0,1,3]:[5]);
+      trace(d,'p0',230,'Partition 0',s===0?['“Pizza, pizza!”']:s===1?['pizza, pizza']:['(pizza, 1)','(pizza, 1)'],P.blue);
+      trace(d,'p1',430,'Partition 1',s===0?['“Salad pizza.”']:s===1?['salad, pizza']:['(salad, 1)','(pizza, 1)'],P.green);
+      foot(d,s===2?'lambda meal: (meal, 1) is a function that returns one pair per word':'re.findall extracts lowercase letter sequences · Repeated words remain present');
     },{
       idea:'flatMap changes the number of elements, while map applies one function to each element.',
       builds:[
@@ -169,11 +201,12 @@
       'Partition 0 produces (pizza, 2). Partition 1 produces (salad, 1) and (pizza, 1).',
       'Three partial-count pairs represent four requests. Add their values, not their number of pairs.'
     ],(d,s)=>{
+      codeLine(d,'combine-code',205,'counts = pairs.reduceByKey(add, numPartitions=2)');
       box(d,'p0',70,255,480,190,'Input partition 0',s?['Local sum','(pizza, 2)']:['(pizza, 1)','(pizza, 1)'],P.blue);
       box(d,'p1',730,255,480,190,'Input partition 1',s?['(salad, 1)','(pizza, 1)']:['(salad, 1)','(pizza, 1)'],P.green);
       if(s>=1){label(d,'pair-count',640,505,'Pairs sent: 3',30,P.orange);}
       if(s>=2){label(d,'weight',640,566,'Requests represented: 2 + 1 + 1 = 4',34,P.ink);}
-      foot(d,'Addition permits partial sums · Other operations need a valid combining rule');
+      foot(d,'add comes from operator · Spark uses it for local sums and final sums');
     },{
       idea:'A valid local combine reduces transfer without losing the contributions represented by the values.',
       builds:[
@@ -189,6 +222,7 @@
       'The shuffle sends every contribution for pizza to its destination, including the partial value 2.',
       'Stage 1 combines the received values: pizza gets [2, 1], while salad gets [1].'
     ],(d,s)=>{
+      codeLine(d,'shuffle-code',184,'pairs.reduceByKey(add, numPartitions=2).collect()');
       d.rect('stage0',50,220,450,365,P.white,P.line,12,2);
       d.rect('stage1',780,220,450,365,P.white,P.line,12,2);
       label(d,'stage0-title',275,255,'Stage 0 · input tasks',28,P.blue);
@@ -257,17 +291,18 @@
       'The first action computes and saves needed partitions. Later actions can reuse those saved values.',
       'If a cached partition is lost, Spark can recompute it from available inputs and recorded dependencies.'
     ],(d,s)=>{
-      box(d,'source',65,330,285,160,'Available inputs',['Saved order records'],P.blue,false);
-      if(s>=1)arrow(d,'compute',370,405,470,405,s===2?P.orange:P.green);
-      box(d,'cache',490,285,300,250,s===0?'RDD marked for cache':'Cached RDD',s===0?['P0: not stored','P1: not stored']:s===1?['P0: computed + saved','P1: computed + saved']:['P0: lost → rebuild','P1: still available'],s===2?P.orange:P.green,s!==0);
-      if(s>=1){
-        arrow(d,'reuse',810,405,900,405);
-        box(d,'action',920,330,295,160,'Later action',['Read saved values'],P.blue);
-        label(d,'first-action',640,245,s===1?'First action computes; a later action reuses':'Rebuild missing P0; reuse available P1',25,s===2?P.orange:P.green);
-      }
-      if(s===0)label(d,'cache-mark',640,575,'cache() records reuse intent. No action has requested values yet.',26,P.muted);
-      if(s===2)label(d,'lineage',640,575,'Lineage = the recorded operations and inputs needed to rebuild data',25,P.orange);
-      foot(d,'Reuse costs memory · Recomputing requires accessible inputs and repeatable transformations');
+      python(d,'Python · reuse the meals RDD',[
+        'meals.cache()','',
+        '# First action computes and stores meals.',
+        'requests = meals.count()','',
+        '# Later action can read cached partitions.',
+        'sample = meals.take(2)'
+      ],s===0?[0]:s===1?[3,6]:[6]);
+      trace(d,'inputs',210,'Available inputs',['source → split_order'],P.blue);
+      arrow(d,'compute',1035,315,1035,350,s===2?P.orange:P.green);
+      trace(d,'cache',365,s===0?'Marked for reuse':'Cached meals',s===0?['P0: not stored','P1: not stored']:s===1?['P0: pizza, pizza','P1: salad, pizza']:['P0: lost → recompute','P1: still available'],s===2?P.orange:P.green);
+      if(s>=1)label(d,'sample',1035,560,s===1?'count(): 4 · take(2): two pizzas':'Rebuild P0 for take(2)',22,P.green);
+      foot(d,s===2?'Lineage records how to rebuild data · Inputs must remain accessible':'cache() marks reuse · count() counts elements · take(2) returns the first two');
     },{
       idea:'Caching reuses computed data, while lineage describes how lost data can be recomputed.',
       builds:[
@@ -306,10 +341,21 @@
       'A grouping expression describes a table operation. Spark SQL can choose how to execute that operation.',
       'The RDD example exposes partitions and combining. Choose the programming interface that fits the actual computation.'
     ],(d,s)=>{
-      box(d,'rows',65,275,325,270,'DataFrame',['meal: string','pizza','pizza','salad','pizza'],P.blue);
-      if(s>=1){arrow(d,'plan-arrow',410,380,500,380);box(d,'plan',520,275,335,210,'Relational operation',['groupBy("meal")','.count()'],P.green);}
-      if(s>=2){arrow(d,'output-arrow',875,380,925,380);box(d,'out',945,275,270,210,'Result',['pizza: 3','salad: 1'],P.orange);}
-      foot(d,'RDD: functions over elements · DataFrame: named columns and table operations');
+      python(d,'Python · a separate DataFrame example',[
+        'from pyspark.sql import SparkSession',
+        'spark = (SparkSession.builder.master("local[2]")',
+        '         .appName("Lunch table").getOrCreate())',
+        'meals = spark.createDataFrame(',
+        '    [("pizza",), ("pizza",),',
+        '     ("salad",), ("pizza",)], ["meal"])','',
+        'totals = meals.groupBy("meal").count()',
+        'totals.explain(mode="formatted")',
+        'totals.show()'
+      ],s===0?[3,4,5]:s===1?[7,8]:[9]);
+      trace(d,'rows',210,'Column: meal (string)',['pizza, pizza, salad, pizza'],P.blue);
+      if(s>=1){arrow(d,'group',1035,315,1035,350);trace(d,'plan',360,'Group matching meals',['Count each group'],P.green);}
+      if(s===2)trace(d,'result',500,'show() requests the result',['pizza: 3 · salad: 1'],P.orange);
+      foot(d,'explain() displays the plan · show() displays rows · This meals variable is a DataFrame');
     },{
       idea:'Structured expressions expose information that Spark SQL can use when planning execution.',
       builds:[
@@ -323,26 +369,50 @@
     ['Define a remote task','Submit both orders','Read completed results','Merge counts explicitly'],[
       'A Ray task is a function call scheduled by the runtime. Each count_order call handles one order.',
       '.remote() submits work and returns an ObjectRef, which identifies a result that may not be ready.',
-      'ray.get([a, b]) waits for both results and returns them in the order of those references.',
+      'ray.get(refs) waits for both results and returns them in the order of those references.',
       'Our driver adds matching dictionary counts. Ray Core does not automatically group these meal keys.'
     ],(d,s)=>{
-      box(d,'call0',65,265,410,130,'count_order(order0)',['“Pizza, pizza!”'],P.blue);
-      box(d,'call1',65,445,410,130,'count_order(order1)',['“Salad pizza.”'],P.blue);
-      if(s>=1){
-        arrow(d,'ref0',495,330,565,330);arrow(d,'ref1',495,510,565,510);
-        box(d,'result0',585,265,300,130,s>=2?'Result a':'ObjectRef a',s>=2?['{pizza: 2}']:['Pending or ready']);
-        box(d,'result1',585,445,300,130,s>=2?'Result b':'ObjectRef b',s>=2?['{salad: 1, pizza: 1}']:['Pending or ready']);
+      if(s===0){
+        python(d,'Python · define the task function',[
+          'import re','import ray','',
+          '@ray.remote','def count_order(order):',
+          '    counts = {}',
+          '    words = re.findall(r"[a-z]+", order.lower())',
+          '    for meal in words:',
+          '        counts[meal] = counts.get(meal, 0) + 1',
+          '    return counts'
+        ],[3,4,8,9]);
+        trace(d,'input',235,'One order',['“Pizza, pizza!”'],P.blue);
+        arrow(d,'call',1035,340,1035,395);
+        trace(d,'output',410,'Function result',['{"pizza": 2}'],P.green);
+        foot(d,'@ray.remote enables remote submission · counts.get(meal, 0) supplies zero for a new meal');
+      }else if(s<3){
+        const lines=['ray.init(num_cpus=2, include_dashboard=False)',
+          'orders = ["Pizza, pizza!", "Salad pizza."]','',
+          'refs = []','for order in orders:',
+          '    refs.append(count_order.remote(order))'];
+        if(s===2)lines.push('','partials = ray.get(refs)');
+        python(d,s===1?'Python · submit both orders':'Python · wait for the dictionaries',lines,s===1?[3,4,5]:[7]);
+        trace(d,'result0',245,s===1?'refs[0]':'partials[0]',s===1?['ObjectRef: pending or ready']:['{"pizza": 2}'],P.blue);
+        trace(d,'result1',425,s===1?'refs[1]':'partials[1]',s===1?['ObjectRef: pending or ready']:['{"salad": 1, "pizza": 1}'],P.green);
+        foot(d,s===1?'Submit first · Each .remote() returns a reference, without waiting for the count':'The returned list follows reference order · It does not follow completion order');
+      }else{
+        python(d,'Python · merge inside the driver',[
+          'totals = {}','for partial in partials:',
+          '    for meal, count in partial.items():',
+          '        totals[meal] = (',
+          '            totals.get(meal, 0) + count)',
+          'print(dict(sorted(totals.items())))'
+        ],[1,2,3,4]);
+        trace(d,'partials',205,'Task dictionaries',['pizza: 2','salad: 1, pizza: 1'],P.blue);
+        arrow(d,'merge',1035,340,1035,390,P.orange);
+        trace(d,'totals',405,'Driver totals',['pizza: 2 + 1 = 3','salad: 1'],P.orange);
+        foot(d,'Add values for matching keys · An ordinary dictionary update would replace a value');
       }
-      if(s>=3){
-        arrow(d,'merge0',895,345,940,385,P.orange);arrow(d,'merge1',895,510,940,470,P.orange);
-        box(d,'merge',950,345,265,165,'Driver merge',['pizza: 3','salad: 1'],P.orange);
-      }
-      if(s>=1)label(d,'submit-a',640,599,'a = count_order.remote(order0)',23,P.muted);
-      foot(d,s>=1?'b = count_order.remote(order1)':'@ray.remote marks count_order as a remotely scheduled function');
     },{
       idea:'Ray schedules function calls and tracks their results, while this program explicitly combines the returned counts.',
       builds:[
-        'Move from Spark collections to Ray Core function calls. The reading supplies a runnable count_order function. It returns a dictionary of local counts without changing shared state. The decorator makes remote submission available.',
+        'Move from Spark collections to Ray Core function calls. Read the visible count_order definition before submitting a call. A decorator modifies the function defined immediately below it. The ray.remote decorator makes remote submission available. words holds the lowercase meal names. counts.get returns zero when the meal has no entry yet. The function returns local counts without changing shared state. The reading provides the complete script with cleanup in a finally block.',
         'Submit both calls before requesting their values. Define ObjectRef as a handle to a result. Receiving the reference does not mean the computation has finished. Ray schedules tasks subject to declared resources and available capacity.',
         'Wait with ray.get on the list of references. The returned list follows the reference order, even if tasks finish in the opposite order. This example gathers two small dictionaries. Gathering a large output at one driver can become a bottleneck.',
         'Add counts with the same meal name in the driver. Do not use ordinary dictionary update to combine repeated keys, because it replaces values. Use explicit addition or Counter.update. Ray Core has no automatic word-count shuffle in this program.'
@@ -355,18 +425,27 @@
       'Submitting both calls first lets the runtime overlap them when resources are available.',
       'Concurrency means work can overlap in time. This submission order permits overlap but does not guarantee a speedup for tiny tasks.'
     ],(d,s)=>{
-      const x=270,unit=260;
-      label(d,'wait-label',135,300,'Wait in loop',25);
-      box(d,'serial0',x,255,unit,100,'Task A',[],P.orange);
-      box(d,'serial1',x+unit+40,255,unit,100,'Task B',[],P.orange,s===0);
-      arrow(d,'serial-order',x+unit+8,305,x+unit+30,305,P.orange);
-      label(d,'submit-label',135,480,'Submit first',25);
-      if(s>=1){
-        box(d,'parallel0',x,420,unit,80,'Task A',[],P.green);
-        box(d,'parallel1',x,515,unit,80,'Task B',[],P.blue);
-        label(d,'wait-once',880,500,'ray.get([a, b])',31,P.green);
+      python(d,s===0?'Python · wait inside the loop':'Python · wait after the loop',s===0?[
+        'partials = []','for order in orders:',
+        '    ref = count_order.remote(order)',
+        '    partials.append(ray.get(ref))'
+      ]:[
+        'refs = []','for order in orders:',
+        '    refs.append(count_order.remote(order))','',
+        'partials = ray.get(refs)'
+      ],s===0?[3]:s===1?[0,1,2]:[4]);
+      label(d,'time',1035,235,'Time →',25,P.muted);
+      if(s===0){
+        d.box('serial0',850,300,165,70,'Task 0',P.orangeLight,P.orange,25);
+        arrow(d,'serial-order',1025,335,1040,335,P.orange);
+        d.box('serial1',1050,300,165,70,'Task 1',P.orangeLight,P.orange,25);
+        trace(d,'waiting',450,'Driver waits twice',['Submit 0 → get 0','Submit 1 → get 1'],P.orange);
+      }else{
+        d.box('parallel0',850,300,210,70,'Task 0',P.greenLight,P.green,25);
+        d.box('parallel1',850,395,210,70,'Task 1',P.blueLight,P.blue,25);
+        label(d,'wait',1035,535,'One wait after both submissions',23,P.green);
       }
-      foot(d,s===2?'Schematic schedules · Actual overlap depends on resources and task duration':'First submit the independent tasks. Then wait for their results.');
+      foot(d,s===2?'Schematic schedules · Available resources permit overlap but do not guarantee speedup':'Both versions use the same count_order function · Ray is already initialized');
     },{
       idea:'Launching independent tasks before waiting removes an unnecessary serial dependency in the driver.',
       builds:[
@@ -382,22 +461,25 @@
       'Pass the reference directly as an argument, rather than inside a list or dictionary. Ray waits for its value before running that task.',
       'Ray replaces the direct argument’s reference with its completed value. The consumer receives the dictionary, and the driver can await its final result.'
     ],(d,s)=>{
-      box(d,'producer',65,325,310,160,'count_order',['Produces local counts'],P.blue);
+      const lines=['@ray.remote','def summarize(partial):',
+        '    return sum(partial.values())','',
+        'first_ref = count_order.remote("Pizza, pizza!")'];
+      if(s>=1)lines.push('second_ref = summarize.remote(first_ref)');
+      if(s===2)lines.push('print(ray.get(second_ref))');
+      python(d,'Python · one result becomes another task’s input',lines,s===0?[4]:s===1?[5]:[6]);
+      trace(d,'producer',205,'Producer: count_order',['first_ref identifies its result'],P.blue);
       if(s>=1){
-        arrow(d,'a-ref',395,405,480,405,P.blue);
-        box(d,'ref',500,325,280,160,s===2?'Argument value':'ObjectRef a',s===2?['{pizza: 2}']:['Identifies a result'],P.orange);
-        arrow(d,'consumer-input',800,405,875,405,P.orange);
-        box(d,'consumer',895,325,320,160,'summarize',s===2?['Receives {pizza: 2}']:['Waits for count value'],P.green);
+        arrow(d,'dependency',1035,315,1035,355,P.orange);
+        trace(d,'consumer',370,'Consumer: summarize',s===1?['Waits for the dictionary']:['Receives {"pizza": 2}'],P.green);
       }
-      if(s>=1)label(d,'chain',640,550,'b = summarize.remote(a)',29,P.green);
-      if(s>=2)label(d,'final-get',640,595,'ray.get(b)',27,P.green);
-      foot(d,s===0?'The consumer is the task that needs the producer’s value':'Top-level means a direct argument: summarize.remote(a), not summarize.remote([a])');
+      if(s===2)trace(d,'summary',510,'Final result',['sum([2]) = 2'],P.orange);
+      foot(d,'Pass first_ref directly · Ray supplies the dictionary before summarize runs');
     },{
       idea:'Task-result references connect producers and consumers without requiring an intermediate driver wait.',
       builds:[
         'Use a separate dependency example after the main driver-merge program. A producer creates a value, and a consumer needs that value. The producer returns a count dictionary. The driver receives its reference while the task may still be running.',
-        'Pass a directly to summarize.remote(a). This is a top-level argument: the reference is not inside another list or dictionary. The consumer must wait until the producer result is available. The driver can submit the consumer without first calling ray.get(a).',
-        'Resolve means replace the direct reference argument with its completed value. The summarize function receives the dictionary {pizza: 2}, not the pending reference. The driver can wait only on b for the final result. Passing [a] instead would give the function a list containing a reference. That nested reference is not automatically replaced with its value.'
+        'Read summarize: it sums the values in one count dictionary. Pass first_ref directly to summarize.remote(first_ref). This is a top-level argument: the reference is not inside another list or dictionary. The consumer waits until the producer result is available. The driver can submit the consumer without first calling ray.get(first_ref).',
+        'Resolve means replace the direct reference argument with its completed value. summarize receives the dictionary {pizza: 2}, not the pending reference. It returns 2. The driver waits on second_ref for that final result. Passing [first_ref] instead would give the function a list containing a reference. That nested reference is not automatically replaced with its value.'
       ],question:'Can the consumer run before the value it needs is available?',answer:'No. A top-level ObjectRef argument makes that result a scheduling dependency. The runtime resolves it before the function executes.'
     },[refs.objects]);
 
@@ -407,43 +489,73 @@
       'Ray’s object store holds values for tasks to retrieve. ray.put(menu) stores a value there and returns a reusable reference.',
       'Pass menu_ref to each task. Reusing a reference avoids repeatedly submitting the same large value.'
     ],(d,s)=>{
-      box(d,'menu',65,330,320,170,'Shared menu',['Read-only input'],P.orange);
-      if(s>=1){arrow(d,'put',405,415,475,415,P.orange);box(d,'store',495,330,290,170,'Object store',['menu_ref'],P.blue);}
-      if(s>=2){
-        arrow(d,'to-a',805,385,895,320,P.blue);arrow(d,'to-b',805,445,895,520,P.blue);
-        box(d,'task0',915,250,300,130,'Check order 0',['Receives menu value'],P.green);
-        box(d,'task1',915,450,300,130,'Check order 1',['Receives menu value'],P.green);
+      const lines=['@ray.remote','def check_order(order, menu):',
+        '    return all(meal in menu',
+        '               for meal in split_order(order))','',
+        'menu = {"pizza", "salad"}'];
+      if(s>=1)lines.push('menu_ref = ray.put(menu)');
+      if(s===2)lines.push(
+        'first_ref = check_order.remote(',
+        '    "Pizza, pizza!", menu_ref)',
+        'second_ref = check_order.remote(',
+        '    "Salad pizza.", menu_ref)',
+        'print(ray.get([first_ref, second_ref]))');
+      python(d,'Python · reuse split_order and an initialized Ray session',lines,s===0?[0,1,2,3,5]:s===1?[6]:[7,8,9,10]);
+      trace(d,'menu',205,s===0?'Menu value':'Object store: menu_ref',['{"pizza", "salad"}'],P.orange);
+      if(s===2){
+        arrow(d,'to-a',950,315,950,365,P.blue);
+        d.line('to-b-top',1230,257,1250,257,P.blue,3);
+        d.line('to-b-side',1250,257,1250,572,P.blue,3);
+        arrow(d,'to-b',1250,572,1234,572,P.blue);
+        trace(d,'check0',380,'Check order 0',['Receives menu → True'],P.green);
+        trace(d,'check1',520,'Check order 1',['Receives menu → True'],P.green);
       }
-      foot(d,'Data may still move between machines · A reference does not create shared editable data');
+      foot(d,'Tiny menu demonstrates the calls · The benefit concerns larger inputs · Data may still move');
     },{
       idea:'A reusable object reference lets several tasks depend on one submitted read-only input.',
       builds:[
-        'Extend the lunch application to validate orders against a larger menu. The large shared object is hypothetical. Two short strings do not need this optimization. Identify which input is reused across tasks before choosing an object-store strategy.',
+        'Extend the lunch application to validate orders against a larger menu. The visible two-meal menu demonstrates the calls. A large shared menu is hypothetical. check_order reuses split_order to extract meal names. all returns True only when every extracted meal belongs to the menu. These short inputs do not need this optimization. Identify the reused input before choosing an object-store strategy.',
         'Call ray.put once and keep the returned ObjectRef. Ray places the object in its object store. This avoids repeatedly passing the same large Python value by value to many task submissions.',
         'Pass menu_ref as a direct argument. Tasks receive the object value after Ray resolves the reference. Copies may be transferred to other machines. Reconstructing Python values from transferred bytes also costs work. Stored objects are immutable: changing a local object does not update the stored value for other tasks. The reference does not create a shared editable dictionary.'
       ],question:'Does ray.put guarantee that no data crosses the network?',answer:'No. Ray may transfer the object to nodes that need it. Reusing its reference avoids repeated submissions of the same value.'
     },[refs.objects]);
 
   scene('ray-stateful-actor','An actor keeps state between calls',4,
-    ['Create a remote object','Apply one method call','Apply the next call'],[
+    ['Define the actor class','Create an actor and call its method','Apply the next call'],[
       'An actor is a Python object hosted by a worker. Its state is data, such as this counter, retained between method calls.',
       'This synchronous actor finishes one method before starting the next. The first update adds two pizza requests.',
       'The next update sees the changed state and adds one pizza and one salad.'
     ],(d,s)=>{
-      box(d,'caller',65,300,330,210,'One caller',['add({pizza: 2})','add({pizza: 1, salad: 1})'],P.blue,false);
-      arrow(d,'actor-call',415,405,540,405,P.blue);
-      box(d,'actor',560,250,380,310,'MealCounter actor',[
-        'State kept between calls',
-        s===0?'pizza: 0':s===1?'pizza: 2':'pizza: 3',
-        s<2?'salad: 0':'salad: 1'
-      ],P.green);
-      if(s>=1)box(d,'serial',1010,330,205,150,'Methods',['One at a time'],P.orange);
-      foot(d,'Ordinary actor methods · State survives calls, but is not automatically restored after a failure');
+      if(s===0){
+        python(d,'Python · define the actor class',[
+          '@ray.remote','class MealCounter:',
+          '    def __init__(self):','        self.counts = {}','',
+          '    def add(self, partial):',
+          '        for meal, count in partial.items():',
+          '            self.counts[meal] = (',
+          '                self.counts.get(meal, 0)',
+          '                + count)',
+          '        return dict(self.counts)'
+        ],[2,3]);
+        trace(d,'class',245,'MealCounter class',['__init__: start empty','add: change stored counts'],P.blue);
+        trace(d,'state',445,'Each instance keeps state',['self.counts'],P.green);
+      }else{
+        const lines=['counter = MealCounter.remote()','',
+          'first = counter.add.remote({"pizza": 2})'];
+        if(s===2)lines.push('second = counter.add.remote(',
+          '    {"pizza": 1, "salad": 1})','',
+          'snapshots = ray.get([first, second])');
+        python(d,'Python · call methods on the same actor',lines,s===1?[0,2]:[3,4,6]);
+        trace(d,'actor',205,'Actor: current state',s===1?['{"pizza": 2}']:['{"pizza": 3, "salad": 1}'],P.green);
+        trace(d,'snapshot0',360,s===1?'Result identified by first':'snapshots[0]',['{"pizza": 2}'],P.blue);
+        if(s===2)trace(d,'snapshot1',505,'Second returned snapshot',['{"pizza": 3, "salad": 1}'],P.orange);
+      }
+      foot(d,'Initialized Ray session · One synchronous actor · Returned snapshots keep their earlier values');
     },{
       idea:'An actor owns mutable state, while ordinary tasks are function calls that return results.',
       builds:[
-        'A class defines an object’s data and methods. A method is a function attached to that object. The constructor creates the counter object in an actor process. State means the data retained by that object, such as its running meal totals. This state survives successive method calls while the actor remains alive.',
-        'Submit both updates from one caller. An ordinary synchronous actor executes one method at a time. Without out-of-order options or retries, same-caller calls run in submission order. Other actor modes can allow methods to overlap, with different ordering rules.',
+        'A class defines an object’s data and methods. A method is a function attached to that object. The __init__ constructor creates an empty dictionary. self identifies the instance whose method is running. self.counts is state retained between calls while that actor remains alive. The add method adds each incoming count. Returning dict(self.counts) creates a separate snapshot, so later changes do not modify earlier returned results.',
+        'MealCounter.remote creates one actor instance and returns its handle. The first add.remote call adds two pizzas and returns a result reference. An ordinary synchronous actor executes one method at a time. Without out-of-order options or retries, same-caller calls run in submission order. Other actor modes can allow methods to overlap, with different ordering rules.',
         'Apply the second update to the existing object. The new total depends on the first update. An actor can retain useful data, such as a loaded model. Durable storage retains data after the worker fails. An actor does not automatically save and restore its counter that way. Its restart and state recovery need an explicit design.'
       ],question:'Why can two calls to the same counter actor observe updated state?',answer:'Both methods operate on the same persistent remote object. A default synchronous actor executes those methods serially.'
     },[refs.actors,refs.order,refs.actorFailure]);
@@ -454,6 +566,10 @@
       'An external effect changes something outside the returned value. A receipt appended before failure remains in the file.',
       'A retry can return one count but leave two receipt rows. The application must recognize repeated requests before applying the effect again.'
     ],(d,s)=>{
+      if(s>=1){
+        codeLine(d,'append-code',220,'with open("receipts.log", "a") as receipt:');
+        codeLine(d,'append-line',255,'    receipt.write("order-0\\n")');
+      }
       box(d,'task',65,325,310,170,s===2?'Retry same task':'Task attempt',['Count the order'],P.blue);
       if(s===0){arrow(d,'pure-result',395,410,525,410);box(d,'count',550,325,340,170,'Pure result',['{pizza: 2}'],P.green);}
       if(s>=1){
@@ -463,7 +579,7 @@
         box(d,'failure',945,325,270,170,s===2?'Returned result':'Worker fails',s===2?['{pizza: 2}']:['Before completion'],s===2?P.green:P.red);
       }
       if(s===2)label(d,'repeat-risk',640,565,'One returned dictionary does not prove one external write',29,P.red);
-      foot(d,'A repeated attempt processes the same intended input. It is not a new lunch order.');
+      foot(d,s===0?'A repeated attempt processes the same intended input. It is not a new lunch order.':'Append fragment inside a task · Assume the external file remains accessible after failure');
     },{
       idea:'Runtime retries do not automatically make external side effects occur exactly once.',
       builds:[

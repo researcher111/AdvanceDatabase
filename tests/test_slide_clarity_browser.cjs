@@ -348,7 +348,8 @@ fs.mkdirSync(output,{recursive:true});
      assert(await reading.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'reading fits '+width+'px');
      const mobile=await widgets.evaluateAll(roots=>roots.map(r=>{
       const viewport=r.querySelector('.lw-viewport');
-      return{localScroll:viewport.scrollWidth>viewport.clientWidth,buttons:[...r.querySelectorAll('button')].every(b=>{const box=b.getBoundingClientRect();return box.height>=44&&box.x>=0&&box.right<=innerWidth;})};
+      // Paragraph speech adds separate inline buttons. Check the diagram navigation targets here.
+      return{localScroll:viewport.scrollWidth>viewport.clientWidth,buttons:[...r.querySelectorAll('.lw-controls button')].every(b=>{const box=b.getBoundingClientRect();return box.height>=44&&box.x>=0&&box.right<=innerWidth;})};
      }));
      assert(mobile.every(s=>s.localScroll&&s.buttons),'diagrams scroll locally and controls remain usable');
      if(id===15){

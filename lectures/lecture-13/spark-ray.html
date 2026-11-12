@@ -270,9 +270,15 @@ counts.collect()                                      # NOW it runs</code></pre>
 
 <h2 id="reuse" data-slide="8" data-scene="spark-cache-recompute">8 · Cache reusable data and rebuild lost output</h2>
 <p class="slide-reference"><a href="../../slides/lecture-13b.html#s=8&amp;b=1">Open slide 8 ↗</a></p>
-<p>Maya wants two reports from the same cleaned orders. Suppose an RDD named <code>cleaned</code> contains the lowercase meal names extracted from both orders. Repeating that extraction for every report may waste work.</p>
-<p><strong>Persistence</strong> asks Spark to retain computed partitions for reuse. <code>cleaned.persist()</code> marks that intention. It does not immediately compute the records. <code>cache()</code> is a convenient way to request the default persistence behavior.</p>
-<p>An action computes the partitions it needs and saves them according to the selected storage policy. A later action can reuse the retained values. <code>cleaned.unpersist()</code> releases them when they are no longer useful. <a href="#src-persist">[7]</a></p>
+<p>Maya wants two reports from the same cleaned orders. The <code>meals</code> RDD contains the lowercase meal names extracted from both orders. Repeating that extraction for every report may waste work.</p>
+<p><strong>Persistence</strong> asks Spark to retain computed partitions for reuse. <code>meals.persist()</code> marks that intention. It does not immediately compute the records. <code>cache()</code> is a convenient way to request the default persistence behavior.</p>
+<p>An action computes the partitions it needs and saves them according to the selected storage policy. A later action can reuse the retained values. <code>meals.unpersist()</code> releases them when they are no longer useful. <a href="#src-persist">[7]</a></p>
+<p>Run these lines after defining <code>meals</code> and before stopping the Spark context:</p>
+<pre><code class="language-python">meals.cache()          # Request storage when values are computed.
+print(meals.count())    # Compute all partitions: 4 meal requests.
+print(meals.take(2))    # Reuse saved values: ["pizza", "pizza"].
+meals.unpersist()       # Release the retained partitions.</code></pre>
+<p>The <code>count()</code> action returns the number of elements. The <code>take(2)</code> action returns the first two elements. Both request values, but neither changes the meal requests.</p>
 <p>Think of keeping prepared ingredients for another meal. Retaining data saves repeated preparation, but consumes space. Caching every result can leave less memory for useful work.</p>
 <p><strong>Lineage</strong> is Spark’s record of the steps needed to rebuild an RDD partition. The cache holds computed data. Lineage describes how to compute that data again. If a cached partition is lost, Spark can rebuild it when its required inputs remain available. <a href="#src-paper">[3]</a></p>
 <p>Reproducing the same values also requires repeatable transformations: the same inputs must produce the same outputs. The fixed word-extraction rules in our example satisfy that condition.</p>
@@ -436,11 +442,16 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
 <p class="slide-reference"><a href="../../slides/lecture-13b.html#s=13&amp;b=1">Open slide 13 ↗</a></p>
 <p>Now change the task: a second function must summarize the first function’s count dictionary. It cannot summarize a value that does not exist yet.</p>
 <p>The first task is the <strong>producer</strong> of that value. The second is its <strong>consumer</strong>. Pass the producer’s reference directly as an argument to the consumer:</p>
-<pre><code class="language-python">first_ref = count_order.remote("Pizza, pizza!")
-second_ref = summarize.remote(first_ref)</code></pre>
-<p>Here, <code>summarize</code> represents another remote function that accepts a count dictionary. This two-line fragment shows the dependency and assumes that function is already defined.</p>
+<p>Reuse <code>count_order</code> from the Ray example in an initialized Ray session. Define <code>summarize</code> to add the values in one count dictionary:</p>
+<pre><code class="language-python">@ray.remote
+def summarize(partial):
+    return sum(partial.values())
+
+first_ref = count_order.remote("Pizza, pizza!")
+second_ref = summarize.remote(first_ref)
+print(ray.get(second_ref))  # 2 meal requests</code></pre>
+<p>The consumer receives <code>{'pizza': 2}</code> and returns <code>2</code>. Its result counts the meal requests in that one order.</p>
 <p>A <strong>top-level argument</strong> is passed directly to the call, rather than inside a list or dictionary. Ray waits until that referenced value is available, then supplies the actual dictionary to <code>summarize</code>. This is called <strong>resolving</strong> the reference. <a href="#src-objects">[10]</a></p>
-<p>The diagram abbreviates <code>first_ref</code> as <code>a</code> and <code>second_ref</code> as <code>b</code>.</p>
 <div class="lecture-walkthrough" data-lecture-scene="ray-dependency-references"></div>
 <p>The consumer receives <code>{'pizza': 2}</code>, not an unfinished ObjectRef. The driver can wait for <code>second_ref</code> at the end without calling <code>ray.get(first_ref)</code> between submissions.</p>
 <p>The claim-ticket analogy only explains identification. Ray also uses a direct reference argument to delay the consumer until its input is ready. References nested inside lists or dictionaries are not automatically replaced with their values in the same way.</p>
@@ -454,6 +465,17 @@ second_ref = summarize.remote(first_ref)</code></pre>
 <p>Extend the lunch application to check orders against a large menu. This is a separate teaching example. Both checking tasks need the same menu, but receive different orders.</p>
 <p>Ray’s <strong>object store</strong> holds values that tasks can retrieve through references. <code>ray.put(data)</code> stores a value and returns an ObjectRef. For the menu, save that reference as <code>menu_ref</code>.</p>
 <p>Pass <code>menu_ref</code> directly to each checking task. Each task receives the menu value after Ray resolves the reference. Reusing the reference avoids repeatedly submitting the same large value. Data may still need transfer to another machine. <a href="#src-objects">[10]</a></p>
+<p>Reuse <code>split_order</code> from the Spark example in an initialized Ray session. The function only extracts words, so it also works inside a Ray task.</p>
+<p>The <code>check_order</code> task returns <code>True</code> when every requested meal appears in the menu. This two-item menu makes the code easy to inspect:</p>
+<pre><code class="language-python">@ray.remote
+def check_order(order, menu):
+    return all(meal in menu for meal in split_order(order))
+
+menu = {"pizza", "salad"}
+menu_ref = ray.put(menu)
+first_ref = check_order.remote("Pizza, pizza!", menu_ref)
+second_ref = check_order.remote("Salad pizza.", menu_ref)
+print(ray.get([first_ref, second_ref]))  # [True, True]</code></pre>
 <div class="lecture-walkthrough" data-lecture-scene="ray-put-shared-input"></div>
 <p>Ray’s stored objects are <strong>immutable</strong>: a stored value does not change in place. A shared reference therefore does not create a dictionary that all tasks can edit together. It identifies a stored value.</p>
 <p><strong>Lab connection:</strong> several nearest-neighbor tasks need the same vector collection. A reference can identify that input while each task receives a different query ID. Two short lunch strings do not need this optimization.</p>
@@ -621,7 +643,7 @@ finally:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../slides/_shared/visuals.js"></script>
-<script src="../../slides/decks/spark-ray.js?v=clear-20261109"></script>
+<script src="../../slides/decks/spark-ray.js?v=visible-code-20261112"></script>
 <script src="slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/paragraph-speech.js?v=spark-ray-speech-20261112"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>
