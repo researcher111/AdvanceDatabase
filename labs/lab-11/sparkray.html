@@ -192,6 +192,25 @@ if __name__ == &quot;__main__&quot;:
 </table>
 <p class="keep-in-present">Think of an object reference as a coffee receipt. The receipt identifies the order you will collect. Similarly, an <code>ObjectRef</code> identifies a result that may still be running. A reference is not the image itself.</p>
 
+<h3 id="object-reference">Follow one object reference</h3>
+<p>Inside stage 1’s Ray session, trace a one-pixel image with the same <code>process_image</code> function:</p>
+<pre><code class="language-python">image = np.array([[[0, 64, 255]]])
+ref = process_image.remote(image)
+result = ray.get(ref)</code></pre>
+<figure class="ray-diagram">
+  <div class="ray-diagram-frame">
+    <img src="diagrams/ray-object-ref.svg" width="840" height="620" alt="The driver receives an ObjectRef when it submits an image task. A worker processes the image while the driver can continue. Calling ray.get retrieves the image, waiting if necessary. The original reference remains an ObjectRef.">
+  </div>
+  <figcaption><code>ref</code> identifies the result. After <code>ray.get(ref)</code> returns, <code>result</code> contains the image with RGB values <code>[255, 191, 0]</code>.</figcaption>
+</figure>
+<p>The <code>.remote()</code> call submits the task. The <code>ray.get(ref)</code> call waits if necessary and retrieves its value. It does not change <code>ref</code> into the image. See the <a href="https://docs.ray.io/en/latest/ray-core/tasks.html">Ray task guide</a>.</p>
+<div class="exercise learning-check">
+  <span class="ex-label">Reference or value?</span>
+  <p>After the task finishes, does <code>print(ref)</code> print the image?</p>
+  <details><summary>Check your explanation</summary><p>No. The variable still holds an <code>ObjectRef</code>. Use <code>ray.get(ref)</code> to retrieve the image.</p></details>
+</div>
+
+<h3>Submit several tasks before waiting</h3>
 <figure class="ray-diagram">
   <div class="ray-diagram-frame">
     <img src="diagrams/ray-tasks.svg" width="840" height="490" alt="A serial loop waits after each image. Ray submits image tasks first, then gathers their results with one ray.get call.">
