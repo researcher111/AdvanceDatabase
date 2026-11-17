@@ -7,7 +7,9 @@ import pyarrow.parquet as pq
 import ray
 import ray.data
 
-from ray_images import process_row
+
+def process_image(row):
+    return {"processed_image": 255 - row["image"], "original_id": row["path"]}
 
 
 if __name__ == "__main__":
@@ -15,13 +17,15 @@ if __name__ == "__main__":
         source = Path(directory) / "images"
         output = Path(directory) / "processed"
         source.mkdir()
-        for value in range(8):
-            image = np.full((10, 10, 3), value, dtype=np.uint8)
-            Image.fromarray(image).save(source / f"{value}.png")
-        ray.init(include_dashboard=False, log_to_driver=False)
+        for i in range(8):
+            image = np.random.randint(0, 255, (10, 10, 3), dtype=np.uint8)
+            Image.fromarray(image).save(source / f"{i}.png")
+        ray.init()
         try:
-            dataset = ray.data.read_images(str(source))
-            dataset.map(process_row).write_parquet(str(output))
+            ds = ray.data.read_images(str(source), include_paths=True)
+            processed_ds = ds.map(process_image)
+            processed_ds.explain()
+            processed_ds.write_parquet(str(output))
             rows = sum(pq.read_metadata(file).num_rows for file in output.glob("*.parquet"))
             print("written rows:", rows)
         finally:

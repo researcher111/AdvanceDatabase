@@ -1,18 +1,16 @@
-import numpy as np
 import ray
 import ray.data
 
-from ray_images import process_row
+
+def process_image(row):
+    return {"processed_image": 255 - row["image"], "original_id": row["path"]}
 
 
 if __name__ == "__main__":
-    ray.init(include_dashboard=False, log_to_driver=False)
+    ray.init(address="auto")
     try:
-        images = [np.full((10, 10, 3), value, dtype=np.uint8) for value in range(8)]
-        rows = [{"id": i, "image": image} for i, image in enumerate(images)]
-        dataset = ray.data.from_items(rows)
-        results = dataset.map(process_row).take_all()
-        print("rows:", len(results))
-        print("IDs:", sorted(row["id"] for row in results))
+        ds = ray.data.read_images("s3://YOUR-BUCKET/raw-images", include_paths=True)
+        processed_ds = ds.map(process_image)
+        processed_ds.write_parquet("s3://YOUR-BUCKET/processed-images")
     finally:
         ray.shutdown()

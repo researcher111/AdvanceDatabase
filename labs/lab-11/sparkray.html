@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../_shared/clear-teaching.css?v=partitions-20261110">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=4">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 </head>
 <body>
@@ -24,7 +24,8 @@
     <li><a href="#ray-actors">2 · Keep one pixel count</a></li>
     <li><a href="#ray-cluster">3 · Move to a cluster</a></li>
     <li><a href="#ray-data">4 · Process data in blocks</a></li>
-    <li><a href="#verify">Run and check the example</a></li>
+    <li><a href="#execution-plan">Connect to the MicroDB plan</a></li>
+    <li><a href="#verify">Optional helper checks</a></li>
     <li><a href="#explain-it">Explain the result</a></li>
     <li><a href="#assignment">Choose your own task</a></li>
     <li><a href="#worked-example">Optional earlier exercises</a></li>
@@ -100,24 +101,27 @@ source .venv/bin/activate
 python -m pip install -r requirements-ray.txt</code></pre>
 <p>On Windows, activate the environment with <code>.venv\Scripts\activate</code>. If <code>python3</code> selects another version, use <code>python3.13</code> to create the environment.</p>
 
-<div class="chat-downloads">
-  <span class="chat-downloads-label">Walkthrough files:</span>
-  <a class="chat-dl-btn" href="starter/ray_images.py" download>ray_images.py</a>
-  <a class="chat-dl-btn" href="starter/demo_ray.py" download>demo_ray.py</a>
-  <a class="chat-dl-btn" href="starter/test_ray_images.py" download>test_ray_images.py</a>
-  <a class="chat-dl-btn" href="starter/requirements-ray.txt" download>requirements-ray.txt</a>
-</div>
+<p>Each stage is a complete, standalone script. It contains its own functions and needs no other walkthrough file. Download <a href="starter/requirements-ray.txt" download>requirements-ray.txt</a> for the dependencies.</p>
 <table>
-  <thead><tr><th>File</th><th>Your action</th></tr></thead>
+  <thead><tr><th>Example in the source video</th><th>Standalone lab file</th></tr></thead>
   <tbody>
-    <tr><td><code>ray_images.py</code></td><td>Read the complete task, counter, and row functions. Follow each function in the diagrams below.</td></tr>
-    <tr><td><code>demo_ray.py</code></td><td>Run the supplied image, timing, counter, and dataset demonstration.</td></tr>
-    <tr><td><code>test_ray_images.py</code></td><td>Run function checks, then the full seven-check suite.</td></tr>
-    <tr><td><code>requirements-ray.txt</code></td><td>Install Ray Data, NumPy, and Pillow.</td></tr>
+    <tr><td><code>process.py</code></td><td><a href="starter/stage0_serial.py" download>stage0_serial.py</a></td></tr>
+    <tr><td><code>parallel_process.py</code></td><td><a href="starter/stage1_tasks.py" download>stage1_tasks.py</a></td></tr>
+    <tr><td><code>counter_fails.py</code></td><td><a href="starter/stage2_global.py" download>stage2_global.py</a></td></tr>
+    <tr><td><code>counter_works.py</code></td><td><a href="starter/stage2_actor.py" download>stage2_actor.py</a></td></tr>
+    <tr><td>Connect the actor program to a cluster</td><td><a href="starter/stage3_cluster.py" download>stage3_cluster.py</a> · optional</td></tr>
+    <tr><td><code>data_pipeline.py</code></td><td><a href="starter/stage4_data.py" download>stage4_data.py</a> · cloud reading example</td></tr>
+    <tr><td>Local version with a printed execution plan</td><td><a href="starter/stage4_streaming.py" download>stage4_streaming.py</a></td></tr>
   </tbody>
 </table>
-<p>The example uses short functions, clear names, and no code comments. The explanations and diagrams stay beside the code. Each stage below includes a complete program and its download link. Keep that program beside <code>ray_images.py</code>, which supplies the functions shown in the reading.</p>
-<p>The image example uses generated data. Your chosen task can also use small local inputs. No cloud account, Java installation, or paid service is needed.</p>
+<p>The scripts follow the source sequence and function names. They use random images, a four-image global failure, and an eight-image actor example. Filenames keep the lab stage numbers. The local file pipeline adds <code>explain()</code> to connect Ray Data with MicroDB.</p>
+<details>
+  <summary>Small corrections retained in the examples</summary>
+  <p>Pixel counts use height × width. Each counted task waits for its actor update. Ray Data receives an ordinary Python function. The one-second sleep demonstrates overlapping waits, not measured CPU scaling.</p>
+  <p>The YAML uses the current Ray schema. Image paths supply row identifiers because <code>read_images()</code> does not create an <code>id</code> column. Main guards and <code>finally</code> blocks make the scripts safe to import and ensure Ray shuts down after a run.</p>
+</details>
+<p>Keep code short, clear, and easy to edit. The scripts have no code comments. Explanations and diagrams stay beside the code.</p>
+<p>The local examples generate their own data. No cloud account, Java installation, or paid service is needed. Cloud connection and S3 examples are for reading unless you already have the required setup.</p>
 
 <h2 id="ray-core">Ray Core primitives</h2>
 <p>Ray Core organizes work as tasks, actors, and objects. Use this table as a reference while reading the examples. The <a href="https://docs.ray.io/en/latest/ray-core/key-concepts.html">Ray Core concepts guide</a> introduces these building blocks.</p>
@@ -126,7 +130,7 @@ python -m pip install -r requirements-ray.txt</code></pre>
   <tbody>
     <tr><td><a href="https://docs.ray.io/en/latest/ray-core/api/doc/ray.init.html"><code>ray.init()</code></a></td><td>Connect to Ray. Start a local instance when needed.</td><td>Connection context</td></tr>
     <tr><td><a href="https://docs.ray.io/en/latest/ray-core/api/doc/ray.remote.html"><code>@ray.remote</code></a></td><td>Define a remote function or actor class.</td><td>A wrapper used with <code>.remote()</code></td></tr>
-    <tr><td><code>process_image_task.remote(image)</code></td><td>Submit one image task.</td><td>An <code>ObjectRef</code> for its result</td></tr>
+    <tr><td><code>process_image.remote(image)</code></td><td>Submit one image task.</td><td>An <code>ObjectRef</code> for its result</td></tr>
     <tr><td><code>ObjectRef</code></td><td>Identify an object held by Ray.</td><td>A reference to data that may still be computing</td></tr>
     <tr><td><a href="https://docs.ray.io/en/latest/ray-core/api/doc/ray.get.html"><code>ray.get(refs)</code></a></td><td>Wait for results and retrieve their values.</td><td>A value for one reference, or a list for a reference list</td></tr>
     <tr><td><code>PixelCounter.remote()</code></td><td>Create one actor with its own state.</td><td>An actor handle</td></tr>
@@ -156,32 +160,32 @@ Inverted value:    [255, 191, 0]</code></pre>
 <p>Use <strong>predict, run, explain</strong>. Predict what can run independently and what must wait. Run each local stage. Explain what the returned value represents.</p>
 
 <h3>Run stage 0: the serial loop</h3>
-<p>This program imports the image function shown above and processes all eight images in order. <a href="starter/stage0_serial.py" download>Download stage0_serial.py</a>.</p>
+<p>This standalone program defines the image function and processes eight random images in order. <a href="starter/stage0_serial.py" download>Download stage0_serial.py</a>.</p>
 <pre data-source="starter/stage0_serial.py"><code class="language-python">import time
 
 import numpy as np
 
-from ray_images import process_image
+def process_image(image):
+    time.sleep(1)
+    return 255 - image
 
 
 if __name__ == &quot;__main__&quot;:
-    images = [np.full((10, 10, 3), value, dtype=np.uint8) for value in range(8)]
-    start = time.perf_counter()
+    images = [np.random.randint(0, 255, (10, 10, 3)) for _ in range(8)]
+    start_time = time.time()
     results = [process_image(image) for image in images]
-    print(f&quot;serial: {time.perf_counter() - start:.2f} seconds&quot;)
-    print(&quot;images:&quot;, len(results))
-    print(&quot;first pixel:&quot;, results[0][0, 0])</code></pre>
+    print(f&quot;Processed {len(results)} images in {time.time() - start_time:.2f} seconds.&quot;)</code></pre>
 <pre class="terminal"><code>python stage0_serial.py</code></pre>
-<p>Expect eight images and a first pixel of <code>[255 255 255]</code>. The artificial waits take about eight seconds before other overhead.</p>
+<p>Expect a message reporting eight processed images. The artificial waits take about eight seconds before other overhead. Random input values change between runs.</p>
 
 <h2 id="ray-tasks">1 · Run independent tasks</h2>
 
-<p>The same image function can run as a remote task. The supplied <code>@ray.remote</code> decorator marks its wrapper for Ray.</p>
+<p>Add <code>@ray.remote</code> directly to <code>process_image</code>. Call the decorated function with <code>.remote()</code> to submit a task.</p>
 <table>
   <thead><tr><th>Operation</th><th>What the caller receives</th><th>What waits?</th></tr></thead>
   <tbody>
-    <tr><td><code>process_image(image)</code></td><td>The processed image</td><td>The caller waits for the function.</td></tr>
-    <tr><td><code>process_image_task.remote(image)</code></td><td>An <code>ObjectRef</code> for the result</td><td>The caller can submit another task.</td></tr>
+    <tr><td><code>process_image(image)</code> · ordinary stage 0 function</td><td>The processed image</td><td>The caller waits for the function.</td></tr>
+    <tr><td><code>process_image.remote(image)</code></td><td>An <code>ObjectRef</code> for the result</td><td>The caller can submit another task.</td></tr>
     <tr><td><code>ray.get(result_refs)</code></td><td>The processed images</td><td>The caller waits for the requested results.</td></tr>
   </tbody>
 </table>
@@ -194,49 +198,40 @@ if __name__ == &quot;__main__&quot;:
   <figcaption>Submit independent work before waiting. The diagram shows three of the eight images. Available resources limit how many tasks overlap.</figcaption>
 </figure>
 
-<h3>Read the task code</h3>
-<pre><code class="language-python">@ray.remote
-def process_image_task(image):
-    return process_image(image)
-
-
-def process_parallel(images):
-    refs = [process_image_task.remote(image) for image in images]
-    return ray.get(refs)</code></pre>
-<p>The list comprehension submits every image before <code>ray.get(refs)</code> waits. Ray can overlap tasks when resources are available. The returned list follows the reference order, even if tasks finish in another order.</p>
-<p>The function leaves the inputs unchanged. An empty input list produces an empty result list.</p>
+<p>The list comprehension below submits every image before <code>ray.get(result_refs)</code> waits. Ray can overlap tasks when resources are available. Results follow the reference order, even if tasks finish in another order.</p>
 
 <div class="exercise">
   <span class="ex-label">Find the wait</span>
   <p>This loop waits after every submission. Why does that prevent the next image from starting sooner?</p>
-  <pre><code class="language-python">results = [ray.get(process_image_task.remote(image)) for image in images]</code></pre>
+  <pre><code class="language-python">results = [ray.get(process_image.remote(image)) for image in images]</code></pre>
   <details><summary>Check your explanation</summary><p>The loop cannot submit its next task until the current result arrives. Submit all independent tasks first. Available resources determine how many can run together.</p></details>
 </div>
 <h3>Run stage 1: parallel tasks</h3>
-<p>This program calls the complete task functions shown above. <a href="starter/stage1_tasks.py" download>Download stage1_tasks.py</a>.</p>
+<p>This program contains the decorator, task submissions, and result collection in one file. <a href="starter/stage1_tasks.py" download>Download stage1_tasks.py</a>.</p>
 <pre data-source="starter/stage1_tasks.py"><code class="language-python">import time
 
 import numpy as np
 import ray
 
-from ray_images import process_parallel
+@ray.remote
+def process_image(image):
+    time.sleep(1)
+    return 255 - image
 
 
 if __name__ == &quot;__main__&quot;:
-    ray.init(include_dashboard=False, log_to_driver=False)
+    ray.init()
     try:
-        images = [np.full((10, 10, 3), value, dtype=np.uint8) for value in range(8)]
-        start = time.perf_counter()
-        results = process_parallel(images)
-        print(f&quot;parallel: {time.perf_counter() - start:.2f} seconds&quot;)
-        print(&quot;images:&quot;, len(results))
-        print(&quot;first pixel:&quot;, results[0][0, 0])
+        images = [np.random.randint(0, 255, (10, 10, 3)) for _ in range(8)]
+        start_time = time.time()
+        result_refs = [process_image.remote(image) for image in images]
+        results = ray.get(result_refs)
+        print(f&quot;Processed {len(results)} images in {time.time() - start_time:.2f} seconds.&quot;)
     finally:
         ray.shutdown()</code></pre>
 <pre class="terminal"><code>python stage1_tasks.py</code></pre>
-<p>The image count and first pixel should match stage 0. Runtime varies with resources and startup overhead.</p>
-<pre class="terminal"><code>python test_ray_images.py --unit process_image_task
-python test_ray_images.py --unit process_parallel</code></pre>
+<p>Expect eight processed images. Runtime varies with resources and startup overhead. The random images differ from the previous run.</p>
+
 
 <h2 id="ray-actors">2 · Keep one pixel count</h2>
 
@@ -250,51 +245,50 @@ python test_ray_images.py --unit process_parallel</code></pre>
     <tr><td>Channel values: height × width × channels</td><td>300</td><td>2,400</td></tr>
   </tbody>
 </table>
-<p>The expression <code>image.size</code> counts channel values. This lab counts pixels with <code>image.shape[0] * image.shape[1]</code>. The expected shared count is <strong>800 pixels</strong>.</p>
+<p>The expression <code>image.size</code> counts channel values. This lab counts pixels with <code>image.shape[0] * image.shape[1]</code>. The actor example expects <strong>800 pixels</strong>. The four-image global example below expects 400.</p>
 
 <h3 id="global-counter">First try: a global variable</h3>
-<p>This complete program processes all eight images and adds their pixel counts to <code>total</code>. Keep it beside <code>ray_images.py</code>. <a href="starter/stage2_global.py" download>Download stage2_global.py</a>.</p>
-<pre data-source="starter/stage2_global.py"><code class="language-python">import numpy as np
+<p>This standalone program processes four images and adds their pixel counts to <code>total_pixels_processed</code>. <a href="starter/stage2_global.py" download>Download stage2_global.py</a>.</p>
+<pre data-source="starter/stage2_global.py"><code class="language-python">import time
+
+import numpy as np
 import ray
 
-from ray_images import process_image
-
-
-total = 0
+total_pixels_processed = 0
 
 
 @ray.remote
-def process_and_count_global(image):
-    global total
-    processed = process_image(image)
-    total += image.shape[0] * image.shape[1]
-    return processed
+def process_image_and_count(image):
+    global total_pixels_processed
+    num_pixels = image.shape[0] * image.shape[1]
+    total_pixels_processed += num_pixels
+    print(f&quot;Task processing {num_pixels} pixels. Local total: {total_pixels_processed}&quot;)
+    time.sleep(1)
+    return 255 - image
 
 
 if __name__ == &quot;__main__&quot;:
-    ray.init(include_dashboard=False, log_to_driver=False)
+    ray.init()
     try:
-        images = [np.full((10, 10, 3), value, dtype=np.uint8) for value in range(8)]
-        refs = [process_and_count_global.remote(image) for image in images]
-        results = ray.get(refs)
-        print(&quot;images:&quot;, len(results))
-        print(&quot;expected pixels:&quot;, sum(image.shape[0] * image.shape[1] for image in images))
-        print(&quot;driver pixels:&quot;, total)
+        images = [np.random.randint(0, 255, (10, 10, 3)) for _ in range(4)]
+        ray.get([process_image_and_count.remote(image) for image in images])
+        expected_total = sum(image.shape[0] * image.shape[1] for image in images)
+        print(f&quot;Expected total pixels: {expected_total}&quot;)
+        print(f&quot;Actual total pixels in main script: {total_pixels_processed}&quot;)
     finally:
         ray.shutdown()</code></pre>
 <div class="exercise learning-check">
   <span class="ex-label">Predict before running</span>
-  <p>The driver waits for every image task with <code>ray.get(refs)</code>. Will <code>driver pixels</code> print 0 or 800? Explain your prediction.</p>
+  <p>The driver waits for all four image tasks. Will its final count be 0 or 400? Explain your prediction.</p>
 </div>
 <pre class="terminal"><code>python stage2_global.py</code></pre>
-<p>After all eight image tasks finish, the program prints:</p>
-<pre class="terminal"><code>images: 8
-expected pixels: 800
-driver pixels: 0</code></pre>
-<p class="keep-in-present">The <code>global total</code> statement lets the function update its module’s variable. Each worker process has its own copy. Those updates do not change the driver’s <code>total</code>. See Ray’s <a href="https://docs.ray.io/en/latest/ray-core/patterns/global-variables.html">guide to global variables</a>.</p>
+<p>Workers print their local counts. After all four image tasks finish, the driver prints:</p>
+<pre class="terminal"><code>Expected total pixels: 400
+Actual total pixels in main script: 0</code></pre>
+<p class="keep-in-present">The <code>global total_pixels_processed</code> statement updates a module variable. Each worker process has its own copy. Worker updates do not change the driver’s copy. See Ray’s <a href="https://docs.ray.io/en/latest/ray-core/patterns/global-variables.html">guide to global variables</a>.</p>
 <figure class="ray-diagram">
   <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Global counter diagram, scroll horizontally on small screens">
-    <img src="diagrams/ray-global.svg" width="840" height="600" alt="The driver and workers hold separate total variables. Workers return eight processed images, but the driver's total remains zero.">
+    <img src="diagrams/ray-global.svg" width="840" height="600" alt="The driver and workers hold separate global variables. Workers return four processed images, but the driver's total remains zero.">
   </div>
   <figcaption>Waiting collects task results. It does not merge the workers’ global variables into the driver’s variable.</figcaption>
 </figure>
@@ -310,55 +304,54 @@ driver pixels: 0</code></pre>
   <figcaption>One actor owns the total. Each image task finishes its counter update before returning, so the driver can read the completed count.</figcaption>
 </figure>
 
-<h3>Read the counter code</h3>
-<pre><code class="language-python">@ray.remote
-class PixelCounter:
-    def __init__(self):
-        self.total = 0
-
-    def add(self, count):
-        self.total += count
-
-    def get_total(self):
-        return self.total
-
-
-@ray.remote
-def process_and_count(image, counter):
-    processed = process_image(image)
-    ray.get(counter.add.remote(image.shape[0] * image.shape[1]))
-    return processed</code></pre>
 <p>The actor starts at zero and adds each image’s pixel count. Each task waits for its actor update before returning the processed image.</p>
 <p class="keep-in-present">A submitted counter update may still be waiting. Finishing the image task does not automatically finish an actor call that task submitted. Waiting for the update makes completion explicit. Calls from different submitters have no guaranteed relative order.</p>
-<pre class="equation"><code>Image processed → counter update submitted → update completed → task returns
+<pre class="equation"><code>Counter update submitted → update completed → image processed → task returns
 All image tasks return → driver reads the actor's total</code></pre>
 <h3>Run stage 2: one shared counter</h3>
 <p>This program creates one actor and passes the same handle to every image task. <a href="starter/stage2_actor.py" download>Download stage2_actor.py</a>.</p>
-<pre data-source="starter/stage2_actor.py"><code class="language-python">import numpy as np
+<pre data-source="starter/stage2_actor.py"><code class="language-python">import time
+
+import numpy as np
 import ray
 
-from ray_images import PixelCounter, process_and_count
+
+@ray.remote
+class PixelCounter:
+    def __init__(self):
+        self.total_pixels = 0
+
+    def add(self, num_pixels):
+        self.total_pixels += num_pixels
+
+    def get_total(self):
+        return self.total_pixels
+
+
+@ray.remote
+def process_image_with_actor(image, counter_actor):
+    ray.get(counter_actor.add.remote(image.shape[0] * image.shape[1]))
+    time.sleep(1)
+    return 255 - image
 
 
 if __name__ == &quot;__main__&quot;:
-    ray.init(include_dashboard=False, log_to_driver=False)
+    ray.init()
     try:
-        images = [np.full((10, 10, 3), value, dtype=np.uint8) for value in range(8)]
+        images = [np.random.randint(0, 255, (10, 10, 3)) for _ in range(8)]
         counter = PixelCounter.remote()
-        refs = [process_and_count.remote(image, counter) for image in images]
-        results = ray.get(refs)
-        print(&quot;images:&quot;, len(results))
-        print(&quot;pixels:&quot;, ray.get(counter.get_total.remote()))
-        print(&quot;RGB channel values:&quot;, sum(image.size for image in images))
+        task_refs = [process_image_with_actor.remote(image, counter) for image in images]
+        results = ray.get(task_refs)
+        expected_total = sum(image.shape[0] * image.shape[1] for image in images)
+        final_total = ray.get(counter.get_total.remote())
+        print(f&quot;Expected total pixels: {expected_total}&quot;)
+        print(f&quot;Actual total from actor: {final_total}&quot;)
     finally:
         ray.shutdown()</code></pre>
 <pre class="terminal"><code>python stage2_actor.py</code></pre>
-<p>Expect eight images, 800 pixels, and 2,400 RGB channel values.</p>
+<p>Expect <code>Expected total pixels: 800</code> and <code>Actual total from actor: 800</code>.</p>
 <p>Compare the two programs. Both wait for all image tasks. The global version leaves the driver at zero. The actor version sends every update to one counter and reads 800.</p>
 <p>This lab makes one update per input image. Retrying an update is separate work and can count an image twice. Automatic deduplication is not part of this exercise.</p>
-<pre class="terminal"><code>python test_ray_images.py --unit PixelCounter.add
-python test_ray_images.py --unit PixelCounter.get_total
-python test_ray_images.py --unit process_and_count</code></pre>
 
 <h2 id="ray-cluster">3 · Move to a cluster</h2>
 
@@ -431,7 +424,7 @@ ray down my-cluster.yaml</code></pre>
     <tr><td><code>ray down</code></td><td>Shut down the cluster according to the provider settings.</td></tr>
   </tbody>
 </table>
-<p>The submitted script uses the same <code>PixelCounter</code> and <code>process_and_count</code> definitions from <code>ray_images.py</code>. The <code>ray submit</code> command copies the named script only. Arrange imported files and packages separately. See the <a href="https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-cli.html#running-ray-scripts-on-the-cluster-ray-submit">launcher command reference</a>.</p>
+<p>The submitted script contains <code>PixelCounter</code> and <code>process_image_with_actor</code>. The <code>ray submit</code> command copies the named script only. Install its Python packages on the cluster. See the <a href="https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-cli.html#running-ray-scripts-on-the-cluster-ray-submit">launcher command reference</a>.</p>
 <p>The example’s <code>ray.init()</code> call can attach to the Ray instance already running on the head node. Stage 3 below uses <code>address="auto"</code> to require an existing cluster. The task and actor definitions stay unchanged.</p>
 <p>The eight-image input checks behavior. A larger input provides more independent tasks to use additional workers. More machines help when enough work can overlap. The earlier timing calculation remains an idealized estimate.</p>
 <div class="exercise learning-check">
@@ -448,23 +441,45 @@ ray down my-cluster.yaml</code></pre>
   </div>
   <figcaption>Screenshot from the <a href="https://docs.ray.io/en/latest/ray-observability/getting-started.html#cluster-view">official Ray Dashboard documentation</a>, using its <a href="https://raw.githubusercontent.com/ray-project/Images/master/docs/new-dashboard-v2/dashboard-pics/cluster_page.png">original image</a>. The displayed values belong to that example cluster. <a href="images/ray-dashboard-cluster.png" target="_blank" rel="noopener">Open the full-size screenshot</a>.</figcaption>
 </figure>
-<p>The YAML describes the resources you request. The Dashboard shows the running nodes and their current activity. Use the log links when investigating a failed task. This screenshot is for reading; the supplied stage programs keep the live dashboard disabled.</p>
+<p>The YAML describes the resources you request. The Dashboard shows the running nodes and their current activity. Use the log links when investigating a failed task. Studying this screenshot is enough for the lab. Running a live Dashboard is optional.</p>
 <h3>Read stage 3: connect to an existing cluster</h3>
 <p>This optional program runs from a node in an already configured Ray cluster. <a href="starter/stage3_cluster.py" download>Download stage3_cluster.py</a>.</p>
-<pre data-source="starter/stage3_cluster.py"><code class="language-python">import numpy as np
+<pre data-source="starter/stage3_cluster.py"><code class="language-python">import time
+
+import numpy as np
 import ray
 
-from ray_images import process_parallel
+
+@ray.remote
+class PixelCounter:
+    def __init__(self):
+        self.total_pixels = 0
+
+    def add(self, num_pixels):
+        self.total_pixels += num_pixels
+
+    def get_total(self):
+        return self.total_pixels
+
+
+@ray.remote
+def process_image_with_actor(image, counter_actor):
+    ray.get(counter_actor.add.remote(image.shape[0] * image.shape[1]))
+    time.sleep(1)
+    return 255 - image
 
 
 if __name__ == &quot;__main__&quot;:
     ray.init(address=&quot;auto&quot;)
     try:
-        images = [np.full((10, 10, 3), value, dtype=np.uint8) for value in range(8)]
-        results = process_parallel(images)
-        print(&quot;cluster CPUs:&quot;, ray.cluster_resources().get(&quot;CPU&quot;, 0))
-        print(&quot;images:&quot;, len(results))
-        print(&quot;first pixel:&quot;, results[0][0, 0])
+        images = [np.random.randint(0, 255, (10, 10, 3)) for _ in range(8)]
+        counter = PixelCounter.remote()
+        task_refs = [process_image_with_actor.remote(image, counter) for image in images]
+        results = ray.get(task_refs)
+        expected_total = sum(image.shape[0] * image.shape[1] for image in images)
+        final_total = ray.get(counter.get_total.remote())
+        print(f&quot;Expected total pixels: {expected_total}&quot;)
+        print(f&quot;Actual total from actor: {final_total}&quot;)
     finally:
         ray.shutdown()</code></pre>
 <p>The call <code>ray.init(address="auto")</code> connects to an existing cluster. It raises an error when none is found. It does not create worker machines. See the <a href="https://docs.ray.io/en/latest/ray-core/api/doc/ray.init.html">Ray initialization reference</a>.</p>
@@ -476,35 +491,38 @@ if __name__ == &quot;__main__&quot;:
 
 <h2 id="ray-data">4 · Process data in blocks</h2>
 
+<p><strong>Ray Data</strong> is a library built on Ray Core for loading, transforming, and writing datasets. A <strong>Dataset</strong> describes a collection and its processing steps. A <strong>block</strong> holds a group of rows that workers can process together.</p>
 <p>Now consider 500 GB of image files in storage and a driver machine with 16 GB of memory. The next limit is memory, even if many workers are available.</p>
 
 <h3 id="out-of-memory">Why the driver can run out of memory</h3>
-<p>Read this loading pattern with <code>large-image-folder</code> as a placeholder. The loop keeps every decoded image in one Python list.</p>
+<p>Consider replacing stage 1’s random inputs with this loading function. The folder is a placeholder for a large collection. The loop keeps every decoded image in one Python list.</p>
 <pre><code class="language-python">from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-from ray_images import process_parallel
+def load_all_data(folder):
+    images = []
+    for path in Path(folder).glob("*.png"):
+        with Image.open(path) as image:
+            images.append(np.array(image))
+    return images
 
 
-images = []
-for path in Path("large-image-folder").glob("*.png"):
-    with Image.open(path) as image:
-        images.append(np.array(image))
-
-results = process_parallel(images)</code></pre>
-<p class="keep-in-present">The list belongs to the driver process. If its arrays exceed available memory, loading fails before <code>process_parallel(images)</code> submits any tasks. This is an <strong>out-of-memory</strong> failure, often shortened to <strong>OOM</strong>. More worker machines do not enlarge the driver’s memory.</p>
+images = load_all_data("large-image-folder")
+result_refs = [process_image.remote(image) for image in images]
+results = ray.get(result_refs)</code></pre>
+<p class="keep-in-present">The list belongs to the driver process. If its arrays exceed available memory, loading fails before the task submissions. This is an <strong>out-of-memory</strong> failure, often shortened to <strong>OOM</strong>. More worker machines do not enlarge the driver’s memory.</p>
 <p>The 500 GB describes stored files. Decoded array memory depends on image dimensions, channels, and data type. Compressed file size and decoded memory size differ.</p>
-<figure class="ray-diagram">
+<figure class="ray-diagram ray-memory">
   <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Out-of-memory diagram, scroll horizontally on small screens">
-    <img src="diagrams/ray-memory.svg" width="840" height="680" alt="Loading every decoded image into a 16 GB driver exceeds its memory before tasks start. Ray Data instead moves blocks through workers into output storage.">
+    <img src="diagrams/ray-memory.svg" width="1200" height="810" alt="Left: loading every decoded image into a 16 GB driver causes OOM before tasks start. Right: workers read blocks directly from S3 and write output, while the driver coordinates the plan.">
   </div>
-  <figcaption>Change how data enters and leaves the program. Additional workers cannot fix a list that already fills the driver’s memory.</figcaption>
+  <figcaption>Solid arrows carry data. Dashed arrows carry control. Workers read and write blocks without collecting the full dataset in the driver. <a href="diagrams/ray-memory.svg">Open the full-size diagram</a>.</figcaption>
 </figure>
 <div class="exercise learning-check">
   <span class="ex-label">Find the memory limit</span>
-  <p>If loading fails inside the loop, would adding ten more workers let <code>process_parallel(images)</code> run?</p>
+  <p>If loading fails inside the loop, would adding ten more workers let the task submissions run?</p>
   <details><summary>Check your explanation</summary><p>No. The driver must finish building its list before reaching that call. Read and process smaller portions instead.</p></details>
 </div>
 
@@ -514,45 +532,81 @@ results = process_parallel(images)</code></pre>
 
 <figure class="ray-diagram">
   <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Ray Data diagram, scroll horizontally on small screens">
-    <img src="diagrams/ray-data.svg" width="840" height="520" alt="Ray Data reads image blocks, applies the ordinary process_row function, and writes output blocks. Each row retains its ID.">
+    <img src="diagrams/ray-data.svg" width="840" height="520" alt="Ray Data reads image blocks, applies the ordinary process_image function, and writes output blocks. Each result stores the inverted image and its original source path.">
   </div>
-  <figcaption>Ray Data schedules the row function over blocks. Collect only the eight small demo rows. Write a large result back to storage.</figcaption>
+  <figcaption>Ray Data schedules the row function over blocks. Each result keeps its source identity. Write results back to storage.</figcaption>
 </figure>
 
 <h3>Read the row function</h3>
-<pre><code class="language-python">def process_row(row):
-    return {**row, "image": process_image(row["image"])}</code></pre>
-<p>The expression <code>**row</code> copies the row’s fields into a new dictionary. The next entry replaces its image with the processed image. The original row and image stay unchanged. This function has no <code>@ray.remote</code> decorator because Ray Data schedules its calls.</p>
-<pre class="terminal"><code>python test_ray_images.py --unit process_row</code></pre>
-<h3>Run stage 4: a dataset pipeline</h3>
-<p>This program passes the ordinary row function to Ray Data and collects eight small results. <a href="starter/stage4_data.py" download>Download stage4_data.py</a>.</p>
-<pre data-source="starter/stage4_data.py"><code class="language-python">import numpy as np
-import ray
+<pre><code class="language-python">def process_image(row):
+    return {"processed_image": 255 - row["image"], "original_id": row["path"]}</code></pre>
+<p>Ray Data passes a dictionary for each row. The function inverts the image and keeps its source path as <code>original_id</code>. The <code>include_paths=True</code> option supplies that path. Unlike the earlier timing demo, this transformation has no artificial sleep.</p>
+<p>The function has no <code>@ray.remote</code> decorator. Ray Data schedules calls to the ordinary function itself. See the <a href="https://docs.ray.io/en/latest/data/api/doc/ray.data.read_images.html">image reader reference</a>.</p>
+<h3>Read stage 4: the complete storage pipeline</h3>
+<p>This standalone script connects to an existing cluster, reads images from S3, transforms rows, and writes Parquet files. <a href="starter/stage4_data.py" download>Download stage4_data.py</a>.</p>
+<p>This is a cloud reading example. Running it is optional and requires a configured cluster, storage access, and replacement of <code>YOUR-BUCKET</code>. The local version below needs none of that setup.</p>
+<pre data-source="starter/stage4_data.py"><code class="language-python">import ray
 import ray.data
 
-from ray_images import process_row
+
+def process_image(row):
+    return {&quot;processed_image&quot;: 255 - row[&quot;image&quot;], &quot;original_id&quot;: row[&quot;path&quot;]}
 
 
 if __name__ == &quot;__main__&quot;:
-    ray.init(include_dashboard=False, log_to_driver=False)
+    ray.init(address=&quot;auto&quot;)
     try:
-        images = [np.full((10, 10, 3), value, dtype=np.uint8) for value in range(8)]
-        rows = [{&quot;id&quot;: i, &quot;image&quot;: image} for i, image in enumerate(images)]
-        dataset = ray.data.from_items(rows)
-        results = dataset.map(process_row).take_all()
-        print(&quot;rows:&quot;, len(results))
-        print(&quot;IDs:&quot;, sorted(row[&quot;id&quot;] for row in results))
+        ds = ray.data.read_images(&quot;s3://YOUR-BUCKET/raw-images&quot;, include_paths=True)
+        processed_ds = ds.map(process_image)
+        processed_ds.write_parquet(&quot;s3://YOUR-BUCKET/processed-images&quot;)
     finally:
         ray.shutdown()</code></pre>
-<pre class="terminal"><code>python stage4_data.py</code></pre>
-<p>Expect <code>rows: 8</code> and <code>IDs: [0, 1, 2, 3, 4, 5, 6, 7]</code>.</p>
-<p>Keep the <code>id</code> field so results can be matched to their inputs. Dataset output order is not the correctness test. Compare images by ID.</p>
-<p>For a large collection, the input and output would stay in storage. This is a reading example with placeholder paths:</p>
-<pre><code class="language-python">dataset = ray.data.read_images("s3://YOUR-BUCKET/raw-images")
-processed = dataset.map(process_row)
-processed.write_parquet("s3://YOUR-BUCKET/processed-images")</code></pre>
+<h3 id="execution-plan">Connect Ray Data to the MicroDB plan</h3>
+<p>In <a href="../lab-05/sqlfrontend.html#plan-query">Lab 5</a>, <code>plan_query()</code> builds a tree of scans. Does building that tree return every matching row? No. After <code>before_first()</code>, repeated <code>next()</code> calls pull rows through the tree.</p>
+<p>Ray Data also separates describing work from processing data. The read and map calls build a <strong>logical plan</strong>: which operations to perform. A <strong>physical plan</strong> specifies how to run those operations. Ray Data optimizes both plans, then executes physical operators over blocks.</p>
+<table>
+  <thead><tr><th>Idea</th><th>MicroDB</th><th>Ray Data</th></tr></thead>
+  <tbody>
+    <tr><td>Describe the work</td><td><code>QueryData</code> stores fields, tables, and predicates.</td><td>The Dataset records operations such as read and map.</td></tr>
+    <tr><td>Build the execution structure</td><td><code>plan_query()</code> connects scans such as <code>TableScan</code>, <code>SelectScan</code>, and <code>ProjectScan</code>.</td><td>The planner converts logical operations into physical operators.</td></tr>
+    <tr><td>Produce results</td><td>Root <code>next()</code> calls pull rows through scans in one process.</td><td>Consumption starts execution. Operators schedule Ray tasks or actors over blocks.</td></tr>
+    <tr><td>Limit data in memory</td><td>Scans expose one current row. Collecting every result still creates a large list.</td><td>Operators stream blocks. Collecting every result with <code>take_all()</code> still creates a large list.</td></tr>
+  </tbody>
+</table>
+<p>The connection is the separation between a plan and its execution. Ray adds distributed scheduling and block processing. MicroDB’s scan tree does not become distributed automatically.</p>
+<figure class="ray-diagram">
+  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="MicroDB and Ray Data execution plans, scroll horizontally on small screens">
+    <img src="diagrams/ray-plan.svg" width="840" height="800" alt="MicroDB builds a scan tree and pulls rows through it with next. Ray Data builds logical and physical plans, then schedules workers to process blocks when results are consumed.">
+  </div>
+  <figcaption>A plan describes connected operations. Execution moves data through those operations.</figcaption>
+</figure>
+<p>Use <code>explain()</code> to inspect the read-and-map plan before writing output:</p>
+<pre><code class="language-python">ds = ray.data.read_images(str(source), include_paths=True)
+processed_ds = ds.map(process_image)
+processed_ds.explain()
+processed_ds.write_parquet(str(output))</code></pre>
+<p>The complete program below defines <code>source</code> and <code>output</code>. The <code>explain()</code> call displays plans without running the image transformation. The later <code>write_parquet()</code> call triggers execution and writes results.</p>
+<p>Expect logical and physical plans, each shown before and after optimization. Look for <code>ReadImage</code> and <code>Map(process_image)</code>. A <code>TaskPoolMapOperator</code> launches Ray tasks. The optimizer can combine compatible operations into one operator. This is called <strong>fusion</strong>.</p>
+<details>
+  <summary>See two plan sections from a local Ray 2.60 run</summary>
+  <pre class="terminal"><code>-------- Logical Plan --------
+MapRows[Map(process_image)]
++- Read[ReadImage]
+
+-------- Physical Plan (Optimized) --------
+TaskPoolMapOperator[Map(process_image)]
++- TaskPoolMapOperator[ReadImage]
+   +- InputDataBuffer[Input]</code></pre>
+  <p>Inputs appear below their consumers. Read from the bottom upward to follow data into the map operation.</p>
+</details>
+<p>The displayed plan covers reading and mapping. The write call comes afterward. Operator names and fusion can vary with Ray versions and settings. See the <a href="https://docs.ray.io/en/latest/data/api/doc/ray.data.Dataset.explain.html">explain reference</a> and <a href="https://docs.ray.io/en/latest/data/internals.html#plans">Ray Data planning and execution guide</a>.</p>
+<div class="exercise learning-check">
+  <span class="ex-label">Predict when work starts</span>
+  <p>If you remove <code>write_parquet()</code>, does <code>explain()</code> transform all eight images?</p>
+  <details><summary>Check your explanation</summary><p>No. It displays the plans. Reading may inspect files or metadata, but the planned image transformation waits for a consumer.</p></details>
+</div>
 <h3>Run stage 4 with files instead of an in-memory list</h3>
-<p>This complete program creates eight small PNG files, processes their rows, and writes Parquet output. It uses the same <code>process_row</code> function. <a href="starter/stage4_streaming.py" download>Download stage4_streaming.py</a>.</p>
+<p>This complete program creates eight small PNG files, processes their rows, and writes Parquet output. It defines the same ordinary <code>process_image</code> function. <a href="starter/stage4_streaming.py" download>Download stage4_streaming.py</a>.</p>
 <pre data-source="starter/stage4_streaming.py"><code class="language-python">from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -562,7 +616,9 @@ import pyarrow.parquet as pq
 import ray
 import ray.data
 
-from ray_images import process_row
+
+def process_image(row):
+    return {&quot;processed_image&quot;: 255 - row[&quot;image&quot;], &quot;original_id&quot;: row[&quot;path&quot;]}
 
 
 if __name__ == &quot;__main__&quot;:
@@ -570,26 +626,34 @@ if __name__ == &quot;__main__&quot;:
         source = Path(directory) / &quot;images&quot;
         output = Path(directory) / &quot;processed&quot;
         source.mkdir()
-        for value in range(8):
-            image = np.full((10, 10, 3), value, dtype=np.uint8)
-            Image.fromarray(image).save(source / f&quot;{value}.png&quot;)
-        ray.init(include_dashboard=False, log_to_driver=False)
+        for i in range(8):
+            image = np.random.randint(0, 255, (10, 10, 3), dtype=np.uint8)
+            Image.fromarray(image).save(source / f&quot;{i}.png&quot;)
+        ray.init()
         try:
-            dataset = ray.data.read_images(str(source))
-            dataset.map(process_row).write_parquet(str(output))
+            ds = ray.data.read_images(str(source), include_paths=True)
+            processed_ds = ds.map(process_image)
+            processed_ds.explain()
+            processed_ds.write_parquet(str(output))
             rows = sum(pq.read_metadata(file).num_rows for file in output.glob(&quot;*.parquet&quot;))
             print(&quot;written rows:&quot;, rows)
         finally:
             ray.shutdown()</code></pre>
 <pre class="terminal"><code>python stage4_streaming.py</code></pre>
-<p>Expect <code>written rows: 8</code>. The final count reads Parquet metadata, not the image arrays. The temporary files are removed when the program finishes. This small run demonstrates the pipeline, not large-data performance.</p>
+<p>Expect the plan output followed by <code>written rows: 8</code>. The final count reads Parquet metadata, not the image arrays. The temporary files are removed when the program finishes. This small run demonstrates the pipeline, not large-data performance.</p>
 <p class="keep-in-present">The read and map operations build a plan. Writing results triggers execution. Ray Data moves blocks through the pipeline instead of building one list of every image in the driver.</p>
-<p><strong>Keep the result out of the driver too.</strong> The <code>take_all()</code> call collects all result rows into the calling process. A large result can cause OOM there. Use it only for the eight-row example. See the <a href="https://docs.ray.io/en/latest/data/api/doc/ray.data.Dataset.take_all.html">collection warning</a>.</p>
+<p><strong>Keep the result out of the driver too.</strong> The <code>take_all()</code> call collects all result rows into the calling process. A large result can cause OOM there. The pipeline writes results to storage instead. See the <a href="https://docs.ray.io/en/latest/data/api/doc/ray.data.Dataset.take_all.html">collection warning</a>.</p>
 <p>Ray Data uses <strong>backpressure</strong> to slow upstream work when later stages cannot keep up. Ray can also move object-store blocks to disk. These mechanisms reduce memory pressure. They do not make memory unlimited.</p>
 <p>Large images, memory-heavy functions, or too many concurrent tasks can still exhaust worker memory. Temporary arrays inside a function also use memory. See Ray’s <a href="https://docs.ray.io/en/latest/data/internals.html#memory-model">memory model</a> and <a href="https://docs.ray.io/en/latest/data/performance-tips.html#reducing-memory-usage">memory guidance</a>.</p>
 
-<h2 id="verify">Run and check the example</h2>
-<p>These checks apply to the supplied image example. They help you study Ray and do not determine your completion grade. Your chosen task can use different inputs, outputs, and function names.</p>
+<h2 id="verify">Optional: check the shared helper example</h2>
+<p>The standalone scripts above need no helper files. This earlier combined example remains available for extra practice. Its tests check <code>ray_images.py</code>, not the standalone stage scripts. These checks do not determine your completion grade.</p>
+<div class="chat-downloads">
+  <span class="chat-downloads-label">Optional practice files:</span>
+  <a class="chat-dl-btn" href="starter/ray_images.py" download>ray_images.py</a>
+  <a class="chat-dl-btn" href="starter/demo_ray.py" download>demo_ray.py</a>
+  <a class="chat-dl-btn" href="starter/test_ray_images.py" download>test_ray_images.py</a>
+</div>
 
 <h3 id="function-tests">Test one function at a time</h3>
 <pre class="terminal"><code>python test_ray_images.py --list
@@ -625,7 +689,7 @@ small local Ray Data result: 8 rows</code></pre>
 
 <h2 id="explain-it">Explain the result</h2>
 <div class="exercise learning-check">
-  <span class="ex-label">Return to the eight images</span>
+  <span class="ex-label">Return to the image examples</span>
   <p>What does a remote call return before an image is ready? Why did the driver’s global count stay zero? Where does the actor’s count live? Why must each counted task wait for its actor update? Why does Ray Data need an ordinary function? Why can a driver list exhaust memory even with many workers?</p>
   <details><summary>Check your explanation</summary><p>A remote call returns an object reference. Worker changes to globals stay outside the driver’s memory. The actor owns the shared count. Waiting makes each task’s completion include its counter update. Ray Data schedules the ordinary row function itself. A list of every decoded image still consumes the driver’s memory.</p></details>
 </div>
