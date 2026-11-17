@@ -127,7 +127,7 @@
   <details><summary>Check your explanation</summary><p>No. Each person sees only part of the requests. The final pizza count needs contributions from both orders.</p></details>
 </div>
 
-<p class="keep-in-present">First, choose how to divide the data. Then count each order, group requests by meal, and calculate totals. We will also examine uneven work and worker failures. Lab 11 implements the counting pattern in one Python process. Its engine exercises are optional.</p>
+<p class="keep-in-present">First, choose how to divide the data. Then count each order, group requests by meal, and calculate totals. We will also examine uneven work and worker failures. Lab 11’s optional MapReduce exercise implements this pattern in one process. Its graded exercise uses Ray tasks, an actor, and Ray Data.</p>
 <details id="wall"><summary>More context: reading, memory, and recovery costs</summary>
 <p class="keep-in-present">The <a href="#report-window">10 TB report</a> also illustrates memory and recovery concerns. Its 10-minute window explains why the one-machine scan is insufficient. The table separates reading, memory, and recovery concerns. These estimates do not specify a course-project requirement or guarantee a speedup.</p>
 
@@ -236,7 +236,7 @@
     <tr><td>Rule</td><td><code>owner = hash(key) % n</code></td><td>P0: a–c; P1: d–f; P2: g–j; P3: k–z</td></tr>
     <tr><td>Strength</td><td>A good hash distributes distinct keys across partitions. The routing rule is simple to calculate.<sup class="src"><a href="#src-4" title="Hashed Sharding (MongoDB Manual)">4</a></sup></td><td>A range query contacts partitions whose key intervals overlap the requested range. Neighboring keys stay together.</td></tr>
     <tr><td>Weakness</td><td>Without extra metadata, a range query must check <em>every</em> partition.</td><td>Split-point selection affects balance. A frequently accessed range can overload one machine.<sup class="src"><a href="#src-5" title="Design a schema (Google Cloud Bigtable documentation)">5</a></sup></td></tr>
-    <tr><td>Related examples</td><td>Lab 11’s shuffle uses a hash to select a partition. A hash join also uses hashing to group equal keys in one bucket.</td><td>Lab 8’s folders, such as <code>month=12/</code>, group equal month values. B+ tree leaves illustrate sorted key intervals.</td></tr>
+    <tr><td>Related examples</td><td>Lab 11’s optional shuffle exercise uses a hash to select a partition. A hash join also uses hashing to group equal keys in one bucket.</td><td>Lab 8’s folders, such as <code>month=12/</code>, group equal month values. B+ tree leaves illustrate sorted key intervals.</td></tr>
   </tbody>
 </table>
 </div>
@@ -322,7 +322,7 @@
 
 <p class="keep-in-present">You write the map and reduce functions. The framework assigns records to workers, runs the functions, groups their outputs, and retries failed work.</p>
 
-<p class="keep-in-present">Map and reduce are computation roles. A single process can demonstrate both, as Lab 11 does. A <strong>cluster</strong> is a group of machines working together. On a cluster, the framework schedules those computations across worker processes.</p>
+<p class="keep-in-present">Map and reduce are computation roles. A single process can demonstrate both, as Lab 11’s optional MapReduce exercise does. A <strong>cluster</strong> is a group of machines working together. On a cluster, the framework schedules those computations across worker processes.</p>
 
 <h3 id="two-divisions">Input splits and intermediate partitions divide different data</h3>
 <p>A MapReduce job divides data at two points. First, the framework divides original records into <strong>input splits</strong>. A <strong>map task</strong> processes one input split by calling the map function for each record. One task can therefore make many map calls.</p>
@@ -343,7 +343,7 @@ word count:  map:      "the log the tree" → (the,1)(log,1)(the,1)(tree,1)
 <p>Both orders contribute to the same pizza total. Group 0 supplies two values of 1, and group 1 supplies the third. Shuffle forms pizza’s complete group, <code>[1, 1, 1]</code>, and salad’s group, <code>[1]</code>. Reduce adds each group, producing <code>pizza = 3</code> and <code>salad = 1</code>.</p>
 <p>For illustration, pizza goes to P0 and salad to P1. Partition labels describe destinations, while meal names identify groups. A partition can hold several different keys. Changing the partition count may change destinations, but it must preserve each key’s complete total.</p>
 <h3 id="worked-example">Trace the same grouping across partition dictionaries</h3>
-<p class="keep-in-present">Return to the original two orders. The Python companion below uses one dictionary for all groups. Lab 11 adds a routing rule and several partition dictionaries. Follow the same four pairs through the code below.</p>
+<p class="keep-in-present">Return to the original two orders. The Python companion below uses one dictionary for all groups. Lab 11’s optional MapReduce exercise adds a routing rule and several partition dictionaries. Follow the same four pairs through the code below.</p>
 
 <p class="keep-in-present">The code stores groups in <strong>partitions</strong>, which are subsets of the intermediate data. A routing rule selects a partition for each key. Each partition contains a separate list of values for each key assigned to it.</p>
 
@@ -380,9 +380,9 @@ print(partitions)
 </details>
 </section>
 
-<p><strong>Lab connection:</strong> <a href="../../labs/lab-11/sparkray.html#worked-example">Lab 11’s graded Part A runs in one Python process</a>. Its mapper must emit one pair per occurrence. Its shuffle must retain every value and group matching keys. Its reducer adds each group’s values.</p>
+<p><strong>Lab connection:</strong> <a href="../../labs/lab-11/sparkray.html#worked-example">Lab 11’s optional MapReduce exercise runs in one Python process</a>. Its mapper emits one pair per occurrence. Its shuffle retains every value and groups matching keys. Its reducer adds each group’s values.</p>
 
-<p class="keep-in-present">On a cluster, workers must use the same partition rule so equal keys reach the same destination. Python can choose a different string-hash seed for each process. A seed configures the hash calculation. Lab 11 avoids this issue by running its graded implementation in one process.</p>
+<p class="keep-in-present">On a cluster, workers must use the same partition rule so equal keys reach the same destination. Python can choose a different string-hash seed for each process. A seed configures the hash calculation. The optional MapReduce runner avoids this issue by running in one process.</p>
 <details id="python-example"><summary>Python companion: run the same three operations</summary>
 <p class="keep-in-present">This program implements the three operations shown in the diagram. It processes all stages sequentially in one Python process. Each print statement shows the output passed to the next stage.</p>
 
@@ -810,7 +810,7 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 
 <p class="keep-in-present"><strong>Tuesday November 17:</strong> Class begins with Quiz 10 on MapReduce, Spark, and Ray. The lecture then examines Bigtable and log-structured merge (LSM) trees for workloads with many writes.<sup class="src"><a href="#src-16" title="Bigtable: A Distributed Storage System for Structured Data (OSDI 2006 paper PDF)">16</a></sup> Lab 11 is due Tuesday December 1 at class start.</p>
 
-<p><strong>Thursday November 19:</strong> Implement a small MapReduce word count for Lab 11’s graded Part A. Optional Parts B and C use Spark for word count and Ray for parallel nearest-neighbor tasks.</p>
+<p><strong>Thursday November 19:</strong> complete Lab 11’s Ray image-processing exercise. Implement task submission, an actor counter, and a dataset row function. The earlier MapReduce, Spark, and nearest-neighbor exercises remain optional.</p>
 
 <ul class="checklist">
   <li>☐ <strong>Part A (graded, offline):</strong> Implement map, hash partitioning, shuffle, and reduce in micro-mapreduce. The harness checks grouping and identical answers across partition counts.</li>
@@ -820,7 +820,7 @@ Reduce output: [(&#x27;pizza&#x27;, 3), (&#x27;salad&#x27;, 1)]</code></pre>
 </ul>
 <p class="keep-in-present"><strong>Before the November 19 lab:</strong></p>
 <ul>
-  <li><strong>Read</strong> Dean &amp; Ghemawat, <em>MapReduce: Simplified Data Processing on Large Clusters</em> (OSDI 2004, 13 pages). Lab 11 Part A implements the shuffle from that design.</li>
+  <li><strong>Read</strong> Dean &amp; Ghemawat, <em>MapReduce: Simplified Data Processing on Large Clusters</em> (OSDI 2004, 13 pages). Lab 11’s optional MapReduce exercise implements the shuffle from that design.</li>
   <li><strong>Run</strong> <code>pip install pyspark ray</code> for the optional exercises. Confirm that <code>java -version</code> works. PySpark requires Java.</li>
   <li><strong>Bring</strong> your laptop for Part A. Check both installations before optional Parts B and C. The autograder grades Part A.</li>
 </ul>

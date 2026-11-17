@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Lab 11 · Spark &amp; Ray · Advanced Databases for Data Science</title>
+<title>Lab 11 · Ray image processing · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
@@ -16,19 +16,17 @@
 <aside class="toc">
   <div class="toc-title">Lab 11</div>
   <ul>
-    <li><a href="#before-you-start">Check the starting point</a></li>
-    <li><a href="#try-it">Trace how keys select a partition</a></li>
-    <li><a href="#big-idea">Separate computation from scheduling and data transfer</a></li>
-    <li><a href="#worked-example">Trace map output into independent partition dictionaries</a></li>
-    <li><a href="#the-api">One file is graded. Two more you run and read</a></li>
-    <li><a href="#build">Part 1 · micro-mapreduce</a></li>
-    <li><a href="#spark">Part 2 · Spark</a></li>
-    <li><a href="#ray">Part 3 · Ray</a></li>
-    <li><a href="#verify">Routing bugs hide at n=1, so the harness varies n</a></li>
-    <li><a href="#explain-it">Explain what your result means</a></li>
-    <li><a href="#assignment">Assignment</a></li>
-    <li><a href="#going-further">Going further</a></li>
-    <li><a href="#faq">FAQ</a></li>
+    <li><a href="#video-route">Follow the video</a></li>
+    <li><a href="#the-api">Get the starter files</a></li>
+    <li><a href="#before-you-start">Predict the slow loop</a></li>
+    <li><a href="#ray-tasks">1 · Run independent tasks</a></li>
+    <li><a href="#ray-actors">2 · Keep one pixel count</a></li>
+    <li><a href="#ray-cluster">3 · Add worker machines</a></li>
+    <li><a href="#ray-data">4 · Process data in blocks</a></li>
+    <li><a href="#verify">Check your functions</a></li>
+    <li><a href="#explain-it">Explain the result</a></li>
+    <li><a href="#assignment">Submit ray_images.py</a></li>
+    <li><a href="#worked-example">Optional earlier exercises</a></li>
   </ul>
   <div class="toc-foot">DS 6XXX · Fall 2026<br>UVA School of Data Science</div>
 </aside>
@@ -42,19 +40,40 @@
 
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lab 11 · Thursday November 19, 2026</div>
-  <h1>Spark &amp; Ray · distributed processing</h1>
-  <div class="subtitle">Implement the key-grouping rule for MapReduce, then compare local Spark and Ray executions.</div>
+  <h1>Ray · from a slow loop to distributed work</h1>
+  <div class="subtitle">Follow an image-processing job from a slow loop to parallel tasks, shared state, a cluster, and streamed data.</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 
-<p class="lede">How do we count a word that appears in many documents? Emit one pair for each occurrence, group all pairs with the same word, and add their counts. Implement these MapReduce steps in one Python process. Then try the optional Spark word-count and Ray nearest-neighbor examples using the same 4,000 abstracts.</p>
+<p class="lede">You have eight images and one function that inverts their colors. A loop processes one image at a time. How can independent images run together? Follow that question through Ray tasks, an actor that keeps a shared count, a larger cluster, and a dataset processed in blocks.</p>
 
 <div class="cite">
-  Builds on: <a href="../../lectures/lecture-13/spark-ray.html">Lecture 13B · Spark and Ray</a> · <a href="../lab-10/microrag.html">Lab 10 · micro-rag</a> (same corpus) ·
-  Dean &amp; Ghemawat, <a href="https://research.google/pubs/pub62/"><em>MapReduce</em></a> (OSDI 2004) ·
-  Spark's <a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html">RDD programming guide</a> ·
-  Ray's <a href="https://docs.ray.io/en/latest/ray-core/walkthrough.html">core walkthrough</a>.
+  Teaching sequence and image-processing examples adapted from Zachary Huang,
+  <a href="https://www.youtube.com/watch?v=4Rbd_1Kb2qU&amp;t=123s"><em>Ray in 30 min</em></a>, October 25, 2025.
+  The supplied link starts at 2:03. The chapter links below cover the full explanation.
+  See also the creator’s <a href="https://github.com/The-Pocket/PocketFlow-Tutorial-Video-Generator/blob/main/docs/system/ray.md">companion text and code</a>.
 </div>
+
+<div class="cite">
+  Builds on <a href="../../lectures/lecture-13/spark-ray.html">Lecture 13B · Spark and Ray</a>.
+  API references: <a href="https://docs.ray.io/en/latest/ray-core/tasks.html">tasks</a>,
+  <a href="https://docs.ray.io/en/latest/ray-core/actors/task-orders.html">actor ordering</a>, and
+  <a href="https://docs.ray.io/en/latest/data/api/doc/ray.data.Dataset.map.html">Dataset.map</a>.
+</div>
+
+<h2 id="video-route">Follow one job through four problems</h2>
+
+<p>Keep the image transformation in view as each problem appears. Identify what changes: task scheduling, shared state, available workers, or data loading.</p>
+<table>
+  <thead><tr><th>Video chapter</th><th>Problem to predict</th><th>Ray tool to examine</th></tr></thead>
+  <tbody>
+    <tr><td><a href="https://www.youtube.com/watch?v=4Rbd_1Kb2qU&amp;t=107s">1:47 · Tasks</a></td><td>Eight images wait for one another in a loop.</td><td>Submit independent tasks and retrieve their results.</td></tr>
+    <tr><td><a href="https://www.youtube.com/watch?v=4Rbd_1Kb2qU&amp;t=464s">7:44 · Actors</a></td><td>Workers need one shared count.</td><td>Send updates to an actor that owns the count.</td></tr>
+    <tr><td><a href="https://www.youtube.com/watch?v=4Rbd_1Kb2qU&amp;t=830s">13:50 · Clusters</a></td><td>The workload grows to 10,000 images.</td><td>Distribute tasks across workers on multiple machines.</td></tr>
+    <tr><td><a href="https://www.youtube.com/watch?v=4Rbd_1Kb2qU&amp;t=1196s">19:56 · Ray Data</a></td><td>A 500 GB image collection exceeds a machine’s 16 GB memory.</td><td>Read, transform, and write data in blocks.</td></tr>
+  </tbody>
+</table>
+<p>These image sizes and workloads come from the video. The course’s arXiv corpus and measured nearest-neighbor timings are separate examples.</p>
 
 <p class="glossary-hint">
 Terms with a dotted underline have definitions. Hover or tap a term to read its explanation.
@@ -64,24 +83,225 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
   <div id="glossary-content" class="glossary-content"></div>
 </div>
 
-<!-- ============================================================ -->
-<h2 id="before-you-start">Check the starting point</h2>
+<h2 id="the-api">Get the starter files</h2>
 
-<div class="exercise learning-check">
-  <span class="ex-label">Check the starting point</span>
-  <p>Each word in this toy lunch order requests one meal. How many <code>pizza</code> occurrences are in <code>“Pizza, pizza!”</code>? If another order adds one pizza, what must be preserved while routing the pairs? Can every worker use a different partition rule?</p>
-  <details><summary>Check your explanation</summary><p>Lowercasing the first record gives two occurrences of pizza. The other record adds a third. Keep all three pairs and send them to the same partition so reduction returns 3. Separate workers must agree on the routing rule. The graded exercise runs in one process.</p></details>
+<div class="callout note">
+  <span class="label">Required submission</span>
+  <p>Complete six functions in <code>ray_images.py</code>. Submit that file by <strong>Tuesday Dec 1 at class start</strong>. Seven correctness checks determine the grade. All required work runs locally with generated images.</p>
 </div>
 
-<p class="keep-in-present">Use <strong>predict, run, explain</strong>. Predict the emitted pairs, their destination partitions, and the final word totals. Run the trace or function check. Explain how each occurrence contributes to its word’s total.</p>
+<p>Use Python 3.11–3.13 with the pinned Ray version in <code>requirements-ray.txt</code>. The <a href="https://docs.ray.io/en/latest/ray-overview/installation.html">Ray installation guide</a> lists supported platforms.</p>
+<pre class="clone-cmd"><code>git pull
+cd labs/lab-11/starter
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-ray.txt</code></pre>
+<p>On Windows, activate the environment with <code>.venv\Scripts\activate</code>. If <code>python3</code> selects another version, use <code>python3.13</code> to create the environment.</p>
 
+<div class="chat-downloads">
+  <span class="chat-downloads-label">Required files:</span>
+  <a class="chat-dl-btn" href="starter/ray_images.py" download>ray_images.py</a>
+  <a class="chat-dl-btn" href="starter/demo_ray.py" download>demo_ray.py</a>
+  <a class="chat-dl-btn" href="starter/test_ray_images.py" download>test_ray_images.py</a>
+  <a class="chat-dl-btn" href="starter/requirements-ray.txt" download>requirements-ray.txt</a>
+</div>
+<table>
+  <thead><tr><th>File</th><th>Your action</th></tr></thead>
+  <tbody>
+    <tr><td><code>ray_images.py</code></td><td>Replace the six <code>raise NotImplementedError</code> statements. Keep the supplied function names and decorators.</td></tr>
+    <tr><td><code>demo_ray.py</code></td><td>Run the supplied image, timing, counter, and dataset demonstration.</td></tr>
+    <tr><td><code>test_ray_images.py</code></td><td>Run function checks, then the full seven-check suite.</td></tr>
+    <tr><td><code>requirements-ray.txt</code></td><td>Install Ray Data, NumPy, and Pillow.</td></tr>
+  </tbody>
+</table>
+<p>Keep your code short, clear, and easy to edit. Use clear names and simple steps. Do not add code comments. Keep explanations in these instructions. The required exercise needs no downloaded corpus, cloud account, Java installation, or paid service.</p>
+
+<h2 id="before-you-start">Predict the slow loop</h2>
+
+<p class="keep-in-present">The video starts with eight small images. Each image has 10 rows, 10 columns, and three color channels: red, green, and blue. Each channel value is between 0 and 255. Subtracting it from 255 inverts that channel.</p>
+<pre class="equation"><code>Input RGB value:   [0, 64, 255]
+Inverted value:    [255, 191, 0]</code></pre>
+<p>The starter supplies the image operation:</p>
+<pre><code class="language-python">def process_image(image):
+    time.sleep(1)
+    return 255 - image</code></pre>
+<p class="keep-in-present">The one-second sleep simulates a delay. It does not measure expensive CPU work. This demonstration makes overlapping calls visible. It does not establish the speedup of a real image filter.</p>
+<div class="exercise learning-check">
+  <span class="ex-label">Predict before running</span>
+  <p>A loop calls this function for eight images. When does the second call start? Does the second image need the first image’s result?</p>
+  <details><summary>Check your explanation</summary><p>The second call starts after the first returns. Each image transformation is independent. Without overhead, eight one-second waits take eight seconds sequentially.</p></details>
+</div>
+<p>Use <strong>predict, run, explain</strong>. Predict what can run independently and what must wait. Run the function check. Explain what the returned value represents.</p>
+
+<h2 id="ray-tasks">1 · Run independent tasks</h2>
+
+<p><a href="https://www.youtube.com/watch?v=4Rbd_1Kb2qU&amp;t=107s">Video: tasks, from 1:47.</a> The same image function can run as a remote task. The supplied <code>@ray.remote</code> decorator marks its wrapper for Ray.</p>
+<table>
+  <thead><tr><th>Operation</th><th>What the caller receives</th><th>What waits?</th></tr></thead>
+  <tbody>
+    <tr><td><code>process_image(image)</code></td><td>The processed image</td><td>The caller waits for the function.</td></tr>
+    <tr><td><code>process_image_task.remote(image)</code></td><td>An <code>ObjectRef</code> for the result</td><td>The caller can submit another task.</td></tr>
+    <tr><td><code>ray.get(result_refs)</code></td><td>The processed images</td><td>The caller waits for the requested results.</td></tr>
+  </tbody>
+</table>
+<p class="keep-in-present">The video compares an object reference to a coffee receipt. The receipt identifies the order you will collect. Similarly, an <code>ObjectRef</code> identifies a result that may still be running. A reference is not the image itself.</p>
+
+<h3>Implement two functions</h3>
+<ol>
+  <li>In <code>process_image_task(image)</code>, return the result of the supplied <code>process_image(image)</code>.</li>
+  <li>In <code>process_parallel(images)</code>, submit one remote task per image, in input order.</li>
+  <li>Gather the full reference list with one <code>ray.get()</code> call after submitting all tasks.</li>
+  <li>Return the gathered image list in input order. Keep the input list and arrays unchanged.</li>
+</ol>
+<p>An empty image list must return an empty result list. Calling <code>ray.get()</code> on an empty reference list is valid.</p>
+
+<div class="exercise">
+  <span class="ex-label">Find the wait</span>
+  <p>This loop waits after every submission. Why does that prevent the next image from starting sooner?</p>
+  <pre><code class="language-python">results = [ray.get(process_image_task.remote(image)) for image in images]</code></pre>
+  <details><summary>Check your explanation</summary><p>The loop cannot submit its next task until the current result arrives. Submit all independent tasks first. Available resources determine how many can run together.</p></details>
+</div>
+<pre class="terminal"><code>python test_ray_images.py --unit process_image_task
+python test_ray_images.py --unit process_parallel</code></pre>
+
+<h2 id="ray-actors">2 · Keep one pixel count</h2>
+
+<p><a href="https://www.youtube.com/watch?v=4Rbd_1Kb2qU&amp;t=464s">Video: actors, from 7:44.</a> The next request is one shared count. Changing a worker’s global variable does not update the driver’s variable. Worker processes have separate memory and can be reused for later tasks.</p>
+<pre class="equation"><code>Worker A changes its own variable.
+Worker B changes its own variable.
+The driver has not received either update.</code></pre>
+<p class="keep-in-present">An <strong>actor</strong> is a running class instance that owns state. Create one counter actor. Pass its handle to every task that must update that count.</p>
+
+<h3>Count pixels, not channel values</h3>
+<table>
+  <thead><tr><th>Quantity</th><th>One 10 × 10 RGB image</th><th>Eight images</th></tr></thead>
+  <tbody>
+    <tr><td>Pixels: height × width</td><td>100</td><td><strong>800</strong></td></tr>
+    <tr><td>Channel values: height × width × channels</td><td>300</td><td>2,400</td></tr>
+  </tbody>
+</table>
+<p>The video uses <code>image.size</code>, which counts channel values. This lab counts pixels with <code>image.shape[0] * image.shape[1]</code>. The expected actor total is <strong>800 pixels</strong>.</p>
+
+<h3>Implement three functions</h3>
+<ol>
+  <li>In <code>PixelCounter.add(count)</code>, add <code>count</code> to <code>self.total</code>.</li>
+  <li>In <code>PixelCounter.get_total()</code>, return <code>self.total</code>.</li>
+  <li>In <code>process_and_count(image, counter)</code>, process the image with <code>process_image(image)</code>.</li>
+  <li>Send its pixel count to <code>counter.add.remote(...)</code>.</li>
+  <li>Wait for that update with <code>ray.get()</code> before returning the processed image.</li>
+</ol>
+<p class="keep-in-present">A submitted counter update may still be waiting. Finishing the image task does not automatically finish an actor call that task submitted. Waiting for the update makes completion explicit. Calls from different submitters have no guaranteed relative order.</p>
+<pre class="equation"><code>Image processed → counter update submitted → update completed → task returns
+All image tasks return → driver reads the actor's total</code></pre>
+<p>The supplied driver creates one actor and passes the same handle to each image task:</p>
+<pre><code class="language-python">counter = PixelCounter.remote()
+refs = [process_and_count.remote(image, counter) for image in images]
+results = ray.get(refs)
+total = ray.get(counter.get_total.remote())</code></pre>
+<p>This lab makes one update per input image. Retrying an update is separate work and can count an image twice. Automatic deduplication is not part of this exercise.</p>
+<pre class="terminal"><code>python test_ray_images.py --unit PixelCounter.add
+python test_ray_images.py --unit PixelCounter.get_total
+python test_ray_images.py --unit process_and_count</code></pre>
+
+<h2 id="ray-cluster">3 · Add worker machines</h2>
+
+<p><a href="https://www.youtube.com/watch?v=4Rbd_1Kb2qU&amp;t=830s">Video: clusters, from 13:50.</a> The workload grows from eight images to 10,000. The image function still handles one image. Worker machines add capacity for more concurrent tasks.</p>
+<p class="keep-in-present">The head node supplies cluster management services. Worker nodes run tasks and actors. The application still submits tasks, passes actor handles, and retrieves references. A real cluster also needs compatible packages and access to its input data.</p>
+<pre class="equation"><code>Illustrative model: 10,000 independent jobs, one second each, no overhead
+8 available task slots:   10,000 / 8  = 1,250 seconds
+80 available task slots:  10,000 / 80 =   125 seconds</code></pre>
+<p>These are idealized calculations, not measured runtimes. Startup, scheduling, data transfer, and shared resources change actual results.</p>
+<table>
+  <thead><tr><th>Video command</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>ray up my-cluster.yaml</code></td><td>Create the configured cluster.</td></tr>
+    <tr><td><code>ray submit my-cluster.yaml counter_works.py</code></td><td>Submit the video’s script.</td></tr>
+    <tr><td><code>ray down my-cluster.yaml</code></td><td>Remove the cluster after use.</td></tr>
+  </tbody>
+</table>
+<p class="keep-in-present"><strong>Reading only:</strong> cloud deployment is not required or graded. The lab starts Ray locally. Creating cloud machines can incur charges.</p>
+<div class="exercise"><span class="ex-label">Predict the next limit</span>
+  <p>Does adding worker machines increase the memory available to one Python list in the driver?</p>
+  <details><summary>Check your explanation</summary><p>No. That list still belongs to one process. The next step must change how input is read and processed.</p></details>
+</div>
+
+<h2 id="ray-data">4 · Process data in blocks</h2>
+
+<p><a href="https://www.youtube.com/watch?v=4Rbd_1Kb2qU&amp;t=1196s">Video: Ray Data, from 19:56.</a> The video’s final example has 500 GB of images and 16 GB of memory. A list containing every decoded image cannot fit on that machine.</p>
+<pre class="equation"><code>Image files → read blocks → transform rows → write output blocks</code></pre>
+<p class="keep-in-present">Ray Data represents the pipeline as work over blocks. Its transformation accepts a row dictionary containing an image. Ray Data schedules the transformation. The function passed to <code>Dataset.map</code> must be a plain Python callable.</p>
+
+<h3>Implement one function</h3>
+<ol>
+  <li>In <code>process_row(row)</code>, process <code>row["image"]</code> with the supplied <code>process_image</code>.</li>
+  <li>Return a new dictionary containing the processed image and every other original field.</li>
+  <li>Keep the original row and its image unchanged.</li>
+  <li>Leave <code>process_row</code> undecorated. Do not add <code>@ray.remote</code>.</li>
+</ol>
+<pre class="terminal"><code>python test_ray_images.py --unit process_row</code></pre>
+<p>The supplied demo creates eight small rows in memory. That fixture checks your row function without requiring image downloads:</p>
+<pre><code class="language-python">rows = [{"id": i, "image": image} for i, image in enumerate(images)]
+dataset = ray.data.from_items(rows)
+processed = dataset.map(process_row)
+results = processed.take_all()</code></pre>
+<p>Keep the <code>id</code> field so results can be matched to their inputs. Dataset output order is not the correctness test. Compare images by ID.</p>
+<p>For the video’s larger collection, the input and output would stay in storage. This is a reading example with placeholder paths:</p>
+<pre><code class="language-python">dataset = ray.data.read_images("s3://YOUR-BUCKET/raw-images")
+processed = dataset.map(process_row)
+processed.write_parquet("s3://YOUR-BUCKET/processed-images")</code></pre>
+<p class="keep-in-present">The read and map operations build a plan. Consuming or writing results triggers execution. Metadata checks can also read data. Do not collect a large dataset into the driver with <code>take_all()</code>. The lab uses it only for eight small images.</p>
+
+<h2 id="verify">Check your functions</h2>
+
+<h3 id="function-tests">Test one function at a time</h3>
+<pre class="terminal"><code>python test_ray_images.py --list
+python test_ray_images.py --unit process_parallel
+python test_ray_images.py --unit</code></pre>
+<p>The six unit checks use small arrays and local Ray stand-ins. They supply unfinished helper functions while testing your selected function. Unit results are practice feedback. They do not start Ray workers.</p>
+<p>Run the full suite after completing all six functions:</p>
+<pre class="terminal"><code>python test_ray_images.py</code></pre>
+<p>The full suite checks six function contracts and one complete pipeline with real Ray tasks, an actor, and Ray Data. Missing required dependencies cause failure. A fresh starter fails because its functions are unfinished.</p>
+<table>
+  <thead><tr><th>Check</th><th>Required behavior</th></tr></thead>
+  <tbody>
+    <tr><td>Task</td><td>Return the supplied image function’s result.</td></tr>
+    <tr><td>Parallel calls</td><td>Submit all images before one <code>ray.get()</code> call on the reference list. Preserve input order.</td></tr>
+    <tr><td>Counter update</td><td>Add each supplied count.</td></tr>
+    <tr><td>Counter read</td><td>Return the stored total.</td></tr>
+    <tr><td>Counted task</td><td>Count pixels and finish the actor update before returning.</td></tr>
+    <tr><td>Dataset row</td><td>Transform the image while preserving metadata and input.</td></tr>
+    <tr><td>Complete pipeline</td><td>Actual Ray execution produces the correct images and count.</td></tr>
+  </tbody>
+</table>
+
+<h3>Run the supplied demo</h3>
+<pre class="terminal"><code>python demo_ray.py</code></pre>
+<p>Check that all image results agree and the counter reports 800 pixels. Read the serial and parallel timings afterward. The video reports 8.02 seconds and 1.05 seconds for its demonstration. Those are source timings, not required results for your machine.</p>
+<p>The one-second sleep illustrates overlapping waits. It does not establish CPU scaling. No runtime or speedup threshold affects the grade.</p>
+
+<h2 id="explain-it">Explain the result</h2>
+<div class="exercise learning-check">
+  <span class="ex-label">Return to the eight images</span>
+  <p>What does a remote call return before an image is ready? Where does the shared count live? Why must each counted task wait for its actor update? Why does Ray Data need an ordinary function?</p>
+  <details><summary>Check your explanation</summary><p>A remote call returns an object reference. The actor owns the count. Waiting makes each task’s completion include its counter update. Ray Data schedules the ordinary row function itself. Tasks, actors, clusters, and data blocks solve different parts of the same image-processing problem.</p></details>
+</div>
+
+<h2 id="assignment">Submit ray_images.py</h2>
+<p class="keep-in-present">Submit only <code>ray_images.py</code> to Gradescope by <strong>Tuesday Dec 1 at class start</strong>. The seven checks in <code>test_ray_images.py</code> determine 100% of the grade. Each check has equal weight.</p>
+<p>Keep the supplied image function, function names, and decorators. Complete the six unfinished functions. No report, screenshot, timing target, cloud deployment, MapReduce file, or Spark file is required.</p>
+<p>The lab meets Thursday November 19, 2026. There is no class on November 24. The December 1 deadline is unchanged.</p>
+
+<h2 id="worked-example">Optional earlier exercises</h2>
+<p>The earlier MapReduce, Spark, and nearest-neighbor exercises remain below for practice. They do not contribute to the Ray image-processing grade. Their arXiv corpus and measured timings are separate from the video’s image examples.</p>
+<details>
+  <summary>Open the earlier exercises and worked examples</summary>
 <h2 id="try-it">Trace how keys select a partition</h2>
 
 <p>This widget shows the grouping rule you will implement: four documents produce word-count pairs, and each key determines a partition. The colors show the destination selected by the widget’s simple hash.</p>
 
 <div class="viz" id="viz-mr">
   <div class="viz-title">map → shuffle → reduce · word count, 4 documents, 2 partitions</div>
-  <p class="viz-description">Step through the phases and hover over a pair to inspect its destination. Part 1 implements the same grouping pattern in Python over 4,000 abstracts. The lab uses Python’s <code>hash()</code>, so its partition numbers can differ from this illustration.</p>
+  <p class="viz-description">Step through the phases and hover over a pair to inspect its destination. The optional exercise implements the same grouping pattern in Python over 4,000 abstracts. The lab uses Python’s <code>hash()</code>, so its partition numbers can differ from this illustration.</p>
   <div class="qj-controls">
     <button type="button" class="btn primary" id="mr-step">Step ▸</button>
     <button type="button" class="btn" id="mr-back">◂ Back</button>
@@ -90,7 +310,7 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
   </div>
   <div id="mr-stage"></div>
   <div class="chat-downloads">
-    <span class="chat-downloads-label">Starter files:</span>
+    <span class="chat-downloads-label">Optional files:</span>
     <a class="chat-dl-btn" href="starter/mapreduce.py" download>mapreduce.py</a>
     <a class="chat-dl-btn" href="starter/spark_wordcount.py" download>spark_wordcount.py</a>
     <a class="chat-dl-btn" href="starter/ray_speedup.py" download>ray_speedup.py</a>
@@ -106,26 +326,11 @@ Terms with a dotted underline have definitions. Hover or tap a term to read its 
 <p>The <code>git pull</code> command above updates the entire <code>starter/</code> directory, including <code>data/</code>. If you download files individually, include <code>data/</code>. The Python links do not include the corpus and vector files.</p>
 
 <!-- ============================================================ -->
-<h2 id="big-idea">Separate computation from scheduling and data transfer</h2>
-
-<p class="keep-in-present">Think of sorting mail into trays by address. Here, each word is an address, and each partition is a tray. The hash rule sends every occurrence of a word to the same tray so its counts can be added together. Changing the number of trays may change the destination, but it must not change the final word count.</p>
-
-<p class="keep-in-present">Parts 1 and 2 count words in the same 4,000 abstracts. Part 3 runs independent nearest-neighbor searches on their vectors. Compare the code that computes results with the code or framework that schedules work and transfers data:</p>
-
-<pre class="equation"><code>Part 1  mapreduce.py        implement map, partition, shuffle, and reduce
-Part 2  spark_wordcount.py  express word count with Spark transformations
-Part 3  ray_speedup.py      submit independent searches as Ray tasks
-
-Parts 1 and 2 compute the same word counts. Part 3 searches the corpus’s vectors.</code></pre>
-
-<p class="keep-in-present">Part 1 executes each phase sequentially in one process. This lets you inspect how map output is routed and grouped before reducing it. Spark handles distributed scheduling and data transfer in Part 2. The map and reduce logic is similar, but running across machines also requires serialization, retry, and resource management.</p>
-
-<!-- ============================================================ -->
-<h2 id="worked-example">Trace map output into independent partition dictionaries</h2>
+<h2 id="shuffle-example">Trace map output into independent partition dictionaries</h2>
 
 <p class="keep-in-present">Predict how many pairs mapping will emit. Watch both occurrences of <code>pizza</code> become separate pairs and arrive in the same group. Each partition has a dictionary, and each word in that dictionary has its own list of counts.</p>
 
-<p>Follow two lunch orders: <code>“Pizza, pizza!”</code> and <code>“Salad pizza.”</code>. Each word requests one meal. These toy records show the counting rule before you apply it to the corpus. The displayed bucket numbers are a fixed teaching choice. Your required implementation uses Python’s <code>hash(key) % n_partitions</code> within one process.</p>
+<p>Follow two lunch orders: <code>“Pizza, pizza!”</code> and <code>“Salad pizza.”</code>. Each word requests one meal. These toy records show the counting rule before you apply it to the corpus. The displayed bucket numbers are a fixed teaching choice. The optional implementation uses Python’s <code>hash(key) % n_partitions</code> within one process.</p>
 <div data-teaching-trace="shuffle">
   <p><strong>Worked result:</strong> The map emits four pairs. Shuffle groups three values under pizza and one under salad. Reduction gives <code>{"pizza": 3, "salad": 1}</code>, independent of bucket numbering.</p>
   <p>Enable JavaScript to step through the code and intermediate state.</p>
@@ -157,43 +362,47 @@ print(partitions)
 <p>After <code>partitions[1]["salad"] = [1]</code>, partition 1 contains salad. Partition 0 still contains only pizza. Each partition keeps its own key groups.</p>
 </details>
 </section>
-<p><strong>Implementation checkpoints:</strong> create each partition dictionary separately. Preserve all duplicate occurrences in <code>map_words</code> and <code>shuffle</code>. Test with more than one partition. One bucket hides routing errors. The graded implementation runs sequentially, while optional Spark and Ray exercises add actual scheduling.</p>
+<p><strong>Implementation checkpoints:</strong> create each partition dictionary separately. Preserve all duplicate occurrences in <code>map_words</code> and <code>shuffle</code>. Test with more than one partition. One bucket hides routing errors. The MapReduce runner executes sequentially. Spark and Ray add actual scheduling.</p>
 
 <!-- ============================================================ -->
-<h2 id="the-api">One file is graded. Two more you run and read</h2>
+<h2 id="practice-files">Optional practice files</h2>
 
 <table>
   <thead><tr><th>File</th><th>Ships as</th><th>What's inside</th></tr></thead>
   <tbody>
-    <tr><td><code>mapreduce.py</code></td><td><strong>you edit, the graded file</strong></td><td><code>run_mapreduce</code> runner provided. <code>map_words</code>, <code>partition_for</code>, <code>shuffle</code>, <code>reduce_counts</code> are YOUR JOB</td></tr>
+    <tr><td><code>mapreduce.py</code></td><td><strong>optional practice</strong></td><td><code>run_mapreduce</code> runner provided. <code>map_words</code>, <code>partition_for</code>, <code>shuffle</code>, <code>reduce_counts</code> are YOUR JOB</td></tr>
     <tr><td><code>spark_wordcount.py</code></td><td>you edit, run locally</td><td>session setup + DAG printing provided. The three-transformation chain is YOUR JOB</td></tr>
-    <tr><td><code>ray_speedup.py</code></td><td>you edit, run locally</td><td>brute-force <code>neighbors()</code>, the vectors, and the timing harness provided. <code>knn_remote</code> + <code>knn_all_parallel</code> are YOUR JOB</td></tr>
+    <tr><td><code>ray_speedup.py</code></td><td>you edit, run locally</td><td>brute-force <code>neighbors()</code>, the vectors, and the timing harness provided. Complete <code>knn_remote</code> and <code>knn_all_parallel</code></td></tr>
     <tr><td><code>corpus.py</code></td><td>provided, read-only</td><td>4,000 arXiv abstracts, shared with Labs 9 and 10. Download the data/ folder too</td></tr>
+    <tr><td><code>embeddings.py</code></td><td>provided, read-only</td><td><code>load()</code> returns 4,000 unit vectors with 64 dimensions, in the same order as <code>DOCS</code></td></tr>
     <tr><td><code>test_sparkray.py</code></td><td>provided</td><td>OFFLINE group always runs. SPARK/RAY groups auto-skip if not installed</td></tr>
   </tbody>
 </table>
 
+<p>Keep your code short, clear, and easy to edit. Use clear names and simple steps. Do not add code comments. Replace each <code>raise NotImplementedError</code> with your implementation. The function instructions are below.</p>
+<p>The supplied <code>DOCS</code> list contains <code>(arxiv_id, title, abstract)</code> tuples from <code>data/arxiv_4000.jsonl.gz</code> in a fixed order. The corpus contains 800 papers from each category: cs.DB, cs.IR, cs.LG, stat.ML, and cs.DC. It contains about 700,000 words. The file <code>data/arxiv_4000.f16</code> stores the matching MiniLM embeddings from Lab 9.</p>
+
 <div class="callout note">
   <span class="label">Prepare the optional dependencies</span>
-  <p>Install the optional engines with <code>pip install pyspark ray</code>. Spark runs on the <span class="gloss" data-gloss="jvm">JVM</span> and needs a JDK supported by the installed PySpark version. Check it with <code>java -version</code>. Both examples run in <span class="gloss" data-gloss="local-mode">local mode</span> on your machine. Part 1 requires neither package, so you can begin it while preparing the optional dependencies.</p>
+  <p>Install the optional engines with <code>pip install pyspark ray</code>. Spark runs on the <span class="gloss" data-gloss="jvm">JVM</span> and needs a JDK supported by the installed PySpark version. Check it with <code>java -version</code>. Both examples run in <span class="gloss" data-gloss="local-mode">local mode</span> on your machine. MapReduce requires neither package, so you can begin it while preparing the optional dependencies.</p>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="build">Part 1 · micro-mapreduce <span class="part-time">~35 min in class · graded</span></h2>
+<h2 id="build">Optional coding · MapReduce <span class="part-time">ungraded practice</span></h2>
 
 <p class="keep-in-present">For each function, follow the small example from words to pairs, grouped value lists, and totals. Check that repeated occurrences survive until their values are added, then run the function check. Converting occurrences to a set would discard duplicates and undercount repeated words.</p>
 
-<p>After each function, use the <a href="#function-tests">function-level checks</a> to test it before completing the rest of the lab.</p>
+<p>Check these optional functions with <code>python test_sparkray.py --unit NAME</code>. This older harness provides practice feedback only.</p>
 
 <ol>
   <li><strong>Read run_mapreduce (5 min):</strong> identify where it maps records, calls the shuffle, and reduces each grouped key. In a distributed implementation, the shuffle transfers records to the workers responsible for their keys.</li>
-  <li><strong><code>map_words</code></strong>: one <code>(word, 1)</code> per occurrence,
-  tokenized exactly like Lab 10. No counting in map: raw pairs out.</li>
+  <li><strong><code>map_words</code></strong>: tokenize with <code>re.findall(r"[a-z]+", text.lower())</code>, exactly like Lab 10. Return a list with one <code>(word, 1)</code> pair per occurrence, in input order. Keep repeated words as separate pairs.</li>
   <li><strong>partition_for:</strong> return <code>hash(key) % n_partitions</code>. Within a run, equal keys must always select the same partition.</li>
-  <li><strong>shuffle:</strong> create one dictionary per partition. Route each pair using <code>partition_for</code>, then append its value to that partition’s list for the key.</li>
-  <li><strong><code>reduce_counts</code></strong>: <code>sum(values)</code>. Run
-  <code>python3 mapreduce.py</code>:</li>
+  <li><strong>shuffle:</strong> create one dictionary per partition. Route each pair using <code>partition_for</code>, then append its value to that partition’s list for the key. Return a list of exactly <code>n_partitions</code> dictionaries, including empty ones. Preserve the input pairs and the order of each key’s values.</li>
+  <li><strong><code>reduce_counts</code></strong>: return <code>(word, sum(values))</code>. For example, <code>('pizza', [1,1,1])</code> becomes <code>('pizza', 3)</code>.</li>
 </ol>
+
+<p>Run <code>python3 mapreduce.py</code>:</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 mapreduce.py</span>
 31210  the
@@ -203,14 +412,15 @@ print(partitions)
 14747  to
 <span class="t-mute">   ...</span></code></pre>
 
-<p class="keep-in-present">Common words often dominate an unfiltered word count. Removing stop words changes which words are counted. A <span class="gloss" data-gloss="combiner">combiner</span> preserves the counts while reducing intermediate pairs. This lab’s graded map function emits one raw pair per occurrence without either optimization.</p>
+<p class="keep-in-present">Common words often dominate an unfiltered word count. Removing stop words changes which words are counted. A <span class="gloss" data-gloss="combiner">combiner</span> preserves the counts while reducing intermediate pairs. The practice map function emits one raw pair per occurrence without either optimization.</p>
 
 <!-- ============================================================ -->
-<h2 id="spark">Part 2 · Spark <span class="part-time">~15 min in class</span></h2>
+<h2 id="spark">Optional coding · Spark <span class="part-time">ungraded practice</span></h2>
 
 <p class="keep-in-present">Use the same word-count model to read the Spark chain: create occurrences, attach counts, group equal keys, add values. Predict where redistribution is required before looking for <code>ShuffledRDD</code> in the printed plan.</p>
 
-<p>The starter provides the session and DAG printing. Write <code>flatMap</code> to emit word strings, <code>map</code> to turn each word into <code>(word, 1)</code>, and <code>reduceByKey</code> to sum counts. Part 1’s <code>map_words</code> already emits pairs, so do not pass its output through a second word-to-pair mapping.</p>
+<p>The starter provides the session and DAG printing. Write <code>flatMap</code> to emit word strings, <code>map</code> to turn each word into <code>(word, 1)</code>, and <code>reduceByKey</code> to sum counts. The MapReduce function <code>map_words</code> already emits pairs, so do not pass its output through a second word-to-pair mapping.</p>
+<p>The <code>lines</code> argument to <code>word_counts(sc, lines)</code> is an RDD of text strings. Tokenize each string with <code>re.findall(r"[a-z]+", text.lower())</code>. Return an RDD of <code>(word, count)</code> pairs. Do not call <code>collect()</code> inside this function. Transformations build the plan. The later <code>collect()</code> call runs it.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 spark_wordcount.py</span>
 === the DAG (read bottom-up; the stage break is the shuffle) ===
@@ -221,15 +431,22 @@ print(partitions)
     |  PythonRDD[1] at reduceByKey at spark_wordcount.py:37 []
     |  ParallelCollectionRDD[0] at readRDDFromFile at PythonRDD.scala:326 []</code></pre>
 
-<p class="keep-in-present">Read the printed plan from its input upward. The map-side work includes <code>flatMap</code> and <code>map</code>. <code>ShuffledRDD</code> marks redistribution before the reduce-side work. The <code>(4)</code> labels indicate four partitions. Compare the final top-15 list with Part 1. The optional Spark test checks the complete result dictionary.</p>
+<p class="keep-in-present">Read the printed plan from its input upward. The map-side work includes <code>flatMap</code> and <code>map</code>. <code>ShuffledRDD</code> marks redistribution before the reduce-side work. The <code>(4)</code> labels indicate four partitions. Compare the final top-15 list with MapReduce’s result. The optional Spark test checks the complete result dictionary.</p>
 
 <!-- ============================================================ -->
-<h2 id="ray">Part 3 · Ray <span class="part-time">~15 min in class</span></h2>
+<h2 id="ray">Optional coding · Ray neighbor searches <span class="part-time">ungraded practice</span></h2>
 
-<p class="keep-in-present">Each neighbor search can run independently. Before timing Ray, compare two schedules: launch one task and wait for it, or launch all tasks and then wait for their results. Explain which allows work to overlap. Check that the results match the serial version before comparing times.</p>
+<p class="keep-in-present">Transfer the image example to the corpus. Each document’s neighbor search is independent, just as each image transformation was independent. Submit all searches before retrieving results. Check the results against serial execution before comparing times.</p>
 
 <p>For each abstract, find its ten nearest neighbors among the other 3,999 vectors. Each search is independent, so Ray can distribute the work across worker processes. This builds part of a k-nearest-neighbor graph. HNSW adds layers and neighbor-selection rules.</p>
-<p>In <code>ray_speedup.py</code>, define a remote search task. Launch all tasks. Then gather their results once.</p>
+<p>The supplied <code>neighbors(doc)</code> function ranks the other vectors by cosine similarity and returns their document positions. The vectors have unit length, so their dot products give cosine scores. Each search compares its vector with the other 3,999 vectors, each with 64 dimensions.</p>
+<p>As a rough estimate, 25 ms per search would give 5 seconds for 200 searches. These estimates are separate from the measured reference run below.</p>
+<ol>
+  <li>Complete <code>knn_remote(doc)</code> in <code>ray_speedup.py</code> by returning <code>neighbors(doc)</code>. The supplied <code>@ray.remote</code> decorator makes this function a Ray task.</li>
+  <li>In <code>knn_all_parallel(docs)</code>, call <code>knn_remote.remote(doc)</code> for every document before waiting.</li>
+  <li>Pass all returned task references to one <code>ray.get()</code> call. Return the results in the same order as <code>docs</code>. Keep <code>docs</code> unchanged.</li>
+</ol>
+<p>The remote function uses the supplied <code>VECTORS</code> list. Ray makes these vectors available to workers for their searches. Calling <code>ray.get()</code> inside the launch loop would wait for each search before starting the next.</p>
 
 <pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 ray_speedup.py</span>
 200 documents, 10 nearest neighbors each, brute force over 4,000 vectors
@@ -246,110 +463,13 @@ neighbors of [Fine-Grained Table Retrieval Through the Lens of Complex Que]:
 
 <p class="keep-in-present">The reference run was faster in parallel but did not scale in direct proportion to core count. Worker setup, scheduling, and data transfer add work, and some resources are shared. Increasing the number of searches may amortize some setup cost, while other overheads also grow. Measure the behavior on your machine rather than assuming a fixed speedup.</p>
 
-<h3 class="new-slide" data-kicker="Part 3 · Ray">Measure how workload size and worker count affect speedup</h3>
+<h3 class="new-slide" data-kicker="Optional · Ray">Measure how workload size and worker count affect speedup</h3>
 
 <p class="keep-in-present"><strong>Change the experiment.</strong> Set <code>N_DOCS = 1000</code>. Run the script again. Keep the value at 1000. Start Ray with <code>ray.init(num_cpus=2, ...)</code>.</p>
 <p class="keep-in-present">Report speedups for all three runs: 200 documents on all cores, 1000 documents on all cores, and 1000 documents on 2 cores. Explain which change affected the measured speedup more. Account for useful work and scheduling overhead.</p>
 
-<!-- ============================================================ -->
-<h2 id="verify">Routing bugs hide at n=1, so the harness varies n</h2>
-
-<p class="keep-in-present">With only one partition, every pair arrives in the same place even if the routing code is wrong. Try several partition counts and check that each word still gets one correct total. The OFFLINE tests check these rules. The optional tests also run the Spark and Ray implementations.</p>
-
-<h3 id="function-tests">Test one function at a time</h3>
-<p>Run these commands from the starter directory. <code>--list</code> lists the function names, <code>--unit NAME</code> checks one function, and <code>--unit</code> checks every function independently. The tests provide sample data and working versions of any helper methods you have not written yet. They run your code for the function you select.</p>
-<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_sparkray.py --list</span>
-<span class="t-prompt">$</span> <span class="t-cmd">python3 test_sparkray.py --unit shuffle</span>
-<span class="t-prompt">$</span> <span class="t-cmd">python3 test_sparkray.py --unit</span></code></pre>
-<p>Unit results are practice feedback. Run <code>python3 test_sparkray.py</code> without flags to check the complete pipelines. Only the OFFLINE group determines your grade. The optional Spark and Ray unit checks use small local stand-ins for those APIs. Run the real SPARK and RAY groups before measuring performance.</p>
-
-<h3>Run the full tests</h3>
-
-<p>Once you finish the methods, the full test run should pass as shown below. With a fresh starter, <code>not implemented yet</code> failures are expected. Passing one function check does not mean the whole implementation is ready.</p>
-
-<p>The OFFLINE tests check the graded Part 1 implementation. The optional SPARK and RAY groups run when their dependencies are available and otherwise report a skip. The combined local score counts whichever tests ran. Gradescope uses the seven OFFLINE tests only.</p>
-
-<pre class="terminal"><code><span class="t-prompt">$</span> <span class="t-cmd">python3 test_sparkray.py</span>
-<span class="t-head">OFFLINE group (Part A)</span>
-  <span class="t-pass">[PASS]</span> OFFLINE: map emits raw (word, 1) pairs
-  <span class="t-pass">[PASS]</span> OFFLINE: partitioning is deterministic, in range
-  <span class="t-pass">[PASS]</span> OFFLINE: shuffle loses nothing, groups keys
-  <span class="t-pass">[PASS]</span> OFFLINE: shuffle routes by partition_for
-  <span class="t-pass">[PASS]</span> OFFLINE: reduce collapses values
-  <span class="t-pass">[PASS]</span> OFFLINE: end-to-end counts match the reference
-  <span class="t-pass">[PASS]</span> OFFLINE: answer independent of partition count
-<span class="t-head">SPARK group (Part B)</span>
-  <span class="t-pass">[PASS]</span> SPARK: word_counts matches the reference
-<span class="t-head">RAY group (Part C)</span>
-  <span class="t-pass">[PASS]</span> RAY: parallel results identical to serial
-  <span class="t-pass">[PASS]</span> RAY: all tasks launch before the wait
-
-<span class="t-pass">10/10 tests passed</span></code></pre>
-
-<div class="exercise">
-  <span class="ex-label">Exercise · read the failure</span>
-  <p>A classmate gets correct counts with one partition. With seven partitions, the output contains three partial totals for the word “the.” Their <code>partition_for</code> function is deterministic. How could <code>shuffle</code> still send equal keys to different partitions?</p>
-  <details><summary>Show answer</summary>
-  <p>The shuffle may be assigning pairs round-robin or using a varying property, such as the source document, instead of <code>partition_for(key, n)</code>. Each destination then produces a partial total for the same word. With one partition, that routing error is hidden. Hashing <code>(word, 1)</code> would violate the required routing rule but would still keep identical word-count pairs together, so it would not explain this particular split.</p>
-  </details>
-</div>
-
-<!-- ============================================================ -->
-<h2 id="explain-it">Explain what your result means</h2>
-
-<div class="exercise learning-check">
-  <span class="ex-label">Explain the result without reading your code</span>
-  <p>Draw map → shuffle → reduce for the two-record trace. Then explain which part Spark schedules for you and why the Ray example launches tasks before waiting. Which results should stay the same when you change partition or worker counts?</p>
-  <details><summary>Check your explanation</summary><p>Map preserves occurrences, shuffle groups matching keys, and reduce combines a complete group. Spark schedules the map and reduce work and transfers pairs to the workers responsible for their keys. Independent Ray tasks can overlap when submitted before the wait. Word totals and serial/parallel neighbor results should agree even when placement or timing changes. This is practice. Part 1 remains the graded submission.</p></details>
-</div>
-
-<h2 id="assignment">Assignment</h2>
-
-<p class="keep-in-present">Submit <code>mapreduce.py</code> to Gradescope by Tuesday Dec 1 at class start, following the course submission instructions. The seven OFFLINE tests determine the lab grade.</p>
-<p>The lab is due December 1, after Thanksgiving recess. There is no class on November 24. The autograder runs the
-OFFLINE group, and that is the whole grade. Parts 2 and 3 are for class discussion.</p>
-
-<h3>Deliverables</h3>
-<ul>
-  <li>☐ <code>mapreduce.py</code>: all seven OFFLINE tests pass (<code>7/7</code>).</li>
-</ul>
-<p>Submit only the file listed above. Grading uses the lab’s correctness tests. Measurements and reflections are for class discussion.</p>
-
-<h3>Discussion prompts (not graded)</h3>
-<p>Bring the measurement output and your answers to class for discussion. The Spark and Ray experiments help explain distributed execution but are not submitted for the lab grade.</p>
-<ul>
-  <li>Bring three blocks of output, each with a one-paragraph answer. (1)&nbsp;Show your Spark DAG with the shuffle line marked. Explain the position of the stage boundary in one sentence. (2)&nbsp;Show your Ray timings from the three runs. Predict the time for the full 4,000-document graph on your core count. Show the arithmetic. (3)&nbsp;Show the top-15 word list. Connect it to Lab 10’s stop-word list in one sentence.</li>
-  <li>Reflection (3–5 sentences): Compare how your shuffle groups matching keys with how Lab 4’s <code>ProductScan</code> generates candidate row pairs. What data must each operation inspect or move, and what would change if that data were spread across machines?</li>
-</ul>
-
-<h3>Grading</h3>
-<table>
-  <thead><tr><th>Component</th><th>Checked how</th><th>Weight</th></tr></thead>
-  <tbody>
-    <tr><td>Correctness</td><td>Gradescope runs the graded test group described above. Each test contributes an equal share of the points.</td><td>100%</td></tr>
-  </tbody>
-</table>
-
-<!-- ============================================================ -->
-<h2 id="going-further">Going further <span class="part-time">optional</span></h2>
-
-<p class="keep-in-present">Optional extensions: add a combiner that sums repeated keys within each mapper’s output, then measure the reduction in shuffled pairs. Create a skewed input where one word accounts for 50% of occurrences. Split that key across suffixes and combine the partial totals afterward. Or use a Ray actor that loads the vectors once and serves repeated searches, then compare data transfer and timings with the task implementation.</p>
-
-<!-- ============================================================ -->
-<h2 id="faq">FAQ</h2>
-
-<h3 class="keep-in-present">Python's built-in <code>hash()</code> gives different values each run. Is that OK?</h3>
-<p class="keep-in-present">Yes, for this single-process implementation. Python normally randomizes string hashes between processes, while repeated hashes of the same string remain stable within one process. A distributed routing scheme needs all workers to use a compatible hash and seed. Setting <code>PYTHONHASHSEED=0</code> makes the lab’s string hashes reproducible across runs using the same Python environment.</p>
-
-<h3 class="keep-in-present">Spark printed a wall of WARN messages. Is it broken?</h3>
-<p class="keep-in-present">Warnings do not necessarily mean the job failed. Check whether it completes and returns the expected counts. The starter sets <code>sc.setLogLevel("ERROR")</code> for runtime logging, but startup messages may still appear. If startup fails or hangs, check the reported error, <code>java -version</code>, and the Java versions supported by your PySpark installation.</p>
-
-<h3 class="keep-in-present">My Ray speedup is only ~3× on 8 cores. Did I do it wrong?</h3>
-<p class="keep-in-present">Probably not. A small job may spend much of its time starting workers and moving data. The harness checks result equality and that all tasks launch before the wait. It does not impose a hardware-dependent speedup threshold. Use the timing script to investigate overhead and increase the workload before drawing conclusions.</p>
-
-<h3 class="keep-in-present">When would I choose Spark instead of DuckDB and Ray?</h3>
-<p class="keep-in-present">Spark is useful when a relational dataflow needs distributed resources, such as large joins and aggregations on a cluster. DuckDB is worth evaluating for a single-machine SQL workload, including work that spills to disk. Ray is useful for independent Python tasks and stateful workers. Choose from measured memory, latency, and throughput needs rather than dataset size alone.</p>
-
+<p>Run <code>python test_sparkray.py</code> for the earlier exercises. Its OFFLINE, SPARK, and RAY groups are ungraded practice. Their results do not replace <code>test_ray_images.py</code>.</p>
+</details>
 <footer>
   DS 6XXX · Advanced Databases for Data Science · Fall 2026 · Daniel G. Graham, UVA School of Data Science
 </footer>
@@ -358,7 +478,7 @@ OFFLINE group, and that is the whole grade. Parts 2 and 3 are for class discussi
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
-<script src="../_shared/lab-base.js?v=14"></script>
+<script src="../_shared/lab-base.js?v=15"></script>
 <script src="viz.js?v=2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"

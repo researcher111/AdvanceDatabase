@@ -245,7 +245,7 @@
     { kind: 'Lab',     num: '10', dir: 'labs/lab-10',         file: 'microrag.html',    title: 'micro-rag · wire the pipeline' },
     { kind: 'Lecture', num: '13', dir: 'lectures/lecture-13', file: 'distributed.html', title: 'MapReduce and distributed execution' },
     { kind: 'Lecture', num: '13B', dir: 'lectures/lecture-13', file: 'spark-ray.html', title: 'Spark and Ray in depth' },
-    { kind: 'Lab',     num: '11', dir: 'labs/lab-11',         file: 'sparkray.html',    title: 'Spark & Ray · the pattern and the products' },
+    { kind: 'Lab',     num: '11', dir: 'labs/lab-11',         file: 'sparkray.html',    title: 'Ray image processing · tasks, actors & data' },
     { kind: 'Lecture', num: '14', dir: 'lectures/lecture-14', file: 'bigtable.html',    title: 'Bigtable, LSM trees & NoSQL' },
     { kind: 'Lecture', num: '15', dir: 'lectures/lecture-15', file: 'graphs.html',      title: 'Graph databases & course synthesis' },
   ];

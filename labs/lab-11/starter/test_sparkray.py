@@ -1,4 +1,4 @@
-"""Lab 11 test harness — run:  python3 test_sparkray.py
+"""Legacy Lab 11 practice checks — run: python3 test_sparkray.py
 
 Three groups, one per part:
 
@@ -6,10 +6,9 @@ Three groups, one per part:
     SPARK   — Part B, runs only if pyspark + Java are installed
     RAY     — Part C, runs only if ray is installed
 
-Skipped groups print [SKIP] and don't count toward the total, so the
-score is N/M over the tests your machine can run. The Gradescope
-autograder runs the OFFLINE group, which is the whole grade; Parts B and C
-are for class discussion (see the lab page).
+Skipped groups print [SKIP] and do not count toward the practice total.
+These MapReduce, Spark, and neighbor-search exercises are ungraded.
+The required Ray image assignment uses test_ray_images.py instead.
 
     python3 test_sparkray.py --list
     python3 test_sparkray.py --unit shuffle
@@ -17,7 +16,7 @@ are for class discussion (see the lab page).
     python3 test_sparkray.py --unit
 
 Unit checks isolate functions with small fixtures, including optional Parts
-B/C without Spark, Java, or Ray installed. They do not change the grade.
+B/C without Spark, Java, or Ray installed. They provide practice feedback.
 Run without options for the original integration groups and optional engines.
 """
 
@@ -227,8 +226,7 @@ def ray_tests():
 
 # ---------------- isolated function checks (ungraded) ----------------
 # Imports run in a temporary fixture environment. Unit checks do not load the
-# arXiv corpus, embeddings, Spark, Java, or Ray. Default grading uses the real
-# modules and data below. Every temporary replacement is restored on exit.
+# arXiv corpus, embeddings, Spark, Java, or Ray. Every replacement is restored.
 
 @contextmanager
 def fixture_module(name, ray=None):

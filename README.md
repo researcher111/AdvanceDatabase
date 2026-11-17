@@ -79,6 +79,12 @@ writing, and measurement assignment. Lab 6 supplies an in-memory index;
 Lab 7 supplies a separate transaction API. Integrating them with the SQL REPL
 is an optional extension.
 
+## Coding exercises
+
+Keep coding exercises, especially Lab 11, simple, correct, and easy to read and edit.
+Use the fewest lines that keep each step clear. Use clear names and simple steps.
+Do not add code comments. Keep explanations in the lab instructions.
+
 ## Layout
 
 | Path | What it is |
@@ -96,13 +102,16 @@ is an optional extension.
 ## Requirements
 
 Python 3.11 or newer. Labs 1 to 7 are pure standard library. Later labs add
-DuckDB, PyTorch, PyArrow, NumPy, and Matplotlib for Lab 8’s core fare-prediction investigation (install `labs/lab-08/starter/requirements-pytorch.txt`). Optional storage experiments also use `pandas`. Lab 11’s
-graded portion uses only the standard library; its Spark and Ray exercises
-need `pyspark`, a compatible JDK (17 or newer), and `ray`.
+DuckDB, PyTorch, PyArrow, NumPy, and Matplotlib for Lab 8’s core fare-prediction investigation (install `labs/lab-08/starter/requirements-pytorch.txt`). Optional storage experiments also use `pandas`.
+Lab 11 now grades Ray image processing. Use Python 3.11–3.13 and install
+`labs/lab-11/starter/requirements-ray.txt` for Ray Data, NumPy, and Pillow.
+The required work runs locally with generated images. The older MapReduce,
+Spark, and nearest-neighbor exercises remain optional practice. Optional Spark
+practice also needs `pyspark` and a compatible JDK.
 
 Clone the whole repository or download each complete `starter/` directory.
-Labs 8–11 include data files that the individual Python download links do not
-include. Labs 9–10 require no model download or paid API for the graded work.
+Labs 8–10 and Lab 11’s optional corpus exercises include data files that individual
+Python download links do not include. Labs 9–11 require no model download or paid API for the graded work.
 
 Run each lab from its `starter/` directory. Test a function as soon as you implement
 it using the harness's `--unit` mode. For example, in Lab 3:
@@ -115,14 +124,17 @@ python3 test_records.py                            # full integration tests
 ```
 
 Every implementation/practice test script supports these options. Lab 8’s supplied SQL examples use query names such
-as `--unit Q1`; that harness does not grade the core ML report. Lab 11 also provides local unit checks for the optional Spark and
-Ray functions without starting either engine.
+as `--unit Q1`; that harness does not grade the core ML report. Lab 11’s
+`test_ray_images.py` provides six isolated function checks without starting Ray workers.
+Its full suite adds a required integration check with real Ray tasks, an actor, and Ray Data.
+The older `test_sparkray.py` is ungraded practice only.
 
 Function-level checks provide known data and working helpers for unfinished
 dependencies, while always calling the selected student function. These results
-are practice feedback. Running without flags uses the original integration tests
-and grading rules; it never substitutes implementations. Unfinished methods still
-fail their own checks. Lab 5 is the exception to the implementation workflow:
+are practice feedback. Running without flags uses each lab’s full correctness suite
+and grading rules. Lab 11 includes its six isolated contract checks plus an integration
+check that uses the submitted functions together. Unfinished methods still fail
+their own checks. Lab 5 is the exception to the implementation workflow:
 its supplied engine passes immediately, and students submit queries, predictions,
 measurements, and explanations. Lab 8 also provides working model code: students submit an investigation query, its result, a comparison chart, and a short report. Other labs retain their stated grading rules.
 
@@ -133,6 +145,12 @@ now practice feedback; it cannot grade the ML investigation. Configure the
 course’s submission assignment accordingly before collecting those three files.
 The review criteria are listed on the lab page; exact MAE and runtime are not
 grading thresholds.
+
+**Lab 11 instructor setup:** collect only `ray_images.py`.
+The seven Ray correctness checks have equal weight. No timing threshold affects the grade.
+The instructor repository’s `labs/lab-11/autograder/autograder.zip` now targets this submission.
+Upload and test that package in Gradescope before collecting submissions.
+The previous MapReduce package accepts the wrong file and must be replaced.
 
 **Lab 8 matching and chart:** collect `plan_mapping.txt` and `fare-models.png`
 together in an eight-point checkpoint. Four points check operator matches;
