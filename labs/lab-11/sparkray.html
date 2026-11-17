@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="../_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../_shared/clear-teaching.css?v=partitions-20261110">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 <link rel="stylesheet" href="../_shared/teaching-trace.css?v=1">
 </head>
 <body>
@@ -192,7 +192,7 @@ if __name__ == &quot;__main__&quot;:
 <p class="keep-in-present">Think of an object reference as a coffee receipt. The receipt identifies the order you will collect. Similarly, an <code>ObjectRef</code> identifies a result that may still be running. A reference is not the image itself.</p>
 
 <figure class="ray-diagram">
-  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Task diagram, scroll horizontally on small screens">
+  <div class="ray-diagram-frame">
     <img src="diagrams/ray-tasks.svg" width="840" height="490" alt="A serial loop waits after each image. Ray submits image tasks first, then gathers their results with one ray.get call.">
   </div>
   <figcaption>Submit independent work before waiting. The diagram shows three of the eight images. Available resources limit how many tasks overlap.</figcaption>
@@ -287,7 +287,7 @@ if __name__ == &quot;__main__&quot;:
 Actual total pixels in main script: 0</code></pre>
 <p class="keep-in-present">The <code>global total_pixels_processed</code> statement updates a module variable. Each worker process has its own copy. Worker updates do not change the driver’s copy. See Ray’s <a href="https://docs.ray.io/en/latest/ray-core/patterns/global-variables.html">guide to global variables</a>.</p>
 <figure class="ray-diagram">
-  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Global counter diagram, scroll horizontally on small screens">
+  <div class="ray-diagram-frame">
     <img src="diagrams/ray-global.svg" width="840" height="600" alt="The driver and workers hold separate global variables. Workers return four processed images, but the driver's total remains zero.">
   </div>
   <figcaption>Waiting collects task results. It does not merge the workers’ global variables into the driver’s variable.</figcaption>
@@ -298,7 +298,7 @@ Actual total pixels in main script: 0</code></pre>
 <p class="keep-in-present">An <strong>actor</strong> is a running class instance that owns state. Create one counter actor. Pass its handle to every task that must update that count. All updates now reach the same counter.</p>
 
 <figure class="ray-diagram">
-  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Actor diagram, scroll horizontally on small screens">
+  <div class="ray-diagram-frame">
     <img src="diagrams/ray-actor.svg" width="840" height="570" alt="Every image task sends 100 pixels to one counter actor and waits for its update. After all tasks finish, the driver reads 800.">
   </div>
   <figcaption>One actor owns the total. Each image task finishes its counter update before returning, so the driver can read the completed count.</figcaption>
@@ -359,7 +359,7 @@ if __name__ == &quot;__main__&quot;:
 <p class="key-fact keep-in-present">The Ray task and actor functions you built locally can run on cloud workers without rewriting their logic. The cluster configuration selects the machines. Ray schedules the same remote calls across their available resources.</p>
 <p class="keep-in-present">The head node supplies cluster management services. Worker nodes run tasks and actors. The application still submits tasks, passes actor handles, and retrieves references. A real cluster also needs compatible packages and access to its input data.</p>
 <figure class="ray-diagram">
-  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Cluster diagram, scroll horizontally on small screens">
+  <div class="ray-diagram-frame">
     <img src="diagrams/ray-cluster.svg" width="840" height="470" alt="The driver submits work to a Ray cluster. Worker machines run tasks and access data. The head node supplies management services.">
   </div>
   <figcaption>More worker machines provide more task capacity. They do not enlarge a Python list held in the driver’s memory.</figcaption>
@@ -402,7 +402,7 @@ head_node_type: head</code></pre>
 <p>These keys describe the execution environment, not the image algorithm. The <a href="https://docs.ray.io/en/latest/cluster/vms/references/ray-cluster-configuration.html">Ray configuration reference</a> defines their behavior.</p>
 <p>Each <code>c5.2xlarge</code> has eight vCPUs, giving 80 worker vCPUs in this example. These are virtual CPUs, not 80 physical cores. See the <a href="https://docs.aws.amazon.com/ec2/latest/instancetypes/co.html">AWS instance specifications</a>.</p>
 <figure class="ray-diagram">
-  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Local to cloud diagram, scroll horizontally on small screens">
+  <div class="ray-diagram-frame">
     <img src="diagrams/ray-local-cloud.svg" width="840" height="666" alt="The same Python tasks and actor run locally or on cloud workers. The cluster YAML selects machines; Ray launches the cluster and submits the program.">
   </div>
   <figcaption>Keep the task and actor logic. Configure the machines, connection, and software needed to run that logic elsewhere.</figcaption>
@@ -436,10 +436,32 @@ ray down my-cluster.yaml</code></pre>
 <h3 id="ray-dashboard">See the machines in the Ray Dashboard</h3>
 <p>The Dashboard’s Cluster view lists nodes, their state, and resource usage. This screenshot shows a two-node example from the Ray documentation. Locate the <strong>Head</strong> label, then compare the nodes’ CPU and memory usage.</p>
 <figure class="ray-diagram ray-dashboard">
-  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Ray Dashboard screenshot, scroll horizontally to inspect the columns">
+  <div class="ray-diagram-frame">
     <img src="images/ray-dashboard-cluster.png" width="3204" height="876" loading="lazy" alt="Ray Dashboard Cluster view showing two alive nodes, a Head label, log links, CPU usage, memory, GPU, object-store memory, and disk usage.">
   </div>
   <figcaption>Screenshot from the <a href="https://docs.ray.io/en/latest/ray-observability/getting-started.html#cluster-view">official Ray Dashboard documentation</a>, using its <a href="https://raw.githubusercontent.com/ray-project/Images/master/docs/new-dashboard-v2/dashboard-pics/cluster_page.png">original image</a>. The displayed values belong to that example cluster. <a href="images/ray-dashboard-cluster.png" target="_blank" rel="noopener">Open the full-size screenshot</a>.</figcaption>
+</figure>
+<p>The detail panels below enlarge the same screenshot. Each panel shows the head node in the first row and the worker in the second.</p>
+<figure class="ray-dashboard-detail">
+  <figcaption>Nodes, state, and log links</figcaption>
+  <svg viewBox="40 280 1130 585" role="img" aria-labelledby="dashboard-nodes-title">
+    <title id="dashboard-nodes-title">Dashboard detail: two alive nodes, with the head node above the worker and a log link for each</title>
+    <image href="images/ray-dashboard-cluster.png" width="3204" height="876"/>
+  </svg>
+</figure>
+<figure class="ray-dashboard-detail">
+  <figcaption>CPU, memory, and GPU usage · head node first, worker second</figcaption>
+  <svg viewBox="1180 280 1220 585" role="img" aria-labelledby="dashboard-resources-title">
+    <title id="dashboard-resources-title">Dashboard detail: CPU and memory usage for the same two nodes, with idle GPUs</title>
+    <image href="images/ray-dashboard-cluster.png" width="3204" height="876"/>
+  </svg>
+</figure>
+<figure class="ray-dashboard-detail">
+  <figcaption>Object-store memory and disk usage · head node first, worker second</figcaption>
+  <svg viewBox="2400 280 804 585" role="img" aria-labelledby="dashboard-storage-title">
+    <title id="dashboard-storage-title">Dashboard detail: object-store memory and disk usage for the same head and worker nodes</title>
+    <image href="images/ray-dashboard-cluster.png" width="3204" height="876"/>
+  </svg>
 </figure>
 <p>The YAML describes the resources you request. The Dashboard shows the running nodes and their current activity. Use the log links when investigating a failed task. Studying this screenshot is enough for the lab. Running a live Dashboard is optional.</p>
 <h3>Read stage 3: connect to an existing cluster</h3>
@@ -515,10 +537,10 @@ results = ray.get(result_refs)</code></pre>
 <p class="keep-in-present">The list belongs to the driver process. If its arrays exceed available memory, loading fails before the task submissions. This is an <strong>out-of-memory</strong> failure, often shortened to <strong>OOM</strong>. More worker machines do not enlarge the driver’s memory.</p>
 <p>The 500 GB describes stored files. Decoded array memory depends on image dimensions, channels, and data type. Compressed file size and decoded memory size differ.</p>
 <figure class="ray-diagram ray-memory">
-  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Out-of-memory diagram, scroll horizontally on small screens">
-    <img src="diagrams/ray-memory.svg" width="1200" height="810" alt="Left: loading every decoded image into a 16 GB driver causes OOM before tasks start. Right: workers read blocks directly from S3 and write output, while the driver coordinates the plan.">
+  <div class="ray-diagram-frame">
+    <img src="diagrams/ray-memory.svg" width="840" height="770" alt="Top: loading every decoded image into a 16 GB driver causes OOM before tasks start. Below: workers read blocks directly from S3 and write output, while the driver coordinates the plan.">
   </div>
-  <figcaption>Solid arrows carry data. Dashed arrows carry control. Workers read and write blocks without collecting the full dataset in the driver. <a href="diagrams/ray-memory.svg">Open the full-size diagram</a>.</figcaption>
+  <figcaption>Solid arrows carry data. Dashed arrows carry control. The driver is shown on the head node but can run elsewhere. Blocks and concurrent work must still fit worker memory. <a href="diagrams/ray-memory.svg">Open the full-size diagram</a>.</figcaption>
 </figure>
 <div class="exercise learning-check">
   <span class="ex-label">Find the memory limit</span>
@@ -531,7 +553,7 @@ results = ray.get(result_refs)</code></pre>
 <p class="keep-in-present">Ray Data represents the pipeline as work over blocks. Its transformation accepts a row dictionary containing an image. Ray Data schedules the transformation. The function passed to <code>Dataset.map</code> must be a plain Python callable.</p>
 
 <figure class="ray-diagram">
-  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="Ray Data diagram, scroll horizontally on small screens">
+  <div class="ray-diagram-frame">
     <img src="diagrams/ray-data.svg" width="840" height="520" alt="Ray Data reads image blocks, applies the ordinary process_image function, and writes output blocks. Each result stores the inverted image and its original source path.">
   </div>
   <figcaption>Ray Data schedules the row function over blocks. Each result keeps its source identity. Write results back to storage.</figcaption>
@@ -575,7 +597,7 @@ if __name__ == &quot;__main__&quot;:
 </table>
 <p>The connection is the separation between a plan and its execution. Ray adds distributed scheduling and block processing. MicroDB’s scan tree does not become distributed automatically.</p>
 <figure class="ray-diagram">
-  <div class="ray-diagram-scroll" tabindex="0" role="region" aria-label="MicroDB and Ray Data execution plans, scroll horizontally on small screens">
+  <div class="ray-diagram-frame">
     <img src="diagrams/ray-plan.svg" width="840" height="800" alt="MicroDB builds a scan tree and pulls rows through it with next. Ray Data builds logical and physical plans, then schedules workers to process blocks when results are consumed.">
   </div>
   <figcaption>A plan describes connected operations. Execution moves data through those operations.</figcaption>
@@ -785,7 +807,7 @@ print(partitions)
 # [{'pizza': [1]}, {}]</code></pre>
 <p>The expression <code>[{} for _ in range(n)]</code> runs <code>{}</code> once per partition, creating a new dictionary each time. The variable <code>_</code> holds a loop number that we do not use. Now partition 0 contains pizza, and partition 1 remains empty.</p>
 <figure class="partition-reference-diagram" id="partition-dictionary-visual">
-  <div class="partition-reference-scroll" tabindex="0" role="region" aria-label="Shared and separate partition dictionaries; scroll horizontally on a small screen">
+  <div class="partition-reference-scroll">
     <img src="../../lectures/lecture-13/diagrams/partition-dictionaries.svg" width="760" height="870" alt="With list multiplication, partitions 0 and 1 both point to dictionary A, containing pizza. With a new dictionary per partition, partition 0 points to A containing pizza, while partition 1 points to empty dictionary B.">
   </div>
   <figcaption>Each arrow means “points to this dictionary.” Both cases show the state after <code>partitions[0]["pizza"] = [1]</code>. Follow partition 1’s arrow: does it reach the changed dictionary or a separate empty dictionary?</figcaption>

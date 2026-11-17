@@ -1,70 +1,66 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="810" viewBox="0 0 1200 810" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="770" viewBox="0 0 840 770" role="img" aria-labelledby="title desc">
   <title id="title">The memory problem and the Ray Data solution</title>
-  <desc id="desc">Two panels compare a 500 GB image dataset in S3 with a driver that has 16 GB RAM. On the left, loading every decoded image into the driver's list runs out of memory before tasks are submitted. On the right, Ray Data workers read and process blocks, then write results to storage. Solid green arrows carry data. Dashed arrows represent control from the driver, which manages the execution plan without collecting all images. The driver is shown on the head node in this example, but it can run elsewhere. Stored file size differs from decoded memory. Blocks and concurrent work must still fit worker memory.</desc>
+  <desc id="desc">The top panel loads a 500 GB image collection into one Python list in a driver with 16 GB RAM. Loading runs out of memory before image tasks start. The lower panel streams blocks from S3 directly to three workers, which process the blocks and write output to storage. Solid green arrows carry data. Dashed arrows carry control from the driver on the head node. The driver can also run elsewhere. Stored file size differs from decoded memory. Blocks and concurrent work must still fit worker memory.</desc>
   <defs>
     <marker id="data-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#316a4c"/></marker>
     <marker id="control-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#6b645b"/></marker>
     <marker id="problem-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#a04136"/></marker>
-    <style>text{font-family:Arial,sans-serif;fill:#1f1d1a;font-size:20px}.heading{font-size:26px;font-weight:700}.panel-heading{font-size:24px;font-weight:700}.small{font-size:18px;fill:#4a4742}.label{font-weight:700}.code{font-family:Menlo,Consolas,monospace;font-size:18px}.data{fill:none;stroke:#316a4c;stroke-width:3;marker-end:url(#data-arrow)}.control{fill:none;stroke:#6b645b;stroke-width:2.5;stroke-dasharray:5 7;marker-end:url(#control-arrow)}.problem{fill:none;stroke:#a04136;stroke-width:3;marker-end:url(#problem-arrow)}</style>
+    <style>text{font-family:Arial,sans-serif;fill:#1f1d1a;font-size:24px}.heading{font-size:28px;font-weight:700}.panel-heading{font-size:26px;font-weight:700}.small{font-size:22px;fill:#4a4742}.label{font-weight:700}.data{fill:none;stroke:#316a4c;stroke-width:3;marker-end:url(#data-arrow)}.control{fill:none;stroke:#6b645b;stroke-width:2.5;stroke-dasharray:5 7;marker-end:url(#control-arrow)}.problem{fill:none;stroke:#a04136;stroke-width:3;marker-end:url(#problem-arrow)}</style>
   </defs>
-  <rect width="1200" height="810" rx="14" fill="#fbf8f2"/>
-  <text x="24" y="39" class="heading">Keep the full dataset out of the driver.</text>
-  <text x="24" y="72" class="small">Illustrative case: 500 GB of image files and a driver with 16 GB RAM.</text>
-  <rect x="24" y="104" width="344" height="576" rx="14" fill="#fff1ed" stroke="#d8a48a" stroke-width="2"/>
-  <rect x="392" y="104" width="784" height="576" rx="14" fill="#f0f5ef" stroke="#9ec3ae" stroke-width="2"/>
-  <text x="44" y="145" class="panel-heading" style="fill:#a04136">Problem: load everything</text>
-  <text x="412" y="145" class="panel-heading" style="fill:#316a4c">Solution: Ray Data streams blocks</text>
-  <rect x="44" y="180" width="304" height="88" rx="10" fill="#fff" stroke="#b6b0a6" stroke-width="2"/>
-  <text x="196" y="215" text-anchor="middle" class="label">S3: 500 GB dataset</text>
-  <text x="196" y="246" text-anchor="middle" class="small">Image files in storage</text>
-  <path d="M196 268V300M196 342V379" class="problem"/>
-  <text x="196" y="327" text-anchor="middle" class="code">load_all_data()</text>
-  <rect x="44" y="390" width="304" height="120" rx="10" fill="#f8c9bf" stroke="#a04136" stroke-width="2"/>
-  <text x="196" y="423" text-anchor="middle" class="label">Head node*</text>
-  <text x="196" y="457" text-anchor="middle" class="label">Driver: 16 GB RAM</text>
-  <text x="196" y="489" text-anchor="middle" class="small">All decoded images in one list</text>
-  <path d="M196 510V560" class="problem"/>
-  <rect x="44" y="572" width="304" height="60" rx="10" fill="#a04136"/>
-  <text x="196" y="610" text-anchor="middle" class="label" style="fill:#fff">OUT OF MEMORY</text>
-  <text x="196" y="660" text-anchor="middle" class="small">Tasks have not started.</text>
-  <rect x="412" y="180" width="330" height="88" rx="10" fill="#fff" stroke="#b6b0a6" stroke-width="2"/>
-  <text x="577" y="215" text-anchor="middle" class="label">S3: 500 GB dataset</text>
-  <text x="577" y="246" text-anchor="middle" class="small">Image files in storage</text>
-  <rect x="858" y="180" width="294" height="88" rx="10" fill="#fde0d2" stroke="#d8a48a" stroke-width="2"/>
-  <text x="1005" y="215" text-anchor="middle" class="label">Head node*</text>
-  <text x="1005" y="246" text-anchor="middle" class="small">Driver: plan + executor</text>
-  <path d="M460 268C460 326 460 350 460 422" class="data"/>
-  <path d="M577 268C577 325 720 325 720 422" class="data"/>
-  <path d="M694 268C694 325 980 325 980 422" class="data"/>
-  <path d="M958 268C958 296 600 310 600 422" class="control"/>
-  <path d="M1005 268C1005 320 860 320 860 422" class="control"/>
-  <path d="M1052 268C1052 320 1120 320 1120 422" class="control"/>
-  <rect x="428" y="366" width="111" height="31" rx="5" fill="#f0f5ef"/>
-  <text x="484" y="389" text-anchor="middle" class="small">Block 1</text>
-  <rect x="688" y="366" width="111" height="31" rx="5" fill="#f0f5ef"/>
-  <text x="744" y="389" text-anchor="middle" class="small">Block 2</text>
-  <rect x="948" y="366" width="111" height="31" rx="5" fill="#f0f5ef"/>
-  <text x="1004" y="389" text-anchor="middle" class="small">Block …</text>
-  <rect x="412" y="430" width="214" height="80" rx="10" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
-  <rect x="675" y="430" width="214" height="80" rx="10" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
-  <rect x="938" y="430" width="214" height="80" rx="10" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
-  <text x="519" y="462" text-anchor="middle" class="label">Worker 1</text>
-  <text x="782" y="462" text-anchor="middle" class="label">Worker 2</text>
-  <text x="1045" y="462" text-anchor="middle" class="label">Worker …</text>
-  <text x="519" y="492" text-anchor="middle" class="small">Read → process</text>
-  <text x="782" y="492" text-anchor="middle" class="small">Read → process</text>
-  <text x="1045" y="492" text-anchor="middle" class="small">Read → process</text>
-  <path d="M519 510V562" class="data"/>
-  <path d="M782 510V562" class="data"/>
-  <path d="M1045 510V562" class="data"/>
-  <rect x="412" y="572" width="740" height="60" rx="10" fill="#fff" stroke="#9ec3ae" stroke-width="2"/>
-  <text x="782" y="610" text-anchor="middle" class="label">Write output files to storage</text>
-  <path d="M430 657H480" class="data"/>
-  <text x="493" y="664" class="small">Data</text>
-  <path d="M592 657H642" class="control"/>
-  <text x="655" y="664" class="small">Control</text>
-  <text x="1148" y="664" text-anchor="end" class="small">No full list in the driver</text>
-  <text x="24" y="719" class="label">More workers do not increase the driver's RAM.</text>
-  <text x="24" y="751" class="small">* The driver is shown on the head node. The driver can also run elsewhere.</text>
-  <text x="24" y="783" class="small">Stored file size differs from decoded memory. Blocks and concurrent work must still fit worker memory.</text>
+  <rect width="840" height="770" rx="14" fill="#fbf8f2"/>
+  <text x="24" y="40" class="heading">Keep the full dataset out of the driver.</text>
+  <rect x="24" y="65" width="792" height="190" rx="12" fill="#fff1ed" stroke="#d8a48a" stroke-width="2"/>
+  <text x="44" y="101" class="panel-heading" style="fill:#a04136">Problem: load everything</text>
+  <rect x="44" y="120" width="210" height="70" rx="10" fill="#fff" stroke="#b6b0a6" stroke-width="2"/>
+  <text x="149" y="150" text-anchor="middle" class="label">S3: 500 GB</text>
+  <text x="149" y="178" text-anchor="middle" class="small">Image files</text>
+  <path d="M254 155H300" class="problem"/>
+  <rect x="310" y="120" width="260" height="70" rx="10" fill="#f8c9bf" stroke="#a04136" stroke-width="2"/>
+  <text x="440" y="150" text-anchor="middle" class="label">Driver: 16 GB RAM</text>
+  <text x="440" y="178" text-anchor="middle" class="small">One Python list</text>
+  <path d="M570 155H618" class="problem"/>
+  <rect x="628" y="120" width="168" height="70" rx="10" fill="#a04136"/>
+  <text x="712" y="149" text-anchor="middle" class="label" style="fill:#fff">Out of</text>
+  <text x="712" y="179" text-anchor="middle" class="label" style="fill:#fff">memory</text>
+  <text x="44" y="229" class="small">load_all_data() fails before task submission.</text>
+  <rect x="24" y="275" width="792" height="424" rx="12" fill="#f0f5ef" stroke="#9ec3ae" stroke-width="2"/>
+  <text x="44" y="312" class="panel-heading" style="fill:#316a4c">Solution: Ray Data streams blocks</text>
+  <rect x="44" y="331" width="320" height="65" rx="10" fill="#fff" stroke="#b6b0a6" stroke-width="2"/>
+  <text x="204" y="359" text-anchor="middle" class="label">S3: 500 GB</text>
+  <text x="204" y="386" text-anchor="middle" class="small">Image files in storage</text>
+  <rect x="476" y="331" width="320" height="65" rx="10" fill="#fde0d2" stroke="#d8a48a" stroke-width="2"/>
+  <text x="636" y="359" text-anchor="middle" class="label">Head node</text>
+  <text x="636" y="386" text-anchor="middle" class="small">Driver coordinates</text>
+  <path d="M100 396C100 421 105 436 105 469" class="data"/>
+  <path d="M200 396C200 423 375 420 375 469" class="data"/>
+  <path d="M300 396C300 423 645 420 645 469" class="data"/>
+  <path d="M546 396C546 420 215 420 215 469" class="control"/>
+  <path d="M646 396C646 420 485 420 485 469" class="control"/>
+  <path d="M746 396C746 421 755 436 755 469" class="control"/>
+  <rect x="63" y="431" width="94" height="29" rx="5" fill="#f0f5ef"/>
+  <rect x="333" y="431" width="94" height="29" rx="5" fill="#f0f5ef"/>
+  <rect x="603" y="431" width="94" height="29" rx="5" fill="#f0f5ef"/>
+  <text x="110" y="452" text-anchor="middle" class="small">Block 1</text>
+  <text x="380" y="452" text-anchor="middle" class="small">Block 2</text>
+  <text x="650" y="452" text-anchor="middle" class="small">Block …</text>
+  <rect x="44" y="478" width="212" height="68" rx="10" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
+  <rect x="314" y="478" width="212" height="68" rx="10" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
+  <rect x="584" y="478" width="212" height="68" rx="10" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
+  <text x="150" y="506" text-anchor="middle" class="label">Worker 1</text>
+  <text x="420" y="506" text-anchor="middle" class="label">Worker 2</text>
+  <text x="690" y="506" text-anchor="middle" class="label">Worker …</text>
+  <text x="150" y="535" text-anchor="middle" class="small">Read → process</text>
+  <text x="420" y="535" text-anchor="middle" class="small">Read → process</text>
+  <text x="690" y="535" text-anchor="middle" class="small">Read → process</text>
+  <path d="M150 546V580" class="data"/>
+  <path d="M420 546V580" class="data"/>
+  <path d="M690 546V580" class="data"/>
+  <rect x="44" y="588" width="752" height="50" rx="10" fill="#fff" stroke="#9ec3ae" stroke-width="2"/>
+  <text x="420" y="620" text-anchor="middle" class="label">Write output files to storage</text>
+  <path d="M44 673H94" class="data"/>
+  <text x="107" y="681" class="small">Data</text>
+  <path d="M239 673H289" class="control"/>
+  <text x="302" y="681" class="small">Control</text>
+  <text x="796" y="681" text-anchor="end" class="small">No full driver list</text>
+  <text x="24" y="743" class="label">More workers do not enlarge the driver's RAM.</text>
 </svg>

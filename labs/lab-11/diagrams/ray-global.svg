@@ -3,18 +3,18 @@
   <desc id="desc">The driver initializes total_pixels_processed to zero. It submits four process_image_and_count tasks and waits for every result with ray.get. Two illustrative worker processes each update their own total by 100 pixels for each image they handle. They return processed images, not updates to the driver's variable. After all four images return, the driver's total is still zero instead of the expected 400. Workers can handle multiple tasks, so their local totals depend on task placement.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#4a4742"/></marker>
-    <style>text{font-family:Arial,sans-serif;fill:#1f1d1a;font-size:20px}.heading{font-size:25px;font-weight:700}.small{font-size:18px;fill:#4a4742}.label{font-weight:700}.line{fill:none;stroke:#4a4742;stroke-width:2;marker-end:url(#arrow)}.code{font-family:Menlo,Consolas,monospace;font-size:18px}</style>
+    <style>text{font-family:Arial,sans-serif;fill:#1f1d1a;font-size:24px}.heading{font-size:28px;font-weight:700}.small{font-size:22px;fill:#4a4742}.label{font-weight:700}.line{fill:none;stroke:#4a4742;stroke-width:2;marker-end:url(#arrow)}.code{font-family:Menlo,Consolas,monospace;font-size:22px}</style>
   </defs>
   <rect width="840" height="600" rx="14" fill="#fbf8f2"/>
   <text x="24" y="38" class="heading">Each process owns a separate variable.</text>
-  <text x="24" y="69" class="small">Two workers shown. Task placement and worker reuse can vary.</text>
+  <text x="24" y="69" class="small">Four images. Two illustrative workers.</text>
   <rect x="24" y="100" width="792" height="135" rx="12" fill="#fde0d2" stroke="#d8a48a" stroke-width="2"/>
   <text x="48" y="139" class="label">Driver process</text>
   <text x="48" y="180" class="code">total_pixels_processed = 0</text>
-  <text x="48" y="212" class="small">The variable printed by the driver</text>
-  <text x="420" y="146">Submit four image tasks.</text>
-  <text x="420" y="183" class="code">ray.get(...)</text>
-  <text x="420" y="212" class="small">Wait for all four results.</text>
+  <text x="48" y="212" class="small">The driver prints this copy.</text>
+  <text x="455" y="146">Submit four tasks.</text>
+  <text x="455" y="183" class="code">ray.get(...)</text>
+  <text x="455" y="212" class="small">Wait for all four results.</text>
   <path d="M100 235V338" class="line"/>
   <text x="114" y="283" class="small">Task input</text>
   <path d="M320 350V247" class="line"/>
@@ -25,13 +25,13 @@
   <text x="610" y="317" class="small">Image result</text>
   <rect x="24" y="350" width="372" height="135" rx="12" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
   <text x="48" y="387" class="label">Worker process A</text>
-  <text x="48" y="427" class="code">total_pixels_processed += 100</text>
-  <text x="48" y="462" class="small">Changes this worker’s variable.</text>
+  <text x="48" y="427" class="code">Add 100 to this copy.</text>
+  <text x="48" y="462" class="small">The driver copy stays separate.</text>
   <rect x="444" y="350" width="372" height="135" rx="12" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
   <text x="468" y="387" class="label">Worker process B</text>
-  <text x="468" y="427" class="code">total_pixels_processed += 100</text>
-  <text x="468" y="462" class="small">Changes this worker’s variable.</text>
+  <text x="468" y="427" class="code">Add 100 to this copy.</text>
+  <text x="468" y="462" class="small">The driver copy stays separate.</text>
   <path d="M24 509H816" stroke="#e6e1d6" stroke-width="2"/>
-  <text x="24" y="545" class="label">All 4 images returned. Driver total: 0. Expected total: 400.</text>
-  <text x="24" y="578" class="small">The global statement does not share a variable across processes.</text>
+  <text x="24" y="545" class="label">4 images returned · driver: 0 · expected: 400</text>
+  <text x="24" y="578" class="small">A global variable belongs to one process.</text>
 </svg>
