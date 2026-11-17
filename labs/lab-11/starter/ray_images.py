@@ -10,11 +10,12 @@ def process_image(image):
 
 @ray.remote
 def process_image_task(image):
-    raise NotImplementedError
+    return process_image(image)
 
 
 def process_parallel(images):
-    raise NotImplementedError
+    refs = [process_image_task.remote(image) for image in images]
+    return ray.get(refs)
 
 
 @ray.remote
@@ -23,16 +24,18 @@ class PixelCounter:
         self.total = 0
 
     def add(self, count):
-        raise NotImplementedError
+        self.total += count
 
     def get_total(self):
-        raise NotImplementedError
+        return self.total
 
 
 @ray.remote
 def process_and_count(image, counter):
-    raise NotImplementedError
+    processed = process_image(image)
+    ray.get(counter.add.remote(image.shape[0] * image.shape[1]))
+    return processed
 
 
 def process_row(row):
-    raise NotImplementedError
+    return {**row, "image": process_image(row["image"])}

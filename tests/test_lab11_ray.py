@@ -57,19 +57,21 @@ class RayLabTests(unittest.TestCase):
     def assert_pass(self, result):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_starter_preserves_six_unfinished_targets_and_small_provided_operation(self):
-        tree = ast.parse((SOURCE / "ray_images.py").read_text())
-        unfinished = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and len(node.body) == 1 and isinstance(node.body[0], ast.Raise):
-                unfinished.append(node.name)
-        self.assertCountEqual(unfinished, [name.split(".")[-1] for name in TARGETS])
+    def test_provided_code_is_complete_and_has_no_comments_or_docstrings(self):
         for name in ("ray_images.py", "demo_ray.py"):
             text = (SOURCE / name).read_text()
             self.assertNotIn("#", text)
+            self.assertNotIn("NotImplementedError", text)
             for node in ast.walk(ast.parse(text)):
                 if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef)):
                     self.assertIsNone(ast.get_docstring(node))
+
+    @unittest.skipUnless(HAS_NUMPY, "NumPy required for image contracts")
+    def test_provided_code_passes_all_six_function_checks(self):
+        with starter() as directory:
+            result = self.run_harness(directory, "--unit")
+            self.assert_pass(result)
+            self.assertIn("6/6 checks passed", result.stdout)
 
     def test_metadata_commands_need_no_dependencies(self):
         with starter() as directory:

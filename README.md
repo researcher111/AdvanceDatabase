@@ -84,6 +84,12 @@ is an optional extension.
 Keep coding exercises, especially Lab 11, simple, correct, and easy to read and edit.
 Use the fewest lines that keep each step clear. Use clear names and simple steps.
 Do not add code comments. Keep explanations in the lab instructions.
+Lab 11 supplies complete runnable code at each stage of its walkthrough.
+Students then choose their own task and parallelize it with Ray for completion credit.
+Use diagrams to show task flow, shared state, and data flow.
+The cluster section explains how the same task and actor code uses cloud workers.
+Its `my-cluster.yaml` is a resource configuration excerpt for reading, not a complete
+deployment setup. AWS deployment is optional and does not affect completion credit.
 
 ## Layout
 
@@ -103,9 +109,9 @@ Do not add code comments. Keep explanations in the lab instructions.
 
 Python 3.11 or newer. Labs 1 to 7 are pure standard library. Later labs add
 DuckDB, PyTorch, PyArrow, NumPy, and Matplotlib for Lab 8’s core fare-prediction investigation (install `labs/lab-08/starter/requirements-pytorch.txt`). Optional storage experiments also use `pandas`.
-Lab 11 now grades Ray image processing. Use Python 3.11–3.13 and install
+Lab 11 uses Ray for a task students choose. Use Python 3.11–3.13 and install
 `labs/lab-11/starter/requirements-ray.txt` for Ray Data, NumPy, and Pillow.
-The required work runs locally with generated images. The older MapReduce,
+The complete example runs locally with generated images. The older MapReduce,
 Spark, and nearest-neighbor exercises remain optional practice. Optional Spark
 practice also needs `pyspark` and a compatible JDK.
 
@@ -126,17 +132,18 @@ python3 test_records.py                            # full integration tests
 Every implementation/practice test script supports these options. Lab 8’s supplied SQL examples use query names such
 as `--unit Q1`; that harness does not grade the core ML report. Lab 11’s
 `test_ray_images.py` provides six isolated function checks without starting Ray workers.
-Its full suite adds a required integration check with real Ray tasks, an actor, and Ray Data.
+Its full suite adds an integration check with real Ray tasks, an actor, and Ray Data.
+These seven checks are practice feedback for the supplied image example, not the completion grade.
 The older `test_sparkray.py` is ungraded practice only.
 
 Function-level checks provide known data and working helpers for unfinished
 dependencies, while always calling the selected student function. These results
 are practice feedback. Running without flags uses each lab’s full correctness suite
 and grading rules. Lab 11 includes its six isolated contract checks plus an integration
-check that uses the submitted functions together. Unfinished methods still fail
-their own checks. Lab 5 is the exception to the implementation workflow:
-its supplied engine passes immediately, and students submit queries, predictions,
-measurements, and explanations. Lab 8 also provides working model code: students submit an investigation query, its result, a comparison chart, and a short report. Other labs retain their stated grading rules.
+check that uses the supplied image functions together. Its complete example passes all seven
+checks without edits. Students submit their own task instead. In labs with unfinished methods, those methods still fail
+their own checks. Lab 5 supplies a complete engine, and students submit queries,
+predictions, measurements, and explanations. Lab 8 also provides working model code: students submit an investigation query, its result, a comparison chart, and a short report. Other labs retain their stated grading rules.
 
 **Lab 8 instructor setup:** use a report-based assignment with manual review for
 `ml_report.txt`, `investigation.sql`, and `query-results.csv`.
@@ -146,11 +153,15 @@ course’s submission assignment accordingly before collecting those three files
 The review criteria are listed on the lab page; exact MAE and runtime are not
 grading thresholds.
 
-**Lab 11 instructor setup:** collect only `ray_images.py`.
-The seven Ray correctness checks have equal weight. No timing threshold affects the grade.
-The instructor repository’s `labs/lab-11/autograder/autograder.zip` now targets this submission.
-Upload and test that package in Gradescope before collecting submissions.
-The previous MapReduce package accepts the wrong file and must be replaced.
+**Lab 11 instructor setup:** collect `my_ray_task.py` and `completion.txt` for manual completion review.
+Students choose a task, run serial and Ray versions, and compare their results or describe what failed.
+The note identifies the task and inputs, gives the run command and actual output,
+and explains independent work and learning in two to four sentences.
+An exact error and an account of attempted fixes can supply run evidence.
+Award full completion credit for the task and evidence described on the lab page.
+There is no speedup or complexity threshold. Actors, Ray Data, and cloud deployment are optional for the chosen task.
+The seven image checks remain practice feedback. Replace the previous fixed-image
+Gradescope assignment setup with manual completion review. Do not use the old autograder ZIP to grade this submission.
 
 **Lab 8 matching and chart:** collect `plan_mapping.txt` and `fare-models.png`
 together in an eight-point checkpoint. Four points check operator matches;

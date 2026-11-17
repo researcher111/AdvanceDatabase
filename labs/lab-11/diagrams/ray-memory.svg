@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="680" viewBox="0 0 840 680" role="img" aria-labelledby="title desc">
+  <title id="title">Process blocks instead of filling the driver's memory</title>
+  <desc id="desc">This illustrative case has 500 GB of image files in storage and 16 GB of driver RAM. Stored file size and decoded memory differ. In this example, the whole collection of decoded images cannot fit in the driver's Python list. If the program builds that list before submitting tasks, adding worker machines does not fix the driver's memory limit. A Ray Data pipeline instead reads blocks, processes rows on workers, and writes output files. The driver manages the plan without collecting all images. Block size and concurrent work must still fit worker memory.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#4a4742"/></marker>
+    <style>text{font-family:Arial,sans-serif;fill:#1f1d1a;font-size:20px}.heading{font-size:25px;font-weight:700}.small{font-size:18px;fill:#4a4742}.label{font-weight:700}.line{fill:none;stroke:#4a4742;stroke-width:2;marker-end:url(#arrow)}.code{font-family:Menlo,Consolas,monospace;font-size:18px}</style>
+  </defs>
+  <rect width="840" height="680" rx="14" fill="#fbf8f2"/>
+  <text x="24" y="38" class="heading">Keep the full dataset out of the driver.</text>
+  <text x="24" y="69" class="small">Illustrative case: 500 GB of image files and 16 GB of driver RAM.</text>
+  <text x="24" y="118" class="label">Before: load every image into one list</text>
+  <rect x="24" y="145" width="190" height="126" rx="12" fill="#f0eee5" stroke="#b6b0a6" stroke-width="2"/>
+  <text x="119" y="184" text-anchor="middle">500 GB of</text>
+  <text x="119" y="221" text-anchor="middle">image files</text>
+  <text x="119" y="251" text-anchor="middle" class="small">In storage</text>
+  <path d="M214 208H283" class="line"/>
+  <rect x="292" y="145" width="270" height="126" rx="12" fill="#fde0d2" stroke="#d8a48a" stroke-width="2"/>
+  <text x="427" y="184" text-anchor="middle" class="label">Driver: 16 GB RAM</text>
+  <text x="427" y="221" text-anchor="middle">All decoded images</text>
+  <text x="427" y="251" text-anchor="middle" class="small">Cannot fit whole collection</text>
+  <path d="M562 208H632" fill="none" stroke="#b6b0a6" stroke-width="2" stroke-dasharray="5 5"/>
+  <path d="M589 195L609 221M609 195L589 221" fill="none" stroke="#9f4b39" stroke-width="3"/>
+  <rect x="640" y="145" width="176" height="126" rx="12" fill="#fff" stroke="#b6b0a6" stroke-width="2"/>
+  <text x="728" y="184" text-anchor="middle" class="label">Workers</text>
+  <text x="728" y="221" text-anchor="middle" class="small">Tasks not</text>
+  <text x="728" y="251" text-anchor="middle" class="small">submitted</text>
+  <text x="24" y="308" class="small">More workers do not increase the driver's RAM.</text>
+  <path d="M24 332H816" stroke="#e6e1d6" stroke-width="2"/>
+  <text x="24" y="373" class="label">After: process blocks and write results</text>
+  <rect x="24" y="400" width="170" height="120" rx="12" fill="#f0eee5" stroke="#b6b0a6" stroke-width="2"/>
+  <text x="109" y="443" text-anchor="middle">Image files</text>
+  <text x="109" y="484" text-anchor="middle" class="small">In storage</text>
+  <path d="M194 460H223" class="line"/>
+  <rect x="231" y="400" width="170" height="120" rx="12" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
+  <text x="316" y="443" text-anchor="middle">Read blocks</text>
+  <text x="316" y="484" text-anchor="middle" class="small">Groups of rows</text>
+  <path d="M401 460H430" class="line"/>
+  <rect x="438" y="400" width="170" height="120" rx="12" fill="#fde0d2" stroke="#d8a48a" stroke-width="2"/>
+  <text x="523" y="443" text-anchor="middle" class="small">Ray Data workers</text>
+  <text x="523" y="484" text-anchor="middle" class="code">process_row</text>
+  <path d="M608 460H637" class="line"/>
+  <rect x="645" y="400" width="170" height="120" rx="12" fill="#d5e6dc" stroke="#9ec3ae" stroke-width="2"/>
+  <text x="730" y="443" text-anchor="middle">Write blocks</text>
+  <text x="730" y="484" text-anchor="middle" class="small">Output files</text>
+  <rect x="24" y="549" width="792" height="64" rx="10" fill="#fff" stroke="#b6b0a6" stroke-width="2"/>
+  <text x="420" y="589" text-anchor="middle">Driver plans work without collecting all images.</text>
+  <text x="24" y="651" class="small">Block size and concurrent work still need to fit worker memory.</text>
+</svg>
