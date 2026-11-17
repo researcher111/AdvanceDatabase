@@ -15,6 +15,7 @@
 
 <aside class="toc">
   <div class="toc-title">Lab 11</div>
+  <p><a href="../../slides/lab-11.html">Visual slide deck ↗</a></p>
   <ul>
     <li><a href="#video-route">Follow the example</a></li>
     <li><a href="#the-api">Get the complete example</a></li>
@@ -220,12 +221,6 @@ result = ray.get(ref)</code></pre>
 
 <p>The list comprehension below submits every image before <code>ray.get(result_refs)</code> waits. Ray can overlap tasks when resources are available. Results follow the reference order, even if tasks finish in another order.</p>
 
-<div class="exercise">
-  <span class="ex-label">Find the wait</span>
-  <p>This loop waits after every submission. Why does that prevent the next image from starting sooner?</p>
-  <pre><code class="language-python">results = [ray.get(process_image.remote(image)) for image in images]</code></pre>
-  <details><summary>Check your explanation</summary><p>The loop cannot submit its next task until the current result arrives. Submit all independent tasks first. Available resources determine how many can run together.</p></details>
-</div>
 <h3>Run stage 1: parallel tasks</h3>
 <p>This program contains the decorator, task submissions, and result collection in one file. <a href="starter/stage1_tasks.py" download>Download stage1_tasks.py</a>.</p>
 <pre data-source="starter/stage1_tasks.py"><code class="language-python">import time
@@ -308,9 +303,9 @@ Actual total pixels in main script: 0</code></pre>
 <p class="keep-in-present">The <code>global total_pixels_processed</code> statement updates a module variable. Each worker process has its own copy. Worker updates do not change the driver’s copy. See Ray’s <a href="https://docs.ray.io/en/latest/ray-core/patterns/global-variables.html">guide to global variables</a>.</p>
 <figure class="ray-diagram">
   <div class="ray-diagram-frame">
-    <img src="diagrams/ray-global.svg" width="840" height="600" alt="The driver and workers hold separate global variables. Workers return four processed images, but the driver's total remains zero.">
+    <img src="diagrams/ray-global.svg" width="840" height="600" alt="The driver has its own count, which stays zero. A worker adds 100 to a separate copy and returns the processed image. After all four images return, no worker counts have been returned or merged. The driver still prints zero instead of 400.">
   </div>
-  <figcaption>Waiting collects task results. It does not merge the workers’ global variables into the driver’s variable.</figcaption>
+  <figcaption>The function returns an image. Its count update stays in worker memory. Collecting four images leaves the driver’s count at zero.</figcaption>
 </figure>
 <p>Two workers are shown for illustration. Ray can reuse a worker for several tasks, so its local count can accumulate. The driver’s count stays separate regardless of task placement.</p>
 

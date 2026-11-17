@@ -4,24 +4,32 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const parseId=value=>/^\d+$/.test(value)?Number(value):value.toLowerCase();
 const requested=process.argv.slice(2).map(parseId);
-const lectureIds=requested.length?requested:[...Array.from({length:13},(_,i)=>i+1),'13b',14,15];
+const lectureIds=requested.length?requested:[...Array.from({length:13},(_,i)=>i+1),'13b',14,15,'lab11'];
 const groups=[...new Set(lectureIds.map(id=>id<=5?'01-05':id<=10?'06-10':'11-15'))];
 const context=vm.createContext({window:{},console});
-for(const p of ['slides/_shared/visuals.js','labs/_shared/rag-measurements.js','labs/_shared/teaching-traces.js','slides/_shared/trace-scenes.js',...groups.map(g=>'slides/decks/lectures-'+g+'.js'),'slides/decks/spark-ray.js','slides/decks/spark-program.js','slides/decks/teaching-notes.js','slides/decks/storage-choices.js','slides/decks/btree-growth.js','slides/decks/btree-clarity.js','slides/decks/clarity-captions.js','slides/decks/clarity-layout.js','slides/decks/clarity-diagrams.js','slides/decks/bigtable-code.js','lectures/lecture-11/embedding-walkthrough.js','slides/decks/embedding-walkthrough.js','slides/decks/hnsw-walkthrough.js','slides/decks/course-clarity.js'])vm.runInContext(fs.readFileSync(p,'utf8'),context,{filename:p});
+for(const p of ['slides/_shared/visuals.js','labs/_shared/rag-measurements.js','labs/_shared/teaching-traces.js','slides/_shared/trace-scenes.js',...groups.map(g=>'slides/decks/lectures-'+g+'.js'),'slides/decks/spark-ray.js','slides/decks/spark-program.js','slides/decks/teaching-notes.js','slides/decks/storage-choices.js','slides/decks/btree-growth.js','slides/decks/btree-clarity.js','slides/decks/clarity-captions.js','slides/decks/clarity-layout.js','slides/decks/clarity-diagrams.js','slides/decks/bigtable-code.js','lectures/lecture-11/embedding-walkthrough.js','slides/decks/embedding-walkthrough.js','slides/decks/hnsw-walkthrough.js','slides/decks/course-clarity.js','slides/decks/lab-11-diagrams.js','slides/decks/lab-11.js'])vm.runInContext(fs.readFileSync(p,'utf8'),context,{filename:p});
 const {COURSE_DECKS:decks,DeckViz:V}=context.window;
 let scenes=0,builds=0,animated=0;const warnings=[];
 for(const id of lectureIds){
   const deck=decks[id];assert(deck,`Lecture ${id} exists`);assert.equal(deck.id,id);
   assert.equal(deck.scenes.reduce((n,s)=>n+s.minutes,0),60,`Lecture ${id}: 60 teaching minutes`);
+  if(id==='lab11'){
+    assert.equal(deck.type,'lab');
+    assert.equal(deck.teachingMinutes,60);
+  }
   if(deck.discussionMinutes)assert.equal(deck.discussion.reduce((n,s)=>n+s.minutes,0),deck.discussionMinutes,`Lecture ${id}: discussion timing`);
   // Lectures 10 and 13B include detailed code walkthroughs within the same teaching period.
-  const maxScenes=id==='13b'?26:id===10?23:20;
-  assert(deck.scenes.length>=14&&deck.scenes.length<=maxScenes,`Lecture ${id}: 14–${maxScenes} scenes`);
+  const minScenes=id==='lab11'?24:14,maxScenes=id==='lab11'?30:id==='13b'?26:id===10?23:20;
+  assert(deck.scenes.length>=minScenes&&deck.scenes.length<=maxScenes,`Deck ${id}: ${minScenes}–${maxScenes} scenes`);
   assert(fs.existsSync(deck.source),`Lecture ${id}: source exists`);
   const ids=new Set();
   for(const [i,sc]of deck.scenes.entries()){
     const name=`L${id}/${i+1} ${sc.title}`;assert(!ids.has(sc.id),name+' unique scene id');ids.add(sc.id);
     assert(Number.isInteger(sc.steps)&&sc.steps>=1,name+' states');assert(sc.minutes>0,name+' time');assert(sc.notes.length>=180,name+' useful presenter notes');
+    if(sc.codeSource){
+      assert(fs.existsSync(sc.codeSource),name+' code source exists');
+      assert.equal(sc.code,fs.readFileSync(sc.codeSource,'utf8'),name+' displayed code matches download');
+    }
     if(sc.states)assert.equal(sc.states.length,sc.steps,name+' labeled states');
     assert(sc.teaching,name+' structured presenter notes');
     if(sc.teaching){

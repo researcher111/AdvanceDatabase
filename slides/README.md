@@ -1,10 +1,16 @@
-# Visual lecture decks
+# Visual lecture and lab decks
 
-Open [the lecture index](index.html), choose a lecture, and put the audience
-window on the projector. Each deck contains **60 minutes of teaching**.
-The scheduled ten-minute quizzes are additional. There are no decks for labs,
+Open [the slide index](index.html), choose a deck, and put the audience
+window on the projector. Each lecture deck contains **60 minutes of teaching**.
+The scheduled ten-minute quizzes are additional. There are no decks for
 breaks, workshops, or student presentations. Lectures 7–9 are optional bonus decks.
 Follow the course schedule for meeting dates.
+
+[Lab 11](lab-11.html) provides a 60-minute guided Ray walkthrough with local runs.
+Its complete code, downloads, and completion requirements remain in the
+[lab instructions](../labs/lab-11/sparkray.html). Students continue their own
+parallel task independently. The deck uses the same presenter and drawing tools
+as the lectures.
 
 [Lecture 13B](lecture-13b.html) develops Spark and Ray on November 12.
 Its 60-minute deck is followed by a 15-minute investigation in the
@@ -88,7 +94,8 @@ motion is enabled in the device settings.
 
 ## Files and maintenance
 
-`lecture-NN.html` loads the player and its assigned deck bundle. The bundles
+`lecture-NN.html` loads the player and its assigned deck bundle. `lab-11.html`
+loads `decks/lab-11-diagrams.js` and `decks/lab-11.js`. The bundles
 in `decks/` contain the teaching content and editable SVG diagrams. Shared
 files in `_shared/` provide layout, animation, navigation, notes, and drawing.
 Everything uses ordinary HTML, CSS, and JavaScript. There is no build step,
@@ -97,3 +104,4 @@ remain available alongside the decks.
 
 Run `node scripts/validate_slides.mjs` from the repository root to check all
 scenes, timing, definitions, drawing keys, and estimated text bounds.
+Use `node scripts/validate_slides.mjs lab11` to check only the Lab 11 deck.

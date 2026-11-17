@@ -5,6 +5,7 @@
   const id=/^\d+$/.test(lectureKey)?Number(lectureKey):lectureKey.toLowerCase(),deck=window.COURSE_DECKS[id],V=window.DeckViz;
   if(!deck){document.body.textContent='This lecture deck could not load. Open it from the slides index.';return;}
   const displayId=deck.label||String(id);
+  const isLab=deck.type==='lab',deckKind=isLab?'Lab':'Lecture';
   const params=new URLSearchParams(location.search),role=params.has('presenter')?'presenter':params.has('script')?'script':params.has('guide')?'guide':'audience';
   const $=id=>document.getElementById(id),el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
   const svg=()=>{const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('viewBox','0 0 1280 720');return s;};
@@ -13,7 +14,7 @@
   const channel=location.protocol!=='file:'&&typeof BroadcastChannel!=='undefined'?new BroadcastChannel('course-deck-'+id+'-'+session):null;
   const state={slide:0,step:0,elapsed:0,running:false,playing:false,blanked:false};
   let presenterWindow=null,auto=null,clockStart=0,quietTimer,toastTimer,hashWrite=false;
-  document.title=deck.title+' · Visual lecture '+displayId;
+  document.title=deck.title+' · Visual '+deckKind.toLowerCase()+' '+displayId;
   const scene=()=>deck.scenes[state.slide];
   // Chromium reports file:// here, but local-file message recipients have an
   // opaque origin. Messages still go only to the stored peer window, and the
@@ -67,7 +68,7 @@
     update(oldSlide===state.slide);
   }
   function sourceList(sc,target){
-    const links=[{url:sourceLink(deck.source),text:'Lecture reading'}];
+    const links=[{url:sourceLink(deck.source),text:isLab?'Lab instructions':'Lecture reading'}];
     if(sc.demo)links.push({url:sourceLink(deck.source)+'#'+sc.demo,text:'Original interactive demo'});
     (sc.sources||[]).filter(s=>s!==deck.source).forEach((s,i)=>links.push({url:sourceLink(s),text:s.startsWith(deck.source+'#')?'Reading section':'Source '+(i+1)}));
     links.forEach((l,i)=>{if(i)target.append(document.createTextNode(' · '));const a=el('a','',l.text);a.href=l.url;a.target='_blank';a.rel='noopener';target.append(a);});
@@ -83,7 +84,7 @@
       section.append(el('p',/^\[.*\]$/.test(p)?'script-cue':'script-spoken',p));
     });
     const slide=deck.scenes.indexOf(sc);
-    const cue=step<sc.steps-1?'[Advance once for the next build.]':slide<deck.scenes.length-1?`[Advance once to slide ${slide+2}.]`:'[End of lecture.]';
+    const cue=step<sc.steps-1?'[Advance once for the next build.]':slide<deck.scenes.length-1?`[Advance once to slide ${slide+2}.]`:`[End of ${deckKind.toLowerCase()}.]`;
     section.append(el('p','script-cue script-advance',cue));target.append(section);
   }
   function scriptLink(target){
@@ -134,13 +135,14 @@
     document.body.className='presenter';document.body.innerHTML='<header><div><h1></h1><p>Presenter view · 60 teaching minutes · quizzes separate</p><span class="connection" id="connection"></span></div><div><span class="clock" id="clock">0:00</span> <button id="clock-button">Start clock</button> <button id="reset-clock">↺</button></div></header><div class="workspace"><section><div class="preview" id="preview"></div><div class="timing"><span id="scene-time"></span><span id="pace"></span></div><div class="speaker-tools" id="speaker-tools"></div><div class="timeline"><span id="timeline-progress"></span></div><label for="jump">Slide </label><select id="jump"></select><p class="next" id="next-scene"></p><a class="guide-link" id="guide-link" target="_blank">Full teaching guide</a></section><section id="notes" aria-live="polite"></section></div>';
     document.querySelector('h1').textContent=`${pad(displayId)} · ${deck.title}${deck.bonus?" · Bonus":""}`;
     if(deck.discussionMinutes)document.querySelector('header p').textContent=`Presenter view · ${total} teaching minutes + ${deck.discussionMinutes} discussion minutes`;
+    if(deck.timingNote)document.querySelector('header p').textContent=`Presenter view · ${total} teaching minutes · ${deck.timingNote}`;
     const s=svg();s.id='presenter-canvas';$('preview').append(s);
     [['←','Previous build','back'],['→','Next build','next'],['↺','Replay scene','replay'],['▷','Play or pause animation','play'],['▸▸','Next slide','next-slide'],['◼','Blank audience screen','blackout']].forEach(([t,l,c])=>$('speaker-tools').append(button(t,l,()=>command(c))));
-    $('clock-button').onclick=()=>command('clock');$('reset-clock').title='Reset lecture clock';$('reset-clock').onclick=()=>command('reset-clock');
+    $('clock-button').onclick=()=>command('clock');$('reset-clock').title='Reset '+deckKind.toLowerCase()+' clock';$('reset-clock').onclick=()=>command('reset-clock');
     $('guide-link').href=location.pathname.split('/').pop()+'?guide=1';
     scriptLink($('guide-link').parentElement);
     deck.scenes.forEach((sc,i)=>{const o=el('option','',`${pad(i+1)} · ${sc.title}`);o.value=i;$('jump').append(o);});$('jump').onchange=()=>command('jump',Number($('jump').value));
-    $('connection').textContent=window.opener||channel?'Connecting to audience window…':'Open the lecture deck first, then press N to connect this presenter view.';
+    $('connection').textContent=window.opener||channel?'Connecting to audience window…':`Open the ${deckKind.toLowerCase()} deck first, then press N to connect this presenter view.`;
     const receive=e=>{if(e.data?.scope!=='course-visual-deck'||e.data.id!==id)return;if(e.data.type==='ink'){window.dispatchEvent(new CustomEvent('deck-ink-remote',{detail:e.data.detail}));return;}if(e.data.type!=='state')return;const changed=e.data.state.slide!==state.slide||e.data.state.step!==state.step;Object.assign(state,e.data.state);clockStart=Date.now();$('connection').textContent='Connected to audience window';drawPresenter(changed);};
     if(channel)channel.onmessage=receive;else window.addEventListener('message',e=>{if(e.source===window.opener)receive(e);});
     sendPeer({type:'ready'});drawPresenter(true);
@@ -155,7 +157,7 @@
     const notes=$('notes');if(changed||!notes.childElementCount){notes.replaceChildren(el('h2','',sc.title));if(!sc.teaching)notes.append(el('p','build',sc.states?.[state.step]||`Build ${state.step+1}`));teachingNotes(notes,sc,state.step);const sources=el('p','sources');sourceList(sc,sources);notes.append(sources);notes.scrollTop=0;}
   }
   function guide(){
-    document.body.className='guide';const tools=el('div','guide-tools');const a=el('a','','← Lecture deck');a.href=location.pathname.split('/').pop();tools.append(a,button('Print teaching guide','Print teaching guide',()=>window.print()));document.body.append(tools,el('h1','',deck.title));document.body.append(el('p','intro',`${deck.bonus?'Optional bonus · self-paced':deck.date} · ${deck.scenes.length} scenes · ${total} teaching minutes. ${deck.discussionMinutes?`Follow with ${deck.discussionMinutes} discussion minutes.`:'Scheduled quizzes are separate.'} Advance each animation with the right arrow or Space. Pause at the prediction prompts before revealing the next build.`));
+    document.body.className='guide';const tools=el('div','guide-tools');const a=el('a','','← '+deckKind+' deck');a.href=location.pathname.split('/').pop();tools.append(a,button('Print teaching guide','Print teaching guide',()=>window.print()));document.body.append(tools,el('h1','',deck.title));document.body.append(el('p','intro',`${deck.bonus?'Optional bonus · self-paced':deck.date} · ${deck.scenes.length} scenes · ${total} teaching minutes. ${deck.timingNote||(deck.discussionMinutes?`Follow with ${deck.discussionMinutes} discussion minutes.`:'Scheduled quizzes are separate.')} Advance each animation with the right arrow or Space. Pause at the prediction prompts before revealing the next build.`));
     scriptLink(tools);
     deck.scenes.forEach((sc,i)=>{const article=el('article');article.append(el('div','meta',`${pad(i+1)} · ${starts[i]}–${starts[i]+sc.minutes} min · ${sc.steps} builds`),el('h2','',sc.title));const row=el('div','guide-row'),preview=svg(),notes=el('div');render(preview,sc,sc.steps-1);row.append(preview,notes);if(sc.definition)notes.append(el('p','',`${sc.term}: ${sc.definition}`));teachingNotes(notes,sc);if(sc.states&&!sc.teaching)notes.append(el('p','meta','Builds: '+sc.states.join(' / ')));const sources=el('p','sources');sourceList(sc,sources);notes.append(sources);article.append(row);document.body.append(article);});
     if(deck.discussion?.length){
@@ -171,13 +173,13 @@
   }
   function scriptGuide(){
     document.body.className='script-guide';
-    document.title=`Lecture ${id} · Read-aloud script`;
-    const tools=el('nav','script-tools'),back=el('a','','← Lecture deck');back.href=location.pathname.split('/').pop();
+    document.title=`${deckKind} ${isLab?displayId:id} · Read-aloud script`;
+    const tools=el('nav','script-tools'),back=el('a','','← '+deckKind+' deck');back.href=location.pathname.split('/').pop();
     tools.setAttribute('aria-label','Script controls');
     tools.append(back,button('Print script','Print script',()=>window.print()));
     const jump=el('select');jump.id='script-jump';
     const jumpLabel=el('label','','Jump to slide');jumpLabel.htmlFor=jump.id;tools.append(jumpLabel,jump);
-    document.body.append(tools,el('h1','',`Lecture ${id} · Read-aloud script`),el('p','script-intro','Read the plain paragraphs aloud. Bracketed cues are directions for you. Pause at a prediction cue. At an advance cue, press Right Arrow or Space once in the slide window.'));
+    document.body.append(tools,el('h1','',`${deckKind} ${isLab?displayId:id} · Read-aloud script`),el('p','script-intro','Read the plain paragraphs aloud. Bracketed cues are directions for you. Pause at a prediction cue. At an advance cue, press Right Arrow or Space once in the slide window.'));
     if(!deck.scenes.some(sc=>sc.readAloud)){
       document.body.append(el('p','','This deck does not yet have a read-aloud script.'));return;
     }
@@ -200,9 +202,10 @@
   function closeOverlay(){const overlay=$('overlay');if(overlay)overlay.remove();$('overview').focus();}
   function overlay(mode){
     if($('overlay')){closeOverlay();return;}
-    const wrap=el('section');wrap.id='overlay';wrap.setAttribute('role','dialog');wrap.setAttribute('aria-modal','true');wrap.setAttribute('aria-label',mode==='help'?'Presentation controls':'Lecture overview');const header=el('header');header.append(el('h1','',mode==='help'?'Presentation controls':deck.title),button('×','Close dialog',closeOverlay));wrap.append(header);
+    const wrap=el('section');wrap.id='overlay';wrap.setAttribute('role','dialog');wrap.setAttribute('aria-modal','true');wrap.setAttribute('aria-label',mode==='help'?'Presentation controls':deckKind+' overview');const header=el('header');header.append(el('h1','',mode==='help'?'Presentation controls':deck.title),button('×','Close dialog',closeOverlay));wrap.append(header);
     if(mode==='help'){
       const help=el('div','help');help.innerHTML='<p>One build at a time. Pause to let the class predict what moves next.</p><dl><dt>→ or Space</dt><dd>Next build, then next slide</dd><dt>←</dt><dd>Previous build</dd><dt>Page Down / Page Up</dt><dd>Next / previous slide</dd><dt>R</dt><dd>Reset this scene</dd><dt>A</dt><dd>Play / pause this animation</dd><dt>N</dt><dd>Open separate presenter view</dd><dt>F</dt><dd>Full screen</dd><dt>B</dt><dd>Blank / restore audience screen</dd><dt>D / H / E</dt><dd>Pen / highlighter / eraser</dd><dt>L</dt><dd>Laser pointer</dd><dt>U / C</dt><dd>Undo / clear this slide’s ink</dd><dt>O</dt><dd>Slide overview</dd><dt>?</dt><dd>These controls</dd></dl><p>Each deck contains 60 minutes of teaching. Start the lecture clock in presenter view. Notes, discussion prompts, answers, and sources appear there. Keep the audience window on the projector.</p><p>On a tablet, use landscape orientation. Swipe left or right while drawing is off, or tap the navigation controls. Pen mode keeps swipes from changing slides. After a stylus is detected, finger touches on the ink layer are ignored. Ink saves with each slide in this browser. Clear is undoable. Animation playback stops at the end of the current scene. Reduced-motion preferences are respected.</p>';
+      if(isLab)help.querySelectorAll('p')[1].textContent=`This lab deck contains ${total} teaching minutes. ${deck.timingNote||''} Start the lab clock in presenter view. Notes, prompts, answers, and sources appear there. Keep the audience window on the projector.`;
       wrap.append(help);
     }else{
       const grid=el('div');grid.id='overview-list';deck.scenes.forEach((sc,i)=>{const b=button('','Go to slide '+(i+1)+': '+sc.title,()=>{command('jump',i);closeOverlay();});b.setAttribute('aria-current',i===state.slide);const s=svg();render(s,sc,sc.steps-1,false,false);const caption=el('div','caption');caption.append(el('span','',pad(i+1)),el('strong','',sc.title));b.append(s,caption);grid.append(b);});wrap.append(grid);
@@ -213,7 +216,7 @@
   function wake(){document.body.classList.remove('quiet');clearTimeout(quietTimer);quietTimer=setTimeout(()=>{if(!$('overlay'))document.body.classList.add('quiet');},2700);}
   function audience(){
     document.body.innerHTML='<main id="stage"><svg id="canvas" viewBox="0 0 1280 720"></svg></main><div id="blackout" aria-hidden="true"></div><nav class="toolbar" aria-label="Presentation controls"></nav><div id="build-progress" aria-hidden="true"></div><div id="status" role="status"></div><div id="live" class="sr-only" aria-live="polite"></div>';
-    const toolbar=document.querySelector('.toolbar'),home=el('a','','⌂');home.href='index.html';home.title='All lecture decks';home.setAttribute('aria-label','All lecture decks');toolbar.append(home);
+    const toolbar=document.querySelector('.toolbar'),home=el('a','','⌂');home.href='index.html';home.title=isLab?'All slide decks':'All lecture decks';home.setAttribute('aria-label',home.title);toolbar.append(home);
     const sep=()=>el('span','divider');toolbar.append(sep());
     [['back','←','Previous build (←)','back'],['forward','→','Next build (Space)','next']].forEach(([id,t,l,c])=>{const b=button(t,l,()=>command(c));b.id=id;toolbar.append(b);});const count=el('span','count');count.id='counter';toolbar.append(count);
     [['play','▷','Play this animation (A)','play'],['replay','↺','Reset scene (R)','replay']].forEach(([id,t,l,c])=>{const b=button(t,l,()=>command(c));b.id=id;toolbar.append(b);});toolbar.append(sep());
