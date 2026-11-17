@@ -27,7 +27,7 @@
     return lines;
   }
 
-  function code(d, key, x, y, text, size = 24) {
+  function code(d, key, x, y, text, size = 28) {
     d.add(key, 'text', {x, y, fill: P.ink, 'font-size': size,
       'text-anchor': 'start', 'dominant-baseline': 'middle',
       style: 'font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre',
@@ -48,10 +48,10 @@
       notes: [teaching.idea, ...builds, 'Ask: ' + teaching.question,
         'Expected answer: ' + teaching.answer, teaching.context].filter(Boolean).join('\n\n'),
       draw(d, step) {
-        d.text('title', 640, 52, title, 38);
+        d.text('title', 640, 58, title, 38);
         wrap(steps[step].caption).forEach((line, i) => d.text('caption' + i, 640, 108 + i * 32, line, 26));
         draw(d, step);
-        d.text('step', 640, 690, 'Step ' + (step + 1) + ' of ' + steps.length + ' · ' + steps[step].state, 21, P.muted);
+        d.text('step', 640, 20, 'Step ' + (step + 1) + ' of ' + steps.length + ' · ' + steps[step].state, 18, P.muted);
       }
     });
   }
@@ -60,8 +60,11 @@
     const rows = programs[filename].trimEnd().split('\n').map((line, i) => {
       const parts = [];
       do {
-        let end = Math.min(line.length, 68);
-        if (line.length > 68 && line.lastIndexOf(' ', 68) > 20) end = line.lastIndexOf(' ', 68) + 1;
+        let end = Math.min(line.length, 64);
+        if (line.length > 64) {
+          const boundary = Math.max(...[' ', '(', ','].map(char => line.lastIndexOf(char, 63)));
+          if (boundary > 20) end = boundary + 1;
+        }
         parts.push({number: i + 1, continued: parts.length > 0, text: line.slice(0, end)});
         line = line.slice(end);
       } while (line.length);
@@ -69,7 +72,7 @@
     });
     const pages = [[]];
     for (const row of rows) {
-      if (pages[pages.length - 1].length + row.length > 13) pages.push([]);
+      if (pages[pages.length - 1].length + row.length > 11) pages.push([]);
       pages[pages.length - 1].push(...row);
     }
     const steps = pages.map(page => ({
@@ -80,12 +83,12 @@
     scene(filename.replace(/\W/g, '-'), title, minutes, steps, (d, s) => {
       d.text('filename', 70, 180, filename + ' · complete file across ' + pages.length + ' builds', 23, P.muted, 'start');
       pages[s].forEach((row, i) => {
-        const y = 222 + i * 30;
+        const y = 222 + i * 34;
         d.text('number' + i, 77, y, row.continued ? '↪' : row.number, 18, P.muted, 'end');
         code(d, 'code' + i, 100, y, row.text);
       });
-      d.link('download', 70, 630, 'Open complete ' + filename, '../' + starter + filename, 23);
-      code(d, 'run', 70, 660, run, 22);
+      d.link('download', 70, 600, 'Open complete ' + filename, '../' + starter + filename, 24);
+      code(d, 'run', 70, 630, run, 24);
     }, {idea, question, answer}, section, [starter + filename]);
     Object.assign(scenes[scenes.length - 1], {codeSource: starter + filename, code: programs[filename]});
   }
@@ -112,7 +115,7 @@
       ], {fontSize: 27, rowHeight: 65});
     }
     d.link('lab', 80, 595, 'Lab 11 instructions and complete code', '../' + source, 24);
-    d.link('video', 80, 640, 'Adapted from Zachary Huang · Ray in 30 min', video, 23);
+    d.link('video', 80, 625, 'Adapted from Zachary Huang · Ray in 30 min', video, 24);
   }, {idea: 'Follow the same image operation as scheduling, state, resources, and input size change.',
     question: 'Does the second image need the first image’s result?', answer: 'No. Each inversion uses only its own image.',
     context: 'The examples follow the cited video and the Lab 11 reading. This is a guided walkthrough with local runs. Cloud deployment remains optional.'}, 'video-route', [video]);
@@ -125,9 +128,9 @@
   ], (d, s) => {
     const commands = s ? ['cd labs/lab-11/starter', 'python3 -m venv .venv', 'source .venv/bin/activate', 'python -m pip install -r requirements-ray.txt'] :
       ['git clone https://github.com/researcher111/AdvanceDatabase.git', 'cd AdvanceDatabase', '', 'Existing copy: open AdvanceDatabase, then run', 'git pull'];
-    commands.forEach((line, i) => code(d, 'command' + i, 90, 240 + i * 60, line, 25));
-    d.link('repo', 90, 605, 'github.com/researcher111/AdvanceDatabase', 'https://github.com/researcher111/AdvanceDatabase', 26);
-    if (s) d.text('windows', 640, 650, 'Windows activation: .venv\\Scripts\\activate', 25, P.muted);
+    commands.forEach((line, i) => code(d, 'command' + i, 90, 240 + i * 60, line, 28));
+    d.link('repo', 90, 590, 'github.com/researcher111/AdvanceDatabase', 'https://github.com/researcher111/AdvanceDatabase', 26);
+    if (s) d.text('windows', 640, 625, 'Windows activation: .venv\\Scripts\\activate', 26, P.muted);
   }, {idea: 'The public repository contains complete runnable examples and the required dependencies.',
     question: 'What changes if you already cloned the course repository?', answer: 'Open that folder and run git pull before entering the lab starter directory.'}, 'the-api');
 
@@ -184,12 +187,12 @@
     {state: 'Actors and additional calls', caption: 'Actors own state. put and wait are additional reference tools.',
       note: 'The actor handle identifies an actor, while a method call returns an ObjectRef. ray.put stores an existing value. ray.wait returns ready and remaining references. Neither extra call is required for the assignment.'}
   ], (d, s) => {
-    const rows = s ? [['Call', 'Purpose'], ['PixelCounter.remote()', 'Create an actor with its own state'], ['counter.add.remote(100)', 'Submit an actor method'], ['ray.put(value)', 'Store a value and return a reference'], ['ray.wait(refs, num_returns=1)', 'Return ready and remaining references'], ['ray.shutdown()', 'Disconnect and stop local Ray']] :
+    const rows = s ? [['Call', 'Purpose'], ['PixelCounter.remote()', 'Create an actor with its own state'], ['counter.add.remote(100)', 'Submit an actor method'], ['ray.put(value)', 'Store a value and return a reference'], ['ray.wait(refs, num_returns=1)', 'Return ready and remaining references'], ['ray.shutdown()', 'Disconnect from Ray']] :
       [['Call or value', 'Purpose'], ['ray.init()', 'Connect to Ray'], ['@ray.remote', 'Define a remote function or actor'], ['process_image.remote(image)', 'Submit a task; receive an ObjectRef'], ['ObjectRef', 'Identify a Ray object'], ['ray.get(refs)', 'Retrieve values; wait if needed']];
-    d.table('primitives', 60, 200, [555, 605], rows, {rowHeight: 65, fontSize: 25});
+    d.table('primitives', 60, 200, [555, 605], rows, {rowHeight: 65, fontSize: 28});
   }, {idea: 'Tasks, actors, and object references provide the core programming model.',
     question: 'Does an actor method call return the actor itself?', answer: 'No. It returns an ObjectRef for that method’s return value.',
-    context: 'These examples use ordinary calls with one return value. ray.shutdown does not delete cloud machines. put and wait are optional reference material.'}, 'ray-core');
+    context: 'These examples use ordinary calls with one return value. ray.shutdown stops local processes only if this connection started them. An existing cluster keeps running. It does not delete cloud machines. put and wait are optional reference material.'}, 'ray-core');
 
   codeScene('stage2_global.py', 'Stage 2: try a global count', 3, 'global-counter',
     'Four image tasks update globals in worker processes. Predict the driver’s final count.',
@@ -271,13 +274,26 @@
     'Reading only · Requires an existing configured cluster');
 
   scene('dashboard', 'The Ray Dashboard', 1, [
-    {state: 'Find the head and worker', caption: 'The Cluster view lists nodes and their resource usage.',
-      note: 'This is the official documentation screenshot already used in the lab. It shows two alive nodes. Find the Head label and the logs. Values belong to that example cluster, not a lab benchmark.'},
+    {state: 'See the Cluster view', caption: 'The Cluster view lists nodes and their resource usage. The next builds enlarge the details.',
+      note: 'This is the official documentation screenshot already used in the lab. It shows two alive nodes. Use this overview to locate the columns. Read the labels in the following close-ups.'},
+    {state: 'Find the head node', caption: 'The Head label identifies the head node. Log opens that node’s logs.',
+      note: 'This close-up shows the header and first node row. ALIVE is its state. The second row in the overview belongs to a worker. Screenshot values describe the documentation example, not a lab run.'},
+    {state: 'Inspect CPU and memory', caption: 'CPU usage and node memory usage are separate measurements.',
+      note: 'The head node reports 1.2 percent CPU and 28.04 GB of 172.80 GB memory in this example. These are observed usage values, not the logical resource requests in the YAML.'},
+    {state: 'Inspect object storage and disk', caption: 'Object-store memory and disk usage describe different storage resources.',
+      note: 'The same head-node row shows object-store memory and disk usage. Object-store memory holds Ray objects. Do not confuse it with a Python process heap or the total node memory.'},
     {state: 'Read the resource columns', caption: 'CPU, node memory, object-store memory, and disk usage describe different resources.',
-      note: 'Use the enlarged detail panels in the linked lab when discussing exact numbers. High memory use needs interpretation: distinguish Python process memory from the shared object store. The screenshot does not establish a speedup.'}
+      note: 'Return to the meaning of each column. High memory use needs interpretation: distinguish Python process memory from the shared object store. The screenshot does not establish a speedup.'}
   ], (d, s) => {
     if (!s) d.add('dashboard-image', 'image', {href: '../labs/lab-11/images/ray-dashboard-cluster.png', x: 50, y: 225, width: 1180, height: 323});
-    else d.table('dashboard-columns', 140, 200, [390, 610], [['Column', 'What to inspect'], ['Head / worker', 'Which machine performs each role'], ['CPU', 'Compute use on each node'], ['Memory', 'Memory use on each node'], ['Object store', 'Memory used for Ray objects'], ['Disk', 'Storage use on each node']], {fontSize: 26, rowHeight: 64});
+    else if (s < 4) {
+      const [x, width] = [[40, 1130], [1190, 550], [2400, 804]][s - 1];
+      const scale = Math.min(1160 / width, 1.15);
+      d.add('dashboard-detail', 'image', {href: '../labs/lab-11/images/ray-dashboard-cluster.png',
+        x: (1280 - width * scale) / 2 - x * scale, y: 195 - 280 * scale,
+        width: 3204 * scale, height: 876 * scale,
+        'clip-path': 'inset(' + [280 / 876, (3204 - x - width) / 3204, 246 / 876, x / 3204].map(value => value * 100 + '%').join(' ') + ')'});
+    } else d.table('dashboard-columns', 140, 200, [390, 610], [['Column', 'What to inspect'], ['Head / worker', 'Which machine performs each role'], ['CPU', 'Compute use on each node'], ['Memory', 'Memory use on each node'], ['Object store', 'Memory used for Ray objects'], ['Disk', 'Storage use on each node']], {fontSize: 28, rowHeight: 64});
     d.link('details', 100, 630, 'Open the Dashboard screenshot and enlarged detail panels', '../' + source + '#ray-dashboard', 24);
   }, {idea: 'The Dashboard helps connect the program’s roles to actual cluster resources.',
     question: 'Does a node count tell you how many tasks finish simultaneously?', answer: 'No. Available resources and task requirements determine concurrency.',

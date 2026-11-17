@@ -12,9 +12,9 @@
   function box(d, k, x, y, w, h, title, lines = [], color = P.green, active = true) {
     d.rect(k, x, y, w, h, active ? light(color) : P.white, active ? color : P.line, 10, 2);
     d.text(k + '-title', x + w / 2, y + 32, title, 28, active ? color : P.ink, 'middle', 650);
-    lines.forEach((line, i) => text(d, k + '-line-' + i, x + w / 2, y + 72 + i * 34, line, 24));
+    lines.forEach((line, i) => text(d, k + '-line-' + i, x + w / 2, y + 72 + i * 34, line, 26));
   }
-  function code(d, k, x, y, value, size = 24) {
+  function code(d, k, x, y, value, size = 26) {
     d.add(k, 'text', {x, y, fill: P.ink, 'font-size': size, 'text-anchor': 'middle', 'dominant-baseline': 'middle', style: 'font-family:ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre', 'xml:space': 'preserve'}, value);
   }
   const note = (d, value) => text(d, 'diagram-note', 640, 613, value, 24, P.muted);
@@ -46,17 +46,17 @@
     box(d, 'driver', 65, 270, 465, 230, 'Driver', [], P.orange);
     code(d, 'reference', 298, 350, 'ref: ObjectRef R');
     text(d, 'driver-action', 298, 405, s === 0 ? 'Submit with .remote()' : s === 1 ? 'Can continue other work' : 'result = ray.get(ref)', 26);
-    text(d, 'driver-state', 298, 455, s === 2 ? 'result holds the image' : 'ref is not the image', 24);
+    text(d, 'driver-state', 298, 455, s === 2 ? 'result holds the image' : 'ref is not the image', 26);
     box(d, 'ray-result', 750, 270, 465, 230, 'Result R', [], s === 0 ? P.blue : P.green);
     text(d, 'result-state', 983, 350, s === 0 ? 'Pending' : s === 1 ? 'Worker processes the image' : 'Completed image', 28);
     if (s === 2) code(d, 'pixel-result', 983, 405, '[255, 191, 0]');
     else text(d, 'result-info', 983, 405, s === 0 ? 'Task submitted' : 'Result becomes ready', 26);
-    text(d, 'result-managed', 983, 455, 'Ray manages the result', 24);
+    text(d, 'result-managed', 983, 455, 'Ray manages the result', 26);
     dashed(d, 'identifies', 540, 340, 740, 340);
-    text(d, 'ref-label', 640, 305, 'Identifies R', 24, P.muted);
+    text(d, 'ref-label', 640, 305, 'Identifies R', 26, P.muted);
     if (s === 2) {
       arrow(d, 'value', 740, 440, 540, 440);
-      text(d, 'value-label', 640, 480, 'Image value', 24, P.green);
+      text(d, 'value-label', 640, 480, 'Image value', 26, P.green);
     }
     text(d, 'ref-summary', 640, 555, s === 2 ? 'ray.get waits if needed. ref stays an ObjectRef.' : 'The same reference identifies the pending or ready result.', 28);
     note(d, 'Dashed arrow: reference · Green arrow: returned value');
@@ -72,15 +72,15 @@
     code(d, 'worker-variable', 993, 335, 'total_pixels_processed');
     code(d, 'driver-value', 288, 390, '= 0', 38);
     code(d, 'worker-value', 993, 390, s === 0 ? '= 0' : '+= 100', 38);
-    text(d, 'driver-copy', 288, 465, 'Main script reads this copy', 25);
-    text(d, 'worker-copy', 993, 465, s === 0 ? 'A different copy' : 'Only this copy changes', 25);
+    text(d, 'driver-copy', 288, 465, 'Main script reads this copy', 26);
+    text(d, 'worker-copy', 993, 465, s === 0 ? 'A different copy' : 'Only this copy changes', 26);
     if (s >= 1) {
       arrow(d, 'image-input', 520, 350, 760, 350, P.orange);
-      text(d, 'input-label', 640, 315, 'Image input', 25, P.orange);
+      text(d, 'input-label', 640, 315, 'Image input', 26, P.orange);
     }
     if (s === 2) {
       arrow(d, 'image-return', 760, 430, 520, 430);
-      text(d, 'return-label', 640, 470, 'Processed image', 25, P.green);
+      text(d, 'return-label', 640, 470, 'Processed image', 26, P.green);
       d.rect('result-panel', 65, 540, 1150, 55, P.orangeLight, P.orange, 10, 2);
       text(d, 'result-text', 640, 568, '4 image results received · driver count: 0 · expected: 400', 28);
       note(d, 'The function returns images. Worker counts are not returned or merged.');
@@ -94,7 +94,7 @@
     if (s === 0) {
       box(d, 'actor-driver', 75, 280, 470, 225, 'Driver', ['counter =', 'PixelCounter.remote()'], P.blue);
       arrow(d, 'create-actor', 560, 390, 720, 390, P.orange);
-      text(d, 'create-label', 640, 350, 'Create actor', 24, P.orange);
+      text(d, 'create-label', 640, 350, 'Create actor', 26, P.orange);
       box(d, 'counter', 735, 280, 470, 225, 'PixelCounter actor', ['Owns total_pixels', 'Starts at 0'], P.green);
       text(d, 'eight-tasks', 640, 555, 'All 8 image tasks use the same actor', 30);
     } else if (s === 1) {
@@ -105,7 +105,7 @@
       });
       text(d, 'ellipsis', 253, 445, '⋮', 30, P.muted);
       box(d, 'counter', 745, 285, 460, 210, 'One PixelCounter actor', ['8 updates, one total', '0 → 100 → … → 800'], P.green);
-      text(d, 'serial-updates', 975, 550, 'One method runs at a time', 24, P.muted);
+      text(d, 'serial-updates', 975, 550, 'One method runs at a time', 26, P.muted);
     } else {
       box(d, 'task-order', 65, 195, 580, 300, 'Inside each image task', ['Count 100 pixels', 'Submit actor add(100)', 'ray.get waits for the update', 'Invert and return the image'], P.blue);
       box(d, 'counter', 785, 245, 425, 200, 'PixelCounter actor', ['All 8 updates complete', 'total_pixels = 800'], P.green);
@@ -137,10 +137,10 @@
     box(d, 'program', 65, 195, 460, 160, 'stage2_actor.py', ['Driver, task, and actor', 'Same Python logic'], P.blue);
     box(d, 'local', 755, 195, 460, 160, 'Local machine', ['ray.init()', 'Local tasks and actor'], P.green);
     arrow(d, 'local-run', 535, 270, 745, 270);
-    text(d, 'local-run-label', 640, 230, 'Run locally', 24, P.green);
+    text(d, 'local-run-label', 640, 230, 'Run locally', 26, P.green);
     if (s >= 1) {
       box(d, 'yaml', 65, 425, 460, 160, 'my-cluster.yaml', ['AWS region and node types', 'Worker count'], P.orange);
-      box(d, 'cloud', 755, 425, 460, 160, 'Cloud cluster', ['ray.init(address="auto")', '1 head + 10 workers'], P.green);
+      box(d, 'cloud', 755, 425, 460, 160, 'Cloud cluster', ['Connect to existing Ray', '1 head + 10 workers'], P.green);
       arrow(d, 'launch', 535, 525, 745, 525, P.orange);
       text(d, 'launch-label', 640, 562, 'ray up', 26, P.orange);
     }
@@ -148,7 +148,7 @@
       arrow(d, 'submit-program', 535, 340, 745, 440, P.blue);
       text(d, 'submit-label', 640, 320, 'ray submit', 26, P.blue);
     }
-    note(d, s === 0 ? 'Python defines the work. Cluster settings select its execution environment.' : 'Workers need the code, compatible packages, and access to input data.');
+    note(d, s === 0 ? 'Python defines the work. Cluster settings select its execution environment.' : s === 1 ? 'Workers need the code, compatible packages, and access to input data.' : 'ray down my-cluster.yaml shuts down the cluster.');
   }
 
   function memory(d, s) {
@@ -157,7 +157,7 @@
       box(d, 'storage', 55, 315, 310, 170, 'S3: 500 GB', ['Image files', 'In storage'], P.blue);
       box(d, 'driver', 545, 315, 390, 170, 'Driver: 16 GB RAM', ['Decoded images', 'One Python list'], P.orange);
       arrow(d, 'load-all', 375, 400, 535, 400, P.orange);
-      text(d, 'load-label', 455, 350, 'Load all', 25, P.orange);
+      text(d, 'load-label', 455, 350, 'Load all', 26, P.orange);
       box(d, 'oom', 995, 335, 230, 130, 'Out of memory', ['Before tasks start'], P.red);
       arrow(d, 'fails', 945, 400, 985, 400, P.red);
       text(d, 'worker-limit', 640, 550, 'More workers do not enlarge the driver’s RAM', 28, P.red);
@@ -170,12 +170,12 @@
       const y = 325 + i * 95;
       d.rect('worker-' + i, 450, y, 340, 75, P.greenLight, P.green, 10, 2);
       text(d, 'worker-label-' + i, 620, y + 25, 'Worker ' + (i === 2 ? '…' : i + 1), 27, P.green);
-      text(d, 'worker-work-' + i, 620, y + 55, 'Read → process', 24);
+      text(d, 'worker-work-' + i, 620, y + 55, 'Read → process', 26);
       arrow(d, 'data-in-' + i, 325, 400 + i * 30, 440, y + 38);
       dashed(d, 'control-' + i, 825, 300, 800, y + 25, P.orange);
       if (s === 2) arrow(d, 'data-out-' + i, 800, y + 55, 940, 400 + i * 30);
     });
-    text(d, 'block-label', 370, 345, 'Blocks', 24, P.green);
+    text(d, 'block-label', 370, 345, 'Blocks', 26, P.green);
     box(d, 'output', 950, 365, 275, 155, 'Output storage', s === 2 ? ['Write files', 'No full driver list'] : ['Write after', 'Processing blocks'], P.blue, s === 2);
     note(d, 'Solid: data · Dashed: control · Blocks and concurrent work must fit worker memory');
   }
@@ -195,7 +195,7 @@
       box(d, 'output-row', 770, 405, 440, 175, 'Output row', ['original_id: "0.png"', 'processed_image:', '[255, 191, 0]'], P.green);
       arrow(d, 'transform-row', 520, 490, 760, 490, P.orange);
       code(d, 'transform-code', 640, 450, '255 - image');
-      text(d, 'path-kept', 640, 540, 'Keep the path', 24, P.muted);
+      text(d, 'path-kept', 640, 540, 'Keep the path', 26, P.muted);
     }
     note(d, s === 2 ? 'Write blocks to storage. original_id preserves each image’s source path.' : 'One RGB pixel shown. Shortened path. include_paths=True supplies the path.');
   }
@@ -206,13 +206,13 @@
     d.line('plan-divider', 640, 235, 640, 585, P.line, 2);
     if (s < 2) {
       box(d, 'scan-tree', 65, 250, 540, 275, 'plan_query(data)', ['ProjectScan[name]', '↓', 'SelectScan[gpa > 35]', '↓', 'TableScan[students]'], P.blue);
-      text(d, 'scan-direction', 335, 560, 'Root calls its child scan', 24, P.muted);
+      text(d, 'scan-direction', 335, 560, 'Root calls its child scan', 26, P.muted);
       if (s === 0) {
         box(d, 'logical-plan', 685, 250, 530, 275, 'Logical plan', ['read_images(...).map(...)', 'ReadImage', '↓', 'Map(process_image)'], P.green);
       } else {
         box(d, 'logical-plan', 685, 250, 530, 110, 'Logical operators', ['ReadImage → Map(process_image)'], P.green);
         arrow(d, 'optimize', 950, 370, 950, 420, P.orange);
-        text(d, 'optimize-label', 1095, 397, 'Optimize', 25, P.orange);
+        text(d, 'optimize-label', 1095, 397, 'Optimize', 26, P.orange);
         box(d, 'physical-plan', 685, 430, 530, 115, 'Physical operators', ['May combine read and map'], P.orange);
       }
       note(d, s === 0 ? 'Both plans describe connected operations before row processing.' : 'explain() displays plans. Operator names and fusion can vary.');
