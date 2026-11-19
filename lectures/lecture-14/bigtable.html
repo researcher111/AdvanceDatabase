@@ -84,18 +84,17 @@
 <h2 id="problem" data-slide="1" data-scene="organize-writes-differently">1 · Distribute the rows and batch the writes</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=1&amp;b=1">Open slide 1 ↗</a></p>
 <div class="lecture-walkthrough" data-lecture-scene="organize-writes-differently"></div>
-<p>Once an update reaches the server for its row, the server must write it to storage. In a B+ tree, updates for different web addresses can change many different leaf pages.</p>
-<p>A <strong>dirty page</strong> is a memory copy changed since its last storage write. The <strong>buffer pool</strong> holds working copies of storage pages in memory. It can combine updates before writing dirty pages. However, scattered keys can still require writes to many separate storage locations.</p>
-<p>A <strong>log-structured merge-tree</strong>, or <strong>LSM tree</strong>, organizes updates into batches. It records changes in a log and keeps recent entries sorted in memory. It then writes each completed batch as a sorted file.</p>
-<p>A <strong>log</strong> is an ordered record of changes used for recovery. <strong>Sequential output</strong> writes a stream of data instead of repeatedly updating scattered locations. A <strong>sorted run</strong> is a sequence of entries ordered by key.</p>
-<p>A <strong>flush</strong> writes a memory batch to storage. <strong>Compaction</strong> merges existing sorted files into new sorted files. Later sections explain how each operation preserves reads.</p>
+<p>The crawler sends Server 1 the morning copy of CNN’s home page under the key <code>com.cnn.www</code>. Suppose the server uses a B+ tree. It finds the leaf page for that key and changes the copy in its <strong>buffer pool</strong>, where it keeps database pages in memory. The leaf is now a <strong>dirty page</strong> because the CNN entry in memory is newer than the one on disk.</p>
+<p>If another update changes the same leaf before the server writes it back, one write saves both changes. Now suppose the crawler’s next hundred updates land on a hundred different leaves. The server may have to write a hundred separate pages scattered across storage. Could it write those updates together?</p>
+<p>Bigtable groups the updates in a <strong>log-structured merge-tree</strong>, or <strong>LSM tree</strong>. When the CNN update arrives, Server 1 appends it to a <strong>log</strong> so it can replay the change after a crash. It also puts the CNN entry in its <strong>memtable</strong>, where it keeps recent updates sorted by key. When the memtable fills, the server <strong>flushes</strong> the batch to a new file. The entries are already in key order, so the server can write the entire <strong>sorted run</strong> in one sequential pass.</p>
+<p>That afternoon, the crawler finds a new headline on CNN’s home page. The morning file is <strong>immutable</strong>, so its entries stay as written. The afternoon copy goes into the next batch and then into a second file. A reader looking for the latest headline may now need to check both files. Later, the server can merge both runs into a new sorted file through <strong>compaction</strong>. If a reader still needs the morning version, the merge must preserve it.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
-  <thead><tr><th>When the crawler writes</th><th>What the storage engine does</th></tr></thead>
+  <thead><tr><th>After this step</th><th>CNN entry in the active memtable</th><th>CNN entries in sorted files</th></tr></thead>
   <tbody>
-    <tr><td>The crawler saves pages from several sites.</td><td>The <strong>memtable</strong> holds recent writes in memory, sorted by key.</td></tr>
-    <tr><td>After a flush, the crawler visits one page again.</td><td>The flushed file is <strong>immutable</strong>. Its entries stay fixed. The updated page goes into the active memtable.</td></tr>
-    <tr><td>A later flush writes the updated page to a second file.</td><td>Compaction merges sorted files. It can discard an older version when doing so preserves every required read result.</td></tr>
+    <tr><td>Morning flush</td><td>None</td><td>File A holds the morning copy.</td></tr>
+    <tr><td>Afternoon update</td><td>Afternoon copy</td><td>File A holds the morning copy.</td></tr>
+    <tr><td>Afternoon flush</td><td>None</td><td>File A holds the morning copy. File B holds the afternoon copy.</td></tr>
   </tbody>
 </table>
 </div>
