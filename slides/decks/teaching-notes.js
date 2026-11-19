@@ -2136,12 +2136,12 @@
     },
     "sparse-cells-and-versions": {
       "idea": "Sparse storage omits missing cells and can retain several versions of a present cell.",
-      "question": "Does adding anchor:school to r2 require a value in that column for every row?",
-      "answer": "No. Only r2 needs that stored cell. Other rows can omit it.",
+      "question": "The school links to the Moon article. Why can the Mars row omit anchor:school?",
+      "answer": "The link points to the Moon article, so its text belongs in r2. The Mars article has its own address and row, r3.",
       "builds": [
-        "The previous update selected one column of one page. Now use r1, r2, and r3 as short names for three example pages. Count the five stored cells. Which page has link text in anchor:news?",
-        "The crawler finds a link from a school site to r2. Point to the single assignment for anchor:school. Ask whether either of the other two rows must acquire a value in that column. Metadata still consumes storage.",
-        "On two further visits, the crawler saves changed text in the same cell. Point to timestamps 1, 2, and 3. A retention policy specifies which versions to keep. Ask whether distributing the table should send three versions of one row to three different ranges."
+        "Point to CNN’s home page. In this example, r1 is its short row label. Follow r2 and r3 to the two article addresses. Ask which article has text from a news site. The dictionary stores anchor:news in r2, along with four other cells across the three rows.",
+        "Follow the arrow from the school website to the Moon article. The destination address selects row r2. The source of the link gives the qualifier school. Point to the assignment for anchor:school. It adds one cell to r2. The other rows can omit that cell.",
+        "Follow the same arrow on the next two visits. The source and destination stay the same while the words in the link change. Trace the stored value from old to prior to new. A retention policy specifies which versions to keep."
       ]
     },
     "tablets-separate-placement-from-storage": {
@@ -2219,7 +2219,7 @@
       "question": "A merge includes every file, but a reader still holds snapshot 8. What must it be able to read?",
       "answer": "It must still read new from sequence 8. A current read must still report absence, so keep the deletion marker as well.",
       "builds": [
-        "Slide 10 merged files containing ordinary values. Now add a delete. Reuse slide 9’s key k and its three records. File A holds old at 5, B holds new at 8, and C holds the flushed deletion at 9. Ask for the current answer before merging.",
+        "The previous merge compared two values for one key. Return to key k, whose newest record marks a deletion. File A holds old at 5, B holds new at 8, and C holds the flushed deletion at 9. Ask what a current read returns before merging.",
         "Merge only B and C. Cover B and C on the diagram. Which record remains outside the merge? If the output discarded the marker, A could return old. The merged output must keep DELETE at 9.",
         "Consider a complete merge of A, B, and C while a reader still holds snapshot 8. The first safety check passes. The second fails. Ask for the two answers the merge must preserve. Keep new for the saved view and the deletion for current reads.",
         "Let that reader finish. In this example no remaining view requires an old version, and the merge covers all older values. Both checks now pass. Removing the covered records leaves the key absent. Until files are merged, how can a reader avoid opening every file?"

@@ -48,7 +48,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,232);assert.equal(builds,866);
+assert.equal(slides,234);assert.equal(builds,869);
 const resources=decks[10].scenes.at(-1);
 assert.equal(resources.id,'more-models-with-duckdb');
 const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');
@@ -327,6 +327,9 @@ assert(!draw(13,'count-one-logical-task-contribution',2).some(item=>item.key==='
 assert.equal(text(draw(13,'count-one-logical-task-contribution',3),'retry-total-label'),'pizza = 2 + 1 = '+counts.pizza);
 for(const step of [1,2])for(const c of [0,1])assert.equal(text(draw(13,'distinguish-retries-from-new-orders',step),'case-'+c+'-line-1'),'pizza = '+counts.pizza+', salad = '+counts.salad);
 assert.equal(text(draw(13,'distinguish-retries-from-new-orders',2),'case-2-line-1'),'pizza = '+(counts.pizza+2)+', salad = '+counts.salad);
+assert.deepEqual(Array.from(decks[14].scenes.slice(0,3),scene=>[scene.id,scene.steps]),[
+  ['bigtable-definition',1],['bigtable-learning-goals',2],['organize-writes-differently',3]
+],'Lecture 14 moves from the paper to the goals and then to the CNN row');
 // The flush carries forward all the keys students just sorted.
 const sortedBatch = text(draw(14, 'the-memtable-stays-ordered', 2), 'sorted-line-0');
 assert.equal(sortedBatch, 'k1, k2, k5, k7, k8');

@@ -6,12 +6,17 @@
 const P = window.DeckViz.palette;
 const D = window.COURSE_DECKS = window.COURSE_DECKS || {};
 const mins = [3,4,4,4,3,4,4,4,4,3,4,4,4,4,3,4];
+const lecturePacing = {
+  // Lecture 12 assigns time from removed slides to evaluation, filtering, and diagnosis discussion.
+  12: [3,4,4,4,3,6,4,4,3,4,4,6,4,7],
+  // The definition and goals share the first eleven minutes with the first three worked scenes.
+  14: [1,2,2,3,3,...mins.slice(3)]
+};
 function scene(title, states, draw, notes, extra={}) {
   return Object.assign({id:title.toLowerCase().replace(/[^a-z0-9]+/g,'-'),title,kind:'visual',steps:states.length,states,draw,notes},extra);
 }
 function register(id,title,date,source,scenes) {
-  // Lecture 12 assigns time from removed slides to evaluation, filtering, and diagnosis discussion.
-  const pacing=id===12?[3,4,4,4,3,6,4,4,3,4,4,6,4,7]:mins;
+  const pacing=lecturePacing[id] || mins;
   scenes.forEach((s,i)=>{s.minutes=s.minutes || pacing[i];if(!s.sources)s.sources=[source];});
   D[id]={id,title,date,source,scenes};
   window.CourseTraceSlides.apply(D[id]);
@@ -391,6 +396,40 @@ function lsmRuns(d,s,mode='read') {const runs=[['k2:v1','k7:v1','k9:v1'],['k2:v2
 function bloomHash(key){let a=0,b=0,c=0;[...key].forEach((ch,i)=>{const n=ch.charCodeAt(0);a=(a*31+n)%32;b=(b*17+n*7)%32;c=(c*13+n*(i+3))%32;});return[a,b,c];}
 function bloomDraw(d,s){const inserted=s?['k1','k2','k3','k4','k5','k6']:[],bits=new Set(inserted.flatMap(bloomHash)),q=s<2?'k1':s===2?'k7':'k17',hs=bloomHash(q);for(let i=0;i<32;i++){const x=170+(i%16)*59,y=335+Math.floor(i/16)*83;d.box('bit'+i,x,y,46,53,bits.has(i)?'1':'0',bits.has(i)?P.greenLight:P.white,hs.includes(i)&&s>1?P.orange:P.line,27);}d.text('query',640,295,s<2?'k1…k6':q,43,s>1?P.orange:P.ink);if(s>1){d.text('answer',640,570,s===2?'0 → ∅':'1 · 1 · 1 → ?',45,s===2?P.green:P.orange);}if(s===4){d.arrow('read',775,565,980,565,P.orange);d.text('absent',1070,578,'∅',47,P.red);}}
 function capNetwork(d,s){const places=[[290,420],[985,420]];places.forEach(([x,y],i)=>{d.circle('rep'+i,x,y,95,i===0?P.greenLight:P.blueLight,i===0?P.green:P.blue,3);d.text('value'+i,x,y+13,(i===0&&s>0)||s===4?'v2':'v1',42);d.text('replica'+i,x,575,'replica '+(i+1),29);});d.line('connection',390,420,885,420,s>0&&s<4?P.red:P.green,5,s>0&&s<4?'12 12':'');if(s>0&&s<4)d.path('cut','M620,370 L670,470 M670,370 L620,470','none',P.red,6);if(s>1){d.arrow('read',985,250,985,305,P.orange);d.text('response',985,215,s===2?'wait':'v1',43,s===2?P.red:P.orange);}if(s===4){d.arrow('reconcile',390,475,880,475,P.orange);}}
+const bigtablePaper = 'https://www.usenix.org/legacy/event/osdi06/tech/chang/chang.pdf';
+const bigtableQuote = [
+  '“Bigtable is a distributed storage system for managing',
+  'structured data that is designed to scale to a very large size:',
+  'petabytes of data across thousands of commodity servers.',
+  'Many projects at Google store data in Bigtable, including',
+  'web indexing, Google Earth, and Google Finance.”'
+];
+const bigtableGoals = [
+  [
+    ['explain how Bigtable distributes a growing table across servers', 'and why the choice of row keys can concentrate writes.'],
+    ['judge whether Bigtable’s NoSQL data model fits an application that', 'needs key lookups, range scans, joins, or transactions across rows.'],
+    ['explain how Bigtable batches writes in a log-structured merge-tree', '(LSM tree) and recovers confirmed writes from a durable log.']
+  ],
+  [
+    ['predict what current reads and older snapshots should return as', 'an LSM tree merges files containing updates and deletions.'],
+    ['compare the read, write, and maintenance costs of LSM trees and', 'B+ trees for a given workload.'],
+    ['explain why guaranteeing the latest value can force a distributed', 'database to delay reads when replicas lose contact.']
+  ]
+];
+function bigtableDefinition(d) {
+  d.line('quote-rule', 90, 206, 90, 467, P.green, 4);
+  bigtableQuote.forEach((line, i) => d.text('quote-line-' + i, 120, 233 + i * 51, line, 34, P.ink, 'start'));
+  d.text('paper-authors', 120, 535, 'Fay Chang et al., OSDI 2006, abstract', 24, P.muted, 'start');
+  d.link('paper-source', 120, 578, 'Bigtable: A Distributed Storage System for Structured Data', bigtablePaper, 25);
+}
+function bigtableLearningGoals(d, step) {
+  bigtableGoals[step].forEach((lines, i) => {
+    const key = 'goal-' + (step * 3 + i);
+    const y = 230 + i * 135;
+    d.circle(key + '-bullet', 91, y, 6, P.green);
+    lines.forEach((line, j) => d.text(key + '-line-' + j, 118, y + j * 43, line, 30, P.ink, 'start'));
+  });
+}
 function webTable(d, step) {
   const rowKeys = ['com.cnn.www', 'org.example.www'];
   const centers = [350, 930];
@@ -484,6 +523,24 @@ function compareCrawlerWrites(d, step) {
   }
 }
 register(14,'Bigtable and LSM trees','2026-11-17','lectures/lecture-14/bigtable.html',[
+scene('Bigtable, LSM Trees & NoSQL', ['The original Bigtable paper'], bigtableDefinition,
+  bigtableQuote.join(' '),
+  {id:'bigtable-definition', clarityNative:true, sources:[bigtablePaper],
+   teaching:{
+     idea:'Bigtable lets applications use one table even when its data must span many servers.',
+     builds:[bigtableQuote.join(' ') + '\n\nPoint to web indexing in the authors’ examples. Ask the class to picture a crawler saving CNN’s home page twice in one day.'],
+     question:'One server can store both copies of CNN’s home page. What changes as the crawler visits more sites?',
+     answer:'The growing crawl can exceed one server’s storage capacity or its ability to keep up with writes.'
+   }}),
+scene('Learning goals', ['Row keys, queries, and writes', 'Reads, costs, and consistency'], bigtableLearningGoals,
+  'Follow one crawler update from its row key to durable storage. Then use the saved versions to reason about reads, compare storage costs, and predict what readers can see when servers lose contact.',
+  {id:'bigtable-learning-goals', clarityNative:true, sources:['lectures/lecture-14/bigtable.html#plan'],
+   teaching:{
+     idea:'Use the crawler’s two visits to connect how Bigtable distributes a table with how an LSM tree stores changes.',
+     builds:bigtableGoals.map(group => group.map(lines => '• ' + lines.join(' ')).join('\n\n')),
+     question:'The crawler returns in the afternoon and finds a new headline. What can it use to find the same row?',
+     answer:'The web address stays the same across visits. The crawler can use that address to build the same row key.'
+   }}),
 scene('Find the row for one web page', ['Name one page', 'Split the growing table', 'Route the morning update'], webTable,
   'The Webtable example comes from the original Bigtable paper. The crawler names a row for its morning update, finds the assigned server, and sends the update there. The two keys and the boundary shown here illustrate one possible assignment.',
   {id:'organize-writes-differently', clarityNative:true}),

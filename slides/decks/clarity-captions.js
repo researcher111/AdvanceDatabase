@@ -1162,6 +1162,13 @@ window.CourseClarityCaptions = {
     ]
   },
   "14": {
+    "bigtable-definition": [
+      "What problem does Bigtable solve?"
+    ],
+    "bigtable-learning-goals": [
+      "By the end of this lecture, you will be able to:",
+      "By the end of this lecture, you will be able to:"
+    ],
     "organize-writes-differently": [
       "The morning crawl fetches CNN’s home page. The crawler reverses the hostname parts to build a row key it can use again.",
       "When one server cannot handle the whole crawl, Bigtable assigns each range of row keys to a server.",
@@ -1173,9 +1180,9 @@ window.CourseClarityCaptions = {
       "The row and column identify the cell. At timestamp t9, its stored value is the three letters CNN."
     ],
     "sparse-cells-and-versions": [
-      "Each row represents a page. These three pages have different links, so the table stores only the cells that have values.",
-      "A new link appears on a later crawl. Add anchor:school to r2. Which other row needs to change?",
-      "The link text changes on later visits. Here one cell holds three versions. A retention policy decides which to keep."
+      "Each row describes one web page at one address. The Moon and Mars articles have different rows on the same website.",
+      "The school website links to the Moon article. The crawler stores the link text in the Moon article’s row, r2, under anchor:school.",
+      "The school changes its link text twice. All three versions belong to the same cell in the Moon article’s row."
     ],
     "tablets-separate-placement-from-storage": [
       "Keep the page’s fields and versions together. Bigtable assigns a range of whole rows, called a tablet, to one server.",

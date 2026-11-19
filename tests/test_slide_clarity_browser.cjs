@@ -115,12 +115,48 @@ fs.mkdirSync(output,{recursive:true});
     const readingFile=id===15?'lecture-15/graphs.html':id===14?'lecture-14/bigtable.html':id===13?'lecture-13/distributed.html':'lecture-13/spark-ray.html';
     await reading.goto(pathToFileURL(path.join(root,'lectures',readingFile)).href);
     const widgets=reading.locator('.lecture-walkthrough');
+    const walkthroughScenes=id===14?scenes.slice(2):scenes;
     if(id===14){
-     assert.equal(scenes.length,16,'Bigtable retains all sixteen lecture scenes');
+     assert.equal(walkthroughScenes.length,16,'Bigtable retains all sixteen walkthroughs after its two opening slides');
+     const quote=reading.locator('main figure q[cite]').first();
+     await go(0,0);
+     const quoteLines=await page.locator('#canvas text[data-key^="quote-line-"]').allTextContents();
+     const quotedText=await quote.innerText();
+     assert.equal(quoteLines.join(' '),'“'+quotedText+'”','the projected definition quotes the reading verbatim');
+     const paperSource=page.locator('#canvas a[data-key="paper-source"]');
+     assert.equal(await paperSource.getAttribute('href'),await quote.getAttribute('cite'),'students can open the cited paper from the slide');
+     const goals=await reading.locator('#plan ~ ul').first().locator('li').allInnerTexts();
+     assert.equal(goals.length,6);
+     assert.equal(await reading.locator('#plan ~ .slide-reference a').first().evaluate(link=>link.href),url+'#s=2&b=1');
+     for(let step=0;step<2;step++){
+      await go(1,step);
+      const projectedGoals=await page.locator('#canvas text[data-key^="goal-"][data-key*="-line-"]').evaluateAll(lines=>{
+       const bullets=new Map();
+       for(const line of lines){
+        const goal=line.dataset.key.split('-')[1];
+        if(!bullets.has(goal))bullets.set(goal,[]);
+        bullets.get(goal).push(line.textContent);
+       }
+       return Array.from(bullets.values(),words=>words.join(' '));
+      });
+      assert.deepEqual(projectedGoals,goals.slice(step*3,step*3+3),'the projected bullets follow the reading in order');
+     }
+     const links=await reading.locator('h2[data-scene] + .slide-reference a').evaluateAll(anchors=>anchors.map(anchor=>{
+      const heading=anchor.parentElement.previousElementSibling;
+      return {sceneId:heading.dataset.scene,slide:Number(heading.dataset.slide),label:anchor.textContent,href:anchor.href};
+     }));
+     for(const scene of walkthroughScenes){
+      const number=scenes.indexOf(scene)+1;
+      const link=links.find(link=>link.sceneId===scene.id);
+      assert(link,'reading references '+scene.id);
+      assert.equal(link.slide,number);
+      assert.equal(link.label,'Open slide '+number+' ↗');
+      assert.equal(link.href,url+'#s='+number+'&b=1','the reading opens the matching diagram');
+     }
     }
     if(id===15)assert.equal(scenes.length,16,'Graphs retains all sixteen lecture scenes');
-    assert.deepEqual(await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.lectureScene)),scenes.map(s=>s.id));
-    assert.equal(await reading.locator('.lecture-walkthrough[data-walkthrough-ready="true"]').count(),scenes.length);
+    assert.deepEqual(await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.lectureScene)),walkthroughScenes.map(s=>s.id));
+    assert.equal(await reading.locator('.lecture-walkthrough[data-walkthrough-ready="true"]').count(),walkthroughScenes.length);
     if(id==='13b'){
      const hostOverride=await reading.evaluate(()=>{
       const host=document.createElement('div');host.className='lecture-walkthrough';
@@ -133,8 +169,9 @@ fs.mkdirSync(output,{recursive:true});
      });
      assert.deepEqual(hostOverride,{ready:'true',drawings:1},'host override selects its deck and repeated initialization does not duplicate controls');
     }
-    for(const [index,scene]of scenes.entries()){
+    for(const [index,scene]of walkthroughScenes.entries()){
      const widget=widgets.nth(index);
+     const slideNumber=scenes.indexOf(scene)+1;
      for(let step=0;step<scene.steps;step++){
       const state=await widget.evaluate((root,id)=>{
        const step=Number(root.dataset.step),scene=COURSE_DECKS[id].scenes.find(s=>s.id===root.dataset.lectureScene);
@@ -144,7 +181,7 @@ fs.mkdirSync(output,{recursive:true});
       },id);
       assert.equal(state.step,step);
       assert.deepEqual(state.actual,state.expected,'inline diagram retains the slide content');
-      const source=snapshots.find(s=>s.id===id&&s.slide===index+1&&s.step===step+1);
+      const source=snapshots.find(s=>s.id===id&&s.slide===slideNumber&&s.step===step+1);
       assert.equal(state.caption,source.instruction.split('\n\n')[0],'inline caption matches the deck build');
       assert(state.status.startsWith(`Step ${step+1} of ${scene.steps}:`));
       if(step<scene.steps-1)await widget.locator('[data-action="next"]').click();
@@ -366,7 +403,7 @@ fs.mkdirSync(output,{recursive:true});
     const beforePrint=await widgets.evaluateAll(roots=>roots.map(r=>r.dataset.step));
     await reading.emulateMedia({media:'print'});
     assert.equal(await reading.locator('.lw-controls:visible').count(),0);
-    assert.equal(await reading.locator('.lw-print:visible').count(),scenes.length);
+    assert.equal(await reading.locator('.lw-print:visible').count(),walkthroughScenes.length);
     const printed=await widgets.evaluateAll((roots,id)=>roots.map(root=>{
      const scene=COURSE_DECKS[id].scenes.find(s=>s.id===root.dataset.lectureScene);
      const expected=DeckViz.sceneDrawing(scene,scene.steps-1).filter(i=>i.tag==='text'||i.tag==='a').map(i=>[i.key,i.text]);

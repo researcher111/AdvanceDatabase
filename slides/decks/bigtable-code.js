@@ -44,8 +44,27 @@
   ]);
   install('sparse-cells-and-versions',[sparse],(d,s)=>{
     code(d,{...sparse,lines:sparse.lines.slice(0,s===0?7:s===1?9:11)},s===0?[1,2,3,4,5]:s===1?[8]:[9,10]);
-    box(d,'sparse',210,'Stored cell coordinates',['r1: example, contents','r2: news','r3: example, contents'],P.blue);
-    if(s>=1)box(d,'school',430,'r2 · anchor:school',s===1?['t1: old']:['t3: new','t2: prior','t1: old'],P.orange);
+    d.text('page-key-heading',850,206,'Row key',21,P.muted,'start');
+    d.text('web-page-heading',952,206,'Web page',21,P.muted,'start');
+    const pages=[
+      ['r1','CNN’s home page','www.cnn.com/'],
+      ['r2','Moon article','science.example/moon'],
+      ['r3','Mars article','science.example/mars']
+    ];
+    pages.forEach(([key,title,address],i)=>{
+      const y=226+i*82, target=s>=1&&key==='r2';
+      d.rect(key+'-row',840,y,390,72,target?P.orangeLight:P.white,target?P.orange:P.line,7);
+      d.text(key+'-key',854,y+36,key,27,P.ink,'start',650);
+      d.arrow(key+'-maps-to',890,y+36,934,y+36,P.blue,3);
+      d.text(key+'-page',950,y+23,title,24,P.ink,'start',650);
+      d.text(key+'-address',950,y+52,address,22,P.muted,'start');
+    });
+    if(s>=1){
+      box(d,'school',495,'School website',['Link text on each visit',s===1?'t1: old':'t1: old  ·  t2: prior  ·  t3: new'],P.orange);
+      d.line('school-link-start',840,530,821,530,P.orange,3);
+      d.line('school-link-up',821,530,821,344,P.orange,3);
+      d.arrow('school-link-target',821,344,838,344,P.orange,3);
+    }
     if(s===2)foot(d,'A retention policy determines how many of these three versions remain available.');
   });
 
@@ -73,7 +92,7 @@
     if(s>=2){arrow(d,'storage',470,500,P.blue);box(d,'durable',515,'Replicated durable files',['Data files and recovery log'],P.green);}
     foot(d,s===3?'S2 must recover the tablet before it serves this range.':'bisect_right counts the boundaries at or before the row key.');
   },[
-    'The first slide routed com.cnn.www. Now shorten the keys to trace a reassignment. Tablet 1 begins at h and stops before n. bisect_right returns the number of boundaries no greater than the row key. For kim, it returns 1. This is a small routing model, not the actual metadata lookup protocol.',
+    'The crawler sent the update for com.cnn.www to Server 1. Now shorten the keys to trace a reassignment. Tablet 1 begins at h and stops before n. bisect_right returns the number of boundaries no greater than the row key. For kim, it returns 1. This is a small routing model, not the actual metadata lookup protocol.',
     'The servers list maps the tablet number to its serving process. Index 1 names S1. A Bigtable client checks its cached tablet locations. If an entry is missing or stale, it looks up the current assignment in the location metadata. The row stays in the same tablet when the serving process changes.',
     'The original architecture stores its recovery log and data files in the Google File System. GFS replicates those files. Tablet servers keep working copies in memory. Partitioning divides row ranges. Replication protects stored copies. The Python list models only the assignment.',
     'After S1 fails, assign tablet 1 to S2 in the toy directory. S2 can serve more than one tablet. A real reassignment must coordinate ownership and recover the tablet before serving it. Updating this Python list alone does not implement recovery.'
