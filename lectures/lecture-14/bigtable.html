@@ -51,6 +51,10 @@
   <div class="subtitle">What problem does Bigtable solve?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
+<figure class="callout note">
+  <p><q cite="https://www.usenix.org/legacy/event/osdi06/tech/chang/chang.pdf">Bigtable is a distributed storage system for managing structured data that is designed to scale to a very large size: petabytes of data across thousands of commodity servers. Many projects at Google store data in Bigtable, including web indexing, Google Earth, and Google Finance.</q></p>
+  <figcaption><small>Fay Chang et al., <cite><a href="https://www.usenix.org/legacy/event/osdi06/tech/chang/chang.pdf">Bigtable: A Distributed Storage System for Structured Data</a></cite> (OSDI 2006), abstract.</small></figcaption>
+</figure>
 <p class="lede">A web crawler saves CNN’s home page in the morning. By afternoon the headline has changed. How can the crawler save the new copy and still find the morning one?</p>
 <p>One server can do this for one page. A crawl of many sites can exceed one server’s storage capacity or its ability to keep up with updates. Bigtable divides the work among servers while the crawler continues to read and update one table. <a href="#src-1">[1]</a></p>
 <div class="cite">
@@ -61,13 +65,14 @@
 
 
 <h2 id="plan">Learning goals</h2>
+<p class="keep-in-present">By the end of this lecture, you will be able to:</p>
 <ul>
-  <li>A row key gives a page a stable name. Bigtable assigns ranges of keys to servers, so the page keeps its name when another server takes over.</li>
-  <li>A row can hold several fields, and each field can change over time. The row and column identify the cell. A timestamp selects a retained version.</li>
-  <li>A confirmed write can survive the loss of memory before it reaches a sorted file. The server can replay the change from its durable log.</li>
-  <li>A B+ tree groups changes by page. A log-structured merge-tree groups changes into sorted batches. Writing batches in order shifts some work to later reads and merges.</li>
-  <li>A read uses the newest record visible to that reader. A deletion marker hides the value from current reads. A reader using a snapshot from before the deletion can still see the value. Merging files must preserve both answers.</li>
-  <li>When two copies lose contact, one can miss a confirmed update. Answering from that copy risks returning an older value. Checking with the other server can delay the answer until contact resumes.</li>
+  <li>explain how Bigtable distributes a growing table across servers and why the choice of row keys can concentrate writes.</li>
+  <li>judge whether Bigtable’s NoSQL data model fits an application that needs key lookups, range scans, joins, or transactions across rows.</li>
+  <li>explain how Bigtable batches writes in a log-structured merge-tree (LSM tree) and recovers confirmed writes from a durable log.</li>
+  <li>predict what current reads and older snapshots should return as an LSM tree merges files containing updates and deletions.</li>
+  <li>compare the read, write, and maintenance costs of LSM trees and B+ trees for a given workload.</li>
+  <li>explain why guaranteeing the latest value can force a distributed database to delay reads when replicas lose contact.</li>
 </ul>
 <div class="callout note"><span class="label">Class plan</span>
   <p>Start with <strong>Quiz 10</strong>, a 10-minute quiz on MapReduce, Spark, and Ray. Then study Bigtable and storage for workloads with many writes.</p>
