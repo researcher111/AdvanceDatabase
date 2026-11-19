@@ -1260,94 +1260,94 @@ window.CourseClarityCaptions = {
   },
   "15": {
     "the-path-is-the-answer": [
-      "A graph represents things as nodes and their connections as edges. Here each node represents one student.",
-      "Each arrow means “follows.” Its direction matters: ada follows ben, and ben also follows ada.",
-      "The route ada → cyd → eli → fay reaches one endpoint, fay. Distinct people means each person appears once."
+      "Ada follows Ben. If Ada opens her list of people she follows, whose name should she see?",
+      "Start at Ada and follow the arrowhead to Ben. What does this arrow tell us about Ben’s own list?",
+      "One hop along Ada’s outgoing arrow reaches Ben. To find out whether Ben follows Ada, we need a separate record."
     ],
     "property-graph": [
-      "A node is one entity, such as a student. A label names its category, such as Student.",
-      "An edge is a relationship between two nodes. Its type, Follows, names that relationship.",
-      "A property is a named value. The gpa property describes ada. The since property describes the Follows relationship."
+      "Keep the same two people and the same arrow. The label Student tells us what kind of node each person is.",
+      "Ada’s grade point average belongs to Ada. The graph stores it as a named value, or property, on her node.",
+      "The year Ada began following Ben belongs to their Follows edge. Another person she follows could have a different start year."
     ],
     "store-adjacency-at-write-time": [
-      "In an edge table, src is the source and dst is the destination. Matching src = ada finds two outgoing neighbors.",
-      "Adjacency means direct connection. Resolve each endpoint’s identity when creating an edge.",
-      "An adjacency list stores a node’s neighbors. Reading ada’s list returns ben and cyd. Edge changes must maintain that list."
+      "Store Ada’s follow as one row. The src column holds Ada, the source. The dst column holds Ben, the destination.",
+      "Ada also follows Cyd. Both rows now start with Ada. How could the next lookup find her two neighbors together?",
+      "Ada’s outgoing adjacency list holds ben and cyd. Adding or removing a follow must also update the stored list."
     ],
     "one-hop": [
-      "One hop follows one edge. Start at ada and predict the outgoing neighbors.",
-      "Expand means inspect outgoing edges and their destinations. Ada’s two outgoing edges reach ben and cyd.",
-      "Return {ben, cyd}. Reversing the question asks who follows ada and returns {ben, fay}."
+      "Ada wants the names of everyone she follows. Which direction should the lookup take from her node?",
+      "Follow Ada’s two outgoing edges to Ben and Cyd. If the question changes to who follows Ada, which arrows count?",
+      "Read the arrows pointing to Ada. Ben and Fay follow her. Cyd appears only in Ada’s outgoing list."
     ],
     "two-hops-with-exclusions": [
-      "An endpoint is where a route ends. Four two-hop routes end at dee, ada, dee, and eli.",
-      "Exclude ada because the query asks for other people. Two remaining routes still reach dee.",
-      "Exclude people already followed directly. Remove repeated endpoint names to return the distinct people {dee, eli}."
+      "Ada wants to find new contacts through people she follows. Ben’s arrows lead to Dee and back to Ada. Where do Cyd’s arrows lead?",
+      "Cyd leads to Dee and Eli. Now four routes end at Dee, Ada, Dee, and Eli. Which names should Ada see as new contacts?",
+      "Exclude Ada and anyone she already follows. Two routes reach Dee, so the list of distinct new contacts contains just Dee and Eli."
     ],
     "breadth-first-reachability": [
-      "BFS means breadth-first search. The frontier holds nodes to expand next. Visited records all nodes already discovered.",
-      "Expand ada. Add unseen ben and cyd to visited and the next frontier, at distance 1.",
-      "Expand ben and cyd. Add dee and eli once each. Ada is already visited, and the second route to dee adds nothing.",
-      "Expand dee and eli. Discover fay at distance 3. Stop at the bound without expanding fay."
+      "Who can Ada reach within three hops? Start with Ada. Keep track of whom to expand next and whom the search has already reached.",
+      "At distance one, Ben and Cyd form the next group to expand, the frontier. Mark both as visited when they enter it.",
+      "Ben and Cyd lead to Dee and Eli. Record each once. The return edge to Ada leads to someone already visited.",
+      "Only Fay is new at distance three. Breadth-first search stops at the requested bound before expanding Fay’s edges."
     ],
     "paths-are-not-unique-vertices": [
-      "A walk follows edges and may repeat nodes or edges. At one hop, both methods reach ben and cyd.",
-      "Four two-hop walks end at dee, ada, dee, and eli. Two copies of dee represent routes, not two people.",
-      "A cycle returns to a node earlier on the same walk. Reachability skips revisiting ada and retains only newly discovered people.",
-      "Through depth 3: eleven walk rows versus eight BFS edge visits and five other people. These count different things.",
-      "Choose the required result before comparing work: walks, distinct reachable people, or one shortest path."
+      "What if the club wants every route? A walk may revisit a person or edge. The one-hop walks still end at Ben and Cyd.",
+      "At two hops, the walk through Ben and the walk through Cyd both reach Dee. Each contributes a row.",
+      "One walk returns to Ada through Ben. The visited set already contains Ada, so a search for distinct people skips a second expansion of Ada.",
+      "Across three rounds, the walks produce 11 rows. Breadth-first search examines 8 outgoing edges and finds 5 other people.",
+      "Five people and eleven walks both describe this graph. Which result must two queries return before we compare how fast they run?"
     ],
     "the-query-draws-a-shape": [
-      "Cypher is a graph query language. Parentheses name nodes, brackets name an edge type, and the arrow gives direction.",
-      "The *1..3 range requests one to three edges. DISTINCT keeps each output name once. The WHERE condition excludes ada.",
-      "A recursive common table expression (CTE) repeats an SQL query step. Start with ada, then join each round to outgoing edges."
+      "Write Ada’s first lookup as a Cypher pattern. MATCH starts at Ada and follows one outgoing Follows edge. Which names can b hold?",
+      "Extend the pattern to one through three hops. Exclude Ada and return each destination name once. Which five names qualify?",
+      "SQL can start at Ada and join each round to the outgoing edges. Its final DISTINCT returns the same five names."
     ],
     "find-the-shortest-path": [
-      "A shortest path here uses the fewest edges. BFS explores one hop before two, then three.",
-      "A predecessor is the node that first discovered another node. Record cyd as eli’s predecessor.",
-      "Fay is first discovered at distance 3, through eli. Equal-cost edges make this the minimum hop count.",
-      "Follow predecessors backward: fay ← eli ← cyd ← ada. Reverse that sequence to return the route."
+      "The five names tell Ada that Fay is reachable. How could Ada recover the people along a shortest route to Fay?",
+      "Save who first reached each person. Cyd first reaches Eli, so Eli’s predecessor is Cyd.",
+      "Eli reaches Fay at distance three. Fay did not appear in either earlier layer, so no shorter route reaches her.",
+      "Follow the saved links backward from Fay, then read the route forward. Ada reaches Fay through Cyd and Eli in three hops."
     ],
     "a-supernode-is-skew-again": [
-      "A node’s outgoing degree counts its outgoing edges. This example begins with five neighbors.",
-      "A supernode has unusually many connections. Expanding thirty neighbors still requires thirty edge inspections.",
-      "An expansion budget limits inspected edges. Inspecting only eight of thirty can omit valid results. This budget is illustrative."
+      "What if one student follows many people? Try a larger club where one student has five outgoing edges. Each gives the search a next step.",
+      "Give that student thirty outgoing edges. Finding the stored list still leaves thirty entries to inspect for a complete expansion.",
+      "Suppose the search inspects only eight edges. A skipped edge could lead to someone Ada needs. Can this search promise a complete result?"
     ],
     "choose-a-graph-workload": [
-      "A workload is the set of operations a system must support. A fixed one-edge relationship often fits a relational join.",
-      "A variable-depth query follows different numbers of edges. Graph path syntax can make these requests convenient.",
-      "Whole-graph analytics repeatedly processes much of the graph. Choose for the result and workload, not the database label."
+      "Return to Ada’s club. An indexed edge table can find everyone she follows by matching one source value.",
+      "Now Ada wants a route to Fay. The query must follow connections until it reaches Fay or its search bound.",
+      "Now the club wants to rank every student by their connections. The work changes again because a score can depend on neighbors’ scores."
     ],
     "connections-augment-similarity": [
-      "Retrieval-augmented generation (RAG) retrieves passages before generating an answer. Begin with a passage found by vector similarity.",
-      "An entity is a named thing or concept. Identify WAL, the write-ahead log, in the retrieved passage.",
-      "Follow an illustrative relation from WAL to the buffer pool, which holds working copies of stored pages.",
-      "Add the connected passage with its source ID. A graph connection suggests evidence. Reading the passage establishes its relevance."
+      "Try the same one-hop idea on course passages. A vector search finds log-notes. Which other passage could help explain a dirty page write?",
+      "The passage mentions the write-ahead log (WAL). Link its source ID to the WAL node so we can follow the relationship.",
+      "Follow one edge from WAL to the buffer pool, which holds working copies of pages. Where can we check what a dirty page is?",
+      "The buffer pool links to buffer-notes. Keep both source IDs and read the passages to check whether they support the answer."
     ],
     "does-graph-expansion-help": [
-      "A baseline is the comparison system. Keep vector-only retrieval as the baseline on the same saved evaluation questions.",
-      "Add relationship neighbors. Predict one question that gains useful evidence and one that gains irrelevant text.",
-      "Check answer support, irrelevant text, and response time. The checkmarks are hypothetical outcomes, not measured project results."
+      "Did adding buffer-notes help? Save the vector-only results as a baseline. Use the same held-out questions for both searches.",
+      "Add one hop from the retrieved entities. A new source could fill a gap or introduce an unrelated passage. Which question changed?",
+      "These marks illustrate possible outcomes. In an experiment, check source coverage, answer support, extra text, and response time."
     ],
     "five-mechanisms-recur": [
-      "A cache keeps reusable data nearby. Ask which storage reads its contents avoid.",
-      "An index maintains a search structure. Ask which data the query can skip.",
-      "A log stores recovery information. Spark lineage records a recomputation recipe. It is not a write-ahead log.",
-      "An execution plan specifies operations and their dependencies. Ask which inputs each operation needs.",
-      "A partition is a portion of data. Ask who holds it and whether the workload is balanced."
+      "Ada asks for her neighbors twice. A cached block containing her list can save a storage read on the second lookup.",
+      "To find Ada’s list the first time, the engine needs a way to locate her edges. An index on the source can skip other students’ rows.",
+      "Recall the moment Ada first followed Ben. If the server crashed just after confirming that write, what record could restore the edge?",
+      "To find distinct people within three hops, a plan may expand edges and then remove repeated names. Where do duplicates arise?",
+      "Split the student records across machines. A student with many outgoing edges can give one machine much more work."
     ],
     "read-a-new-system": [
-      "A storage block is a chunk read or written as a unit. Find its contents and cached copies.",
-      "An access path is a way to locate records. Identify its read savings and its maintenance costs.",
-      "An acknowledged write has received a success reply. Ask which failures that reply promises to survive.",
-      "Follow the query’s operations. Identify data movement and any step that must wait for another result.",
-      "A benchmark runs a defined workload and measures its costs. Match required results before comparing systems."
+      "An unfamiliar database promises fast neighbor lookups. For Ada’s repeated lookup, which block would the engine read and cache?",
+      "When Ada follows another student, which index entries or neighbor lists must change before the next lookup?",
+      "Test the first follow from Ada to Ben. The caller receives a success reply, then the server crashes. What lets the engine recover the edge?",
+      "Request distinct names within three hops. Does the plan expand Dee twice before it removes the repeated name?",
+      "Run the same queries and updates on each system. Measure what happens when some students have many more outgoing edges than others."
     ],
     "finish-with-measured-decisions": [
-      "Return to Maya’s question. State whether the required result contains routes or distinct people.",
-      "Show evidence from the same workload under the compared configurations. Explain what each measured counter counts.",
-      "Connect the result to a design decision. These plotted points illustrate a comparison. They are not project measurements.",
-      "Compare at least two configurations and explain one diagnosed failure. Use your project’s evidence to defend the choice."
+      "On the original graph, Ada follows Ben and Cyd. She can reach five other people within three hops. Her shortest route to Fay takes three hops.",
+      "On a copy, add one arrow from Ada to Fay. Predict what changes in the one-hop list, the three-hop set, and the shortest route.",
+      "Fay joins Ada’s direct neighbors. The same five people remain reachable within three hops. The shortest route to Fay now takes one hop.",
+      "Use that same check in your project. State the required result, compare two configurations on the same questions, and show the evidence for your choice."
     ]
   }
 };

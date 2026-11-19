@@ -62,12 +62,12 @@
 
 <h2 id="plan">Learning goals</h2>
 <ul class="recap-list">
-  <li>Use the row key <code>com.cnn.www</code> and the assigned key ranges to find the server that handles the crawler’s update.</li>
-  <li>Choose a row, column, and timestamp to retrieve a particular version of a web page.</li>
-  <li>Trace how the server recovers a confirmed write from its log after a crash erases the copy in memory.</li>
-  <li>Predict what a read returns after a deletion. Explain when merging files can safely remove the deletion marker.</li>
-  <li>Compare the work a B+ tree and a log-structured merge-tree do to update a record and read it back.</li>
-  <li>Explain why a server that misses an update during a network failure cannot guarantee the latest value to a reader.</li>
+  <li>A row key gives a page a stable name. Bigtable assigns ranges of keys to servers, so the page keeps its name when another server takes over.</li>
+  <li>A row can hold several fields, and each field can change over time. The row and column identify the cell. A timestamp selects a retained version.</li>
+  <li>A confirmed write can survive the loss of memory before it reaches a sorted file. The server can replay the change from its durable log.</li>
+  <li>A B+ tree groups changes by page. A log-structured merge-tree groups changes into sorted batches. Writing batches in order shifts some work to later reads and merges.</li>
+  <li>A read uses the newest record visible to that reader. A deletion marker hides the value from current reads. A reader using a snapshot from before the deletion can still see the value. Merging files must preserve both answers.</li>
+  <li>When two copies lose contact, one can miss a confirmed update. Answering from that copy risks returning an older value. Checking with the other server can delay the answer until contact resumes.</li>
 </ul>
 <div class="callout note"><span class="label">Class plan</span>
   <p>Start with <strong>Quiz 10</strong>, a 10-minute quiz on MapReduce, Spark, and Ray. Then study Bigtable and storage for workloads with many writes.</p>

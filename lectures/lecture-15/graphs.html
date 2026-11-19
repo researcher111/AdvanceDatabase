@@ -18,11 +18,11 @@
   <div class="toc-title">Lecture 15</div>
   <p><a href="../../slides/lecture-15.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Starting point and class plan</a></li>
-    <li><a href="#motivation">1 · Decide whether the answer is routes or people</a></li>
-    <li><a href="#model">2 · Represent people and relationships as a graph</a></li>
-    <li><a href="#joins">3 · Store neighbor references for later queries</a></li>
-    <li><a href="#one-hop">4 · Follow one outgoing relationship</a></li>
+    <li><a href="#plan">Learning goals</a></li>
+    <li><a href="#motivation">1 · Read one follow arrow</a></li>
+    <li><a href="#model">2 · Put a fact on the person or the relationship</a></li>
+    <li><a href="#joins">3 · Store Ada’s neighbors for the next lookup</a></li>
+    <li><a href="#one-hop">4 · Find everyone Ada follows directly</a></li>
     <li><a href="#two-hops">5 · Find new contacts through two relationships</a></li>
     <li><a href="#reachability">6 · Explore distance layers with a visited set</a></li>
     <li><a href="#worked-example">7 · Count walks and distinct people separately</a></li>
@@ -48,97 +48,80 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 15 · Tuesday December 1, 2026</div>
   <h1>Graph Databases &amp; Course Synthesis</h1>
-  <div class="subtitle">Two routes can reach the same person. Decide what the query should count before choosing a plan.</div>
+  <div class="subtitle">Who does Ada follow?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 <div class="story-scene">
   <p class="story-label">A fictional classroom investigation</p>
-  <p>Maya draws the student club’s follow relationships on a whiteboard. Each circle names a student. An arrow means one student follows another.</p>
-  <p>Ada follows Ben and Cyd. Both Ben and Cyd follow Dee. Maya traces both routes and writes Dee’s name twice.</p>
-  <p>Noor points to the repeated name: <q>Are we counting routes, or people we can reach?</q></p>
-  <p>One question needs a list of distinct people. Another needs the routes that connect them. Maya must choose the required result before comparing query methods.</p>
+  <p>Maya opens Ada’s profile in the student club directory. Under “Following,” she sees Ben. She writes <code>ada → ben</code> on the board.</p>
+  <p>Noor asks, <q>Does Ben follow Ada too?</q> What can Maya tell from the one entry she has seen?</p>
 </div>
 <div class="cite">
-  Companion reading: Kuzu's <a href="https://docs.kuzudb.com/">documentation</a> (setup and Cypher examples) ·
+  Companion reading: Kuzu's <a href="https://docs.kuzudb.com/">documentation</a> (<a href="https://kuzudb.github.io/docs/">archived version</a> with setup and Cypher examples) ·
   Robinson, Webber &amp; Eifrem, <a href="https://neo4j.com/graph-databases-book/"><em>Graph Databases</em></a> (free O'Reilly text) ·
   Microsoft's <a href="https://arxiv.org/abs/2404.16130"><em>From Local to Global: GraphRAG</em></a> paper.
 </div>
 
 
-<p>Kuzu’s archived documentation is available at <a href="https://kuzudb.github.io/docs/">kuzudb.github.io/docs</a>. The course keeps its existing local demo and recorded results.</p>
-<h2 id="plan">Starting point and class plan</h2>
-<p><strong>Starting knowledge:</strong> tables, keys, and SQL joins. A join matches rows using a condition, such as equality between a person’s key and a relationship’s source key.</p>
-<p><strong>Goal:</strong> Trace a relationship query, distinguish routes from distinct people, and explain how storage and query rules affect its work.</p>
+<h2 id="plan">Learning goals</h2>
+<ul class="recap-list">
+  <li>A directed relationship records who follows whom. A fact about one person belongs to that person. A fact about a particular follow belongs to the relationship.</li>
+  <li>Storing a person’s neighbors together makes their list easier to find. A query still has to inspect the neighbors it needs, and each new follow must update the list.</li>
+  <li>A route records the steps taken. Two routes can end at one person. The question determines whether both routes belong in the answer.</li>
+  <li>Searching one hop at a time discovers people in order of hop count. Marking each person on arrival avoids repeated searches. Saving who led there preserves a route with the fewest hops.</li>
+  <li>Two queries can return the same names and do different work. Comparing their speed requires the same question, including which routes and repetitions count.</li>
+  <li>Following a link can uncover a new source of evidence. Whether it helps depends on what that source supports and what the extra search costs.</li>
+</ul>
 <div class="callout note"><span class="label">Class plan</span>
   <p><a href="../../labs/lab-11/sparkray.html#assignment">Lab 11</a> is due at class start on December 1.</p>
   <p>Start with <strong>Quiz 11</strong>, the last quiz. It covers Bigtable, LSM, and NoSQL and takes 10 minutes.</p>
   <p>Then study graph storage, traversal queries, and the course review. The numbered sections follow the slides. Each diagram includes its explanation and its own controls.</p>
 </div>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>A table contains ada → ben and ada → cyd. Which two names come from selecting relationships whose source is ada?</p><details><summary>Check your explanation</summary><p>Ben and Cyd. Those matching rows describe Ada’s outgoing relationships. Reversing the condition asks who follows Ada instead.</p></details></div>
 <p class="glossary-hint">Dotted terms have extra definitions. Hover over a term or tap it to show its definition below the sentence.</p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
   <div id="glossary-content" class="glossary-content"></div>
 </div>
 
-<h2 id="motivation" data-slide="1" data-scene="the-path-is-the-answer">1 · Decide whether the answer is routes or people</h2>
+<h2 id="motivation" data-slide="1" data-scene="the-path-is-the-answer">1 · Read one follow arrow</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=1&amp;b=1">Open slide 1 ↗</a></p>
-<p>A <strong>graph</strong> represents things and their connections. A <strong>node</strong>, also called a <strong>vertex</strong>, represents one thing. An <strong>edge</strong> represents one connection.</p>
-<p>A <strong>directed edge</strong> has a source and destination. The arrow <code>ada → ben</code> means Ada follows Ben. It does not by itself mean Ben follows Ada.</p>
-<p>A <strong>hop</strong> follows one edge. A route with two edges has two hops. <strong>Distinct</strong> means each person appears once in the result, even when several routes reach that person.</p>
-<p>Think of a campus map with one-way routes. Intersections represent nodes and arrows represent edges. Listing routes and listing destinations answer different questions.</p>
-<p>The map explains connections and direction. It does not specify file layout, query cost, or which routes an algorithm should explore.</p>
+<p>Read the arrow from its tail to its tip. Ada is the <strong>source</strong>, and Ben is the <strong>destination</strong>. In a table, a single row with those two names would record the same fact.</p>
+<p>The drawing is a <strong>graph</strong>. Each person is a <strong>node</strong>, also called a <strong>vertex</strong>. The arrow is a <strong>directed edge</strong>. Following it from Ada to Ben takes one <strong>hop</strong>.</p>
 <div class="lecture-walkthrough" data-lecture-scene="the-path-is-the-answer"></div>
-<p>Our graph has <strong>6 students and 9 directed follows edges</strong>. We use lowercase names as identifiers throughout the code and diagrams.</p>
-<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
-<table>
-  <thead><tr><th>Question</th><th>Required result</th><th>What repeated routes mean</th></tr></thead>
-  <tbody>
-    <tr><td>Which people can Ada reach?</td><td>Distinct student names</td><td>Dee appears once.</td></tr>
-    <tr><td>Which routes connect Ada to Dee?</td><td>Sequences of connected students</td><td><code>ada → ben → dee</code> and <code>ada → cyd → dee</code> are different routes.</td></tr>
-    <tr><td>How can Ada reach Fay with the fewest hops?</td><td>A shortest route</td><td>The answer includes the connecting students, not only Fay’s name.</td></tr>
-  </tbody>
-</table>
-</div>
-<p><strong>State the result before choosing the algorithm.</strong> SQL and graph query languages can both express relationship questions. Their query rules and the operations chosen by the engine determine the work.</p>
+<div class="exercise learning-check"><span class="ex-label">Check the direction</span><p>What additional entry would answer Noor’s question about Ben?</p><details><summary>Check your explanation</summary><p>Maya would need to find <code>ben → ada</code> to say that Ben follows Ada. The first arrow records only Ada’s choice.</p></details></div>
 
-<h2 id="model" data-slide="2" data-scene="property-graph">2 · Represent people and relationships as a graph</h2>
+<h2 id="model" data-slide="2" data-scene="property-graph">2 · Put a fact on the person or the relationship</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=2&amp;b=1">Open slide 2 ↗</a></p>
-<p>A <strong>property</strong> is a named value attached to a node or edge. A <strong>label</strong>, such as <code>Student</code>, identifies a node category. A relationship <strong>type</strong>, such as <code>Follows</code>, identifies an edge category.</p>
-<p>A <strong>property graph</strong> combines these nodes, typed edges, and properties. Ada’s GPA belongs to her node. The year a follow relationship began belongs to that edge.</p>
+<p>Keep the same two people and the same arrow. The directory records Ada’s grade point average (GPA) as 3.9. Maya also wants to record that Ada began following Ben in 2026. Which fact would still describe Ada if she stopped following Ben?</p>
 <div class="lecture-walkthrough" data-lecture-scene="property-graph"></div>
-<p>The notation below draws nodes with parentheses and edges with brackets and arrows. Named values appear inside braces. The integer <code>gpa: 39</code> stores GPA in tenths, so it represents 3.9.</p>
-<p>An <strong>outgoing neighbor</strong> is a destination reached by following an arrow from a node. An <strong>incoming neighbor</strong> has an arrow pointing to that node. <strong>Adjacency</strong> means the direct connections between nodes.</p>
+<p>Put the GPA on Ada’s node. Put the year on the arrow from Ada to Ben. Each named value is a <strong>property</strong>. A <strong>property graph</strong> can store properties on both nodes and edges.</p>
+<p>The notation gives Ada the <strong>label</strong> <code>Student</code> and the arrow the relationship <strong>type</strong> <code>Follows</code>. Parentheses enclose a node. Brackets enclose the relationship. Values in braces describe the item they belong to.</p>
 <pre class="equation"><code>node   (:Student {name: 'ada', gpa: 39})       a labeled record with properties
-edge   (ada)-[:Follows {since: 2026}]-&gt;(ben)   a typed, directed relationship
+edge   (ada)-[:Follows {since: 2026}]-&gt;(ben)   a typed, directed relationship</code></pre>
+<p>The Kuzu demo stores GPA in tenths, so <code>39</code> means 3.9. The year illustrates a property we could add to its edge. <a href="#src-3">[3]</a></p>
 
-ada’s neighbors: outgoing [ben, cyd]; incoming [ben, fay]
-adjacency storage keeps references for locating these neighbors</code></pre>
-<p>The <code>since: 2026</code> property illustrates the model. The supplied Kuzu script stores student GPA values but does not add that edge property. The physical storage can differ across graph engines. <a href="#src-3">[3]</a></p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Where should we store the year Ada began following Ben: Ada’s node, Ben’s node, or their Follows edge?</p><details><summary>Check your explanation</summary><p>Store it on their Follows edge because the year describes that particular relationship. Ada can begin following another student in a different year.</p></details></div>
-
-<h2 id="joins" data-slide="3" data-scene="store-adjacency-at-write-time">3 · Store neighbor references for later queries</h2>
+<h2 id="joins" data-slide="3" data-scene="store-adjacency-at-write-time">3 · Store Ada’s neighbors for the next lookup</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=3&amp;b=1">Open slide 3 ↗</a></p>
-<p>An <strong>edge table</strong> stores one row per relationship. Its <code>src</code> column names the source, and <code>dst</code> names the destination.</p>
-<p>To find Ada’s outgoing neighbors, select rows where <code>src = 'ada'</code>. An <strong>index</strong> is a maintained search structure for locating data. An index on <code>src</code> can locate those rows. Without a suitable access structure, the engine may scan more rows.</p>
-<p>An <strong>adjacency list</strong> stores a node’s neighbor references or incident edges. A reference identifies where to find the connected node. Ada’s outgoing list contains <code>[ben, cyd]</code>.</p>
+<p>Ada also follows Cyd. In an <strong>edge table</strong>, Maya now has two rows starting with Ada. The <code>src</code> column holds the source and <code>dst</code> holds the destination. Which rows should the directory fetch each time someone opens Ada’s “Following” list?</p>
+<p>The directory needs the rows with <code>src = 'ada'</code>. As more students join, a scan can pass many unrelated rows. An index on <code>src</code> helps the engine locate Ada’s rows.</p>
+<p>Another option is to store the destinations together as <code>ada → [ben, cyd]</code>. Ben and Cyd are Ada’s <strong>outgoing neighbors</strong>. An <strong>adjacency list</strong> stores references to those neighbors or to the edges that lead to them.</p>
 <div class="lecture-walkthrough" data-lecture-scene="store-adjacency-at-write-time"></div>
-<p>A <strong>traversal</strong> follows relationships through a graph. To <strong>expand</strong> a node means inspect its relevant neighbor list. Stored adjacency lets a traversal reuse connections established when edges were written.</p>
-<p>The engine must maintain that structure when an edge changes. This resembles an index: extra write work can reduce later lookup work. <a href="#src-4">[4]</a></p>
-<p>References need not be raw memory pointers. Engines use different stored representations, and accessing them can still require storage reads.</p>
-<p><strong>Adjacency can reduce neighbor-lookup work.</strong> It does not remove the work of inspecting many neighbors or enumerating many routes.</p>
+<p>Adding Cyd costs a write to Ada’s list. In return, later queries can go straight to her neighbors. Like an index, the list must stay up to date when a relationship changes. Engines store the references in different ways, and reading a list can require storage access. <a href="#src-4">[4]</a></p>
 
-<h2 id="one-hop" data-slide="4" data-scene="one-hop">4 · Follow one outgoing relationship</h2>
+<h2 id="one-hop" data-slide="4" data-scene="one-hop">4 · Find everyone Ada follows directly</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=4&amp;b=1">Open slide 4 ↗</a></p>
-<p>The first question is: <strong>Who does Ada follow?</strong> One hop follows each outgoing edge once. The destinations are <code>ben</code> and <code>cyd</code>.</p>
+<p>Run the lookup. Start at Ada and follow each outgoing arrow once. Following edges through the graph is a <strong>traversal</strong>. To <strong>expand</strong> Ada means to inspect her neighbors in the chosen direction.</p>
 <div class="lecture-walkthrough" data-lecture-scene="one-hop"></div>
-<p>A result <strong>set</strong> contains each answer once, so we write <code>{ben, cyd}</code>. An ordered list can contain repeated values. The difference becomes visible after two hops.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Reverse the question: who follows Ada? Which arrows and result should the query use?</p><details><summary>Check your explanation</summary><p>Use incoming arrows. Ben and Fay follow Ada, so the result is {ben, fay}. This differs from Ada’s outgoing neighbors.</p></details></div>
+<p>The result is the <strong>set</strong> <code>{ben, cyd}</code>. Each name appears once. Now the club directory also shows two arrows into Ada, <code>ben → ada</code> and <code>fay → ada</code>. Which arrow answers Noor’s question about Ben?</p>
+<details><summary>Check the incoming arrows</summary><p>Ben and Fay are Ada’s <strong>incoming neighbors</strong>. The separate entry <code>ben → ada</code> establishes that Ben follows Ada too. Fay follows Ada even though Ada’s own list contains only Ben and Cyd.</p>
+<pre class="equation"><code>ada’s neighbors: outgoing [ben, cyd]; incoming [ben, fay]
+adjacency storage keeps references for locating these neighbors</code></pre></details>
 
 <h2 id="two-hops" data-slide="5" data-scene="two-hops-with-exclusions">5 · Find new contacts through two relationships</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=5&amp;b=1">Open slide 5 ↗</a></p>
-<p>The second question is: <strong>Which new contacts can Ada reach through exactly two follows relationships?</strong> Exclude Ada and people she already follows directly.</p>
-<p>A <strong>walk</strong> is a sequence that follows edges and can revisit nodes or edges. Its <strong>endpoint</strong> is the final node. Here are all four two-hop walks from Ada.</p>
+<p>The club wants to suggest new people for Ada to follow. Start with her direct contacts, Ben and Cyd. Ben follows Dee and Ada. Cyd follows Dee and Eli. Which suggestions should appear if the directory follows one more arrow from each contact?</p>
+<p>Following two arrows gives a two-hop <strong>walk</strong>. A walk can revisit a person or an edge. Its last person is the <strong>endpoint</strong>. Follow the arrows from Ben first. Then try Cyd. Watch what happens to Dee’s name.</p>
+<div class="lecture-walkthrough" data-lecture-scene="two-hops-with-exclusions"></div>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
   <thead><tr><th>Two-hop walk</th><th>Endpoint</th><th>Effect on the distinct-person result</th></tr></thead>
@@ -150,16 +133,17 @@ adjacency storage keeps references for locating these neighbors</code></pre>
   </tbody>
 </table>
 </div>
-<p><strong>Deduplication</strong> removes repeated result values. Applying the exclusions and deduplicating endpoints gives <code>{dee, eli}</code>. Neither remaining student is already Ada’s outgoing neighbor.</p>
-<div class="lecture-walkthrough" data-lecture-scene="two-hops-with-exclusions"></div>
-<p>The term <strong>path</strong> can carry stricter repeat rules in graph theory or a query language. We use <em>walk</em> when repeats are allowed. Check an engine’s path rules before assuming the same syntax returns the same routes.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>If the question asks for both routes to Dee, should deduplication keep only one route?</p><details><summary>Check your explanation</summary><p>No. The two sequences are different answers. Removing a repeated endpoint is appropriate only when the query asks for distinct people.</p></details></div>
+<p>The club excludes Ada and anyone she already follows. It wants each new person just once, so it also removes repeated names. This is <strong>deduplication</strong>. The two <strong>distinct</strong> suggestions are <code>{dee, eli}</code>.</p>
+<div class="exercise learning-check"><span class="ex-label">Change the question</span><p>Dee asks how she appeared in Ada’s suggestions. Which routes could the club show her?</p><details><summary>Check your explanation</summary><p>One route goes through Ben and another through Cyd. Both explain the suggestion. Keeping only Dee’s name loses that information.</p></details></div>
+<p>The word <strong>path</strong> can have stricter rules about repeats. When comparing two query languages, check whether their rules allow the same walks.</p>
 
 <h2 id="reachability" data-slide="6" data-scene="breadth-first-reachability">6 · Explore distance layers with a visited set</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=6&amp;b=1">Open slide 6 ↗</a></p>
-<p><strong>Reachability</strong> asks which nodes can be reached from a start under the chosen direction and depth limit. <strong>Breadth-first search</strong>, or <strong>BFS</strong>, explores nodes in increasing hop distance.</p>
-<p>The <strong>frontier</strong> contains newly discovered nodes waiting for the next expansion. The <strong>visited set</strong> records every node already discovered. A discovered node enters the frontier only once.</p>
-<p>A <strong>depth bound</strong> limits how many edges a route may use. Starting at Ada, the algorithm expands frontiers through depth 3. Nodes first discovered at depth 3 are returned but are not expanded further.</p>
+<p>Now Ada wants everyone she can reach in up to three outgoing hops. This question asks about <strong>reachability</strong>. Two walks led to Dee. If we want names, what could we gain by remembering the first time we saw her?</p>
+<p>Start a <strong>visited set</strong> with Ada. Add Ben and Cyd when you first reach them. They form the next <strong>frontier</strong>, the group whose outgoing arrows you will inspect next.</p>
+<p>Ben leads to Dee and back to Ada. Add Dee to the next group. Ada is already in the set. Now Cyd leads to Dee and Eli. Which person still needs a place in the group?</p>
+<div class="lecture-walkthrough" data-lecture-scene="breadth-first-reachability"></div>
+<p>Only Eli is new. Expanding Dee and Eli once each finds Fay. Searching in these distance layers is <strong>breadth-first search</strong> (BFS). The three-hop limit is a <strong>depth bound</strong>. At the bound we record Fay and stop.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
   <thead><tr><th>Distance from Ada</th><th>New frontier</th><th>Visited after discovery</th></tr></thead>
@@ -171,15 +155,12 @@ adjacency storage keeps references for locating these neighbors</code></pre>
   </tbody>
 </table>
 </div>
-<div class="lecture-walkthrough" data-lecture-scene="breadth-first-reachability"></div>
-<p>A <strong>cycle</strong> follows directed edges back to an earlier node. For example, <code>ada → ben → ada</code> returns to the start. The visited set prevents that return from restarting the same expansion.</p>
-<p><strong>BFS tracks people already reached, not every route to them.</strong> This saves repeated expansion when the required answer is distinct reachability.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Ben and Cyd both lead to Dee. How many times should a visited-set BFS add Dee to the frontier?</p><details><summary>Check your explanation</summary><p>Once. The first discovery records Dee as visited. The second route does not create another person or require another expansion of Dee.</p></details></div>
+<p>The return <code>ada → ben → ada</code> is a <strong>cycle</strong>. Remembering Ada also prevents this cycle from starting her search again. With both a cycle and two ways to Dee, how much work would it take to list every walk instead?</p>
 
 <h2 id="worked-example" data-slide="7" data-scene="paths-are-not-unique-vertices">7 · Count walks and distinct people separately</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=7&amp;b=1">Open slide 7 ↗</a></p>
-<p>A <strong>self-join</strong> matches a table with another use of that same table. A <strong>join chain</strong> repeatedly matches relationship sources to the previous endpoints.</p>
-<p>Without intermediate deduplication, each walk contributes another result row. Repeated people can therefore appear many times. This can be correct when the question requires walks.</p>
+<p>Keep the same six students, nine follow edges, and three-hop bound. This time the club asks for all walks from Ada. Both routes to Dee count, and each can continue along <code>dee → eli</code>.</p>
+<p>One way to generate the walks is to join the edge table to itself. Match each destination from the first edge with the source of the second. This is a <strong>self-join</strong>. Repeating that match builds a <strong>join chain</strong>. Each walk produces a separate row.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
   <thead><tr><th>Depth</th><th>Walk endpoints at exactly this depth</th><th>New distinct people</th><th>Outgoing edges examined by BFS in this round</th></tr></thead>
@@ -211,9 +192,9 @@ adjacency storage keeps references for locating these neighbors</code></pre>
   <div class="bs-stats" id="walk-stats"></div>
   <p class="viz-caption">Start at ada and step to depth 3. The reached students match query 3 of the Kuzu demo. The cycle ada → cyd → eli → fay → ada shows why traversal needs a stopping rule. The example queries use a depth bound. Their <code>DISTINCT</code> operation keeps one copy of each returned name.<sup class="src"><a href="#src-2" title="DuckDB documentation: WITH Clause (recursive CTEs)">2</a></sup></p>
 </div>
-<p>The counters describe different work, not SQL-versus-graph execution times. SQL can also implement visited-set logic. A graph engine can also enumerate many walks.</p>
+<p>These counters measure different things. One counts rows and the other counts inspected edges. SQL can implement visited-set logic, and a graph engine can enumerate walks. The counters alone cannot establish which engine finishes first.</p>
 <h3 id="cost">Compare work for the same result</h3>
-<p>The <strong>out-degree</strong> of a node is its number of outgoing edges. Let <em>d</em> be average out-degree and <em>k</em> the requested walk length. With roughly <em>d</em> choices at each expansion, the number of length-<em>k</em> walks can grow approximately as <em>d</em><sup>k</sup>.</p>
+<p>Ada’s two outgoing edges gave the join two choices for its first step. The number of outgoing edges is a node’s <strong>out-degree</strong>. Let <em>d</em> be the average out-degree and <em>k</em> the requested walk length. With roughly <em>d</em> choices at each expansion, the number of length-<em>k</em> walks can grow approximately as <em>d</em><sup>k</sup>.</p>
 <p>This branching estimate assumes repeated expansion without pruning or deduplication. Uneven degrees and query restrictions can change it. Count one edge-table join per expansion from the starting row.</p>
 <p>For visited-set traversal, <em>V<sub>r</sub></em> counts reached vertices, including the start. <em>E<sub>r</sub></em> counts examined outgoing edges under the bound. <strong>Big-O</strong> notation describes how work grows with those counts, rather than a measured runtime.</p>
 <div class="math">
@@ -224,10 +205,13 @@ adjacency storage keeps references for locating these neighbors</code></pre>
 
 <h2 id="cypher" data-slide="8" data-scene="the-query-draws-a-shape">8 · Express the same question in SQL and Cypher</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=8&amp;b=1">Open slide 8 ↗</a></p>
-<p><strong>Cypher</strong> is a graph query language that describes relationship patterns. <code>MATCH</code> selects matching patterns. An <strong>operator</strong> is a query operation, such as following edges or removing duplicates.</p>
-<p>The pattern <code>(a)-[:Follows]-&gt;(b)</code> names a source, relationship type, direction, and destination. The pattern <code>[:Follows*1..3]</code> allows one to three edges.</p>
-<p>A <strong>common table expression</strong>, or <strong>CTE</strong>, names a temporary query result. A <strong>recursive CTE</strong> uses earlier results to produce another round. Its <strong>seed</strong> supplies the starting rows.</p>
-<p>Both queries below ask for distinct students reachable from Ada within three outgoing hops, excluding Ada. Read the query parts before comparing their results.</p>
+<p>Use the five names from the search as an answer you can check. Ask two engines for everyone Ada can reach within three outgoing hops. Exclude Ada and return each other name once, in alphabetical order.</p>
+<p><strong>Cypher</strong> lets us write a query that looks like Maya’s drawing. The pattern <code>(a)-[:Follows]-&gt;(b)</code> describes one outgoing follow. In <code>MATCH</code>, changing that relationship to <code>[:Follows*1..3]</code> allows one to three hops. Which part of this query makes Dee appear just once?</p>
+<pre><code class="language-text">// Cypher: the pattern IS the query, draw the arrow, star the depth
+MATCH (a:Student {name: 'ada'})-[:Follows*1..3]->(b)
+WHERE b.name &lt;&gt; 'ada'
+RETURN DISTINCT b.name ORDER BY b.name</code></pre>
+<p>In SQL, start with Ada at depth zero. Match the outgoing edges of each endpoint to advance one hop. A <strong>common table expression</strong> (CTE) names a temporary query result. A <strong>recursive CTE</strong> uses one round’s result to produce the next. Its starting row is the <strong>seed</strong>.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
   <thead><tr><th>SQL part</th><th>Role in this example</th></tr></thead>
@@ -250,29 +234,24 @@ WITH RECURSIVE reach(name, depth) AS (
     WHERE r.depth < 3
 )
 SELECT DISTINCT name FROM reach WHERE name &lt;&gt; 'ada' ORDER BY name;</code></pre>
-<pre><code class="language-text">// Cypher: the pattern IS the query, draw the arrow, star the depth
-MATCH (a:Student {name: 'ada'})-[:Follows*1..3]->(b)
-WHERE b.name &lt;&gt; 'ada'
-RETURN DISTINCT b.name ORDER BY b.name</code></pre>
 <div class="lecture-walkthrough" data-lecture-scene="the-query-draws-a-shape"></div>
 <p>The SQL recursion generates 11 walk rows across depths 1–3, plus the seed. Final exclusion and <code>DISTINCT</code> return <code>[ben, cyd, dee, eli, fay]</code>. The Kuzu query returns the same five names on this fixture.</p>
-<p><strong>Final deduplication is different from preventing repeated expansion.</strong> Here, the engine may generate repeated endpoints before the final <code>DISTINCT</code>. That is not the visited-set BFS from section 6.</p>
+<p>In the SQL query, both walks to Dee can expand to Eli. The final <code>DISTINCT</code> removes repeated names after those rows exist. In section 6 the visited set let the search skip the second expansion of Dee.</p>
 <p>Replacing <code>UNION ALL</code> with <code>UNION</code> removes duplicate whole rows. It does not merge <code>(ada, 0)</code> with <code>(ada, 2)</code>, because their depths differ. Keep an explicit stopping or cycle rule. <a href="#src-2">[2]</a> <a href="#src-5">[5]</a></p>
 <p>Kuzu’s default variable-length relationship semantics are <code>WALK</code>: nodes and edges can repeat. Other engines or options can use different rules. <a href="https://kuzudb.github.io/docs/cypher/query-clauses/match/#match-recursive-relationships">Kuzu MATCH documentation</a>.</p>
-<p>An <strong>execution plan</strong> is the sequence of operations the engine chooses to run a query. Both languages compile to plans. Syntax alone does not guarantee a faster plan.</p>
+<p>Both languages compile the request into an <strong>execution plan</strong>. Each operation in a plan, such as following an edge or removing duplicates, is an <strong>operator</strong>. The five names check the answer. To compare speed, measure the plans on the same task.</p>
 
 <h2 id="shortest" data-slide="9" data-scene="find-the-shortest-path">9 · Reconstruct a shortest route</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
-<p>A <strong>shortest path</strong> here is a directed route with the fewest edges. Each edge has the same cost: one hop. BFS reaches nodes in increasing hop count, so its first discovery of Fay has minimum hop distance.</p>
-<p>A <strong>predecessor</strong> records which node led to a new discovery. The first discoveries on the route to Fay record <code>cyd ← ada</code>, <code>eli ← cyd</code>, and <code>fay ← eli</code>.</p>
-<p>Follow predecessor records backward from Fay, then reverse that sequence. The route is <code>ada → cyd → eli → fay</code>, with three edges.</p>
+<p>Both queries returned Fay’s name. Now Ada wants the shortest chain of follows that connects her to Fay. The list of five names gives her no directions. What could the search save when it first reaches each person?</p>
+<p>When BFS discovers Cyd from Ada, it records Ada as Cyd’s <strong>predecessor</strong>. It records Cyd when it first reaches Eli, then Eli when it first reaches Fay. Starting with Fay, which name would you read next?</p>
 <div class="lecture-walkthrough" data-lecture-scene="find-the-shortest-path"></div>
-<p>This diagram explains one BFS reconstruction. It does not claim that Kuzu uses exactly this internal implementation. Its query interface provides <code>SHORTEST</code> for requesting the route. <a href="#src-6">[6]</a></p>
-<p>A <strong>weight</strong> is an edge’s cost, such as travel time. With unequal weights, the fewest hops need not give the lowest total cost. That question needs a search that accounts for weights.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Does the visited set alone tell us how to travel from Ada to Fay?</p><details><summary>Check your explanation</summary><p>No. It tells us Fay was reached. Predecessor records, or another route representation, are needed to reconstruct the connecting sequence.</p></details></div>
+<p>Reading backward gives Fay, Eli, Cyd, Ada. Reverse that list to get <code>ada → cyd → eli → fay</code>. Fay first appeared in the third BFS layer. Since BFS had already checked every shorter distance, this three-hop route is a <strong>shortest path</strong>.</p>
+<p>For Dee, Ben and Cyd both offer a two-hop route. Saving the first predecessor gives one shortest route. Finding all shortest routes would also require keeping the other equally short choice.</p>
+<p>Here each edge costs one hop. If each edge instead records the time a message takes, that time is its <strong>weight</strong>. Finding the fastest route would require accounting for those weights.</p>
+<p>Kuzu’s <code>SHORTEST</code> query asks the engine for a minimum-hop route. The diagram shows one way to produce that result. <a href="#src-6">[6]</a></p>
 <h3 id="kuzu">Run the existing Kuzu demo</h3>
-<p>An <strong>embedded database</strong> runs as a library inside an application process. Kuzu is the embedded graph engine used by this course’s Python demo.</p>
-<p>The script creates six students and nine follows edges. It runs the one-hop, new two-hop contact, bounded reachability, and shortest-route queries already explained.</p>
+<p>The Python demo runs Kuzu inside the application process. This makes Kuzu an <strong>embedded database</strong>. The script creates the same six students and nine directed edges. Compare the last two results below. One lists everyone Ada can reach within three hops. Which one gives her directions to Fay?</p>
 <p>Download the script into a separate demo folder. It recreates <code>demo_db</code> in its current working folder. This setup keeps the sample database separate from other files.</p>
 <div class="chat-downloads">
   <span class="chat-downloads-label">Demo script:</span>
@@ -302,18 +281,17 @@ loaded 6 students, 9 follows edges
 
 <h2 id="skew" data-slide="10" data-scene="a-supernode-is-skew-again">10 · Account for nodes with many neighbors</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=10&amp;b=1">Open slide 10 ↗</a></p>
-<p>A <strong>supernode</strong> has far more incident edges than most other nodes. <strong>Skew</strong> means work is distributed unevenly, so a small part of the data accounts for much of the cost.</p>
-<p>Locating a neighbor list quickly does not make a long list cheap to inspect. The diagram changes from 5 neighbors to 30. An <strong>expansion budget</strong> limits how many neighbors the query examines.</p>
+<p>Finding Fay took little work because each student on the way had few outgoing edges. Now imagine a larger club. In the diagram one member follows 5 people, then 30. Finding the start of that member’s list still leaves 30 entries to inspect.</p>
+<p>When one member has far more connections than most, that node is a <strong>supernode</strong>. The uneven work that results is <strong>skew</strong>. Suppose the system inspects just the first 8 neighbors of this member. Could it still promise to find every reachable person?</p>
 <div class="lecture-walkthrough" data-lecture-scene="a-supernode-is-skew-again"></div>
-<p>The hypothetical budget examines only 8 of the 30 neighbors. It saves work but can omit valid answers. This is a teaching example, not a recommended engine setting.</p>
-<p>A more selective query can reduce the required neighbors. Specialized indexes can help locate those matches. Dividing a large list across workers can spread work, but communication and coordination also cost time.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>The query requires every reachable person. Can a 30-to-8 neighbor cap preserve that guarantee without further evidence?</p><details><summary>Check your explanation</summary><p>No. An omitted neighbor can lead to a required person. State any limit and measure missing results before claiming the same answer.</p></details></div>
+<p>That limit is an <strong>expansion budget</strong>. In this illustration it leaves 22 outgoing edges unchecked. An unexamined edge might be the only way to reach a person within the allowed depth.</p>
+<p>If the question asks only for relationships formed this year, an index on the year can help locate the qualifying edges. If every neighbor counts, workers can share a long list, at the cost of coordinating their work.</p>
 
 <h2 id="when" data-slide="11" data-scene="choose-a-graph-workload">11 · Choose a system for the required query</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=11&amp;b=1">Open slide 11 ↗</a></p>
-<p>Start with the required query, then consider its data size, update pattern, and response time. A graph-shaped drawing alone does not justify another database.</p>
-<p>A <strong>foreign key</strong> references a key in another table. A fixed department lookup can use a join between student and department tables.</p>
-<p><strong>Whole-graph analytics</strong> repeatedly processes large portions of a graph. <strong>PageRank</strong> computes link-based importance scores. <strong>Community detection</strong> identifies groups with strong internal connections.</p>
+<p>Which work does the club actually need? Consider three requests on the same follow records. The first asks whom Ada follows directly. A SQL query can look up rows for Ada and join each destination to a student. The destination can be a <strong>foreign key</strong> that references the student table.</p>
+<p>The second request asks how Ada can reach Fay. The route length is unknown when the query starts. A graph query language can express that search directly. The recursive SQL query in section 8 also followed successive relationships.</p>
+<p>The third request asks which students are influential across the club. An algorithm such as <strong>PageRank</strong> repeatedly uses links across the graph to update importance scores. This is <strong>whole-graph analytics</strong>. Another example is <strong>community detection</strong>, which looks for groups with strong internal connections.</p>
 <div class="lecture-walkthrough" data-lecture-scene="choose-a-graph-workload"></div>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
@@ -326,7 +304,7 @@ loaded 6 students, 9 follows edges
   </tbody>
 </table>
 </div>
-<p>These are starting choices, not performance guarantees. Compare equivalent results and include the cost of keeping stored relationships current.</p>
+<p>The club’s <strong>workload</strong> includes how often each request runs and how often follow records change. Compare systems on that mix, including any work needed to keep a second copy of the edges current.</p>
 <h3>Case study: investigating relationships in the Panama Papers</h3>
 <div class="callout note">
   <span class="label">Case study · the Panama Papers, 2016</span>
@@ -338,9 +316,9 @@ loaded 6 students, 9 follows edges
 
 <h2 id="graphrag" data-slide="12" data-scene="connections-augment-similarity">12 · Use relationships to connect source passages</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=12&amp;b=1">Open slide 12 ↗</a></p>
-<p><strong>Retrieval-augmented generation</strong>, or <strong>RAG</strong>, retrieves source passages before a language model writes an answer. A <strong>chunk</strong> is one stored passage. A <strong>corpus</strong> is the document collection.</p>
-<p><strong>Vector retrieval</strong> ranks chunks using similarity between their numeric representations and the question’s representation. Useful evidence can be spread across passages that do not all rank highly.</p>
-<p>Consider the teaching question: <strong>Why must logging happen before a dirty page is written?</strong> A <strong>write-ahead log</strong>, or <strong>WAL</strong>, stores recovery information. A <strong>dirty page</strong> has changes not yet written to storage.</p>
+<p>Following <code>ada → ben</code> gave us a name. Suppose we use the same one-hop operation to find a source for an answer. This time the nodes represent concepts in course notes. Each concept links back to a passage where it appears.</p>
+<p><strong>Why must logging happen before a dirty page is written?</strong> Consider a system that retrieves passages before a language model answers. This is <strong>retrieval-augmented generation</strong> (RAG). Each stored passage is a <strong>chunk</strong> from the document collection, or <strong>corpus</strong>.</p>
+<p><strong>Vector retrieval</strong> ranks passages by how similar their numeric representations are to the question’s representation. Suppose it returns <code>log-notes</code>. This passage explains the write-ahead log (WAL). Which passage could help a reader understand what changes in memory?</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
   <thead><tr><th>Source ID</th><th>Illustrative passage</th><th>Named concept</th></tr></thead>
@@ -350,21 +328,19 @@ loaded 6 students, 9 follows edges
   </tbody>
 </table>
 </div>
-<p>The <strong>buffer pool</strong> holds working copies of storage pages. An <strong>entity</strong> is an identified person, object, or concept. Here, WAL and the buffer pool are entities linked to their source passages.</p>
-<p>A <strong>knowledge graph</strong> stores entities and named relationships. Our illustrative edge says WAL <em>protects page writes</em> from the buffer pool. The edge must be justified by source evidence.</p>
+<p>The <strong>buffer pool</strong> holds working copies of storage pages. A page becomes <strong>dirty</strong> when the engine changes its memory copy. The write-ahead log stores the information the engine needs to recover that change.</p>
+<p>WAL and the buffer pool each name a concept, or <strong>entity</strong>. A <strong>knowledge graph</strong> stores such entities and the named relationships between them. In the illustration, an edge labeled <em>protects page writes</em> leads from WAL to the buffer pool.</p>
 <div class="lecture-walkthrough" data-lecture-scene="connections-augment-similarity"></div>
-<p>Start with the retrieved <code>log-notes</code> passage. Follow the relationship to the buffer-pool entity. Add its <code>buffer-notes</code> passage while retaining both source IDs.</p>
-<p>An <strong>evidence union</strong> combines the selected passages from both retrieval methods. It can remove repeated chunk IDs, but it must preserve each retained chunk’s source identity.</p>
-<p>This one-hop extension can supply related evidence. It does not prove that every added passage is relevant or that the generated answer is correct.</p>
-<p>During <strong>ingestion</strong>, the system prepares documents for later queries. It can extract entities, record relationships, and link them to chunks. Wrong entity matches or unsupported edges can lead retrieval toward irrelevant evidence.</p>
-<p>The cited Microsoft GraphRAG paper also groups related entities into communities and builds summaries for broad questions about the corpus. Our one-hop experiment illustrates only a smaller graph-based retrieval step. <a href="#src-12">[12]</a></p>
+<p>Following that edge leads to <code>buffer-notes</code>. Combine it with <code>log-notes</code> to form an <strong>evidence union</strong>. If both routes retrieve the same chunk, include it once. Keep each chunk’s source ID so the reader can check which passage supports which claim.</p>
+<p>These links take work to build. During <strong>ingestion</strong>, the system identifies entities, records relationships supported by the sources, and links the entities to passages. If it links the wrong concepts, a search can follow the arrow correctly and still bring back an irrelevant passage.</p>
+<p>Our experiment follows one edge. Microsoft’s GraphRAG paper also groups related entities into communities and builds summaries for broad questions about the corpus. <a href="#src-12">[12]</a></p>
 
 <h2 id="evaluation" data-slide="13" data-scene="does-graph-expansion-help">13 · Measure whether graph expansion helps</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=13&amp;b=1">Open slide 13 ↗</a></p>
-<p>A <strong>baseline</strong> is the result used for comparison. Keep vector-only retrieval as the baseline, then evaluate vector retrieval plus graph expansion on the same questions.</p>
-<p><strong>Held-out questions</strong> are reserved for evaluation rather than tuning. A <strong>relevance label</strong> identifies a source expected to help answer a question. Compare both configurations against the same labels.</p>
+<p>We added <code>buffer-notes</code> to the passages retrieved for the logging question. Did its definition of a dirty page fill a gap? Would the same passage help someone who asked only what WAL stands for?</p>
+<p>Save the passages from vector-only retrieval as a <strong>baseline</strong> for comparison. Run the same questions again with one-hop expansion. Use <strong>held-out questions</strong> that the team reserved for evaluation. For each question, a <strong>relevance label</strong> identifies a source expected to help answer it.</p>
 <div class="lecture-walkthrough" data-lecture-scene="does-graph-expansion-help"></div>
-<p>The five question rows and checkmarks are hypothetical. They are not project measurements. A relationship can find useful evidence for one question and add irrelevant passages for another.</p>
+<p>The five rows in the diagram illustrate hypothetical outcomes. A checkmark can record that an expected source appeared. To evaluate your own results, read each added passage and identify which claim it supports.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
   <thead><tr><th>Measure</th><th>Meaning</th><th>Why it matters</th></tr></thead>
@@ -376,50 +352,46 @@ loaded 6 students, 9 follows edges
   </tbody>
 </table>
 </div>
-<p><strong>GraphRAG is an optional project extension.</strong> Tag chunks with entities, record selected relationships, and try one-hop expansion. Compare the combined result with the baseline on the same evaluation questions.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Graph expansion adds ten passages but recovers no missing relevant source. Does that establish an improvement?</p><details><summary>Check your explanation</summary><p>No. More text is not evidence of better retrieval. Inspect source coverage, answer support, noise, context size, and elapsed time.</p></details></div>
+<p><strong>GraphRAG is an optional project extension.</strong> If you try it, keep the source IDs from both runs. Use them to show where expansion recovered a missing source or added irrelevant text. Record how long each configuration took.</p>
 
 <h2 id="synthesis" data-slide="14" data-scene="five-mechanisms-recur">14 · Recognize five recurring database mechanisms</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=14&amp;b=1">Open slide 14 ↗</a></p>
-<p>The same questions connect graph storage to the earlier course. The table briefly restates each mechanism before naming its earlier examples.</p>
+<p>Suppose the second run of a relationship query finishes sooner than the first. Did the engine reuse a page, examine fewer edges, or choose another plan? Return to the club’s simplest query, “Whom does Ada follow?” Follow one lookup to see what each explanation would predict.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
-  <thead><tr><th>Mechanism</th><th>What it does</th><th>Course connections</th></tr></thead>
+  <thead><tr><th>Mechanism</th><th>What to look for in Ada’s graph</th><th>Course connections</th></tr></thead>
   <tbody>
-    <tr><td>Blocks and caching</td><td>Read stored data in chunks and keep useful copies in memory. I/O means input/output, including storage reads and writes.</td><td>The file manager and buffer pool. Bigtable’s sorted-file blocks, Parquet’s groups of column data, and temporary shuffle files.</td></tr>
-    <tr><td>Sorting and indexes</td><td>Maintain structures that help locate required data or skip irrelevant data.</td><td>B+ trees, graph adjacency, and Bloom filters. Inverted file (IVF) vector indexes group vectors into searchable lists.</td></tr>
-    <tr><td>Logs and recovery</td><td>Preserve changes or instructions needed to recover work after failure.</td><td>WAL and Bigtable recovery. Spark’s <strong>lineage</strong> records transformations for recomputation. Table-format metadata records committed data-file versions.</td></tr>
-    <tr><td>Declarative queries and plans</td><td>Describe the result, then let the engine plan operations that produce it.</td><td>SQL parsing and execution, Spark plans, and Cypher <code>MATCH</code>.</td></tr>
-    <tr><td>Partitioning</td><td>Divide data and work into portions while monitoring uneven load.</td><td>Shuffle destinations, Bigtable’s row ranges, data folders, and IVF lists. Supernodes show why equal data portions can still have unequal work.</td></tr>
+    <tr><td>Blocks and caching</td><td>After one lookup loads the block containing Ada’s edges, a second lookup can reuse its copy in memory. This saves storage input/output (I/O).</td><td>The file manager and buffer pool. Bigtable’s sorted-file blocks, Parquet’s groups of column data, and temporary shuffle files.</td></tr>
+    <tr><td>Sorting and indexes</td><td>An index on the source finds Ada’s edge rows. A stored adjacency list also gives the query a way to skip other students’ edges.</td><td>B+ trees, graph adjacency, and Bloom filters. Inverted file (IVF) vector indexes group vectors into searchable lists.</td></tr>
+    <tr><td>Logs and recovery</td><td>Suppose the club saves a follow and gets a success reply. If the engine uses a WAL, its durable log record can help recover that change after a crash.</td><td>WAL and Bigtable recovery. Spark’s <strong>lineage</strong> records transformations for recomputation. Table-format metadata records committed data-file versions.</td></tr>
+    <tr><td>Declarative queries and plans</td><td>Ask for every other student within three hops. The plan determines when the engine expands edges and removes duplicates to produce the five names.</td><td>SQL parsing and execution, Spark plans, and Cypher <code>MATCH</code>.</td></tr>
+    <tr><td>Partitioning</td><td>A system can assign different students’ edges to different workers. One worker may still receive the busiest member’s entire list.</td><td>Shuffle destinations, Bigtable’s row ranges, data folders, and IVF lists.</td></tr>
   </tbody>
 </table>
 </div>
 <div class="lecture-walkthrough" data-lecture-scene="five-mechanisms-recur"></div>
-<p>A <strong>contract</strong> states the behavior or guarantee a mechanism promises. A cached copy saves reads but does not by itself make a write durable. Spark lineage can recompute lost data but is not a transaction WAL.</p>
-<p><strong>Recognize the mechanism and its limits.</strong> Similar shapes in two systems can support different guarantees.</p>
+<p>Each mechanism has a <strong>contract</strong>, the behavior it promises. Caching Ada’s list can save a read. Recovering a confirmed change requires information that survives a crash. Spark lineage records how to recompute lost data. A transaction WAL records changes needed for database recovery.</p>
 
 <h2 id="inspect" data-slide="15" data-scene="read-a-new-system">15 · Ask how an unfamiliar system does the work</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=15&amp;b=1">Open slide 15 ↗</a></p>
-<p>An <strong>access path</strong> is a way to find data, such as an index or adjacency list. <strong>Durability</strong> states which acknowledged writes survive the failures covered by the storage protocol.</p>
-<p>Imagine a new database brochure promises fast relationship queries. Turn that promise into five concrete questions before choosing a benchmark.</p>
+<p>A database promises faster relationship queries for the club. Give its designers a request with a known answer. On the original graph, the query must return five other people within three outgoing hops of Ada. How could the engine produce that answer faster?</p>
 <div class="lecture-walkthrough" data-lecture-scene="read-a-new-system"></div>
 <ol>
-  <li>Which records share a stored block, and which blocks can the cache reuse?</li>
-  <li>How does the engine find neighbors, and what must an edge update maintain?</li>
-  <li>What information survives a crash after the caller receives success?</li>
-  <li>Does the plan enumerate walks or avoid repeated expansion of visited nodes?</li>
-  <li>How are data and work divided when one node has many neighbors?</li>
+  <li>Which block holds Ada’s edges? Does a second query read it from storage again?</li>
+  <li>Which <strong>access path</strong> finds Ben and Cyd? What does it cost to maintain that index or neighbor list when a follow changes?</li>
+  <li>What <strong>durability</strong> does a success reply promise? Which failures can the recorded change survive?</li>
+  <li>Does the plan expand Dee twice or mark her visited on the first discovery? Which counters show the difference?</li>
+  <li>Who expands a member with 30 outgoing edges? Does sharing that list save time once the workers exchange results?</li>
 </ol>
-<p>A <strong>benchmark</strong> measures a defined workload under stated conditions. Test the required result, dataset, updates, and resource limits. These questions help investigate the design, but they do not explain every feature.</p>
+<p>Test a proposed explanation with a <strong>benchmark</strong>, a measurement of a defined workload. Run both configurations on the same graph with the same depth, exclusions, and resource limits. Check the returned names before comparing response times. If the proposed benefit is caching, record storage reads on the first and second runs.</p>
 
 <h2 id="recap" data-slide="16" data-scene="finish-with-measured-decisions">16 · Defend a project decision with evidence</h2>
 <p class="slide-reference"><a href="../../slides/lecture-15.html#s=16&amp;b=1">Open slide 16 ↗</a></p>
-<p>Return to Maya’s repeated Dee entries. Two routes reach one person. The correct result depends on the question, direction, depth, exclusions, and repeat rules.</p>
+<p>On the original nine-edge graph, Ada follows Ben and Cyd directly. She can reach five other people within three hops. Her shortest route to Fay takes three hops through Cyd and Eli.</p>
+<div class="exercise learning-check"><span class="ex-label">Change one edge</span><p>Suppose Ada now follows Fay directly. Add <code>ada → fay</code> to a copy of the graph. What changes in Ada’s direct neighbors, the people within three hops, and her shortest route to Fay?</p><details><summary>Check your explanation</summary><p>Ada’s direct neighbors are now Ben, Cyd, and Fay. The distinct answer within three hops still contains Ben, Cyd, Dee, Eli, and Fay. The new edge adds a route to someone Ada could already reach. It also cuts the shortest route to Fay from three hops to one.</p></details></div>
 <div class="lecture-walkthrough" data-lecture-scene="finish-with-measured-decisions"></div>
-<p>The final plot illustrates a choice between answer quality and response time. Its points are schematic, not supplied experimental results. A project decision needs measurements from the configurations actually compared.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>One method emits eleven bounded-walk rows. Another finds five other people. Is one necessarily wrong, and can their counts establish a speedup?</p><details><summary>Check your explanation</summary><p>Neither result is necessarily wrong. They answer different questions, and rows and edge visits measure different work. Match the required result and execution conditions before comparing measured runtime.</p></details></div>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>A new edge gives Ada a second route to Fay. What changes in a distinct-person answer versus a route answer?</p><details><summary>Check your explanation</summary><p>Fay still appears once in the distinct-person answer. A route answer can gain another sequence. The minimum hop count decreases only if the new route has fewer hops. Equal-length routes can change which shortest route is returned.</p></details></div>
-<p><strong>Explain the result, mechanism, and evidence together.</strong> State what the query must return. Show how the system produces it, then use matching measurements to defend the choice.</p>
+<p>A system that kept the old graph could still pass the five-name check. Asking for Ada’s direct neighbors exposes the missing update. This gives you a small test with a known answer before you time either configuration.</p>
+<p>The slide’s final plot illustrates a tradeoff between answer quality and response time. For your own project, compare at least two configurations on the same evaluation questions. Show one result that changed your choice and one failure you diagnosed. If a configuration improves answer quality but takes longer, use your own measurements to explain the decision.</p>
 <h2 id="endgame">Project preparation: discovery, evaluation, and final demos</h2>
 <ul class="checklist">
   <li>☐ <strong>Thu Nov 19, question swap:</strong> Review the ten evaluation questions and corpus access exchanged with your partner team by this deadline. Follow the <a href="../../project.html#milestones">project specification</a> when evaluating these questions.</li>
@@ -488,11 +460,11 @@ loaded 6 students, 9 follows edges
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
-<script src="../../slides/decks/lectures-11-15.js?v=schedule-20261110"></script>
-<script src="../../slides/decks/teaching-notes.js?v=graphs-clear-20261110"></script>
-<script src="../../slides/decks/clarity-captions.js?v=graphs-clear-20261110"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=graph-progression-20261119"></script>
+<script src="../../slides/decks/teaching-notes.js?v=graph-progression-20261119"></script>
+<script src="../../slides/decks/clarity-captions.js?v=graph-progression-20261119"></script>
 <script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
-<script src="../../slides/decks/clarity-diagrams.js?v=graphs-clear-20261110"></script>
+<script src="../../slides/decks/clarity-diagrams.js?v=graph-progression-20261119"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
 <script src="../lecture-13/slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>

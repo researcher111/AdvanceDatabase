@@ -356,4 +356,16 @@ for(let depth=1;depth<=3;depth++){
 assert.equal(walks,11);assert.equal(edgeVisits,8);assert.equal(visited.size-1,5);
 assert.match(strings(draw(15,'paths-are-not-unique-vertices',3)),/8 edges examined/);
 assert.match(strings(draw(15,'paths-are-not-unique-vertices',4)),/11 walk rows[\s\S]*5 unique people/);
+// The opening shows one recorded follow. The extra edge belongs only to the closing exercise.
+const firstFollow = draw(15, 'the-path-is-the-answer', 0);
+const firstPeople = Array.from(firstFollow.filter(item => item.tag === 'circle'), item => item.key);
+assert.deepEqual(firstPeople, ['person-ada', 'person-ben']);
+assert.equal(text(firstFollow, 'relationship'), 'follows');
+const closingCase = step => draw(15, 'finish-with-measured-decisions', step);
+assert(!closingCase(0).some(item => item.key === 'hypothetical-follow'));
+assert(closingCase(1).some(item => item.key === 'hypothetical-follow'));
+const changedGraph = closingCase(2);
+assert.equal(text(changedGraph, 'direct-now-detail'), 'ben, cyd, fay');
+assert.equal(text(changedGraph, 'within-now-detail'), 'Same five other students');
+assert.equal(text(changedGraph, 'shortest-now-detail'), '3 hops → 1 hop');
 console.log(`${slides} clarified slides, ${builds} captions; fixture results, animation identity, and unchanged Lecture 6 pass.`);

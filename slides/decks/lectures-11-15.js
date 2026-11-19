@@ -467,23 +467,122 @@ function graphDraw(d,s,mode='reach'){
  GE.forEach(([a,b],i)=>{const [x1,y1]=GN[a],[x2,y2]=GN[b],l=Math.hypot(x2-x1,y2-y1),ux=(x2-x1)/l,uy=(y2-y1)/l;let hot=mode==='path'?path.indexOf(a)>=0&&path.indexOf(b)===path.indexOf(a)+1&&path.indexOf(b)<=s:dist[a]<s;d.arrow('edge'+i,x1+ux*40,y1+uy*40,x2-ux*45,y2-uy*45,hot?P.orange:P.line,hot?5:2);});
  Object.entries(GN).forEach(([name,[x,y]])=>{const reached=mode==='path'?path.includes(name)&&path.indexOf(name)<=s:dist[name]<=s;d.circle('node'+name,x,y,43,name==='ada'?P.orange:reached?P.greenLight:P.white,name==='ada'?P.orange:reached?P.green:P.line,3);d.text('name'+name,x,y+8,name,26,name==='ada'?P.white:P.ink);if(s>0&&reached&&name!=='ada')d.text('hop'+name,x+65,y+8,String(mode==='path'?path.indexOf(name):dist[name]),25,P.green);});
 }
-function fiveIdeas(d,s){const xs=[160,400,640,880,1120];for(let i=0;i<5;i++){const c=i<=s?P.green:P.line;if(i===0){for(let j=0;j<4;j++)d.rect('page'+j,xs[i]-65+j*9,325+j*14,115,120,j===3?P.greenLight:P.white,c,5);d.rect('frame',xs[i]-76,310,145,180,'none',c,12);}if(i===1)miniTree(d,'tree',xs[i],325,c);if(i===2){for(let j=0;j<5;j++)d.rect('log'+j,xs[i]-80+j*33,385,26,78,i<=s?P.orangeLight:P.white,c,3);d.arrow('append',xs[i]-95,360,xs[i]+90,360,c);}if(i===3){for(let j=0;j<3;j++)d.circle('op'+j,xs[i],320+j*80,24,i<=s?P.blueLight:P.white,c,2);d.arrow('opA',xs[i],345,xs[i],374,c);d.arrow('opB',xs[i],426,xs[i],454,c);}if(i===4){for(let j=0;j<3;j++){d.box('part'+j,xs[i]-90+j*65,375,50,105,String(j),i<=s?P.greenLight:P.white,c,26);}d.arrow('split',xs[i],315,xs[i]-60,355,c);d.arrow('split2',xs[i],315,xs[i]+60,355,c);}if(i<=s)d.text('label'+i,xs[i],590,['cache','index','log','plan','partition'][i],28,c);}}
+function followsPair(d, step, properties = false) {
+  const people = [['ada', 310], ['ben', 970]];
+  people.forEach(([name, x]) => {
+    d.circle('person-' + name, x, 355, 65, P.greenLight, P.green, 3);
+    d.text('person-label-' + name, x, 366, name, 33, P.ink);
+    if (properties) d.text('student-' + name, x, 256, 'Student', 27, P.green);
+  });
+  d.arrow('follows', 390, 355, 884, 355, P.blue, 5);
+  d.text('relationship', 640, 317, properties ? 'Follows' : 'follows', 29, P.blue);
+  if (properties) {
+    if (step >= 1) {
+      d.line('gpa-link', 310, 428, 310, 487, P.orange, 3);
+      d.box('gpa', 173, 493, 274, 74, 'gpa: 39  (3.9)', P.orangeLight, P.orange, 27);
+    }
+    if (step === 2) {
+      d.line('since-link', 640, 369, 640, 487, P.orange, 3);
+      d.box('since', 500, 493, 280, 74, 'since: 2026', P.orangeLight, P.orange, 27);
+    }
+  } else {
+    if (step >= 1) {
+      d.text('source', 310, 466, 'Source', 28, P.muted);
+      d.text('destination', 970, 466, 'Destination', 28, P.muted);
+    }
+    if (step === 2) d.box('one-hop-result', 427, 520, 426, 71, 'One outgoing hop reaches ben', P.greenLight, P.green, 25);
+  }
+}
+
+function storeFollows(d, step) {
+  d.text('edge-table', 308, 235, 'Follows table', 30, P.ink);
+  const rows = [['src', 'dst'], ['ada', 'ben']];
+  if (step >= 1) rows.push(['ada', 'cyd']);
+  d.table('edges', 98, 275, [210, 210], rows, {rowHeight: 66, fontSize: 29});
+  if (step === 2) {
+    d.arrow('group', 545, 377, 690, 377, P.green, 4);
+    d.text('list-title', 950, 235, 'Outgoing neighbors of ada', 29, P.ink);
+    d.box('out', 728, 337, 444, 80, '[ben, cyd]', P.greenLight, P.green, 32);
+    d.text('maintain', 950, 474, 'Maintain the list when an edge changes.', 23, P.muted);
+  }
+}
+
+const followsStorage = [
+  {
+    name:'Cache', input:['Storage block', 'ada → ben', 'ada → cyd'],
+    output:['Buffer pool', 'Keep a copy of the block'],
+    check:'Repeat the lookup for ada. Count storage reads on each run.'
+  },
+  {
+    name:'Index', input:['Source lookup', 'src = ada'],
+    output:['Outgoing neighbors', '[ben, cyd]'],
+    check:'Add a follow on a copy. Which index entry or neighbor list must change?'
+  },
+  {
+    name:'Log', input:['Durable log entry', 'Insert ada → ben'],
+    output:['After a crash', 'Recover the confirmed edge'],
+    check:'After a confirmed edge write, restart the engine and look up that edge.'
+  },
+  {
+    name:'Plan', input:['Bounded walk expansion', '2 + 4 + 5 rows'],
+    output:['Exclude ada and deduplicate', '5 other students'],
+    check:'Check the five output names. Inspect the rows at each expansion.'
+  },
+  {
+    name:'Partition', input:['Worker with a long list', 'Many outgoing edges'],
+    output:['Worker with a short list', 'Few outgoing edges'],
+    check:'Compare the edges each worker examines on the same query.'
+  }
+];
+
+function followStorage(d, step, inspect = false) {
+  const part = followsStorage[step];
+  followsStorage.forEach(({name}, i) => {
+    if (!inspect && i > step) return;
+    const active = i === step;
+    d.box('mechanism-' + i, 95 + 220*i, 217, 202, 56, name,
+      active ? P.orangeLight : P.white, active ? P.orange : P.line, 25);
+  });
+  [part.input, part.output].forEach(([title,...lines], i) => {
+    const x = i ? 714 : 126;
+    d.rect('panel-' + i, x, 335, 440, 167, i ? P.greenLight : P.blueLight, i ? P.green : P.blue, 10, 2);
+    d.text('panel-title-' + i, x+220, 379, title, 26, P.ink);
+    lines.forEach((line, j) => d.text('panel-value-' + i + '-' + j, x+220, 429+40*j, line, 25, P.ink));
+  });
+  if (step < 4) d.arrow('operation', 583, 420, 693, 420, P.green, 4);
+  if (inspect) d.text('check', 640, 597, part.check, 27, P.ink);
+}
+
 register(15,'Graphs and course synthesis','2026-12-01','lectures/lecture-15/graphs.html',[
-scene('The path is the answer',['People','Relationships','A connection'],(d,s)=>{d.text('title',640,125,'Graph databases',60);graphDraw(d,s===0?0:s===1?1:3,'path');},'Start with the same six students used throughout microdb, now connected by directed follows edges. Ask a one-hop question, then “How does ada reach fay?” The second question asks for a path, not just a matching row. Reveal the three-edge route ada→cyd→eli→fay. Frame graph storage as organizing relationships for a workload, while preserving the idea that SQL can also express recursive traversal.',{title:"Count routes and people separately",kind:'title'}),
-scene('Property graph',['Nodes','Typed edges','Properties'],(d,s)=>{graphDraw(d,0);if(s>0)d.text('type',570,275,'Follows',28,P.blue);if(s>1){d.box('nodeprop',80,580,280,57,'gpa: 39',P.orangeLight,P.orange,27);d.box('edgeprop',865,250,300,57,'since: 2026',P.blueLight,P.blue,27);}},'Introduce nodes, directed typed edges and properties on either. Ask which record would store “since 2026.” Expected: the Follows relationship, because it describes the connection rather than either endpoint alone. Explain that labels/types help constrain queries, and edge direction affects answers. The property annotations illustrate the model. The supplied Kuzu demo stores student GPA but does not add the example since property.',{kind:'definition',term:'Property graph',definition:'A graph whose nodes and typed relationships carry named property values.'}),
-scene('Store adjacency at write time',['Edge table','Resolve endpoints','Stored neighbor list'],(d,s)=>{d.table('edge',115,285,[160,160],[['src','dst'],['ada','ben'],['ada','cyd'],['ben','dee']],{rowHeight:65,fontSize:28,highlightRows:s===0?[1,2]:[]});d.arrow('build',470,425,650,425,s?P.orange:P.line,4);d.box('ada',710,300,360,105,'ada',P.orangeLight,P.orange,37);if(s>0){d.box('out',710,440,360,95,'[ben, cyd]',P.greenLight,P.green,31);d.arrow('neighbors',890,413,890,433,P.green);}if(s>1)d.text('writes',875,600,'write → read',34,P.orange);},'Ask how a relational edge table finds ada’s neighbors. Expected: match src using an index or a scan. A graph-oriented adjacency representation stores the neighbor relationship directly after resolving endpoints when the edge is created. Future expansions can read those neighbor IDs efficiently. “Pointer following” is a conceptual model: disk formats, compression and engines differ. The write path pays to maintain this organization, just as an index pays to accelerate future reads.'),
+scene('The path is the answer', ['Read the arrow', 'Trace its direction', 'Name the destination'], followsPair,
+  'Use one fictional club relationship. Trace the arrow from Ada to Ben and read it aloud. Ask what else students would need to know to say that Ben follows Ada.',
+  {title:'Who does Ada follow?', clarityNative:true}),
+scene('Property graph', ['Label the two students', 'Attach a value to Ada', 'Attach a value to Follows'], (d, s) => followsPair(d, s, true),
+  'Keep the first edge on screen. The value 39 belongs to Ada and represents a GPA of 3.9. The year describes when this particular relationship began. The supplied Kuzu demo stores GPA. The edge property is illustrative.',
+  {kind:'definition', term:'Property graph', definition:'A graph whose nodes and typed relationships carry named property values.', clarityNative:true}),
+scene('Store adjacency at write time', ['Store one relationship', 'Add Ada’s second relationship', 'Group Ada’s neighbors'], storeFollows,
+  'Add an edge from Ada to Cyd. An edge table can use a scan or an index on src. A maintained adjacency list keeps the destination references together. Ask what a new follow or an unfollow changes in that list.',
+  {title:'Find both of Ada’s neighbors', clarityNative:true}),
 scene('One hop',['Start at ada','Expand outgoing edges','Result set'],(d,s)=>{graphDraw(d,Math.min(1,s));if(s===2)d.text('result',640,640,'{ben, cyd}',41,P.green);},'Ask students to predict the result of the first Kuzu query before revealing outgoing edges. Expected: ben and cyd. Contrast it with “who follows ada,” which reverses edge direction and returns ben and fay on this dataset. Show or read the simple MATCH pattern from the companion page if desired. The deck stays focused on the graph. The example can run with no live database dependency because the graph and results are deterministic.',{demo:'viz-walk',sources:['lectures/lecture-15/graphs.html#kuzu','lectures/lecture-15/kuzu_demo.py']}),
-scene('Two hops with exclusions',['Two-hop paths','Remove the start','Remove existing neighbors'],(d,s)=>{graphDraw(d,2);if(s>0)d.circle('excludeada',GN.ada[0],GN.ada[1],57,'none',P.red,4);if(s>1){['ben','cyd'].forEach(n=>d.circle('exclude'+n,GN[n][0],GN[n][1],57,'none',P.red,4));d.text('result',650,640,'{dee, eli}',42,P.green);}},'Ask for the raw two-hop endpoints: dee via ben, ada via ben, dee via cyd, and eli via cyd. Then apply the query’s exclusions: remove ada and anyone already directly followed. Expected distinct answer: dee, eli. The two routes reach the same person, Dee. Counting routes and counting distinct people answer different questions. This is the demo’s second query, not simply the set of all nodes reached within two hops.'),
+scene('Two hops with exclusions',['Expand ben','Expand cyd','Keep new contacts'],(d,s)=>{graphDraw(d,2);if(s>0)d.circle('excludeada',GN.ada[0],GN.ada[1],57,'none',P.red,4);if(s>1){['ben','cyd'].forEach(n=>d.circle('exclude'+n,GN[n][0],GN[n][1],57,'none',P.red,4));d.text('result',650,640,'{dee, eli}',42,P.green);}},'Ask for the raw two-hop endpoints: dee via ben, ada via ben, dee via cyd, and eli via cyd. Then apply the query’s exclusions: remove ada and anyone already directly followed. Expected distinct answer: dee, eli. The two routes reach the same person, Dee. Counting routes and counting distinct people answer different questions. This is the demo’s second query, not simply the set of all nodes reached within two hops.'),
 scene('Breadth-first reachability',['Start','Distance one','Distance two','Distance three'],(d,s)=>graphDraw(d,s),'Introduce BFS as frontier expansion with a visited set. Before each build, ask which new nodes enter the next frontier. Expected: ben/cyd, then dee/eli, then fay. Repeated routes do not re-enqueue already visited nodes. Explain that expanding only frontiers under a depth bound finds nodes within that bound. A shortest-path property follows for equal-cost edges. Weighted edges require a different algorithm or priority order.',{kind:'definition',term:'Breadth-first search',definition:'Exploring a graph in distance layers, expanding each newly reached node once.',demo:'viz-walk'}),
 scene('Paths are not unique vertices',['One route','Two routes to dee','Cycle','Different work counts'],(d,s)=>{graphDraw(d,Math.min(3,s+1));if(s>0){d.path('pathA','M185,330 L420,290 L715,320','none',P.blue,7);d.path('pathB','M185,330 L400,530 L715,320','none',P.orange,7);}if(s>1)d.path('cycle','M420,290 Q210,205 185,330','none',P.red,5);if(s>2)d.text('counts',640,640,'8 edge visits · 11 path rows',36,P.ink);},'Give pairs the graph and ask whether visiting dee twice represents two people or two paths. Expected: two paths to one vertex. For depth three from ada, the course widget’s visited-set traversal examines eight outgoing edges while its self-join path enumeration produces eleven rows across levels. These counts describe different outputs and different work.\n\nThey do not show that SQL must be slower. SQL can also deduplicate during recursion. An unbounded walk needs a stopping/cycle rule.',{kind:'activity',demo:'viz-walk'}),
 scene('The query draws a shape',['One edge','Bounded path','Recursive SQL alternative'],(d,s)=>{d.circle('a',225,405,63,P.orangeLight,P.orange,3);d.circle('b',1060,405,63,P.greenLight,P.green,3);d.text('av',225,415,'a',38);d.text('bv',1060,415,'b',38);d.arrow('pattern',300,405,980,405,P.green,5);d.text('cypher',650,320,s===0?'[:Follows]':'[:Follows*1..3]',38,P.green);if(s>1){d.rect('loop',360,500,575,100,P.blueLight,P.blue,12);d.text('sql',647,561,'WITH RECURSIVE',36,P.blue);d.path('looparrow','M620,610 C510,660 480,625 490,610','none',P.blue,4);}},'Read the pattern: start at a and follow one to three outgoing Follows edges to b. Ask which condition removes the source. Ask which operation removes duplicate endpoints. Expected: b.name differs from ada and DISTINCT.\n\nThen contrast a recursive SQL CTE: a base row and an iterative edge join with a depth bound. Both compile to plans. Notation and physical storage are independent choices. Do not claim SQL cannot express recursive graph questions.',{title:"Express the same bounded path in SQL and Cypher"}),
 scene('Find the shortest path',['Frontier one','Frontier two','Target discovered','Return predecessors'],(d,s)=>{graphDraw(d,Math.min(s+1,3),s===3?'path':'reach');if(s===3)d.text('path',640,640,'ada → cyd → eli → fay',40,P.green);},'Predict the shortest route from ada to fay before revealing the search. Expected: three edges via cyd and eli. The first target discovery under BFS establishes minimum hop count because all edges have equal cost. Record which node led to each new node, then follow those links backward to reconstruct the path. Kuzu’s demo expresses this with SHORTEST. The visualization explains the algorithmic shape without claiming an exact internal implementation or that SQL requires one particular hand-coded algorithm.',{sources:['lectures/lecture-15/graphs.html#kuzu','lectures/lecture-15/kuzu_demo.py']}),
 scene('A supernode is skew again',['Ordinary degree','High degree','Expansion budget'],(d,s)=>{d.circle('hub',640,415,70,P.orangeLight,P.orange,4);d.text('hubname',640,425,'hub',31,P.orange);const n=s?30:5;for(let i=0;i<n;i++){const a=i*2*Math.PI/n,x=640+Math.cos(a)*430,y=415+Math.sin(a)*180;d.line('edge'+i,640,415,x,y,s===2&&i>7?P.line:P.orange,2);d.circle('neighbor'+i,x,y,13,s===2&&i>7?P.line:P.green);}if(s===2)d.text('budget',640,625,'30 → 8',45,P.orange);},'Ask whether constant-cost adjacency access makes a node with millions of neighbors cheap to expand. Expected: no, the number of neighbors still dominates. Connect this to the hot key in distributed aggregation. Possible responses include a more selective query, capped expansion, specialized indexes, or partitioned adjacency. Limiting expansion can omit valid results, so state the limit and measure what it misses. The diagram’s 30-to-8 budget is illustrative, not an engine recommendation.'),
-scene('Choose a graph workload',['Shallow relationship','Variable depth path','Whole graph analytics'],(d,s)=>{if(s===0){d.table('left',135,330,[150,150],[['id','dept'],['7','3'],['8','2']],{rowHeight:72,fontSize:28});d.arrow('join',460,420,700,420,P.green);d.table('right',735,330,[145,200],[['id','name'],['2','stats'],['3','cs']],{rowHeight:72,fontSize:28});}else if(s===1)graphDraw(d,3,'path');else{graphDraw(d,3);Object.values(GN).forEach(([x,y],i)=>d.circle('score'+i,x,y,52+i*3,'none',P.blue,3));}},'Present one-join department lookup, unknown-depth dependency tracing, and whole-network PageRank. Ask students to select an initial tool and justify it. Expected: relational operations are natural for shallow joins. Graph query engines can make path-oriented work convenient.\n\nWhole-graph iterative analytics may suit a graph-compute framework. These are workload heuristics, not automatic speed guarantees. Compare queries that return the same kind of result. Include the cost of updating another copy of the relationships.'),
+scene('Choose a graph workload',['Fetch direct contacts','Trace a route','Rank the full network'],(d,s)=>graphDraw(d,s===0?1:3,s===1?'path':'reach'),
+  'Start with three requests on the same Follows data. An indexed edge table can answer a one-hop lookup. The route to Fay takes successive expansions. Ranking all students requires work across the network. Compare suitable tools under the same output and update requirements.',
+  {title:'What does this query have to do?'}),
 scene('Connections augment similarity',['Nearby passages','Named entities','One-hop expansion','Evidence union'],(d,s)=>{paper(d,'p1',150,330,P.greenLight,150,190);paper(d,'p2',340,330,P.greenLight,150,190);d.circle('wal',760,355,62,P.orangeLight,P.orange,3);d.text('wallabel',760,365,'WAL',31,P.orange);d.circle('pool',1040,490,75,P.blueLight,P.blue,3);d.text('poollabel',1040,500,'buffer',29,P.blue);if(s>0)d.arrow('entity',505,420,680,365,P.green);if(s>1)d.arrow('edge',815,388,963,462,P.orange,5);if(s>2){paper(d,'p3',s>2?590:1110,525,P.blueLight,130,100);d.arrow('add',1010,578,760,595,P.blue);}},'Ask why a question about interactions between WAL and the buffer pool might need evidence from multiple passages. Similarity search can find useful starting chunks. Entity links can expand to related sources. Reveal one-hop graph expansion and union the evidence with vector results.\n\nEntity extraction and edge correctness become new failure modes. This manageable project extension illustrates graph-enhanced retrieval. It is not the complete Microsoft GraphRAG pipeline with its community summaries.',{title:"Connect evidence across related sources"}),
 scene('Does graph expansion help',['Vector only','Add neighbors','Measure both'],(d,s)=>{d.text('cfgA',320,255,'vector',31,P.green);d.text('cfgB',930,255,'vector + graph',31,P.blue);for(let i=0;i<5;i++){d.circle('q'+i,130,325+i*57,10,P.orange);d.box('a'+i,220,300+i*57,205,43,i<3?'✓':'∅',i<3?P.greenLight:P.white,P.line,27);if(s>0)d.box('b'+i,805,300+i*57,245,43,i===4?'∅':i===1&&s===2?'?':'✓',i<4?P.blueLight:P.white,P.line,27);}if(s>1){d.text('cost',640,630,'support · noise · latency',35,P.orange);}},'Have pairs propose one question helped by following entity relationships and one likely harmed by irrelevant expansion. Expected: multi-document relationship questions may benefit, while ambiguous entities or high-degree hubs can add noise. The checkmarks are a hypothetical exercise, not project results. Compare retrieval metrics, answer support, context size and latency on the same held-out questions. Keep a vector-only baseline and report where expansion hurts as well as where it helps.',{kind:'activity'}),
-scene('Five mechanisms recur',['Cache','Index','Log','Plan','Partition'],fiveIdeas,'Let students identify each picture before revealing its short label. Ask students where each mechanism appears in the course. Buffer pools and SSTable blocks use caches. B+ trees and IVF/adjacency use indexes.\n\nDurability and storage engines use logs. Iterators, Spark and Cypher use plans. Shuffle, tablets and vector lists use partitions. Explain that Spark lineage is a recipe for recomputation rather than a WAL.\n\nHelp students recognize the same mechanism in another system and explain which guarantees differ.',{title:"Explain the mechanism and its contract"}),
-scene('Read a new system',['Storage','Access paths','Durability','Execution','Scale'],fiveIdeas,'Give a hypothetical new database brochure without naming a product. Ask groups to formulate five concrete architecture questions from the pictures. Expected: what each block stores, how the engine skips data, which writes survive a crash, how queries run, and how work is divided among machines. Follow with one benchmark they would run for their workload. This turns the course vocabulary into a method for evaluating the next system, not a memorized list of products.',{title:"Ask how the unfamiliar system does the work",kind:'activity'}),
-scene('Finish with measured decisions',['Question','Evidence','Decision','Demonstration'],(d,s)=>{if(s===0)graphDraw(d,0);else if(s===1)fiveIdeas(d,4);else{axis(d,'result',180,560,840,275,'latency','quality');[[.2,.65],[.4,.9],[.8,.94]].forEach(([x,y],i)=>d.circle('point'+i,180+x*840,560-y*275,13,i===1?P.orange:P.green));if(s>2){d.circle('choice',516,312.5,33,'none',P.orange,4);d.text('dates',640,640,'12/03 · 12/07 · 12/08',34,P.muted);}}},'Ask every team to name one result that changed a design decision and one failure they can demonstrate. The plotted points are a schematic of a measured choice, not provided experimental evidence. Remind them of the workshop December 3, report December 7 at 11:59 pm, and presentations December 8. The report compares at least two configurations. Each presentation has eight minutes plus a live demo and questions. End by inviting an explanation built from evidence and mechanisms, not a product tour.',{title:"Defend a project decision with evidence",kind:'recap'})
+scene('Five mechanisms recur',['Read a block twice','Locate Ada’s neighbors','Recover the edge','Plan the traversal','Divide the work'],followStorage,
+  'Trace the same club relationship through storage and execution. Identify a saved storage read, a maintained access path, a recovery record, a query plan, and the work assigned to a partition. Each has a different cost or guarantee.',
+  {title:'Follow one relationship through the database',clarityNative:true}),
+scene('Read a new system',['Inspect stored blocks','Inspect the access path','Check durability','Inspect the plan','Check the busiest worker'],(d,s)=>followStorage(d,s,true),
+  'Apply the five questions to a new engine running the same club query. Use the stored block, the edge list, the crash recovery record, the query plan, and the work per partition to design a comparison.',
+  {title:'How would you test a new graph engine?',kind:'activity',clarityNative:true}),
+scene('Finish with measured decisions',['Recall the original graph','Add one edge to a copy','Check three answers','Defend a project choice'],(d,s)=>graphDraw(d,Math.min(s,3)),
+  'Add a hypothetical direct follow from Ada to Fay. Compare direct contacts, distinct people within three hops, and minimum hops to Fay. Then ask teams to defend a comparable project decision using their actual measurements. The workshop is December 3. Reports are due December 7 at 11:59 pm. Presentations are December 8. The report compares at least two configurations. Each presentation has eight minutes plus a live demo and questions.',
+  {title:'What changes if Ada follows Fay?',kind:'recap'})
 ]);
 })();

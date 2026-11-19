@@ -10,6 +10,12 @@ Start with a task students can attempt using what they already know. Show what t
 
 In Lecture 14, a crawler saves CNN’s home page under the key `com.cnn.www`. One server can find the row by its key. When the table outgrows that server, the crawler still knows the key. Where should it send an update? The directory lists Server 1 for keys before `org`, so the crawler sends the update there.
 
+## Write learning goals as mental models
+
+A **learning goal** states an idea students should carry away from the lecture. A **mental model** explains how parts of a system relate and why a change has a particular effect. Write each goal as a claim students can use to reason about a new case. Include any condition that changes the claim.
+
+For example, one Lecture 14 goal is “A read uses the newest record visible to that reader.” Tracing a morning update, an afternoon update, and a deletion gives students practice with that idea. Asking what an earlier reader sees after the deletion checks whether the model transfers. Put the idea in the learning goals, the worked example in the lesson, and the prediction in a learning check.
+
 ## Source and saved transcript
 
 The primary reference is Vinh Giang’s [How to Explain Anything To Anyone](https://www.youtube.com/watch?v=Sqh6rt1hN2A), published June 19, 2026. The full [user-provided transcript](sources/vinh-giang-clear-transcript.txt) preserves the supplied wording, with timestamps formatted for reading. The notes below paraphrase the explanation. The subsequent authoring workflow adapts it for reusable teaching materials.
@@ -65,7 +71,7 @@ Review each rewritten sentence in context. Do not rely on replacing punctuation 
 
 This workflow is our adaptation of CLEAR. Use the [storytelling guide](lecture-storytelling.md) when a concrete scene will help motivate the topic.
 
-1. **Order the ideas by what students need to know.** Start with what students should be able to explain, choose, or do by the end. Work backward to the simplest case they can already attempt. For each later section, identify the earlier result students will use and the new question they can now answer. Open with a short question that checks the assumed knowledge.
+1. **Order the ideas by what students need to know.** Write the mental models students should carry away. Work backward to the simplest case they can already attempt. For each later section, identify the earlier result students will use and the new question they can now answer. Open with a short question that checks the assumed knowledge.
 2. **Choose the familiar connection.** Name the familiar object or process, map its parts to the new mechanism, and state where the analogy stops working. An analogy introduces the mechanism; it does not establish a technical claim.
 3. **Build on the example.** Use the fewest inputs that reveal the important behavior. Carry the result into the next step and change one input, constraint, or goal. Keep IDs, labels, units, and positions consistent across builds. When a different example is necessary, show which idea from the first case lets students tackle the second. Let the audience predict before revealing a result.
 4. **State the essential idea.** Write one plain sentence connecting the mechanism to its consequence. Then add the formula, technical term, and necessary conditions. Keep details available in notes or supporting material.
@@ -144,7 +150,7 @@ Publication date when known:
 Transcript file and provenance:
 
 Audience and prior knowledge:
-Desired learning outcome:
+Mental models students should carry away:
 
 Source ideas
 - Timestamp:
@@ -190,6 +196,7 @@ Read a story sentence aloud and ask whether a student can say what happened, why
 
 ## Final review
 
+- Does each learning goal state an idea that students can apply when the example changes?
 - Can students attempt the opening question using what they already know?
 - At each transition, can students point to the earlier result and explain why the next idea helps?
 - Can each part of the analogy be mapped to a real part of the mechanism?
