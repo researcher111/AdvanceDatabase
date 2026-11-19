@@ -17,7 +17,7 @@
   <div class="toc-title">Lecture 14</div>
   <p><a href="../../slides/lecture-14.html">Visual slide deck ↗</a></p>
   <ul>
-    <li><a href="#plan">Starting point and class plan</a></li>
+    <li><a href="#plan">Learning goals</a></li>
     <li><a href="#problem">1 · Distribute the rows and batch the writes</a></li>
     <li><a href="#model">2 · Locate a value with row, column, and time</a></li>
     <li><a href="#sparse">3 · Store present cells and selected versions</a></li>
@@ -61,11 +61,15 @@
 </div>
 
 
-<h2 id="plan">Starting point and class plan</h2>
-<p><strong>Starting knowledge:</strong> keys and values, B+ tree leaf pages, and the difference between memory and durable storage. Memory holds working data but can lose it during a crash. Durable storage retains data across the failures its protocol promises to survive.</p>
-<p><strong>RAM</strong> means random-access memory, the working memory in these diagrams. <strong>I/O</strong> means input/output, such as reading or writing stored data.</p>
-<p><strong>Goal:</strong> Explain where Bigtable sends a row, how a write survives a crash, and why deleting a key does not immediately erase every older record.</p>
-<p><strong>Code labels:</strong> Teaching Python snippets illustrate small algorithms. Engine pseudocode names required storage guarantees. Neither is a Bigtable client API. Separate examples start with their own data, while later fragments identify the helpers they reuse.</p>
+<h2 id="plan">Learning goals</h2>
+<ul class="recap-list">
+  <li>Use the row key <code>com.cnn.www</code> and the assigned key ranges to find the server that handles the crawler’s update.</li>
+  <li>Choose a row, column, and timestamp to retrieve a particular version of a web page.</li>
+  <li>Trace how the server recovers a confirmed write from its log after a crash erases the copy in memory.</li>
+  <li>Predict what a read returns after a deletion. Explain when merging files can safely remove the deletion marker.</li>
+  <li>Compare the work a B+ tree and a log-structured merge-tree do to update a record and read it back.</li>
+  <li>Explain why a server that misses an update during a network failure cannot guarantee the latest value to a reader.</li>
+</ul>
 <div class="callout note"><span class="label">Class plan</span>
   <p>Start with <strong>Quiz 10</strong>, a 10-minute quiz on MapReduce, Spark, and Ray. Then study Bigtable and storage for workloads with many writes.</p>
   <p>The numbered sections follow the slide sequence. Each diagram has its own controls and explanation. The reading includes the information needed to follow each example.</p>
@@ -239,7 +243,7 @@ reply_success()</code></pre>
 
 <h2 id="memtable" data-slide="7" data-scene="the-memtable-stays-ordered">7 · Keep recent writes in a sorted memtable</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=7&amp;b=1">Open slide 7 ↗</a></p>
-<p>The <span class="gloss" data-gloss="memtable">memtable</span> holds recent entries in memory, sorted by key. Arrival order can differ from key order.</p>
+<p>The <span class="gloss" data-gloss="memtable">memtable</span> holds recent entries in random-access memory (RAM), sorted by key. Arrival order can differ from key order.</p>
 <p>The example receives <code>k8, k2, k5, k1, k7</code>. Its ordered structure keeps <code>k1, k2, k5, k7, k8</code>. That order lets a flush write the entries sequentially.</p>
 <p><strong>Teaching Python:</strong> the integers below represent the suffixes of <code>k8</code>, <code>k2</code>, and the other short labels. The <code>keys</code> list records their order. The <code>values</code> dictionary holds each key’s current value:</p>
 <pre><code class="language-python">from bisect import insort
@@ -471,7 +475,7 @@ def read_block(block_id):
     if block_id not in cache:
         cache[block_id] = disk[block_id]
     return cache[block_id]</code></pre>
-<p>For key <code>9</code>, <code>block_id</code> is <code>1</code>. The <code>disk</code> dictionary stands in for stored blocks. It performs no storage I/O and includes only this example’s needed block.</p>
+<p>For key <code>9</code>, <code>block_id</code> is <code>1</code>. The <code>disk</code> dictionary stands in for stored blocks. It holds the one block this example needs and performs no storage input/output (I/O).</p>
 <p>Continue with the same index, cache, and <code>read_block</code> function:</p>
 <pre><code class="language-python">block = read_block(block_id)
 value = block.get(key)
