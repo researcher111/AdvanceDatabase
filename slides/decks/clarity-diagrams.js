@@ -316,18 +316,6 @@
     });
     foot(d,s===2?'Use the new boundary to predict where the next write goes.':s===3?'Key 99 belongs to [88,100). The counts illustrate one possible workload.':'Each key belongs to the interval that contains it.');
   });
-  use(14,'the-log-protects-memory',(d,s)=>{
-    label(d,'wal-expansion',640,223,'WAL = write-ahead log · recovery can repeat the stored update',P.ink,27);
-    card(d,'request',70,300,280,120,'Write request','k2 = v3',s===0);
-    card(d,'log',500,300,280,120,'Recovery log',s>=2?'durable record':'append k2 = v3',s===1||s===2);
-    card(d,'memory',930,300,280,120,'Memory buffer',s===3?'contains k2 = v3':'not updated yet',s===3);
-    d.arrow('to-log',370,360,480,360,P.orange,4);
-    if(s===3)d.arrow('to-memory',800,360,910,360,P.orange,4);
-    if(s>=2){d.box('durable-boundary',485,472,310,70,'Required log is durable',P.greenLight,P.green,25);}
-    if(s===3)d.box('ack',940,472,260,70,'Success reply',P.greenLight,P.green,27);
-    foot(d,s===3?'Crash after success: replay the durable log to rebuild the lost memory buffer.':'Memory can disappear after a crash. The durable log supplies recovery information.');
-  });
-
   // Slide-only passages continue Maya’s example without changing the lab corpus.
   const sourceExample={
     question:'Why does my model fail on new data?',

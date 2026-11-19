@@ -48,7 +48,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,230);assert.equal(builds,850);
+assert.equal(slides,232);assert.equal(builds,858);
 const resources=decks[10].scenes.at(-1);
 assert.equal(resources.id,'more-models-with-duckdb');
 const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');
@@ -342,11 +342,28 @@ for(const [step,versionCount] of [0,1,3].entries()){
  assert.deepEqual(Array.from(items.filter(i=>i.key.startsWith('code-line-')&&i.text.includes('"anchor:school"')),i=>i.text),
   versions.map((words,i)=>`cells[("r2", "anchor:school", ${i+1})] = b"${words}"`),'the Python writes the same versions in the same cell');
 }
-// The LSM overview leads directly into using a Bloom filter to rule out a file.
+// The same crawl moves from write to merge to lookup before students build a Bloom filter.
 assert.deepEqual(Array.from(decks[14].scenes.slice(8), scene=>scene.id),[
-  'the-log-protects-memory','a-one-sided-membership-test','skip-files-then-find-a-block',
+  'the-log-protects-memory','lsm-merge-crawl-files','lsm-read-crawl-files',
+  'a-one-sided-membership-test','skip-files-then-find-a-block',
   'bigquery-crawl-history','bigquery-count-visits','bigquery-link-changes'
 ]);
+const rowKeys=(items,table)=>Array.from(items.filter(item=>
+  item.key.startsWith(table+'-r')&&item.key.endsWith('-key')),item=>item.text);
+const logged=draw(14,'the-log-protects-memory',1);
+const flushed=draw(14,'the-log-protects-memory',4);
+assert.deepEqual(rowKeys(logged,'wal'),['r3','r1','r2'],'the log preserves arrival order');
+assert.deepEqual(rowKeys(flushed,'file-a'),['r1','r2','r3'],'the flush preserves key order');
+const published=draw(14,'lsm-merge-crawl-files',2);
+assert.equal(text(published,'file-b-r3-value'),'DELETE');
+assert.deepEqual(rowKeys(published,'file-c'),['r1','r2']);
+assert.equal(text(published,'file-c-r1-value'),'CNN noon');
+assert.equal(text(published,'file-c-r2-value'),text(flushed,'file-a-r2-value'));
+const lookup=draw(14,'lsm-read-crawl-files',2);
+assert.match(text(lookup,'file-b-detail'),/Definitely absent/);
+assert.equal(text(lookup,'file-a-r2-value'),'Moon map');
+assert.equal(text(lookup,'read-result-label'),text(lookup,'new-result-label'),
+  'publishing the merged file preserves the Moon lookup');
 for(const [step,positions,bits,decision] of [
   [2,[12,30,9],['0','0','1'],'Definitely absent'],
   [3,[17,21,16],['1','1','1'],'Possibly present'],

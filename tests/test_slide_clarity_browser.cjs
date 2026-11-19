@@ -117,7 +117,7 @@ fs.mkdirSync(output,{recursive:true});
     const widgets=reading.locator('.lecture-walkthrough');
     const walkthroughScenes=id===14?scenes.slice(2).filter(s=>s.id!=='web-pages-and-stored-cells'):scenes;
     if(id===14){
-     assert.equal(walkthroughScenes.length,11,'the shortened reading has eleven embedded walkthroughs');
+     assert.equal(walkthroughScenes.length,13,'the reading includes the write, compaction, and read walkthroughs');
      const quote=reading.locator('main figure q[cite]').first();
      await go(0,0);
      const quoteLines=await page.locator('#canvas text[data-key^="quote-line-"]').allTextContents();

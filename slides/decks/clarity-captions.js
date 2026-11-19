@@ -1200,13 +1200,25 @@ window.CourseClarityCaptions = {
       "Key 99 reaches the last range. Another burst takes its count from 6 to 18. Splitting leaves the next writes concentrated."
     ],
     "the-log-protects-memory": [
-      "The crawler sends k2 = v3. An LSM tree collects writes in memory, flushes sorted files, and later merges them.",
-      "The server first appends k2 = v3 to its write-ahead log. What would recovery need if memory were lost now?",
-      "The server waits until the log record reaches durable storage. Recovery can now replay this update.",
-      "The server puts k2 = v3 in the ordered buffer and confirms the write. Each batch later becomes a sorted file."
+      "The crawler saves three pages. Their keys can lead to different B+ tree leaves. Could the server write one sorted batch?",
+      "The write-ahead log appends r3, r1, then r2. If memory disappears, the server can replay durable records.",
+      "The memtable holds the same changes in key order. The server can confirm a write after its log record is durable and its memory entry is ready.",
+      "Find r2 in each tree. Balancing changes how many keys the reader checks. Both trees still give the same sorted order.",
+      "The server freezes the batch and flushes it to file A in key order. New writes can enter a fresh memtable.",
+      "Follow a batch from memory to level 0 on disk. What happens when a later batch puts another value for the same key in a second file?"
+    ],
+    "lsm-merge-crawl-files": [
+      "A second batch changes CNN and deletes the saved Mars contents. File A still holds their older values.",
+      "Compare the inputs by key. B has the newer CNN contents. Only A has the Moon page. What should a current read return for Mars?",
+      "The merge covers all older values and no retained version needs them. File C keeps CNN and the Moon. Mars remains absent."
+    ],
+    "lsm-read-crawl-files": [
+      "Look up r2 before C is published. Memory is empty. Without filters, this reader checks B, then finds the Moon page in A.",
+      "File B spans r1 through r3. Its Bloom filter rules out r2, so the reader can skip B’s data blocks.",
+      "Check the actual r2 entry in A and return “Moon map.” After publication, C gives the same answer."
     ],
     "a-one-sided-membership-test": [
-      "The LSM tree has written several files. Can a lookup skip one? A Bloom filter summarizes the keys in that file.",
+      "What let the reader skip B? Build a Bloom filter for a six-key file and see which bit can rule a key out.",
       "Inserting k1 sets bits 6, 20, and 17. Insert k2 through k6 the same way. Several keys can set the same bit.",
       "For k7, positions 12, 30, and 9 hold 0, 0, and 1. Either zero proves k7 is absent. Skip this file.",
       "For k17, positions 17, 21, and 16 all hold 1. Must this file contain k17?",

@@ -2168,16 +2168,40 @@
       "context": "The displayed counts are a deterministic toy load model, not measured Bigtable throughput. Numeric timestamps represent ordered keys. Actual key encoding must preserve the intended ordering. A split changes tablet size; the incoming key pattern still determines its load."
     },
     "the-log-protects-memory": {
-      "idea": "An LSM tree collects recent updates in an ordered buffer, flushes sorted files, and merges them. A durable log lets the server recover buffered writes after a crash.",
-      "question": "What can recovery do after the success reply if the memory buffer disappears?",
-      "answer": "It can replay the durable update record to rebuild the buffer.",
+      "idea": "A log records arrival order for recovery. The memtable keeps key order so the server can write a whole sorted file.",
       "builds": [
-        "Define write-ahead log, or WAL, as recovery records stored before the system relies on changed memory. RAM is working memory; losing power can erase it. Acknowledgment is the success reply sent to the caller.",
-        "Append means add at the end. The redo record describes an update that recovery can repeat. The original Bigtable paper calls this a commit log.",
-        "Explain the durability boundary: the required log bytes must survive the failures covered by the storage contract. The original design stores the log in GFS. Memory alone does not satisfy this requirement.",
-        "Put the update into the ordered memory buffer and send the acknowledgment. This buffer is the memtable. Each full batch becomes a sorted file. How could a lookup rule out a file before reading it?"
+        "Follow one field, contents:, on the CNN, Moon, and Mars pages. The short phrases stand in for the contents. In a B+ tree, changes for different keys may dirty different leaf pages. A buffer pool can batch writes to the same page. Ask how to write one batch in key order when the keys arrive out of order.",
+        "Read the log in arrival order. The Mars page arrives first, followed by CNN and the Moon page. Appending places a new record at the end. In this example the server waits for the log to reach durable storage.",
+        "Find the same three keys in the memtable, the ordered buffer in memory. In this example, each success reply follows the durable log record and the memory update. If working memory disappears before the file is ready, the server can replay the logged changes.",
+        "One way to keep keys in order is a balanced search tree. Trace the unbalanced tree for these three inserts: compare r2 with r3, then r1, then r2. With r2 at the root, the balanced tree finds it in one comparison. Both trees can emit r1, r2, r3 in order. Memtables can use other structures, including a skip list.",
+        "Freeze the old memtable and give later requests a new active one. The server writes the frozen entries in key order to an immutable sorted string table, file A. That operation is a flush. Point to r2. Its value is still Moon map.",
+        "Use the overview to trace two different paths. The server appends a log record so recovery can repeat the write. Separately, it copies each frozen memory batch into a sorted file. As files accumulate at level zero, compaction can merge them into the next level. Ask which files the merge will read."
       ],
-      "context": "This is a redo-style write path. The course lab uses a different physical undo/FORCE protocol. A durable log entry is separate from a later data-file flush. Settings determine when writes are durable and whether several writes share synchronization work."
+      "question": "Which order should a reader see in the first sorted file, and where does that order come from?",
+      "answer": "File A contains r1, r2, r3. The memtable already held the keys in that order when the server froze it.",
+      "context": "The example follows a single column in a tablet. A synchronous durability promise requires the log to reach the storage covered by that promise. The log append alone might still be buffered."
+    },
+    "lsm-merge-crawl-files": {
+      "idea": "Compaction merges sorted records into new files while preserving the answers readers are entitled to see.",
+      "builds": [
+        "File A holds the first batch. A later batch changes the CNN page to CNN noon and removes the saved Mars contents. The server records a deletion marker, DELETE, for r3 and flushes this batch as file B. Both files are sorted and their key ranges overlap.",
+        "Read the inputs in key order. For r1, take the newer value from B. For r2, carry forward Moon map from A. For r3, B’s marker hides the older Mars value. Ask what a current lookup should return for each of the three keys.",
+        "In this example all older records for these keys are covered, and no reader or retention rule needs old versions or the marker. The server can leave r3 out of C. Publish the completed file before retiring its inputs when readers are finished. A partial merge may have to keep a deletion marker."
+      ],
+      "question": "If an unmerged file could still contain an older Mars page, what would the output for r3 need?",
+      "answer": "Keep the deletion marker. Otherwise a later lookup might find the older Mars page and return it.",
+      "context": "Level 0 and level 1 illustrate a leveled design. Different LSM implementations select different files and may produce multiple outputs."
+    },
+    "lsm-read-crawl-files": {
+      "idea": "A current read can use different files before and after compaction and still return the same saved page.",
+      "builds": [
+        "Ask for the Moon page while files B and A still serve reads. Start with the empty active memtable. There is no frozen memtable in this state. The reader must look on disk. Which inputs could contain r2 based on their key ranges alone?",
+        "File B is the newer input. Its smallest key is r1 and its largest is r3. The range includes r2 even though B has no entry for it. Here B’s filter says definitely absent. The reader can skip B’s data blocks.",
+        "File A’s filter says possibly present. Check the actual r2 record and read Moon map. Once the server publishes C, the same lookup finds Moon map there. Ask what evidence allowed the server to skip B and what evidence supplied the words."
+      ],
+      "question": "Can a positive Bloom filter result supply the Moon page?",
+      "answer": "It only directs the reader to a candidate file. The reader must find r2 in the stored entries to return its contents.",
+      "context": "For these two overlapping level-zero files, B holds the newer batch. Real engines also consult key ranges, sequence metadata, and retention or visibility rules."
     },
     "a-one-sided-membership-test": {
       "idea": "A Bloom filter can prove a key is absent from a file. When all the selected bits are one, the reader must check the file.",

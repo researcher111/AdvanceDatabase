@@ -22,7 +22,7 @@
     <li><a href="#sparse">3 · Store present cells and selected versions</a></li>
     <li><a href="#tablets">4 · Assign each row range to a tablet server</a></li>
     <li><a href="#hotspot">5 · Explain why a split can leave a hotspot</a></li>
-    <li><a href="#lsm">6 · How an LSM tree stores a crawler update</a></li>
+    <li><a href="#lsm">6 · Follow a crawler update through an LSM tree</a></li>
     <li><a href="#bloom">7 · Use a Bloom filter to rule out files</a></li>
     <li><a href="#reads">8 · Find a block and reuse its cached copy</a></li>
     <li><a href="#bigquery-crawl-history">9 · Give BigQuery a history of crawl visits</a></li>
@@ -63,7 +63,7 @@
 <ul>
   <li>explain how Bigtable distributes a growing table across servers and why the choice of row keys can concentrate writes.</li>
   <li>judge whether Bigtable’s NoSQL data model fits an application that needs key lookups, range scans, joins, or transactions across rows.</li>
-  <li>explain how Bigtable batches writes in a log-structured merge-tree (LSM tree) and recovers confirmed writes from a durable log.</li>
+  <li>explain how an LSM tree protects a write, turns a memory batch into a sorted file, and preserves current reads when files merge.</li>
   <li>use a Bloom filter to decide when a lookup can skip a sorted file and when it must check the key.</li>
   <li>write BigQuery queries that count crawl visits and identify when a school changes the words in its link.</li>
 </ul>
@@ -223,18 +223,33 @@ after = bisect_right([25, 50, 75, 88], 99)  # Tablet 4</code></pre>
 <p>A hash prefix can spread writes across ranges. Here, a hash is a repeatable function that maps a key to a numeric value. This can make one logical range scan contact more tablets.</p>
 <p><strong>Choose keys for both writes and reads.</strong> Reversed domains group related pages, but a heavily used domain can still create a hotspot.</p>
 
-<h2 id="lsm" data-slide="9" data-scene="the-log-protects-memory">6 · How an LSM tree stores a crawler update</h2>
+<h2 id="lsm" data-slide="9" data-scene="the-log-protects-memory">6 · Follow a crawler update through an LSM tree</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
-<p>The morning CNN update reaches Server 1 along with updates for hundreds of other pages. A <strong>log-structured merge-tree</strong> (LSM tree) lets the server write these updates to storage in sorted batches. How can the server tell the crawler “saved” before the batch fills?</p>
-<p>Follow <code>k2 = v3</code> in the diagram. The server appends the update to a <strong>write-ahead log</strong> (WAL) and waits until the record is durable. The server then puts the update into a <span class="gloss" data-gloss="memtable">memtable</span>, which holds recent entries in key order in memory. Now it can reply to the crawler.</p>
+<p>The crawler has found the server for its tablet. On the next crawl it saves three page bodies in the <code>contents:</code> column. The Mars page arrives first (<code>r3</code>, “Mars map”), then CNN (<code>r1</code>, “CNN morning”), then the Moon page (<code>r2</code>, “Moon map”).</p>
+<p>Suppose these keys fall on different leaf pages of a large B+ tree. The server might eventually write back three entire pages at different locations. Writing more bytes than the application changed is <strong>write amplification</strong>. What if the server could write one sorted batch instead?</p>
+<p>A <strong>log-structured merge-tree</strong> (LSM tree) collects updates in memory. To protect each update, the server appends it to a <strong>write-ahead log</strong> (WAL) in arrival order. It also inserts the update into a <span class="gloss" data-gloss="memtable">memtable</span>, a memory buffer that keeps the entries in key order. Once the log record is durable and the memtable contains the update, the server can reply “saved.” <a href="#src-1">[1]</a> <a href="#src-20">[20]</a></p>
+<p>One way to keep the memtable ordered is a binary search tree. Insert <code>r3</code>, <code>r1</code>, then <code>r2</code> into a plain tree. A lookup for the Moon page follows <code>r3 → r1 → r2</code> and compares three keys. A balanced tree can put <code>r2</code> at the root, giving the same answer in one comparison. Both trees yield <code>r1</code>, <code>r2</code>, <code>r3</code> in a sorted scan. RocksDB’s default memtable uses a skip list, an ordered list with shortcuts for searching. <a href="#src-19">[19]</a> <a href="#src-20">[20]</a></p>
+<p>When the batch fills, the server freezes it and directs new writes to a fresh memtable. It writes the frozen entries in order from memory to file A on disk, a <strong>sorted string table</strong> (SSTable). This operation is a <strong>flush</strong>. The file keeps its contents until the server replaces it.</p>
 <div class="lecture-walkthrough" data-lecture-scene="the-log-protects-memory"></div>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>The server replies and then loses its memory before the batch fills. How can a replacement recover <code>k2 = v3</code>?</p><details><summary>Check your explanation</summary><p>It can replay the update from the durable log. Durability means the record survives the failures covered by the storage protocol.</p></details></div>
-<p>When the memtable fills, the server writes its sorted entries to a new file, a <strong>Sorted String Table</strong> (SSTable). This write is a <strong>flush</strong>. Later the server can merge several such files into one, an operation called <span class="gloss" data-gloss="compaction">compaction</span>. <a href="#src-1">[1]</a> <a href="#src-2">[2]</a></p>
-<p>After several flushes, the CNN row could appear in more than one file. When the crawler asks for the page, how can the server skip a file that has no CNN entry?</p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>“Moon map” arrives last. Where will its key fall in file A? What if the server loses memory after replying but before the flush?</p><details><summary>Check your explanation</summary><p>File A orders the keys as <code>r1</code>, <code>r2</code>, <code>r3</code>, so “Moon map” goes in the middle. The durable log survives the failure covered by the storage system’s guarantee. A replacement can replay it to recover unflushed updates.</p></details></div>
 
-<h2 id="bloom" data-slide="10" data-scene="a-one-sided-membership-test">7 · Use a Bloom filter to rule out files</h2>
+<h3 id="lsm-compaction" data-slide="10" data-scene="lsm-merge-crawl-files">Merge two sorted files</h3>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=10&amp;b=1">Open slide 10 ↗</a></p>
-<p>When writing a sorted file, the server can also build a small summary of its keys. This summary is a <strong>Bloom filter</strong>. Try a separate toy file with six keys, <code>k1</code> through <code>k6</code>. Its filter has <strong>32 bits</strong>, initially all zero. Each of <strong>3 hash functions</strong> maps an inserted key to a bit position. Inserting the key sets those positions to 1.</p>
+<p>At noon the crawler replaces “CNN morning” with “CNN noon” and deletes the saved Mars page body. The next flush produces file B. It contains <code>r1</code> with “CNN noon” and <code>r3</code> with a deletion marker. File A still holds “CNN morning” and “Mars map.”</p>
+<p>In this example, new files start in level zero (L0). The server merges A and B into file C in level one (L1). This background operation is <span class="gloss" data-gloss="compaction">compaction</span>. Each input already lists its keys in order, so the server can walk through both files together. Which entries should it carry into C? <a href="#src-2">[2]</a> <a href="#src-9">[9]</a> <a href="#src-19">[19]</a></p>
+<div class="lecture-walkthrough" data-lecture-scene="lsm-merge-crawl-files"></div>
+<p>For <code>r1</code>, B supplies the newer “CNN noon.” Only A has <code>r2</code>, so “Moon map” moves into C. For <code>r3</code>, B’s marker hides “Mars map.” Here A and B cover all older records. No reader or retention rule needs the old versions or the marker. The server can omit both Mars entries. If an older Mars value could survive elsewhere, the server must retain the marker to hide it. <a href="#src-1">[1]</a></p>
+
+<h3 id="lsm-lookup" data-slide="11" data-scene="lsm-read-crawl-files">Find the Moon page before and after the merge</h3>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=11&amp;b=1">Open slide 11 ↗</a></p>
+<p>A reader asks for <code>r2</code> just before the server publishes C. The active memtable is empty, so the reader considers the newer file B first. The key <code>r2</code> falls between B’s first key, <code>r1</code>, and its last key, <code>r3</code>. How can the reader tell whether B is worth opening?</p>
+<div class="lecture-walkthrough" data-lecture-scene="lsm-read-crawl-files"></div>
+<p>Each file has a <strong>Bloom filter</strong>, a small summary of its keys. B’s filter rules out <code>r2</code> in this example, so the reader skips B’s data. A’s filter reports a possible match. The reader checks A’s entries and finds <code>r2</code> with “Moon map.” After the server publishes C, a new lookup finds “Moon map” in C. Compaction spent extra writes to produce C. The next reader has fewer files to check. <a href="#src-4">[4]</a></p>
+<p>The crawler diagrams follow Vivek Bansal’s illustrated LSM walkthrough. The Helius article traces a write through RocksDB, including how to inspect the log and the resulting sorted file. <a href="https://vivekbansal.substack.com/p/what-is-lsm-tree">Bansal’s original diagrams</a> · <a href="https://www.helius.dev/blog/lsm-tree-explained">Helius’s RocksDB walkthrough</a></p>
+
+<h2 id="bloom" data-slide="12" data-scene="a-one-sided-membership-test">7 · Use a Bloom filter to rule out files</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=12&amp;b=1">Open slide 12 ↗</a></p>
+<p>How did B’s filter rule out the Moon page? Try a separate toy file with six keys, <code>k1</code> through <code>k6</code>. Its filter has <strong>32 bits</strong>, initially all zero. Each of <strong>3 hash functions</strong> maps an inserted key to a bit position. Inserting the key sets those positions to 1.</p>
 <p>To look up <code>k7</code>, the server checks the same three positions that inserting <code>k7</code> would set. Two of those bits are zero, so the file cannot contain <code>k7</code>. For <code>k17</code>, all three bits are 1. Could another key have set each of those bits?</p>
 <p><strong>Teaching Python:</strong> these fixed functions reproduce the diagram’s bit positions. <code>ord</code> converts an ASCII character to its numeric code. <code>enumerate</code> supplies the character’s position. The remainder operation <code>% 32</code> keeps each result between 0 and 31:</p>
 <pre><code class="language-python">def hashes(key):
@@ -281,8 +296,8 @@ present = "k17" in stored</code></pre>
 <p>Do not clear shared bits to delete one key from an ordinary Bloom filter. Another inserted key can depend on those bits. Filter size and hash count affect the false-positive rate.</p>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>The filter says possibly present. Can the read return a value without checking the stored entries?</p><details><summary>Check your explanation</summary><p>No. The filter stores membership evidence, not the value or its visibility. The engine must inspect the candidate data.</p></details></div>
 
-<h2 id="reads" data-slide="11" data-scene="skip-files-then-find-a-block">8 · Find a block and reuse its cached copy</h2>
-<p class="slide-reference"><a href="../../slides/lecture-14.html#s=11&amp;b=1">Open slide 11 ↗</a></p>
+<h2 id="reads" data-slide="13" data-scene="skip-files-then-find-a-block">8 · Find a block and reuse its cached copy</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=13&amp;b=1">Open slide 13 ↗</a></p>
 <p>A Bloom filter can leave the server with a file to search. Take a different file that contains <code>k9</code>. The server reads file data in units called <strong>blocks</strong>. Which block should it open for <code>k9</code>?</p>
 <p>A <strong>sparse index</strong> lists the first key in each block. Here the entries are <code>k1 → 0</code>, <code>k8 → 1</code>, and <code>k16 → 2</code>. The example compares numeric suffixes. Since 9 falls between 8 and 16, only block 1 can contain <code>k9</code>.</p>
 <p>The first request loads block 1 and finds <code>k9</code>. The server keeps the block in memory in a <strong>block cache</strong>. A second request for the same block can reuse its contents.</p>
@@ -321,8 +336,8 @@ again = read_block(block_id)</code></pre>
 
 <p>Now a student asks how often the crawler saw the school’s link to the Moon article. Which records would you need to count every visit, including two visits with identical link text?</p>
 
-<h2 id="bigquery-crawl-history" data-slide="12" data-scene="bigquery-crawl-history">9 · Give BigQuery a history of crawl visits</h2>
-<p class="slide-reference"><a href="../../slides/lecture-14.html#s=12&amp;b=1">Open slide 12 ↗</a></p>
+<h2 id="bigquery-crawl-history" data-slide="14" data-scene="bigquery-crawl-history">9 · Give BigQuery a history of crawl visits</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=14&amp;b=1">Open slide 14 ↗</a></p>
 <p>A current Bigtable lookup for <code>r2</code>, <code>anchor:school</code> gives the latest saved link text, “Explore the Moon.” That answer alone cannot tell us how often the crawler saw those words. Suppose the crawler also saves one observation per visit, even when the words repeat.</p>
 <div class="reading-table-scroll keep-in-present" tabindex="0" role="region" aria-label="Five visits in the crawler’s history">
 <table>
@@ -342,8 +357,8 @@ again = read_block(block_id)</code></pre>
 <div class="lecture-walkthrough" data-lecture-scene="bigquery-crawl-history"></div>
 <p>To try both queries, open the <a href="./crawl-history.sql" download>GoogleSQL script with the five visits</a>. Run the whole script in the BigQuery query editor. It creates a temporary table called <code>crawl_history</code>, inserts the five rows, and runs both queries. You can inspect each query’s result in the editor. <a href="#src-16">[16]</a></p>
 
-<h2 id="bigquery-count-visits" data-slide="13" data-scene="bigquery-count-visits">10 · Count visits for each page</h2>
-<p class="slide-reference"><a href="../../slides/lecture-14.html#s=13&amp;b=1">Open slide 13 ↗</a></p>
+<h2 id="bigquery-count-visits" data-slide="15" data-scene="bigquery-count-visits">10 · Count visits for each page</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=15&amp;b=1">Open slide 15 ↗</a></p>
 <p>Which destination page appears in the most visits? Look down the <code>page_key</code> column. Each time <code>r2</code> appears, add one to its count. What should happen to the count at visit 4, when the crawler sees “Moon phases” again?</p>
 <pre><code class="language-sql">SELECT page_key, COUNT(*) AS visits
 FROM crawl_history
@@ -360,8 +375,8 @@ ORDER BY visits DESC, page_key;</code></pre>
 <div class="lecture-walkthrough" data-lecture-scene="bigquery-count-visits"></div>
 <p>The Moon article appears in four visits. How many times did the crawler actually see the school’s link text change?</p>
 
-<h2 id="bigquery-link-changes" data-slide="14" data-scene="bigquery-link-changes">11 · Find changes in the school’s link text</h2>
-<p class="slide-reference"><a href="../../slides/lecture-14.html#s=14&amp;b=1">Open slide 14 ↗</a></p>
+<h2 id="bigquery-link-changes" data-slide="16" data-scene="bigquery-link-changes">11 · Find changes in the school’s link text</h2>
+<p class="slide-reference"><a href="../../slides/lecture-14.html#s=16&amp;b=1">Open slide 16 ↗</a></p>
 <p>Visit 3 saw “Moon phases.” The previous visit, number 2, saw “CNN” on another site. Comparing those two rows would count a change between unrelated links. Which visit last saw the school’s link to the Moon article?</p>
 <p>Keep only rows for <code>r2</code> and <code>school</code>. That leaves visits 1, 3, 4, and 5. Within those rows, <code>LAG(link_text)</code> retrieves the words from the previous visit in <code>visit_no</code> order. <a href="#src-18">[18]</a></p>
 <pre><code class="language-sql">WITH history AS (
@@ -468,8 +483,7 @@ ORDER BY visit_no;</code></pre>
 
 
 <h2 id="sources">Sources</h2>
-<p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
-document that supports the claim it is attached to.</p>
+<p class="sources-intro">Numbered markers identify the papers, documentation, and walkthroughs used in this lecture.</p>
 <ol class="sources">
   <li id="src-1"><a href="https://storage.googleapis.com/gweb-research2023-media/pubtools/4443.pdf">Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)</a> <span class="src-note">The OSDI 2006 paper names web indexing, Google Earth (which serves the maps.google.com interface), Google Finance, Analytics, Orkut, Personalized Search and Writely among more than sixty users; Gmail is not mentioned in the paper.</span></li>
   <li id="src-2"><a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf">The Log-Structured Merge-Tree (LSM-Tree)</a></li>
@@ -489,6 +503,8 @@ document that supports the claim it is attached to.</p>
   <li id="src-16"><a href="https://docs.cloud.google.com/bigquery/docs/multi-statement-queries">Google Cloud · Work with multi-statement queries and temporary tables</a></li>
   <li id="src-17"><a href="https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#count">GoogleSQL · COUNT</a></li>
   <li id="src-18"><a href="https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lag">GoogleSQL · LAG</a></li>
+  <li id="src-19"><a href="https://vivekbansal.substack.com/p/what-is-lsm-tree">Vivek Bansal · A deep dive: What is LSM tree?</a></li>
+  <li id="src-20"><a href="https://www.helius.dev/blog/lsm-tree-explained">0xIchigo (Helius) · What is an LSM Tree? The Log-Structured Merge Tree Explained</a></li>
 </ol>
 
 
@@ -501,12 +517,12 @@ document that supports the claim it is attached to.</p>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=bigtable-short-20261119"></script>
-<script src="../../slides/decks/lectures-11-15.js?v=bigtable-short-20261119"></script>
-<script src="../../slides/decks/teaching-notes.js?v=bigtable-short-20261119"></script>
-<script src="../../slides/decks/clarity-captions.js?v=bigtable-short-20261119"></script>
-<script src="../../slides/decks/clarity-layout.js?v=bigtable-short-20261119"></script>
-<script src="../../slides/decks/clarity-diagrams.js?v=bigtable-short-20261119"></script>
-<script src="../../slides/decks/bigtable-code.js?v=bigtable-short-20261119"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=lsm-crawl-figures-20261119"></script>
+<script src="../../slides/decks/teaching-notes.js?v=lsm-crawl-figures-20261119"></script>
+<script src="../../slides/decks/clarity-captions.js?v=lsm-crawl-figures-20261119"></script>
+<script src="../../slides/decks/clarity-layout.js?v=lsm-crawl-figures-20261119"></script>
+<script src="../../slides/decks/clarity-diagrams.js?v=lsm-crawl-figures-20261119"></script>
+<script src="../../slides/decks/bigtable-code.js?v=lsm-crawl-figures-20261119"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
 <script src="../lecture-13/slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>

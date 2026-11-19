@@ -10,7 +10,7 @@ const lecturePacing = {
   // Lecture 12 assigns time from removed slides to evaluation, filtering, and diagnosis discussion.
   12: [3,4,4,4,3,6,4,4,3,4,4,6,4,7],
   // Allow time to trace the write, try the Bloom filter, and run both GoogleSQL queries.
-  14: [1,2,4,5,2,3,5,5,7,7,4,5,5,5]
+  14: [1,2,3,4,2,3,4,4,5,5,4,6,4,4,5,4]
 };
 function scene(title, states, draw, notes, extra={}) {
   return Object.assign({id:title.toLowerCase().replace(/[^a-z0-9]+/g,'-'),title,kind:'visual',steps:states.length,states,draw,notes},extra);
@@ -395,6 +395,8 @@ function tabletDraw(d,s){const count=s===0?[3,3,3,3]:s===1?[0,0,0,12]:s===2?[0,0
 function bloomHash(key){let a=0,b=0,c=0;[...key].forEach((ch,i)=>{const n=ch.charCodeAt(0);a=(a*31+n)%32;b=(b*17+n*7)%32;c=(c*13+n*(i+3))%32;});return[a,b,c];}
 function bloomDraw(d,s){const inserted=s?['k1','k2','k3','k4','k5','k6']:[],bits=new Set(inserted.flatMap(bloomHash)),q=s<2?'k1':s===2?'k7':'k17',hs=bloomHash(q);for(let i=0;i<32;i++){const x=170+(i%16)*59,y=335+Math.floor(i/16)*83;d.box('bit'+i,x,y,46,53,bits.has(i)?'1':'0',bits.has(i)?P.greenLight:P.white,hs.includes(i)&&s>1?P.orange:P.line,27);}d.text('query',640,295,s<2?'k1…k6':q,43,s>1?P.orange:P.ink);if(s>1){d.text('answer',640,570,s===2?'0 → ∅':'1 · 1 · 1 → ?',45,s===2?P.green:P.orange);}if(s===4){d.arrow('read',775,565,980,565,P.orange);d.text('absent',1070,578,'∅',47,P.red);}}
 const bigtablePaper = 'https://www.usenix.org/legacy/event/osdi06/tech/chang/chang.pdf';
+const bansalLsm = 'https://vivekbansal.substack.com/p/what-is-lsm-tree';
+const heliusLsm = 'https://www.helius.dev/blog/lsm-tree-explained';
 const bigtableQuote = [
   '“Bigtable is a distributed storage system for managing',
   'structured data that is designed to scale to a very large size:',
@@ -406,19 +408,197 @@ const bigtableGoals = [
   [
     ['explain how Bigtable distributes a growing table across servers', 'and why the choice of row keys can concentrate writes.'],
     ['judge whether Bigtable’s NoSQL data model fits an application that', 'needs key lookups, range scans, joins, or transactions across rows.'],
-    ['explain how Bigtable batches writes in a log-structured merge-tree', '(LSM tree) and recovers confirmed writes from a durable log.']
+    ['explain how an LSM tree protects a write, turns a memory batch into', 'a sorted file, and preserves current reads when files merge.']
   ],
   [
     ['use a Bloom filter to decide when a lookup can skip a sorted file', 'and when it must check the key.'],
     ['write BigQuery queries that count crawl visits and identify', 'when a school changes the words in its link.']
   ]
 ];
+// One value per page key in this teaching example. All newer writes go into B.
+const crawlWriteOrder = [['r3', 'Mars map'], ['r1', 'CNN morning'], ['r2', 'Moon map']];
+const crawlFileA = [...crawlWriteOrder].sort(([left], [right]) => left.localeCompare(right));
+const crawlFileB = [['r1', 'CNN noon'], ['r3', 'DELETE']];
+const crawlFileC = [crawlFileB[0], crawlFileA[1]];
+
+function lsmRecords(d, id, x, y, width, title, rows, focusKey) {
+  const titleHeight = 44, headerHeight = 34, rowHeight = 42;
+  d.rect(id+'-title-box', x, y, width, titleHeight, P.greenLight, P.green, 5);
+  d.text(id+'-title', x+16, y+titleHeight/2, title, 25, P.ink, 'start', 650);
+  d.text(id+'-key-heading', x+16, y+titleHeight+headerHeight/2, 'Key', 20, P.muted, 'start');
+  const valueHeading = rows.some(([,value]) => value==='DELETE') ? 'Value or marker' : 'Page contents';
+  d.text(id+'-value-heading', x+96, y+titleHeight+headerHeight/2, valueHeading, 20, P.muted, 'start');
+  rows.forEach(([key, value], index) => {
+    const top = y+titleHeight+headerHeight+index*rowHeight;
+    const row = id+'-'+key;
+    d.rect(row+'-cell', x, top, width, rowHeight, key===focusKey ? P.orangeLight : P.white, P.line, 0, 1);
+    d.text(row+'-key', x+16, top+rowHeight/2, key, 24, P.ink, 'start', 650);
+    d.text(row+'-value', x+96, top+rowHeight/2, value, 24, value==='DELETE' ? P.red : P.ink, 'start');
+  });
+}
+
+function lsmStatus(d, id, x, y, width, title, detail, color) {
+  d.rect(id+'-box', x, y, width, 106, P.white, color, 7, 2);
+  d.text(id+'-title', x+width/2, y+33, title, 26, color, 'middle', 650);
+  d.text(id+'-detail', x+width/2, y+76, detail, 22, P.ink);
+}
+
+function drawLsmWrite(d, step) {
+  if (step === 5) return drawLsmOverview(d);
+  if (step === 0) {
+    lsmRecords(d, 'writes', 55, 241, 323, 'Write arrival order', crawlWriteOrder);
+    d.box('branch', 709, 211, 230, 65, 'B+ tree index', P.blueLight, P.blue, 27);
+    crawlFileA.forEach(([key, value], i) => {
+      const x = 437+i*263;
+      d.arrow('route-'+key, 774+i*50, 278, x+116, 376, P.blue, 3);
+      d.rect('leaf-'+key, x, 386, 232, 122, P.white, P.orange, 6, 2);
+      d.text('leaf-'+key+'-title', x+116, 416, 'Leaf page '+(i+1), 24, P.orange, 'middle', 650);
+      d.text('leaf-'+key+'-key', x+22, 468, key, 24, P.ink, 'start', 650);
+      d.text('leaf-'+key+'-value', x+77, 468, value, 22, P.ink, 'start');
+    });
+    d.text('write-consequence', 640, 598, 'Here the three updates change three different leaf pages in memory.', 25, P.ink);
+    return;
+  }
+  if (step === 3) {
+    d.text('tree-plain-title', 325, 211, 'Plain binary search tree', 27, P.ink, 'middle', 650);
+    d.text('tree-balanced-title', 955, 211, 'Balanced binary search tree', 27, P.ink, 'middle', 650);
+    d.line('separate-trees', 640, 219, 640, 538, P.line, 2);
+    d.line('plain-r3-r1', 347, 284, 249, 371, P.orange, 4);
+    d.line('plain-r1-r2', 249, 371, 347, 458, P.orange, 4);
+    d.line('balanced-r2-r1', 955, 284, 841, 371, P.line, 3);
+    d.line('balanced-r2-r3', 955, 284, 1069, 371, P.line, 3);
+    function node(id, key, x, y, visited) {
+      d.circle(id, x, y, 30, visited ? P.orangeLight : P.white, visited ? P.orange : P.line, 3);
+      d.text(id+'-key', x, y, key, 25, P.ink, 'middle', 650);
+    }
+    node('plain-r3', 'r3', 347, 284, true);
+    node('plain-r1', 'r1', 249, 371, true);
+    node('plain-r2', 'r2', 347, 458, true);
+    node('balanced-r2', 'r2', 955, 284, true);
+    node('balanced-r1', 'r1', 841, 371, false);
+    node('balanced-r3', 'r3', 1069, 371, false);
+    d.text('plain-cost', 325, 539, 'Find r2 in 3 comparisons.', 25, P.ink);
+    d.text('balanced-cost', 955, 539, 'Find r2 in 1 comparison.', 25, P.ink);
+    d.text('tree-order', 640, 604, 'Both trees yield r1, r2, r3 in order. A memtable can also use a skip list.', 24, P.muted);
+    return;
+  }
+  const walX = 55, memoryX = 471, fileX = 887, width = 338;
+  lsmRecords(d, 'wal', walX, 236, width, 'Write-ahead log', crawlWriteOrder, 'r2');
+  d.text('wal-order', walX, 481, 'Append in arrival order.', 23, P.muted, 'start');
+  const waiting = step === 1;
+  const frozen = step === 4;
+  const memory = waiting ? crawlFileA.filter(([key]) => key!=='r2') : crawlFileA;
+  lsmRecords(d, 'mem', memoryX, 236, width, frozen ? 'Frozen memtable' : 'Active memtable', memory, 'r2');
+  d.text('mem-order', memoryX, 481, 'Keep entries in key order.', 23, P.muted, 'start');
+  d.arrow('log-to-ram', walX+width+8, 346, memoryX-10, 346, P.blue, 3);
+  if (frozen) {
+    d.text('wal-location', walX, 203, 'On disk', 22, P.muted, 'start');
+    d.text('ram-location', memoryX, 203, 'In memory', 22, P.muted, 'start');
+    d.text('file-location', fileX, 203, 'On disk', 22, P.muted, 'start');
+    lsmRecords(d, 'file-a', fileX, 236, width, 'SSTable A · level 0', crawlFileA, 'r2');
+    d.text('file-a-order', fileX, 481, 'Write one sorted file.', 23, P.muted, 'start');
+    d.arrow('flush-to-a', memoryX+width+8, 346, fileX-10, 346, P.green, 3);
+    d.text('next-write', walX, 580, 'Next crawler write', 25, P.ink, 'start');
+    d.arrow('next-batch', walX+247, 580, memoryX-10, 580, P.blue, 3);
+    d.box('new-active', memoryX, 548, width, 65, 'New active memtable', P.blueLight, P.blue, 24);
+  } else {
+    lsmStatus(d, 'reply', fileX, 297, width, waiting ? 'Reply pending' : 'Reply to the crawler',
+      waiting ? 'Insert r2 into memory next.' : 'Saved r2 = Moon map', waiting ? P.orange : P.green);
+    if (!waiting) d.arrow('confirm-r2', memoryX+width+8, 346, fileX-10, 346, P.green, 3);
+    d.text('recovery', 640, 583, waiting ? 'The new log record for r2 is durable.' :
+      'If the server loses memory now, recovery can replay the durable log.', 25, P.ink);
+  }
+}
+
+function drawLsmCompaction(d, step) {
+  const focus = step===2 ? 'r3' : 'r1';
+  lsmRecords(d, 'file-a', 66, 189, 421, 'SSTable A · older level 0 file', crawlFileA, focus);
+  lsmRecords(d, 'file-b', 66, 416, 421, 'SSTable B · newer level 0 file', crawlFileB, focus);
+  d.line('merge-a', 496, 295, 550, 295, P.green, 3);
+  d.line('merge-b', 496, 493, 550, 493, P.green, 3);
+  d.line('join-inputs', 550, 295, 550, 493, P.green, 3);
+  d.arrow('to-output', 550, 395, 676, 395, P.green, 3);
+  if (step === 0) {
+    lsmStatus(d, 'choice', 694, 341, 498, 'Build SSTable C', 'Which value should C keep for r1?', P.orange);
+  } else {
+    lsmRecords(d, 'file-c', 694, 274, 498,
+      step===1 ? 'SSTable C · merge in progress' : 'SSTable C · published at level 1', crawlFileC,
+      step===1 ? 'r1' : undefined);
+    d.text('output-status', 695, 495, step===1 ? 'Next, compare both records for r3.' : 'r3 is absent from the output.', 23, P.ink, 'start');
+  }
+  const notes = [
+    'B holds the later write for each key that appears in both files.',
+    'Take r1 from B and r2 from A. Both input files remain readable during the merge.',
+    'This merge covers every older r3 record, and no reader needs an earlier version.'
+  ];
+  d.text('merge-condition', 640, 636, notes[step], 23, P.muted);
+}
+
+function drawLsmRead(d, step) {
+  const xMem = 55, xB = 471, xA = 887, width = 338;
+  d.text('read-time', 55, 212, 'Current lookup for r2 before the merge publishes C', 28, P.ink, 'start', 650);
+  lsmStatus(d, 'mem', xMem, 320, width, 'Active memtable', 'Empty after the second flush', P.blue);
+  if (step === 0) {
+    lsmStatus(d, 'file-b', xB, 320, width, 'Read B · newer file', 'Contains r1 and r3', P.orange);
+    lsmStatus(d, 'file-a', xA, 320, width, 'Read A · older file', 'Find r2 = Moon map', P.green);
+  } else {
+    lsmStatus(d, 'file-b', xB, 320, width, 'Bloom filter for B', 'Definitely absent · skip B', P.green);
+    if (step === 1) {
+      lsmStatus(d, 'file-a', xA, 320, width, 'SSTable A · older', 'Test its filter next.', P.orange);
+    } else {
+      lsmRecords(d, 'file-a', xA, 297, width, 'SSTable A · older', crawlFileA, 'r2');
+      d.text('file-a-filter', xA, 262, 'A’s filter says “possibly present.”', 21, P.muted, 'start');
+    }
+  }
+  d.arrow('next-b', xMem+width+8, 373, xB-10, 373, P.blue, 3);
+  d.arrow('next-a', xB+width+8, 373, xA-10, 373, P.green, 3);
+  if (step===2) {
+    d.arrow('return-r2', xA+width/2, 512, xA+width/2, 543, P.green, 3);
+    d.box('read-result', xA, 553, width, 59, 'Return Moon map', P.greenLight, P.green, 26);
+    d.text('after-publish', xMem, 520, 'After compaction publishes C', 23, P.muted, 'start');
+    d.box('new-file-set', xMem, 553, 263, 59, 'Look up r2 in C', P.blueLight, P.blue, 24);
+    d.arrow('new-lookup', xMem+274, 582, xMem+349, 582, P.green, 3);
+    d.box('new-result', xMem+362, 553, 318, 59, 'Return Moon map', P.greenLight, P.green, 26);
+  } else {
+    d.text('read-question', 640, 563, step===0 ? 'Both file ranges cover r2. Without filters, this lookup opens both files.' :
+      'B’s filter rules out r2 without reading B’s data blocks.', 25, P.ink);
+  }
+}
+
 function bigtableDefinition(d) {
   d.line('quote-rule', 90, 206, 90, 467, P.green, 4);
   bigtableQuote.forEach((line, i) => d.text('quote-line-' + i, 120, 233 + i * 51, line, 34, P.ink, 'start'));
   d.text('paper-authors', 120, 535, 'Fay Chang et al., OSDI 2006, abstract', 24, P.muted, 'start');
   d.link('paper-source', 120, 578, 'Bigtable: A Distributed Storage System for Structured Data', bigtablePaper, 25);
 }
+function drawLsmOverview(d) {
+  d.rect('overview-memory-area', 55, 192, 1170, 145, P.blueLight, P.blue, 10);
+  d.rect('overview-storage-area', 55, 390, 1170, 246, P.white, P.green, 10);
+  d.text('overview-memory-heading', 78, 218, 'Working memory', 26, P.blue, 'start', 650);
+  d.text('overview-storage-heading', 78, 419, 'Durable storage', 26, P.green, 'start', 650);
+  d.text('overview-layout', 1198, 419, 'One possible leveled layout', 22, P.muted, 'end');
+
+  d.box('overview-active', 103, 254, 290, 58, 'Active memtable', P.white, P.blue, 27);
+  d.arrow('overview-freeze', 410, 283, 552, 283, P.blue, 3);
+  d.text('overview-freeze-label', 481, 260, 'Freeze', 22, P.blue);
+  d.box('overview-frozen', 568, 254, 275, 58, 'Frozen memtable', P.white, P.blue, 27);
+  d.arrow('overview-flush', 706, 318, 706, 440, P.green, 3);
+  d.text('overview-flush-label', 729, 363, 'Flush each batch', 23, P.green, 'start');
+
+  d.rect('overview-wal', 99, 478, 284, 104, P.orangeLight, P.orange, 7);
+  d.text('overview-wal-heading', 241, 511, 'Write-ahead log', 26, P.ink, 'middle', 650);
+  d.text('overview-wal-function', 241, 551, 'Replay after a crash', 22, P.ink);
+  d.text('overview-l0', 694, 467, 'Level 0 · immutable files', 24, P.ink, 'middle', 650);
+  d.box('overview-a', 588, 494, 212, 46, 'A · first flush', P.greenLight, P.green, 22);
+  d.box('overview-b', 588, 553, 212, 46, 'B · next flush', P.greenLight, P.green, 22);
+  d.line('overview-a-input', 808, 517, 873, 546, P.green, 3);
+  d.line('overview-b-input', 808, 576, 873, 546, P.green, 3);
+  d.arrow('overview-merge', 873, 546, 973, 546, P.green, 3);
+  d.text('overview-merge-label', 903, 513, 'Compact', 22, P.green);
+  d.text('overview-l1', 1091, 467, 'Level 1', 24, P.ink, 'middle', 650);
+  d.box('overview-c', 985, 515, 212, 62, 'C · merged file', P.greenLight, P.green, 22);
+}
+
 function bigtableLearningGoals(d, step) {
   bigtableGoals[step].forEach((lines, i) => {
     const key = 'goal-' + (step * 3 + i);
@@ -670,7 +850,21 @@ scene('Three web pages and the five cells the crawler has stored so far', ['Coun
 scene('Sparse cells and versions',['Sparse cells','New qualifier','Another version'],(d,s)=>{const cells=[[0,0],[0,2],[1,1],[2,0],[2,3]];for(let r=0;r<3;r++)for(let c=0;c<4;c++){d.rect('cell'+r+c,300+c*175,290+r*86,145,63,P.white,P.line,4);if(cells.some(([a,b])=>a===r&&b===c)||(s>0&&r===1&&c===3))d.rect('data'+r+c,310+c*175,300+r*86,125,43,P.greenLight,P.green,3);}['r1','r2','r3'].forEach((v,i)=>d.text('row'+i,215,334+i*86,v,29));if(s>1){[0,1,2].forEach(i=>d.box('version'+i,840+i*20,320+i*36,190,58,'t'+(3-i),i?P.white:P.orangeLight,P.orange,27));}},'Ask whether a missing qualifier needs a reserved fixed-width slot. Expected: sparse storage can omit absent cells, unlike microdb’s fixed slot layout, though metadata itself still costs space. Add a qualifier to one row without drawing it for every other row. Then stack versions of a cell and ask which timestamp a read requests. Distinguish retaining versions from full MVCC transaction semantics and explain retention/garbage-collection policy.'),
 scene('Tablets separate placement from storage',['Sorted ranges','Assigned servers','Shared durable files','Reassignment'],(d,s)=>{for(let i=0;i<4;i++){d.box('tablet'+i,150+i*270,270,210,85,['a–g','h–m','n–s','t…'][i],P.greenLight,P.green,31);d.box('server'+i,150+i*270,425,210,80,'server '+i,s===3&&i===1?P.redLight:P.white,P.line,27);if(s>0)d.arrow('assigned'+i,255+i*270,370,255+i*270,410,P.green);if(s>1)d.line('storage'+i,255+i*270,520,640,580,P.blue,2);}if(s>1)d.box('gfs',350,575,580,60,'replicated files',P.blueLight,P.blue,30);if(s===3)d.arrow('move',525,365,795,410,P.orange,5);},'Define a tablet as a contiguous row-key range and trace assignment to a tablet server. Ask why losing a server need not mean losing its durable data. Expected: the original architecture stores logs and SSTables in replicated GFS, with caches and in-progress state on tablet servers. Replay and reassignment still take work. Explain that partitioning divides the table while replication protects durable pieces. They solve distinct problems.',{kind:'definition',term:'Tablet',definition:'A contiguous range of row keys managed as a unit of placement and service.'}),
 scene('Splitting cannot fix a moving hotspot',['Distributed writes','Timestamp tail','Split','Next burst'],tabletDraw,'Predict where a burst of increasing timestamp-prefixed keys lands. Reveal all writes at the tail, split that tablet, then send another burst. Expected: the newest range remains hot. A split changes size but not the direction of incoming writes.\n\nDiscuss hash prefixes or a different key order and the range-scan locality each sacrifices. The counts are a deterministic toy load model, not observed Bigtable throughput. Reversed domains group related pages but do not inherently distribute all traffic.',{demo:'viz-tablet'}),
-scene('The log protects memory',['Incoming write','Log append','Durable log','Memory update'],(d,s)=>{card(d,'request',125,300,'k2 = v3',P.orangeLight,235,100);card(d,'log',510,300,'WAL',s>1?P.greenLight:P.white,255,100);card(d,'ram',920,300,'RAM',s===3?P.orangeLight:P.white,235,100);d.arrow('logpath',380,350,490,350,P.orange);d.arrow('rampath',785,350,900,350,P.orange);const xs=[240,635,635,1035];token(d,'write',xs[s],465,undefined,s>1?P.green:P.orange,20);if(s>1)d.text('durable',635,555,'durable ✓',34,P.green);if(s===3)d.text('ack',1035,555,'ack',34,P.green);},'Ask what would be lost if the engine acknowledged a RAM-only write and crashed before a flush. Expected: the memtable contents. Trace a durable log record before acknowledging the update, then rebuilding memory by replay after a failure. This LSM write path uses redo-style records and is not the course lab’s physical undo/FORCE protocol copied unchanged. The engine’s settings determine when a write is durable and when several writes can share a flush.',{title:"How an LSM tree stores a crawler update"}),
+scene('From scattered writes to a sorted file',
+  ['Change three pages', 'Append in arrival order', 'Keep keys sorted in memory', 'Compare two tree shapes', 'Flush one sorted file', 'Connect memory and storage'],
+  drawLsmWrite, 'Follow the contents of the same three pages from the write-ahead log to a sorted file. The words stand in for the saved page contents.',
+  {id:'the-log-protects-memory', clarityNative:true,
+   sources:['lectures/lecture-14/bigtable.html#lsm', bansalLsm, heliusLsm, bigtablePaper]}),
+scene('Merge two sorted files',
+  ['Compare the inputs', 'Resolve matching keys', 'Publish the output'],
+  drawLsmCompaction, 'The two files in this example contain every older record for these keys. The example keeps only current contents. Read the inputs in key order and work out what each page should return.',
+  {id:'lsm-merge-crawl-files', clarityNative:true,
+   sources:['lectures/lecture-14/bigtable.html#lsm-compaction', bansalLsm, heliusLsm]}),
+scene('Find the Moon page before and after the merge',
+  ['Look up r2 without filters', 'Rule out file B', 'Check the stored entry'],
+  drawLsmRead, 'Ask for the current Moon page while readers still use the two inputs. Repeat that lookup after publication. A Bloom filter helps choose a file. The stored entry supplies the result.',
+  {id:'lsm-read-crawl-files', clarityNative:true,
+   sources:['lectures/lecture-14/bigtable.html#lsm-lookup', bansalLsm, bigtablePaper]}),
 scene('A one-sided membership test',['Empty bits','Insert six keys','Definite absence','Possible presence','False positive'],bloomDraw,'Define the Bloom filter, then set bits for k1 through k6 with three deterministic hashes. Ask what a zero among a query’s bits proves. Expected: the key is absent, provided inserted keys set their bits correctly and no shared bits were cleared. Reveal k7 as absent and k17 as all bits set despite never being inserted.\n\nThat false positive costs an extra file check. It must not lose data. Ordinary Bloom filters cannot clear a key’s shared bits safely when deleting.',{title:'How a Bloom filter can skip a sorted file',kind:'definition',term:'Bloom filter',definition:'A compact membership filter returning definitely absent or possibly present.',demo:'viz-bloom'}),
 scene('Skip files then find a block',['Filter','Sparse index','One block','Cached block'],(d,s)=>{const xs=[235,640,1045];d.box('bloom',125,300,220,160,'010110',P.greenLight,P.green,33);d.table('sparse',470,285,[160,150],[['key','block'],['k1','0'],['k8','1'],['k16','2']],{rowHeight:58,fontSize:26,highlightRows:s>0?[2]:[]});for(let i=0;i<4;i++)d.rect('block'+i,930,275+i*70,225,54,i===1&&s>1?P.orangeLight:P.white,i===1&&s>1?P.orange:P.line,5);if(s>0)d.arrow('toindex',355,385,450,385,P.green);if(s>1)d.arrow('todisk',795,385,910,385,P.orange);if(s>2){d.box('cache',920,585,235,60,'cache ✓',P.greenLight,P.green,28);d.arrow('cacheline',1040,545,1040,577,P.green);}},'Ask what each tool eliminates: a Bloom filter can skip an absent file. A sparse index narrows a possible file to a block. A block cache avoids repeated disk reads. Expected: each avoids a different kind of work, and a read can use all three.\n\nA possible Bloom match is not proof of presence. The index must bound the key’s block correctly, then the engine checks actual entries and version visibility. Compaction reduces the number/ranges of files considered.',{title:'Find one key in a sorted file'}),
 scene('A crawl history in BigQuery',

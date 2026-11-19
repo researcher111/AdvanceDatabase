@@ -106,46 +106,6 @@
     d.add('route-code','text',{x:640,y:181,fill:P.ink,'font-size':23,style:'font-family:ui-monospace, SFMono-Regular, Menlo, monospace','text-anchor':'middle','dominant-baseline':'middle'},s<2?'bisect_right([25, 50, 75], 99)  # tablet 3':'bisect_right([25, 50, 75, 88], 99)  # tablet 4');
   };
 
-  const wal=sample('Engine pseudocode · helpers name required guarantees','text',[
-    'record = ("k2", "v3")','',
-    'append_log(record)',
-    'sync_log()  # Wait for required durability.','',
-    'memtable.put("k2", "v3")',
-    'reply_success()'
-  ]);
-  install('the-log-protects-memory',[wal],(d,s)=>{
-    function stages(id, y, cards, arrowColors) {
-      cards.forEach(([title, detail, color], i) => {
-        const x = 65 + i * 412;
-        d.rect(id+'-card-'+i, x, y, 326, 112, P.white, color, 9, 3);
-        d.text(id+'-title-'+i, x+163, y+36, title, 29, P.ink, 'middle', 650);
-        d.text(id+'-detail-'+i, x+163, y+78, detail, 23, P.ink);
-        if (i < 2) d.arrow(id+'-next-'+i, x+336, y+56, x+397, y+56, arrowColors[i], 3);
-      });
-    }
-    d.text('request-label',65,211,'One crawler update reaches its tablet server',27,P.ink,'start',650);
-    stages('write', 240, [
-      ['Crawler update', 'k2 = v3', P.blue],
-      ['Write-ahead log', ['Awaiting the update', 'Appended k2 = v3', 'Durable k2 = v3', 'Durable k2 = v3'][s], s>=2?P.green:P.orange],
-      ['Memory buffer', s===3?'Insert k2 = v3':'Awaiting a durable record', s===3?P.green:P.line]
-    ], [s>=1?P.blue:P.line, s===3?P.green:P.line]);
-    d.text('lsm-label',65,426,'How a log-structured merge-tree (LSM tree) stores batches',27,P.ink,'start',650);
-    stages('batch', 455, [
-      ['Memtable', 'Order recent writes', P.blue],
-      ['Sorted files', 'Flush each full batch', P.green],
-      ['Merged file', 'Combine sorted files', P.green]
-    ], [P.green, P.green]);
-    foot(d,['What would happen if the server lost the update in memory?',
-      'The log has the record. The server still needs to confirm its durability.',
-      'If the server loses memory now, recovery can replay the durable log.',
-      'After several batches, how can a lookup skip a file that lacks its key?'][s]);
-  },[
-    'Follow one crawler update after routing. Use k2 for its key and v3 for the new value. Trace the bottom row. The server orders recent writes in a memory buffer called a memtable. It writes a full batch to a sorted file. Later it merges sorted files. This is the log-structured merge-tree, or LSM tree. How can the server confirm a single write before the batch fills?',
-    'Follow the first arrow. The server appends the update to the end of its recovery log. The original paper calls this the commit log. Ask whether the record would survive if the server lost memory before the append reached durable storage.',
-    'The server waits for the log record to reach durable storage. In the original architecture the Google File System replicates the log. After a crash, recovery can read that record and repeat the update.',
-    'Put k2 = v3 in the ordered memtable and send the success reply. A crash before the batch flush can erase memory. Recovery can replay the durable log. Each full batch later becomes a sorted file. Before opening a file for a lookup, what could rule it out?'
-  ]);
-
   const hashes=sample('Teaching Python · the diagram’s three fixed hash functions','python',[
     'def hashes(key):','    a = b = c = 0',
     '    for i, ch in enumerate(key):','        n = ord(ch)',
