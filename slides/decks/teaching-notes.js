@@ -2113,15 +2113,15 @@
   },
   "14": {
     "organize-writes-differently": {
-      "idea": "A newer record can determine a read while an older record remains in a file.",
-      "question": "If the newest record deletes k, should a current read return the older value?",
-      "answer": "No. A current read must honor the deletion even while the old file still exists.",
+      "idea": "The newest visible record for the booking tells a reader which room to use or whether the booking is absent.",
+      "question": "If you checked this thread on Wednesday, which room would you report?",
+      "answer": "Room 204. Tuesday’s message was the latest update for the match on Wednesday. Thursday’s cancellation came later.",
       "builds": [
-        "Label this a fictional investigation. Maya has a sealed page of club records. Explain that k labels one record. A sealed file keeps its entries unchanged. Ask how she could record a correction without changing that page.",
-        "Place a newer record beside the old one. Ask which value Noor should report now. A later record can replace the current answer without erasing the old bytes.",
-        "Add DELETE k. Ask why reading the oldest file alone would be wrong. Keep this question open until the read and deletion traces explain the rule."
+        "Introduce a fictional chess club. Ask which room a player would write on the calendar after Monday’s email. The Friday match identifies one booking. Its room is the value. Before advancing, ask what the player should do if the club sends a room change.",
+        "Point to Tuesday’s email. It names the same match and gives Room 204. Both emails remain in the inbox. Before advancing, ask which room the player should report if the club cancels the match.",
+        "Point to Thursday’s cancellation. The club no longer has a room booked for this match. A database records the cancellation as a deletion marker. Even if both older room values remain in files, a current read finds the marker and reports the booking absent."
       ],
-      "context": "The sealed-page analogy explains unchanged records. It does not explain machine failures, sorting, or concurrent readers. Later diagrams supply those mechanisms. LSM means log-structured merge tree: a storage organization that buffers writes and later merges sorted batches. Bigtable uses this approach. It reduces scattered writes but adds later read and merge work."
+      "context": "An email thread illustrates how an update can change an answer while earlier messages remain readable. The database uses sequence numbers to order these example records. Bigtable uses a log-structured merge tree (LSM tree) to buffer writes and later merge sorted batches. This design can reduce scattered writes and adds work during reads and merges."
     },
     "a-multidimensional-map": {
       "idea": "Bigtable locates a value by row, column, and timestamp.",
@@ -2185,10 +2185,10 @@
       "answer": "The later flush can write them sequentially in key order.",
       "builds": [
         "Define memtable before tracing the arrivals. It is an ordered memory structure for recent writes. Read k8, k2, k5, k1, k7 in arrival order, then predict their sorted order.",
-        "Use an ordered notebook as an analogy. Entries are kept in key order so the engine can copy them as one sorted batch. A real implementation uses an ordered data structure.",
+        "Point to the sorted keys. The engine keeps entries in key order so it can write the batch to a file in one pass.",
         "Update k2. The simplified diagram shows its current value. Some engines keep additional versions for reads that need an earlier view. Distinguish this logical update from editing an existing stored file."
       ],
-      "context": "The notebook analogy explains ordering and freezing a batch. It does not model hardware durability or the internal cost of an ordered data structure. JavaScript object iteration is not the ordered memtable mechanism."
+      "context": "An ordered data structure keeps keys sorted as writes arrive. Iterating over a JavaScript object does not guarantee the key order a memtable needs."
     },
     "freeze-a-sorted-file": {
       "idea": "A frozen memtable remains readable while its entries are written into an immutable sorted file.",
@@ -2196,7 +2196,7 @@
       "answer": "It goes into a new active memtable. The frozen batch stays unchanged.",
       "builds": [
         "Define flush as copying buffered entries into a stored file. The size threshold starts this operation. The lecture widget reaches capacity at six distinct keys, not necessarily six write calls.",
-        "Freeze the batch: stop accepting updates into it. Keep it available to readers until the file becomes available. Compare sealing one notebook and opening another.",
+        "Freeze the batch. Send new writes to a fresh memtable. Keep the frozen entries readable while the engine writes the sorted file.",
         "Expand SSTable as sorted string table. It is an immutable sorted file with an index for locating blocks. Immutable means existing entries are not modified in place. A block is a group of entries read as one storage unit.",
         "Accept k9 in the active buffer. In a real system, this can overlap the old batch’s flush. Ask how a later k2 update can become current without changing the older SSTable."
       ],
@@ -2219,7 +2219,7 @@
       "question": "What goes wrong if the newer deletion marker disappears but the old value remains?",
       "answer": "A later read can find the old value and return it again.",
       "builds": [
-        "Return to the sealed-page puzzle. Locate the older k2:v1. Predict what a reader would find if there were no later record.",
+        "Recall the email that canceled the chess match. Locate k2:v1 in the older file. Ask what a reader would return for k2 before a deletion marker arrives.",
         "Define tombstone again as a deletion marker. Write it as the newer record. The old file remains immutable.",
         "A current read must honor the visible marker and return absent. Absence is the logical result even though the physical old bytes remain.",
         "Remove old records and their marker only when older values cannot reappear and required snapshots remain valid. A snapshot is a retained read view. Ask why merging only some files can make removal unsafe."

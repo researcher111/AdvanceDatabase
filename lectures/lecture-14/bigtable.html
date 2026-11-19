@@ -48,16 +48,23 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 14 · Tuesday November 17, 2026</div>
   <h1>Bigtable, LSM Trees &amp; NoSQL</h1>
-  <div class="subtitle">The old value is still in a file. How does a later update or delete win?</div>
+  <div class="subtitle">How can a database cancel a booking when an older file still lists the room?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 <div class="story-scene">
-  <p class="story-label">A fictional classroom investigation</p>
-  <p>Maya keeps a student club’s records in an ordered notebook. When a batch is complete, she copies it onto sealed pages.</p>
-  <p>She can read those pages, but she cannot edit their entries. New changes go into her current notebook.</p>
-  <p>One sealed page still says <code>k = old</code>. Here, <code>k</code> is a record’s label, or <strong>key</strong>. The team has since written a new value and then deleted that key.</p>
-  <p>Noor asks: <q>If we can’t change this file, what stops that value coming back?</q> Maya reaches for the eraser.</p>
-  <p>Noor stops her: <q>First show which record a current read must see.</q> We will follow the same key from an old value to a new value and a deletion.</p>
+  <p class="story-label">A fictional room booking</p>
+  <p class="lede">You open the chess club’s emails to find the room for Friday’s match. Three messages from the organizer are still in your inbox.</p>
+  <ul>
+    <li><strong>Monday</strong> — <q>We booked Room 101 for Friday’s match.</q></li>
+    <li><strong>Tuesday</strong> — <q>We moved the match to Room 204.</q></li>
+    <li><strong>Thursday</strong> — <q>We canceled Friday’s match.</q></li>
+  </ul>
+  <details>
+    <summary>Which room, if any, should the booking system show on Friday?</summary>
+    <p>Neither room. Thursday’s cancellation applies to the same match as the two earlier emails. You can still read both room numbers in your inbox.</p>
+  </details>
+  <p>In the booking database, the <strong>key</strong> identifies Friday’s chess match. The <strong>value</strong> is the room number. Each change adds a record for the same key.</p>
+  <p>To cancel the booking, the database writes a <strong>deletion marker</strong>. A current lookup uses the newest record for that key. Since the marker is newest, the lookup reports no booking even though older files still list the rooms.</p>
 </div>
 <div class="cite">
   Companion reading: Chang et&nbsp;al., <a href="https://research.google/pubs/pub27898/"><em>Bigtable: A Distributed Storage System for Structured Data</em></a> (OSDI 2006) ·
@@ -91,15 +98,15 @@
 <p>A <strong>flush</strong> writes a memory batch to storage. <strong>Compaction</strong> merges existing sorted files into new sorted files. Later sections explain how each operation preserves reads.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
-  <thead><tr><th>Notebook comparison</th><th>Storage mechanism</th></tr></thead>
+  <thead><tr><th>Booking example</th><th>What the database does</th></tr></thead>
   <tbody>
-    <tr><td>Current ordered notebook</td><td>The <strong>memtable</strong> holds recent writes in memory, sorted by key.</td></tr>
-    <tr><td>Sealed pages</td><td>A completed sorted file is <strong>immutable</strong>: later writes do not edit its entries.</td></tr>
-    <tr><td>Copying several sealed batches into one</td><td>Compaction merges records and removes obsolete versions only when safe.</td></tr>
+    <tr><td>The club books Room 101.</td><td>The <strong>memtable</strong> holds this booking with other recent writes in memory, sorted by key.</td></tr>
+    <tr><td>The database saves the batch. The club later moves the match to Room 204.</td><td>A flush writes an <strong>immutable</strong> file. Its entries stay fixed. The room change goes into the active memtable.</td></tr>
+    <tr><td>A later flush saves the Room 204 booking in a second file.</td><td>Compaction merges sorted files. It can discard an older booking record when doing so preserves every required read result.</td></tr>
   </tbody>
 </table>
 </div>
-<p>The notebook explains organization. It does not make memory durable or decide which old records are safe to remove. Recovery and version rules supply those guarantees.</p>
+<p>The emails show how to interpret later changes. The database also needs rules for recovering changes after a crash and deciding when it can discard older records.</p>
 <div class="lecture-walkthrough" data-lecture-scene="organize-writes-differently"></div>
 <p><strong>The essential tradeoff:</strong> batching can reduce scattered writes, but reads may need several files and merging adds storage work.</p>
 <pre class="equation"><code>Writes: sequential output can reduce scattered storage operations.
@@ -262,7 +269,7 @@ rows = [(key, values[key]) for key in keys]</code></pre>
 <p>The final expression pairs each ordered key with its current value. This list model explains ordering, not production memtable performance. Real Bigtable row keys use byte-string order.</p>
 <div class="lecture-walkthrough" data-lecture-scene="the-memtable-stays-ordered"></div>
 <p>A later <code>k2</code> write changes its newest value. This simple drawing keeps one current value per key in memory. Production engines can retain older versions for reads that require earlier views.</p>
-<p>The notebook analogy applies to key order. A real memtable uses an ordered data structure. Ordinary dictionary insertion order does not automatically sort keys.</p>
+<p>A real memtable uses an ordered data structure. In the Python example, <code>insort</code> maintains key order separately because a dictionary keeps insertion order.</p>
 
 <h2 id="flush" data-slide="8" data-scene="freeze-a-sorted-file">8 · Flush a frozen memtable to an SSTable</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=8&amp;b=1">Open slide 8 ↗</a></p>
@@ -281,11 +288,12 @@ retire_when_no_readers(frozen)</code></pre>
 <p>Retire the frozen batch only after readers no longer need it. New writes follow the WAL protocol and can proceed while the background flush runs. This fragment does not discard the recovery log.</p>
 <div class="lecture-walkthrough" data-lecture-scene="freeze-a-sorted-file"></div>
 <p>The frozen batch can remain readable while the file is written. A later update goes into active memory and eventually another file. It does not edit the older SSTable.</p>
-<p>The notebook has now become sealed pages. Those pages can coexist with a newer notebook entry for the same key. The next section explains which record a read selects.</p>
+<p>Suppose a file lists Room 101 for Friday’s match and the active memtable lists Room 204. Which record should a current lookup use?</p>
 
 <h2 id="versions" data-slide="9" data-scene="read-the-newest-visible-value">9 · Choose the newest visible record</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
-<p>Return to <code>k</code>. The toy trace assigns each change an increasing <strong>sequence number</strong>, which records its order. <code>old@5</code> means the old value was written at sequence 5.</p>
+<p>In this trace, <code>k</code> identifies Friday’s chess match. The value <code>old</code> stands for Room 101, and <code>new</code> stands for Room 204.</p>
+<p>The trace gives each change an increasing <strong>sequence number</strong> to show its order. For example, <code>old@5</code> records the booking for Room 101 at sequence 5.</p>
 <p>A <strong>snapshot</strong> is a retained view used by a read. In this toy model, snapshot 8 admits records numbered 8 or earlier. A record is <strong>visible</strong> when the chosen view permits the read to use it.</p>
 <p>A <strong>tombstone</strong> is a deletion marker stored as a newer record. <code>DELETE@9</code> means the key is absent from sequence 9 onward, until another update.</p>
 <p><strong>Keep two kinds of time separate.</strong> These update numbers explain a generic LSM version rule. Bigtable’s application cell timestamps do not automatically provide a transactionally consistent snapshot across rows.</p>
@@ -544,10 +552,10 @@ Exact guarantees depend on the operation and configuration.</code><sup class="sr
 
 <h2 id="recap" data-slide="16" data-scene="trace-an-acknowledged-write">16 · Return to the deleted key</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=16&amp;b=1">Open slide 16 ↗</a></p>
-<p>Return to <code>k</code>. Old bytes can remain in files, but a current read must use the newest visible record. A deletion marker is a record that wins that comparison.</p>
+<p>Friday’s chess match has no room booking. A current lookup sees Thursday’s cancellation as the newest record for the match. The older files can still list Room 101 and Room 204.</p>
 <div class="lecture-walkthrough" data-lecture-scene="trace-an-acknowledged-write"></div>
 <p>The log protects acknowledged updates. The memtable orders recent entries. A flush creates sorted files, and compaction merges them while preserving required reads.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>SSTable A still holds old@5. A compaction merges only B’s new@8 and C’s DELETE@9. Can it simply drop both records?</p><details><summary>Check your explanation</summary><p>No. Removing the tombstone could expose A’s old value in a later current read. Retain the marker while that value can reappear. Also preserve versions that required snapshots need.</p></details></div>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>File A still holds <code>old@5</code>. Suppose a merge discards both B’s <code>new@8</code> and C’s <code>DELETE@9</code>. Which room would a current lookup return?</p><details><summary>Check your explanation</summary><p>Room 101. File A would hold the only remaining record for the match. The merge must keep the deletion marker to prevent that booking from reappearing. It must also preserve versions that required snapshots need.</p></details></div>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Now all files are included and no retained snapshot needs k. What two checks make removing its tombstone safe in this toy trace?</p><details><summary>Check your explanation</summary><p>No older value remains outside the merge to reappear, and no retained read view needs the removed records. Deletion alone was not enough.</p></details></div>
 <ul class="recap-list">
   <li>Bigtable assigns ordered row ranges to tablet servers. Key design determines where writes go and which ranges a scan needs.</li>
@@ -640,10 +648,10 @@ document that supports the claim it is attached to.</p>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
 <script src="../../slides/decks/lectures-11-15.js?v=schedule-swap-20261112"></script>
-<script src="../../slides/decks/teaching-notes.js?v=bigtable-clear-20261110"></script>
-<script src="../../slides/decks/clarity-captions.js?v=bigtable-clear-20261110"></script>
+<script src="../../slides/decks/teaching-notes.js?v=chess-booking-20261119"></script>
+<script src="../../slides/decks/clarity-captions.js?v=chess-booking-20261119"></script>
 <script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
-<script src="../../slides/decks/clarity-diagrams.js?v=bigtable-clear-20261110"></script>
+<script src="../../slides/decks/clarity-diagrams.js?v=chess-booking-20261119"></script>
 <script src="../../slides/decks/bigtable-code.js?v=visible-code-20261112"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
 <script src="../lecture-13/slide-walkthroughs.js?v=2"></script>

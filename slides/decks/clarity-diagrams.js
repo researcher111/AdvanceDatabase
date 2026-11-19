@@ -282,22 +282,26 @@
   }
 
   const lsmOpening=use(14,'organize-writes-differently',(d,s)=>{
-    label(d,'opening-question',640,230,'The old record remains. What should Noor report now?',P.ink,29);
-    const xs=[240,640,1040],names=['Sealed file A','Later file B','Latest record'],values=['k = old','k = new','DELETE k'];
-    xs.forEach((x,i)=>{
-      if(i>s)return;
-      label(d,'file-name-'+i,x,318,names[i],P.muted,26);
+    label(d,'opening-question',640,230,'Email thread · Friday chess match',P.ink,29);
+    const days=['Monday','Tuesday','Thursday'];
+    const messages=['Room 101','Room 204','Match canceled'];
+    for(let i=0;i<=s;i++){
+      const x=240+i*400;
+      label(d,'file-name-'+i,x,318,days[i],P.muted,26);
       d.rect('version-'+i,x-155,347,310,112,i===s?P.orangeLight:P.white,i===s?P.orange:P.line,9,2);
-      label(d,'value-'+i,x,412,values[i],i===s?P.orange:P.ink,34);
+      label(d,'value-'+i,x,412,messages[i],i===s?P.orange:P.ink,34);
       if(i<s)d.arrow('newer-'+i,x+170,403,x+230,403,P.green,3);
-    });
-    label(d,'current-result',640,548,'Current read: '+['old','new','absent'][s],s===2?P.orange:P.green,34);
-    label(d,'fictional-note',640,596,'Fictional investigation · sealed files keep their entries unchanged',P.muted,23);
-    foot(d,'LSM = log-structured merge tree · collect writes, then merge sorted files');
+    }
+    label(d,'current-result',640,535,['Current booking · Room 101','Current booking · Room 204','No current booking'][s],s===2?P.orange:P.green,34);
+    foot(d,[
+      'The key identifies the match. The value gives its room.',
+      'The key still identifies the same match. The room value changes.',
+      'A deletion marker tells a current read that the booking is absent.'
+    ][s]);
   });
   if(lsmOpening){
-    lsmOpening.states=['An older file','A newer value','A visible deletion'];
-    lsmOpening.teaching.reference='The opening uses plain records before naming the storage structures. Later, the worked trace assigns update sequence numbers 5, 8, and 9. The same old, new, and deleted states motivate read rules and safe removal of old records.';
+    lsmOpening.states=['Monday books a room','Tuesday changes the room','Thursday cancels the match'];
+    lsmOpening.teaching.reference='In the later database trace, key k identifies the booking. Room 101 corresponds to old@5, Room 204 to new@8, and the cancellation to DELETE@9. The numbers give the order of the changes.';
   }
 
   use(14,'a-multidimensional-map',(d,s)=>{

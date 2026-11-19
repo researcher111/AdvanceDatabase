@@ -1163,9 +1163,9 @@ window.CourseClarityCaptions = {
   },
   "14": {
     "organize-writes-differently": [
-      "Maya keeps an old record in a sealed file. The key k labels that record.",
-      "A later record says k = new. Which value should a current read return?",
-      "A later DELETE k means the record is absent. How can the engine keep the old file without returning its value?"
+      "Monday’s email books Room 101 for the Friday chess match.",
+      "Tuesday’s email moves the same match to Room 204. Monday’s email stays in the inbox.",
+      "Thursday’s email cancels the match. Both earlier emails still name rooms. Which message decides the booking now?"
     ],
     "a-multidimensional-map": [
       "A row key names one row. Bigtable stores rows in key order.",
@@ -1197,7 +1197,7 @@ window.CourseClarityCaptions = {
     ],
     "the-memtable-stays-ordered": [
       "A memtable is an ordered memory buffer for recent writes. These keys arrive out of order.",
-      "Like entries in an ordered notebook, the memtable keeps keys sorted for a later file write.",
+      "The memtable keeps the keys in order. When the engine writes the batch to a file, it can copy the keys in that order.",
       "A later k2 record changes its current value. The simplified view shows only that value. Some readers need retained versions."
     ],
     "freeze-a-sorted-file": [
