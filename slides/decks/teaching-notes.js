@@ -2175,56 +2175,9 @@
         "Define write-ahead log, or WAL, as recovery records stored before the system relies on changed memory. RAM is working memory; losing power can erase it. Acknowledgment is the success reply sent to the caller.",
         "Append means add at the end. The redo record describes an update that recovery can repeat. The original Bigtable paper calls this a commit log.",
         "Explain the durability boundary: the required log bytes must survive the failures covered by the storage contract. The original design stores the log in GFS. Memory alone does not satisfy this requirement.",
-        "Put the update into the ordered memory buffer and send the acknowledgment. The next slide names this buffer the memtable. Place a crash after acknowledgment and predict how recovery reconstructs it."
+        "Put the update into the ordered memory buffer and send the acknowledgment. This buffer is the memtable. Each full batch becomes a sorted file. How could a lookup rule out a file before reading it?"
       ],
       "context": "This is a redo-style write path. The course lab uses a different physical undo/FORCE protocol. A durable log entry is separate from a later data-file flush. Settings determine when writes are durable and whether several writes share synchronization work."
-    },
-    "the-memtable-stays-ordered": {
-      "idea": "A memtable keeps recent updates ordered so a flush can stream sorted entries.",
-      "question": "Why sort keys in memory if they arrived in another order?",
-      "answer": "The later flush can write them sequentially in key order.",
-      "builds": [
-        "Define memtable before tracing the arrivals. It is an ordered memory structure for recent writes. Read k8, k2, k5, k1, k7 in arrival order, then predict their sorted order.",
-        "Point to the sorted keys. The engine keeps entries in key order so it can write the batch to a file in one pass.",
-        "Update k2. The simplified diagram shows its current value. Some engines keep additional versions for reads that need an earlier view. Distinguish this logical update from editing an existing stored file."
-      ],
-      "context": "An ordered data structure keeps keys sorted as writes arrive. Iterating over a JavaScript object does not guarantee the key order a memtable needs."
-    },
-    "freeze-a-sorted-file": {
-      "idea": "A frozen memtable remains readable while its entries are written into an immutable sorted file.",
-      "question": "Where does an update arriving during the frozen batch’s flush go?",
-      "answer": "It goes into a new active memtable. The frozen batch stays unchanged.",
-      "builds": [
-        "Define flush as copying buffered entries into a stored file. The size threshold starts this operation. The lecture widget reaches capacity at six distinct keys, not necessarily six write calls.",
-        "Freeze the batch. Send new writes to a fresh memtable. Keep the frozen entries readable while the engine writes the sorted file.",
-        "Expand SSTable as sorted string table. It is an immutable sorted file with an index for locating blocks. Immutable means existing entries are not modified in place. A block is a group of entries read as one storage unit.",
-        "Accept k9 in the active buffer. In a real system, this can overlap the old batch’s flush. Ask how a later k2 update can become current without changing the older SSTable."
-      ],
-      "context": "The visual sequence separates overlapping activities so their roles are clear. It does not require writes to wait for the whole flush. SSTable keys and values are byte strings, not necessarily human-readable text."
-    },
-    "merge-sorted-runs": {
-      "idea": "Compaction merges sorted files while keeping every version still required by readers or retention rules.",
-      "question": "Which k2 version belongs in this current-value output, and why can a real engine retain more?",
-      "answer": "The example keeps k2:v2. Real read and retention rules may require additional versions.",
-      "builds": [
-        "Define a sorted run as a batch in key order. Two runs can contain the same key. Compaction merges such runs into new sorted output. Predict the first output key.",
-        "Define cursor as the position of the next unread entry. Compare the two next keys, copy the smaller key, and advance that cursor. Ask students to repeat these steps.",
-        "At duplicate k2, use v2 in this current-value example. The engine must also honor retained snapshots and version policies. Do not erase needed history merely because one version is newer.",
-        "Write k1, k2, k4, k7, k8 in order. Sorted inputs allow sequential reads, but the output still consumes bandwidth and space. Ask where the cost moved when the earlier write avoided editing an old file."
-      ],
-      "context": "The course widget merges all disk runs. Production compaction policies select files differently. The memtable remains a separate input to later reads."
-    },
-    "deletion-must-hide-older-values": {
-      "idea": "A merge can discard the marker only when older values cannot reappear and every required read keeps its answer.",
-      "question": "A merge includes every file, but a reader still holds snapshot 8. What must it be able to read?",
-      "answer": "It must still read new from sequence 8. A current read must still report absence, so keep the deletion marker as well.",
-      "builds": [
-        "The previous merge compared two values for one key. Return to key k, whose newest record marks a deletion. File A holds old at 5, B holds new at 8, and C holds the flushed deletion at 9. Ask what a current read returns before merging.",
-        "Merge only B and C. Cover B and C on the diagram. Which record remains outside the merge? If the output discarded the marker, A could return old. The merged output must keep DELETE at 9.",
-        "Consider a complete merge of A, B, and C while a reader still holds snapshot 8. The first safety check passes. The second fails. Ask for the two answers the merge must preserve. Keep new for the saved view and the deletion for current reads.",
-        "Let that reader finish. In this example no remaining view requires an old version, and the merge covers all older values. Both checks now pass. Removing the covered records leaves the key absent. Until files are merged, how can a reader avoid opening every file?"
-      ],
-      "context": "Compaction is not automatic permission to discard every tombstone. Other systems can also require replica-repair or retention conditions. Keep this generic LSM safety rule separate from any one product’s deletion API."
     },
     "a-one-sided-membership-test": {
       "idea": "A Bloom filter can prove a key is absent from a file. When all the selected bits are one, the reader must check the file.",

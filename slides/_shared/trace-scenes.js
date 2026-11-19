@@ -10,7 +10,6 @@
     11: {'probe-the-lists':'ivf'},
     12: {'keep-the-source-identity':'rag'},
     13: {'reduce-sees-the-complete-group':'shuffle'},
-    14: {'read-the-newest-visible-value':'lsm'},
     15: {'paths-are-not-unique-vertices':'graph'}
   };
   function wrap(text, limit) {

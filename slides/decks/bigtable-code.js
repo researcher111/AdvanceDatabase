@@ -138,180 +138,13 @@
     foot(d,['What would happen if the server lost the update in memory?',
       'The log has the record. The server still needs to confirm its durability.',
       'If the server loses memory now, recovery can replay the durable log.',
-      'The server can confirm this write before it flushes the batch.'][s]);
+      'After several batches, how can a lookup skip a file that lacks its key?'][s]);
   },[
     'Follow one crawler update after routing. Use k2 for its key and v3 for the new value. Trace the bottom row. The server orders recent writes in a memory buffer called a memtable. It writes a full batch to a sorted file. Later it merges sorted files. This is the log-structured merge-tree, or LSM tree. How can the server confirm a single write before the batch fills?',
     'Follow the first arrow. The server appends the update to the end of its recovery log. The original paper calls this the commit log. Ask whether the record would survive if the server lost memory before the append reached durable storage.',
     'The server waits for the log record to reach durable storage. In the original architecture the Google File System replicates the log. After a crash, recovery can read that record and repeat the update.',
-    'Put k2 = v3 in the ordered memtable and send the success reply. A crash before the batch flush can erase memory. Recovery can replay the durable log. Follow the memtable into the next slide to see how it keeps a batch in key order.'
+    'Put k2 = v3 in the ordered memtable and send the success reply. A crash before the batch flush can erase memory. Recovery can replay the durable log. Each full batch later becomes a sorted file. Before opening a file for a lookup, what could rule it out?'
   ]);
-
-  const memory=sample('Teaching Python · model sorted keys and current values','python',[
-    'from bisect import insort','keys = []','values = {}','',
-    'for key in [8, 2, 5, 1, 7]:',
-    '    insort(keys, key)',
-    '    values[key] = "v1"','',
-    'values[2] = "v2"',
-    'rows = [(key, values[key]) for key in keys]'
-  ]);
-  install('the-memtable-stays-ordered',[memory],(d,s)=>{
-    code(d,{...memory,lines:memory.lines.slice(0,s<2?7:10)},s===0?[4]:s===1?[5,6]:[8,9]);
-    box(d,'arrival',215,'Arrival order',['k8, k2, k5, k1, k7'],P.blue);
-    if(s>=1){arrow(d,'sort',325,375);box(d,'sorted',390,'Ordered keys',['k1, k2, k5, k7, k8',s===2?'k2 now maps to v2':'Each value is v1'],P.green);}
-    foot(d,'Integer suffixes model the short labels · This current-value model omits retained versions');
-  },[
-    'The log now protects the change. Show how one server organizes many recent changes in memory using a fresh five-key example. The keys list records their order. The values dictionary holds one current value for each key. Read the incoming integer suffixes 8, 2, 5, 1, 7 as the diagram labels k8, k2, k5, k1, k7.',
-    'insort inserts each key at its sorted position. It keeps the list ordered after every insertion. The dictionary alone would not provide sorted key order. This small list model explains ordering, not a production memtable’s performance.',
-    'Update values[2] to v2. Its key already has a sorted position. If these five entries filled the available memory, in what order could they be written? The rows expression visits keys in sorted order. This model keeps one current value and omits versions needed by retained snapshots.'
-  ]);
-
-  const flush=sample('Engine pseudocode · rotate, write, then install safely','text',[
-    'frozen = active',
-    'active = new_memtable()','',
-    '# Background flush of the frozen batch:',
-    'file = write_sstable(frozen.entries())',
-    'make_durable(file)',
-    'publish(file)',
-    'retire_when_no_readers(frozen)'
-  ]);
-  install('freeze-a-sorted-file',[flush],(d,s)=>{
-    code(d,{...flush,lines:flush.lines.slice(0,s===0?1:s===1?2:8)},s===0?[]:s===1?[0,1]:s===2?[4,5,6,7]:[1]);
-    box(d,'batch',205,s===0?'Active batch':'Frozen batch',['k1, k2, k5, k7, k8',s===0?'Accepting writes':'Readable, no new writes'],P.blue);
-    if(s>=2){arrow(d,'flush',345,385);box(d,'sst',400,'SSTable',['Same sorted entries','Durable before publication'],P.green);}
-    if(s===1)box(d,'fresh',435,'New active memtable',['Accepts new writes'],P.orange);
-    if(s===3)box(d,'fresh',545,'New active memtable',['New k9 enters here'],P.orange);
-    if(s===2)foot(d,'Readers can use the frozen batch until the new file becomes available.');
-    if(s===3)foot(d,'The log, ordered buffer, and sorted files are parts of a log-structured merge tree (LSM tree).');
-  },[
-    'Use the same five keys that the server just sorted. This memtable is full. Ask where a new arrival can go while the server writes the sorted batch to a file. The separate interactive widget flushes at six distinct keys.',
-    'Freeze the old batch and create a different active memtable. Reads can still use the frozen data. New writes go to the new active structure and follow the durable-log protocol.',
-    'The background worker writes the sorted file. make_durable waits for the required storage guarantee. publish installs the file in the reader-visible file set. Retire the old buffer only when no reader still needs it. These helpers omit the real synchronization and recovery machinery.',
-    'The new active memtable can receive k9 while the frozen batch is being flushed. The separated builds explain overlapping roles. They do not require all writes to stop until the file is complete. The code does not discard the recovery log.'
-  ]);
-
-  const morningRead=sample('Teaching Python · one stored record','python',[
-    'records = [(5, "old")]','',
-    'sequence, value = records[0]'
-  ]);
-  const afternoonRead=sample('Teaching Python · choose the later record','python',[
-    'records = [(5, "old"), (8, "new")]','',
-    'sequence, value = max(records,',
-    '    key=lambda record: record[0])'
-  ]);
-  const visible=sample('Teaching Python · read at a sequence boundary','python',[
-    'DELETE = object()  # A distinct marker.',
-    'records = [(5, "old"), (8, "new"), (9, DELETE)]','',
-    'def read_at(records, snapshot):',
-    '    visible = [(seq, value) for seq, value',
-    '               in records if seq <= snapshot]',
-    '    if not visible:',
-    '        return None',
-    '    seq, value = max(visible, key=lambda r: r[0])',
-    '    return None if value is DELETE else value'
-  ]);
-  const safety=sample('Engine pseudocode · a proof is required before removal','text',[
-    'if all_older_versions_are_covered(key) and (',
-    '    no_required_read_needs_older_versions(key)',
-    '):',
-    '    remove_tombstone_and_covered_versions(key)',
-    'else:',
-    '    keep_tombstone(key)'
-  ]);
-  const readViews = [
-    {snapshot:5, result:'old', records:['A · old @ 5']},
-    {snapshot:8, result:'new', records:['A · old @ 5','B · new @ 8']},
-    {snapshot:9, result:'None → absent', records:['A · old @ 5','B · new @ 8','Memory · DELETE @ 9']}
-  ];
-  const readExamples=[morningRead,afternoonRead,visible];
-  const lookup = install('read-the-newest-visible-value',readExamples,(d,s)=>{
-    const stored = readViews[Math.min(s,2)];
-    const read = s===3 ? readViews[1] : stored;
-    code(d,readExamples[Math.min(s,2)],[[2],[2,3],[8,9],[4,5],[4,5,8]][s]);
-    box(d,'versions',205,'Records for the page',stored.records,P.blue);
-    arrow(d,'read',365,395);
-    if(s===4){
-      box(d,'earlier',405,'Saved snapshot at 8',['new'],P.green);
-      box(d,'current',515,'Current read at 9',['None → absent'],P.orange);
-    }else{
-      const label=s<2?'Current read at '+read.snapshot:'read_at(records, '+read.snapshot+')';
-      box(d,'result',410,label,[s===3?'Which record wins?':read.result],s===2?P.orange:P.green);
-    }
-    foot(d,s<3?'Sequence numbers give the order of writes for this one key.':'A read includes only the records at or before its own boundary.');
-  },[
-    'Let k stand for com.cnn.www. This file holds the morning contents, old, at update sequence 5. Start with one stored record. Ask which value a reader sees.',
-    'Add the afternoon contents in file B. At boundary 8 both writes qualify. Select the greatest qualifying sequence number. What happens if a third record deletes the stored copy?',
-    'At 9 the deletion marker qualifies and has the greatest sequence. The helper returns None for absence. Ask whether a reader that started earlier must also see this deletion.',
-    'Keep all three records on screen. Snapshot 8 still admits 5 and 8 and excludes 9. The is comparison recognizes the unique DELETE marker only if the winning record contains it.',
-    'Compare the two results before changing any files. The earlier reader needs new and the current reader must see absence. Ask how the engine could combine files while preserving both answers.'
-  ]);
-  lookup.clarityTraceId=lookup.traceId;
-  delete lookup.traceId;
-  lookup.title='Choose the version a read can see';
-  lookup.states=['Read at 5','Read at 8','Delete at 9','Revisit snapshot 8','Compare both reads'];
-  lookup.teaching.idea='Each read chooses the newest record within its own boundary.';
-  lookup.teaching.question='After DELETE at 9, what should the saved read at 8 return?';
-  lookup.teaching.answer='It returns new from file B. It excludes the deletion at 9.';
-  lookup.teaching.context='The sequence numbers order writes for one key in a simplified storage engine. Bigtable cell timestamps label application versions.';
-  lookup.teaching.reference='Reading section 9 uses the same read_at function. None represents an absent key in this Python example.';
-  lookup.sources=[deck.source+'#versions'];
-
-  const mergeInputs=sample('Teaching Python · ordered inputs with numeric key suffixes','python',[
-    '# Each entry is (key, version, value).',
-    'a = [(1, 1, "v1"), (2, 1, "v1"),',
-    '     (7, 1, "v1")]',
-    'b = [(2, 2, "v2"), (4, 1, "v1"),',
-    '     (8, 1, "v1")]'
-  ]);
-  const merge=sample('Teaching Python · no deletes or snapshots','python',[
-    'from heapq import merge',
-    'from itertools import groupby','',
-    'def compact_current(a, b):',
-    '    merged = merge(a, b, key=lambda r: r[0])',
-    '    groups = groupby(merged, key=lambda r: r[0])',
-    '    return [max(group, key=lambda r: r[1])',
-    '            for key, group in groups]','',
-    'output = compact_current(a, b)'
-  ]);
-  install('merge-sorted-runs',[mergeInputs,merge],(d,s)=>{
-    code(d,s===0?mergeInputs:merge,s===0?[1,2,3,4]:s===1?[4,5]:s===2?[6,7]:[9]);
-    box(d,'a',205,'Run A',['k1:v1 · k2:v1 · k7:v1'],P.blue);
-    box(d,'b',350,'Run B',['k2:v2 · k4:v1 · k8:v1'],P.orange);
-    if(s>=1){arrow(d,'merge',455,490);box(d,'merge-output',505,s===1?'Next key: k1':s===2?'Resolve duplicate k2':'Sorted output',s===1?['merge advances input cursors']:s===2?['v2 has the higher version']:['k1 · k2 · k4 · k7 · k8'],P.green);}
-    if(s===0)foot(d,'Each input already lists its keys in ascending order.');
-    if(s===1)foot(d,'merge reads the inputs in order. groupby gathers equal keys.');
-    if(s>=2)foot(d,'This example merges ordinary values for current reads.');
-  },[
-    'The last read had to resolve records stored in separate places. To try a sorted merge, use two small runs of ordinary values. Each triple stores numeric key suffix, version, and value. Predict which key goes into the output first. These version numbers serve only this current-value example.',
-    'heapq.merge compares the next key from each input and advances that input cursor. It produces entries in key order without sorting all inputs again. groupby gathers consecutive entries with the same key. Both helpers use tuple position zero for the key.',
-    'max selects the highest version at tuple position one inside each key group. It chooses k2:v2 over k2:v1. This simplified function assumes no deletions and no retained snapshots. It must not be used as a general compaction algorithm.',
-    'The output contains keys 1, 2, 4, 7, 8 in order. Reading inputs and writing this output still costs storage bandwidth. A real engine also applies the version, deletion, and retention rules before installing its output.'
-  ]);
-
-  const deletedPage=sample('Teaching Python · records for page k','python',[
-    'a = [(5, "old")]',
-    'b = [(8, "new")]',
-    'c = [(9, DELETE)]','',
-    'current = read_at(a + b + c, 9)'
-  ]);
-  const cleanupCases=[
-    {inputs:'Flushed records for k',files:['File A · old @ 5','File B · new @ 8','File C · DELETE @ 9'],outcome:'Current read at 9',result:['None → absent']},
-    {inputs:'Merge B and C',files:['A stays outside the merge','A still holds old @ 5'],outcome:'Keep the deletion',result:['Merged output keeps DELETE @ 9']},
-    {inputs:'Merge A, B, and C',files:['All older records covered','Snapshot 8 still active'],outcome:'Preserve both reads',result:['Keep new @ 8 for snapshot 8','Keep DELETE @ 9 for current']},
-    {inputs:'Merge A, B, and C',files:['All older records covered','No reader needs the old versions'],outcome:'Safe output for k',result:['No record']}
-  ];
-  const cleanup=install('deletion-must-hide-older-values',[deletedPage,safety],(d,s)=>{
-    const frame=cleanupCases[s];
-    code(d,s===0?deletedPage:safety,[[0,1,2,4],[0,4,5],[1,4,5],[0,1,3]][s]);
-    box(d,'inputs',205,frame.inputs,frame.files,P.blue);
-    arrow(d,'decision',365,405);
-    box(d,'outcome',420,frame.outcome,frame.result,s===1?P.orange:P.green);
-    if(s===1)foot(d,'Dropping the marker would make the morning page visible again.');
-    if(s===2)foot(d,'Covering the files is only the first check. The snapshot still needs the afternoon copy.');
-  });
-  cleanup.title='Decide when a deletion marker can go';
-  cleanup.states=['Flush the deletion to C','Merge only B and C','Keep snapshot 8','Release snapshot 8'];
-  cleanup.teaching.reference='Reading section 11 follows the same CNN records through a partial merge and a complete merge. Both file coverage and the required read boundaries determine which records can go.';
-  cleanup.sources=[deck.source+'#worked-example'];
 
   const hashes=sample('Teaching Python · the diagram’s three fixed hash functions','python',[
     'def hashes(key):','    a = b = c = 0',
@@ -365,7 +198,7 @@
     foot(d,s===4?'k1 set bit 17, k2 set bit 21, and k5 set bit 16. Together they made k17 look possible.':
       s<2?'The filter records bit positions. The sorted file holds the keys.':'A lookup uses the same three hash functions as insertion.');
   },[
-    'The partial merge left an older file to check. Could the reader skip a file that lacks the requested key? Build a Bloom filter for a separate file containing k1 through k6. Start with 32 zero bits. For each key, three hash functions give three positions. Locate positions 6, 20, and 17 for k1.',
+    'The LSM tree has written several sorted files. Could the reader skip one before opening it? Build a Bloom filter for one file containing k1 through k6. Start with 32 zero bits. For each key, three hash functions give three positions. Locate positions 6, 20, and 17 for k1.',
     'Insert k1 by setting those three bits to one. Insert k2 through k6 in the same way. Point to the highlighted bits for k1. Setting them again leaves them at one. This sharing lets a small array summarize many keys.',
     'Use the same three hashes for k7. Read the bits in the order 12, 30, 9. They hold zero, zero, one. If this file contained k7, inserting it would have set all three bits. A single zero therefore proves absence. Skip this file.',
     'Check k17 at positions 17, 21, and 16. All three bits are one. Before revealing the file result, ask whether a different key could have set each of those bits.',

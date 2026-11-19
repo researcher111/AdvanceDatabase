@@ -117,7 +117,7 @@ fs.mkdirSync(output,{recursive:true});
     const widgets=reading.locator('.lecture-walkthrough');
     const walkthroughScenes=id===14?scenes.slice(2).filter(s=>s.id!=='web-pages-and-stored-cells'):scenes;
     if(id===14){
-     assert.equal(walkthroughScenes.length,16,'Bigtable retains all sixteen embedded walkthroughs');
+     assert.equal(walkthroughScenes.length,11,'the shortened reading has eleven embedded walkthroughs');
      const quote=reading.locator('main figure q[cite]').first();
      await go(0,0);
      const quoteLines=await page.locator('#canvas text[data-key^="quote-line-"]').allTextContents();
@@ -126,7 +126,7 @@ fs.mkdirSync(output,{recursive:true});
      const paperSource=page.locator('#canvas a[data-key="paper-source"]');
      assert.equal(await paperSource.getAttribute('href'),await quote.getAttribute('cite'),'students can open the cited paper from the slide');
      const goals=await reading.locator('#plan ~ ul').first().locator('li').allInnerTexts();
-     assert.equal(goals.length,6);
+     assert.equal(goals.length,5);
      assert.equal(await reading.locator('#plan ~ .slide-reference a').first().evaluate(link=>link.href),url+'#s=2&b=1');
      for(let step=0;step<2;step++){
       await go(1,step);
@@ -250,6 +250,7 @@ fs.mkdirSync(output,{recursive:true});
      assert.deepEqual(await tabletCounts(),[0,0,0,6,18],'the next increasing-key burst still reaches only the final range');
 
      // Capacity counts distinct keys. Rewrites do not consume another slot.
+     await reading.locator('details:has(#viz-lsm) > summary').click();
      await reading.locator('#lsm-reset').click();
      let flushes=0,writes=0,rewriteSeen=false;
      while((flushes<2||!rewriteSeen)&&writes<60){
@@ -299,21 +300,6 @@ fs.mkdirSync(output,{recursive:true});
       assert.match(await reading.locator('#bloom-msg').textContent(),/confirms that the key is present/);
      }
 
-     // The shared delete trace keeps the marker until the older file is covered.
-     const trace=reading.locator('[data-teaching-trace="lsm"]');
-     if(!(await trace.locator('[data-trace-action="reset"]').isDisabled()))await trace.locator('[data-trace-action="reset"]').click();
-     const states=[];
-     for(let step=0;step<5;step++){
-      assert.equal(await trace.getAttribute('data-trace-step'),String(step));
-      states.push(await trace.locator('.trace-table').textContent());
-      if(step<4)await trace.locator('[data-trace-action="next"]').click();
-     }
-     assert.match(states[2],/read at snapshot 9absent/);
-     assert.match(states[3],/older file Astill contains old @ 5/);
-     assert.match(states[3],/keep in merged outputDELETE @ 9/);
-     assert.match(states[4],/safe output for kno record/);
-     assert(await trace.locator('[data-trace-action="next"]').isDisabled());
-     await trace.locator('[data-trace-action="reset"]').click();
     }
     if(id===15){
      // Enumerate the independent course fixture, then derive shortest distances.

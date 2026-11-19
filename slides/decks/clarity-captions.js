@@ -1203,40 +1203,10 @@ window.CourseClarityCaptions = {
       "The crawler sends k2 = v3. An LSM tree collects writes in memory, flushes sorted files, and later merges them.",
       "The server first appends k2 = v3 to its write-ahead log. What would recovery need if memory were lost now?",
       "The server waits until the log record reaches durable storage. Recovery can now replay this update.",
-      "The server puts k2 = v3 in the ordered buffer and confirms the write. This update can wait for a batch flush."
-    ],
-    "the-memtable-stays-ordered": [
-      "The log can recover a write. Where can a reader find it now? Recent writes enter a memory buffer called a memtable.",
-      "Five keys arrive out of order. The memtable keeps them sorted so the server can later write a file in one pass.",
-      "Another write changes k2 to v2. The key keeps its position in this current-value model."
-    ],
-    "freeze-a-sorted-file": [
-      "The memtable fills. How can the server save this sorted batch while the crawler keeps sending updates?",
-      "The server freezes the batch and opens a new memtable. Readers can still use the frozen entries.",
-      "A flush writes the frozen entries in order to a sorted string table (SSTable). Entries in this file stay fixed.",
-      "Key k9 goes into the new memtable. What if a later update has the same key as an entry in the older file?"
-    ],
-    "read-the-newest-visible-value": [
-      "Let k name the CNN page. File A holds its morning copy, old, at sequence 5. A read at 5 returns old.",
-      "The afternoon flush puts new in file B at sequence 8. A read at 8 returns new even though A still holds old.",
-      "At sequence 9 the crawler deletes its stored copy. A current read sees the deletion marker and returns absent.",
-      "A reader kept its earlier view, called a snapshot, at 8. Which of the three records can that reader see?",
-      "The saved read returns new. The current read at 9 returns absent. Both answers come from the same stored records."
-    ],
-    "merge-sorted-runs": [
-      "Reads may have to check several sorted files. Can the server merge two files while preserving the answers?",
-      "Compare the next entries in A and B. Copy the smaller key, then advance that file’s position.",
-      "The two files meet at k2. With only current reads and no deletions in this example, keep the higher version, v2.",
-      "One sorted output replaces the two inputs. What should a merge keep if the newest record deletes a key?"
-    ],
-    "deletion-must-hide-older-values": [
-      "Return to the CNN page. The deletion marker has reached file C. File A still holds the morning copy.",
-      "Merge B and C. File A stays outside the merge. Keep the marker or the morning copy could reappear.",
-      "Now include A, B, and C. A reader still holds snapshot 8. Preserve its afternoon copy and the current deletion.",
-      "All three files participate and the earlier reader finishes. The merge can now remove the marker and both older values."
+      "The server puts k2 = v3 in the ordered buffer and confirms the write. Each batch later becomes a sorted file."
     ],
     "a-one-sided-membership-test": [
-      "Can a lookup skip a sorted file? Give this file a Bloom filter. Each key selects three positions in its 32 bits.",
+      "The LSM tree has written several files. Can a lookup skip one? A Bloom filter summarizes the keys in that file.",
       "Inserting k1 sets bits 6, 20, and 17. Insert k2 through k6 the same way. Several keys can set the same bit.",
       "For k7, positions 12, 30, and 9 hold 0, 0, and 1. Either zero proves k7 is absent. Skip this file.",
       "For k17, positions 17, 21, and 16 all hold 1. Must this file contain k17?",

@@ -48,7 +48,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,235);assert.equal(builds,870);
+assert.equal(slides,230);assert.equal(builds,850);
 const resources=decks[10].scenes.at(-1);
 assert.equal(resources.id,'more-models-with-duckdb');
 const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');
@@ -342,26 +342,20 @@ for(const [step,versionCount] of [0,1,3].entries()){
  assert.deepEqual(Array.from(items.filter(i=>i.key.startsWith('code-line-')&&i.text.includes('"anchor:school"')),i=>i.text),
   versions.map((words,i)=>`cells[("r2", "anchor:school", ${i+1})] = b"${words}"`),'the Python writes the same versions in the same cell');
 }
-// The flush carries forward all the keys students just sorted.
-const sortedBatch = text(draw(14, 'the-memtable-stays-ordered', 2), 'sorted-line-0');
-assert.equal(sortedBatch, 'k1, k2, k5, k7, k8');
-assert.equal(text(draw(14, 'freeze-a-sorted-file', 0), 'batch-line-0'), sortedBatch);
-// Start with ordinary values, then add the deletion and compare two read boundaries.
-for (const step of [0, 1]) {
-  assert.doesNotMatch(strings(draw(14, 'read-the-newest-visible-value', step)), /DELETE/);
+// The LSM overview leads directly into using a Bloom filter to rule out a file.
+assert.deepEqual(Array.from(decks[14].scenes.slice(8), scene=>scene.id),[
+  'the-log-protects-memory','a-one-sided-membership-test','skip-files-then-find-a-block',
+  'bigquery-crawl-history','bigquery-count-visits','bigquery-link-changes'
+]);
+for(const [step,positions,bits,decision] of [
+  [2,[12,30,9],['0','0','1'],'Definitely absent'],
+  [3,[17,21,16],['1','1','1'],'Possibly present'],
+  [4,[17,21,16],['1','1','1'],'False positive']
+]){
+  const bloom=draw(14,'a-one-sided-membership-test',step);
+  assert.deepEqual(positions.map(i=>text(bloom,'bit-'+i)),bits);
+  assert.equal(text(bloom,'decision-title'),decision);
 }
-const readComparison = draw(14, 'read-the-newest-visible-value', 4);
-assert.equal(text(readComparison, 'earlier-line-0'), 'new');
-assert.equal(text(readComparison, 'current-line-0'), 'None → absent');
-// Cleanup first leaves A outside the merge, then covers A while a reader still needs B.
-const [flushed, partial, withReader, afterReader] = [0, 1, 2, 3].map(
-  step => draw(14, 'deletion-must-hide-older-values', step));
-assert.match(strings(flushed), /File C · DELETE @ 9/);
-assert.match(strings(partial), /A still holds old @ 5/);
-assert.match(strings(partial), /Merged output keeps DELETE @ 9/);
-assert.deepEqual([0, 1].map(i => text(withReader, 'outcome-line-' + i)),
-  ['Keep new @ 8 for snapshot 8', 'Keep DELETE @ 9 for current']);
-assert.equal(text(afterReader, 'outcome-line-0'), 'No record');
 // Independent traversal counts expose the difference between walks and BFS.
 let paths=['ada'],walks=0,frontier=['ada'],visited=new Set(frontier),edgeVisits=0;
 for(let depth=1;depth<=3;depth++){

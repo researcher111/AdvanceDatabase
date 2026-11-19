@@ -93,8 +93,9 @@ for (const base of ['lectures','labs']) {
   }
 }
 // Lab 5 now has its own query-driven explorer, tested in test_lab5_query_trace.js.
-assert.equal(pageCount,16);
-assert.equal(covered.size,Object.keys(examples).length);
+assert.equal(pageCount,15);
+// The LSM deletion trace is available in the shared examples but outside Lecture 14.
+assert.deepEqual([...covered].sort(),Object.keys(examples).filter(id=>id!=='lsm').sort());
 
 // Verify the projected scenes really use these states, and keep the sixty
 // minute schedule. This catches accidental drift between slides and reading.
@@ -123,5 +124,5 @@ for (const deck of Object.values(context.window.COURSE_DECKS)) {
     }
   }
 }
-assert.equal(scenes,12);
+assert.equal(scenes,11);
 console.log(`${pageCount} pages, ${scenes} shared slide scenes, ${builds} builds: teaching examples and arithmetic pass.`);
