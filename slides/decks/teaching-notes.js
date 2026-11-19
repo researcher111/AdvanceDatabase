@@ -2168,7 +2168,7 @@
       "context": "The displayed counts are a deterministic toy load model, not measured Bigtable throughput. Numeric timestamps represent ordered keys. Actual key encoding must preserve the intended ordering. A split changes tablet size; the incoming key pattern still determines its load."
     },
     "the-log-protects-memory": {
-      "idea": "A durable recovery log can rebuild updates lost from memory after a crash.",
+      "idea": "An LSM tree collects recent updates in an ordered buffer, flushes sorted files, and merges them. A durable log lets the server recover buffered writes after a crash.",
       "question": "What can recovery do after the success reply if the memory buffer disappears?",
       "answer": "It can replay the durable update record to rebuild the buffer.",
       "builds": [
@@ -2227,7 +2227,7 @@
       "context": "Compaction is not automatic permission to discard every tombstone. Other systems can also require replica-repair or retention conditions. Keep this generic LSM safety rule separate from any one product’s deletion API."
     },
     "a-one-sided-membership-test": {
-      "idea": "A Bloom filter rules out absent keys; a possible match still needs a data lookup.",
+      "idea": "A Bloom filter can prove a key is absent from a file. When all the selected bits are one, the reader must check the file.",
       "question": "Why can an absent key have all its selected bits set to 1?",
       "answer": "Other inserted keys can share those bit positions. This false positive costs an extra lookup but must not change the answer.",
       "builds": [
@@ -2239,7 +2239,7 @@
       ]
     },
     "skip-files-then-find-a-block": {
-      "idea": "Filters, sparse indexes, and block caches avoid different levels of read work.",
+      "idea": "The Bloom filter can rule out a file. The index locates a candidate block, and the cache can supply that block for another lookup.",
       "question": "For k9, why does the index choose block 1 rather than block 2?",
       "answer": "Block 1 begins at k8, and block 2 begins at k16. Key k9 lies between those boundaries.",
       "builds": [
@@ -2247,41 +2247,6 @@
         "Define sparse index as selected keys paired with block locations. Here each selected key is a block’s first key. Find the greatest indexed key no greater than k9: k8. These toy keys use numeric suffix order. Actual Bigtable row keys use byte-string order; numeric components need an order-preserving encoding.",
         "Load block 1 and compare its actual entries. The block covers keys from k8 up to, but not including, k16. Finding the candidate block alone does not prove that every intervening key exists.",
         "Define a cache as memory holding a reusable copy. A block cache can supply block 1 on the next request without another storage read. State each layer’s job: rule out a file, choose a block, reuse its bytes."
-      ]
-    },
-    "the-read-write-space-budget": {
-      "idea": "A storage choice must account for its whole read, write, space, and durability workload.",
-      "question": "Why can a fast log append fail to sustain a high incoming write rate?",
-      "answer": "Compaction must keep up. Otherwise runs accumulate, increase later work, and can force incoming writes to slow down.",
-      "builds": [
-        "Return to the same morning and afternoon web crawls. Suppose a B+ tree holds the CNN record on a leaf. Find the changed leaf in the buffer pool. If both updates reach the same leaf before it is written, they can share that write.",
-        "Give the same changes to the LSM engine. The morning flush creates A. The afternoon update enters the memtable and later reaches B. Ask what the reader may have to check to find the latest page.",
-        "The merge reads its inputs and writes a new output while the original files still occupy space. Ask which work a benchmark misses if it stops after timing a log append.",
-        "Ask students to choose measurements for frequent crawler updates and lookups. Use the same workload and durability requirements for both designs. Next, give a reader a second copy of the data. Can a faster read path help if that copy missed a write?"
-      ]
-    },
-    "a-network-partition-forces-a-choice": {
-      "idea": "An isolated replica cannot always answer a read both responsively and consistently with completed writes.",
-      "question": "After v2 completes elsewhere, can replica 2 safely return v1 for this later read?",
-      "answer": "No, if linearizability is required. It must learn the write or decline to complete that read under this partition.",
-      "builds": [
-        "A replica is another copy of data. Begin with both copies at v1. A network partition means communication is interrupted; it is different from partitioning rows among tablets.",
-        "Complete v2 at replica 1 while communication is interrupted. Then request a read at replica 2. Ask what its silence from replica 1 proves. It cannot distinguish a completed write from no write.",
-        "Define linearizability: operations appear in one order that respects completed operations in real time. This later read must respect v2. Waiting or returning an error does not complete the required read.",
-        "Define CAP availability: every request to a non-failed node must eventually complete with a non-error response for the requested operation. Returning v1 is responsive, but violates linearizability here. No timeout duration resolves the missing knowledge.",
-        "Reconciliation means bringing copies into agreement using the system’s rules after communication resumes. Name CAP: consistency, availability, and partition tolerance. Under a network partition, a system cannot guarantee both defined properties for every request."
-      ],
-      "context": "This is a generic two-replica thought experiment, not Bigtable’s exact read protocol. Some systems keep serving one side while rejecting the other. A product label alone does not determine every operation’s behavior."
-    },
-    "trace-an-acknowledged-write": {
-      "idea": "A new crawl uses the same row key, write path, and read rule even after a prior deletion.",
-      "question": "After fresh arrives at 10, what do a current read and the saved snapshot at 9 return for the CNN page?",
-      "answer": "A current read returns fresh. The saved snapshot excludes sequence 10 and still sees the deletion at 9.",
-      "builds": [
-        "Return to www.cnn.com on the next crawl. Ask students to reconstruct the row key and name its server under the opening assignment. The key com.cnn.www is before org, so its update goes to Server 1.",
-        "Give this new page copy the value fresh and sequence 10. Ask what must happen before the server confirms the update. Make the log durable, then buffer the record. A crash before the flush requires replay.",
-        "Follow the flush. The new file keeps the fresh value, and older files may still contain the deletion marker. Before advancing, ask for the current read and the read at snapshot 9.",
-        "At boundary 10, fresh is the newest record. At boundary 9, the delete is the newest eligible record. Ask what a later merge must preserve for those two readers. A different, isolated replica may still lack sequence 10."
       ]
     }
   },

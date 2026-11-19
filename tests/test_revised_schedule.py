@@ -94,7 +94,7 @@ class RevisedScheduleTests(unittest.TestCase):
         deck=(ROOT/'slides/decks/lectures-11-15.js').read_text()
         for number, name, slug, date, iso in [
             (13,'MapReduce and distributed execution','distributed','Tuesday November 10, 2026','2026-11-10'),
-            (14,'Bigtable and LSM trees','bigtable','Tuesday November 17, 2026','2026-11-17'),
+            (14,'Bigtable, LSM Trees, Bloom Filters & BigQuery','bigtable','Tuesday November 17, 2026','2026-11-17'),
             (15,'Graphs and course synthesis','graphs','Tuesday December 1, 2026','2026-12-01'),
         ]:
             self.assertIn(date,(ROOT/f'lectures/lecture-{number}/{slug}.html').read_text())

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Lecture 14 · Bigtable, LSM Trees &amp; NoSQL · Advanced Databases for Data Science</title>
+<title>Lecture 14 · Bigtable, LSM Trees, Bloom Filters &amp; BigQuery · Advanced Databases for Data Science</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
@@ -23,7 +23,7 @@
     <li><a href="#sparse">3 · Store present cells and selected versions</a></li>
     <li><a href="#tablets">4 · Assign each row range to a tablet server</a></li>
     <li><a href="#hotspot">5 · Explain why a split can leave a hotspot</a></li>
-    <li><a href="#lsm">6 · Protect a write with a durable log</a></li>
+    <li><a href="#lsm">6 · How an LSM tree stores a crawler update</a></li>
     <li><a href="#memtable">7 · Keep recent writes in a sorted memtable</a></li>
     <li><a href="#flush">8 · Flush a frozen memtable to an SSTable</a></li>
     <li><a href="#versions">9 · Choose the newest visible record</a></li>
@@ -31,9 +31,9 @@
     <li><a href="#deletes">11 · Keep a deletion marker until removal is safe</a></li>
     <li><a href="#bloom">12 · Use a Bloom filter to rule out files</a></li>
     <li><a href="#reads">13 · Find a block and reuse its cached copy</a></li>
-    <li><a href="#lsm-vs-btree">14 · Compare the full storage workload</a></li>
-    <li><a href="#cap">15 · Explain the choice during a network failure</a></li>
-    <li><a href="#recap">16 · Return to the deleted key</a></li>
+    <li><a href="#bigquery-crawl-history">14 · Give BigQuery a history of crawl visits</a></li>
+    <li><a href="#bigquery-count-visits">15 · Count visits for each page</a></li>
+    <li><a href="#bigquery-link-changes">16 · Find changes in the school’s link text</a></li>
     <li><a href="#descendants">Related storage systems</a></li>
     <li><a href="#prepare">Prepare for the next class</a></li>
     <li><a href="#faq">FAQ</a></li>
@@ -47,7 +47,7 @@
 <main>
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 14 · Tuesday November 17, 2026</div>
-  <h1>Bigtable, LSM Trees &amp; NoSQL</h1>
+  <h1>Bigtable, LSM Trees, Bloom Filters &amp; BigQuery</h1>
   <div class="subtitle">What problem does Bigtable solve?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
@@ -71,12 +71,12 @@
   <li>judge whether Bigtable’s NoSQL data model fits an application that needs key lookups, range scans, joins, or transactions across rows.</li>
   <li>explain how Bigtable batches writes in a log-structured merge-tree (LSM tree) and recovers confirmed writes from a durable log.</li>
   <li>predict what current reads and older snapshots should return as an LSM tree merges files containing updates and deletions.</li>
-  <li>compare the read, write, and maintenance costs of LSM trees and B+ trees for a given workload.</li>
-  <li>explain why guaranteeing the latest value can force a distributed database to delay reads when replicas lose contact.</li>
+  <li>use a Bloom filter to decide when a lookup can skip a sorted file and when it must check the key.</li>
+  <li>write BigQuery queries that count crawl visits and identify when a school changes the words in its link.</li>
 </ul>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=2&amp;b=1">Open slide 2 ↗</a></p>
 <div class="callout note"><span class="label">Class plan</span>
-  <p>Start with <strong>Quiz 10</strong>, a 10-minute quiz on MapReduce, Spark, and Ray. Then study Bigtable and storage for workloads with many writes.</p>
+  <p>Start with <strong>Quiz 10</strong>, a 10-minute quiz on MapReduce, Spark, and Ray. Trace a crawler’s write into Bigtable and a lookup through its sorted files. Then use BigQuery to count visits and find changes in the crawler’s history.</p>
 </div>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>When the crawler revisits CNN’s home page, what can it use to find the same row even though the headline changed?</p><details><summary>Check your explanation</summary><p>The web address still identifies the page. The crawler can use that address to construct the same key on both visits.</p></details></div>
 <p class="glossary-hint">Dotted terms have extra definitions. Hover over a term or tap it to show its definition below the sentence.</p>
@@ -230,9 +230,10 @@ after = bisect_right([25, 50, 75, 88], 99)  # Tablet 4</code></pre>
 <p>A hash prefix can spread writes across ranges. Here, a hash is a repeatable function that maps a key to a numeric value. This can make one logical range scan contact more tablets.</p>
 <p><strong>Choose keys for both writes and reads.</strong> Reversed domains group related pages, but a heavily used domain can still create a hotspot.</p>
 
-<h2 id="lsm" data-slide="9" data-scene="the-log-protects-memory">6 · Protect a write with a durable log</h2>
+<h2 id="lsm" data-slide="9" data-scene="the-log-protects-memory">6 · How an LSM tree stores a crawler update</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
-<p>Follow just one write that reached Server 1. The crawler sends the morning CNN update. Suppose the server changes a copy in memory, replies “saved,” and then crashes. What surviving record could the replacement use to keep that promise?</p>
+<p>The crawler sends the morning CNN update to Server 1. Soon updates for hundreds of other pages arrive. The server could write entries in batches, using one stream of writes per batch. This is the idea behind a <strong>log-structured merge-tree</strong> (LSM tree).</p>
+<p>Suppose the server changes its copy in memory, replies “saved,” and crashes before writing the batch. What record could a replacement server use to restore the CNN update?</p>
 <p>Before replying, the server appends a record of the change to a <strong>write-ahead log</strong> (WAL). Appending puts the record at the end of the log. The server waits until the record is <strong>durable</strong>, meaning it can survive the failure covered by the storage protocol. Recovery can then replay the change even if the in-memory copy disappears.</p>
 <p>The slide uses <code>k2 = v3</code> as a short example write. Follow it through the engine pseudocode below. The call to <code>sync_log()</code> waits for durability. Only after that wait and the memory update does the engine send its <strong>acknowledgment</strong>, the success reply.</p>
 <pre><code class="language-text">record = ("k2", "v3")
@@ -252,7 +253,7 @@ reply_success()</code></pre>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=10&amp;b=1">Open slide 10 ↗</a></p>
 <p>The log protects the morning CNN update. Server 1 still has to store that update alongside changes to other sites. Recall how a B+ tree would handle <code>com.cnn.www</code>. The engine finds the leaf for that key in its <strong>buffer pool</strong>, where it keeps working copies of database pages. After the update, the leaf is a <strong>dirty page</strong> until the engine writes it back.</p>
 <p>If a second update changes that leaf before the write, one write saves both changes. Now suppose a hundred updates land on a hundred different leaves. The server may have to write a hundred pages scattered across storage. Could it collect those updates and write them together?</p>
-<p>Bigtable uses a <strong>log-structured merge-tree</strong> (LSM tree) to batch the updates. As each logged write arrives, the server places it in a <span class="gloss" data-gloss="memtable">memtable</span>. This structure keeps entries sorted by key in random-access memory (RAM).</p>
+<p>The LSM tree collects the updates before writing the batch to storage. As each logged write arrives, the server places it in a <span class="gloss" data-gloss="memtable">memtable</span>. This structure keeps entries sorted by key in random-access memory (RAM).</p>
 <p>Try a fresh batch with five short keys. They arrive as <code>k8, k2, k5, k1, k7</code>. In what order could the server copy them out?</p>
 <p><strong>Teaching Python:</strong> the integers below represent the suffixes of <code>k8</code>, <code>k2</code>, and the other short labels. The <code>keys</code> list records their order. The <code>values</code> dictionary holds each key’s current value:</p>
 <pre><code class="language-python">from bisect import insort
@@ -424,8 +425,8 @@ result = read_at(old_file + newer, 2)</code></pre>
 
 <h2 id="bloom" data-slide="15" data-scene="a-one-sided-membership-test">12 · Use a Bloom filter to rule out files</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=15&amp;b=1">Open slide 15 ↗</a></p>
-<p>The server now knows which records must survive a merge. A lookup still has to find them among the remaining files. Some files contain only other sites. How can the server skip those files before reading their entries?</p>
-<p>When writing a file, the server can build a small summary of its keys called a <strong>Bloom filter</strong>. Try a separate toy file with six keys, <code>k1</code> through <code>k6</code>. Its filter has <strong>32 bits</strong>, initially all zero. Each of <strong>3 hash functions</strong> maps an inserted key to a bit position. Inserting the key sets those positions to 1.</p>
+<p>The server now knows which records must survive a merge. A lookup still has to find them among the remaining files. Imagine a reader asks for CNN, and one file contains only rows for other sites. What could the server store about that file so the reader can skip it?</p>
+<p>The LSM tree keeps the records. When writing a sorted file, the server can build a second structure that summarizes the keys in that file. This summary is a <strong>Bloom filter</strong>. Try a separate toy file with six keys, <code>k1</code> through <code>k6</code>. Its filter has <strong>32 bits</strong>, initially all zero. Each of <strong>3 hash functions</strong> maps an inserted key to a bit position. Inserting the key sets those positions to 1.</p>
 <p>To look up <code>k7</code>, the server checks the same three positions that inserting <code>k7</code> would set. One bit is zero, so the file cannot contain <code>k7</code>. For <code>k17</code>, all three bits are 1. Could another key have set each of those bits?</p>
 <p><strong>Teaching Python:</strong> these fixed functions reproduce the diagram’s bit positions. <code>ord</code> converts an ASCII character to its numeric code. <code>enumerate</code> supplies the character’s position. The remainder operation <code>% 32</code> keeps each result between 0 and 31:</p>
 <pre><code class="language-python">def hashes(key):
@@ -468,7 +469,7 @@ present = "k17" in stored</code></pre>
   <div class="bloom-msg" id="bloom-msg">The filter starts empty, so every key is definitely absent without reading an SSTable.</div>
   <p class="viz-caption">If an absent key’s three bits are all set by other keys, the filter returns “possibly present.” The engine may then read a file unnecessarily. An inserted key cannot produce “definitely absent,” because inserting it set the same bits that its query checks. Real systems size filters for a chosen false-positive rate.</p>
 </div>
-<p>A correctly maintained Bloom filter has no <strong>false negatives</strong>: it does not report an inserted key as absent. A false positive costs another check, not a lost result. <a href="#src-4">[4]</a></p>
+<p>Could the filter make a reader miss a deletion? The server includes each key that has a record in the file, including a deletion marker. Because insertion sets every required bit, a lookup for that key always says “possibly present.” This property rules out <strong>false negatives</strong>. A false positive costs an extra check of the file. <a href="#src-4">[4]</a></p>
 <p>Do not clear shared bits to delete one key from an ordinary Bloom filter. Another inserted key can depend on those bits. Filter size and hash count affect the false-positive rate.</p>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>The filter says possibly present. Can the read return a value without checking the stored entries?</p><details><summary>Check your explanation</summary><p>No. The filter stores membership evidence, not the value or its visibility. The engine must inspect the candidate data.</p></details></div>
 
@@ -511,64 +512,77 @@ again = read_block(block_id)</code></pre>
 <p>The filter can skip a file. Otherwise, the engine locates a candidate block and uses a cached copy when available. It still checks actual entries and applies the version rule.</p>
 <p>Illustrations use numeric order for labels such as <code>k8</code> and <code>k16</code>. Real Bigtable row keys use byte-string order. Applications can pad numeric components when they need numeric order to match key order.</p>
 
-<h2 id="lsm-vs-btree" data-slide="17" data-scene="the-read-write-space-budget">14 · Compare the full storage workload</h2>
+<p>Now a student asks how often the crawler saw the school’s link to the Moon article. Which records would you need to count every visit, including two visits with identical link text?</p>
+
+<h2 id="bigquery-crawl-history" data-slide="17" data-scene="bigquery-crawl-history">14 · Give BigQuery a history of crawl visits</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=17&amp;b=1">Open slide 17 ↗</a></p>
-<p>Give two engines the same job. Both must save the crawler’s updates, serve lookups for individual pages, and scan rows for one domain. Both must meet the same durability requirement. What storage work does each engine perform for those requests?</p>
-<p>In a B+ tree, updates to the same leaf can share a write from the buffer pool. Updates to many different leaves can leave the server with many scattered dirty pages. An LSM engine collects updates in key order and writes each batch sequentially. A later read may have to check several files to find the current page.</p>
-<p>That extra work per lookup is <strong>read amplification</strong>. Compaction reduces the number of candidate files, but it reads and rewrites entries that the crawler already saved. <strong>Write amplification</strong> compares the bytes the engine writes with the bytes the application writes. Retaining obsolete versions also uses space beyond the live data, contributing to <strong>space amplification</strong>. If merges fall behind, the number of files can keep growing.</p>
-<div class="lecture-walkthrough" data-lecture-scene="the-read-write-space-budget"></div>
-<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
+<p>A current Bigtable lookup for <code>r2</code>, <code>anchor:school</code> gives the latest saved link text, “Explore the Moon.” That answer alone cannot tell us how often the crawler saw those words. Suppose the crawler also saves one observation per visit, even when the words repeat.</p>
+<div class="reading-table-scroll keep-in-present" tabindex="0" role="region" aria-label="Five visits in the crawler’s history">
 <table>
-  <thead><tr><th>Operation</th><th>B+ tree organization</th><th>LSM organization</th></tr></thead>
+  <caption><strong>Five visits in the crawler’s history</strong></caption>
+  <thead><tr><th scope="col">visit_no</th><th scope="col">page_key</th><th scope="col">source_site</th><th scope="col">link_text</th></tr></thead>
   <tbody>
-    <tr><td>Write</td><td>Change the page for the key. The buffer pool can batch dirty-page writes.</td><td>Log and buffer changes. Flush sorted files and merge them later.</td></tr>
-    <tr><td>Point lookup</td><td>Follow the index to a leaf. Depending on the layout, fetching the row can need another access.</td><td>Resolve the key across relevant memory structures and files. Filters and indexes can reduce file accesses.</td></tr>
-    <tr><td>Range scan</td><td>Read leaf pages in key order.</td><td>Merge relevant sorted runs and resolve duplicate versions.</td></tr>
-    <tr><td>Maintenance</td><td>Split pages, write dirty pages, and perform the engine’s required cleanup.</td><td>Read and rewrite files during compaction. Preserve required versions and deletions.</td></tr>
+    <tr><td>1</td><td>r2</td><td>school</td><td>Moon facts</td></tr>
+    <tr><td>2</td><td>r1</td><td>cnnsi.com</td><td>CNN</td></tr>
+    <tr><td>3</td><td>r2</td><td>school</td><td>Moon phases</td></tr>
+    <tr><td>4</td><td>r2</td><td>school</td><td>Moon phases</td></tr>
+    <tr><td>5</td><td>r2</td><td>school</td><td>Explore the Moon</td></tr>
   </tbody>
 </table>
 </div>
-<p>Both designs maintain sorted data and can support transactions. B+ tree engines appear in systems such as microdb, PostgreSQL, and MySQL. Bigtable, Cassandra, and RocksDB use related LSM techniques.</p>
-<p>Run the same mix of updates, lookups, and domain scans on both engines. Measure read response time, sustained writes per second, memory use, storage space, and maintenance work. Include the merges that the LSM engine needs to keep up with the crawler.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>A test times only log appends and ends before any compaction. Does it establish sustained LSM write performance?</p><details><summary>Check your explanation</summary><p>No. Sustained performance also requires flush and compaction to keep up. Include their costs and the required read workload.</p></details></div>
+<p>Read the first row from left to right. On visit 1 the crawler saw a link to the Moon article (<code>r2</code>) on the school’s site. The link read “Moon facts.” The visit numbers order these five observations. Bigtable cell timestamps identify versions in the earlier example.</p>
+<p>With five visits, you can count by hand. Across millions of visits, the crawler team wants to group rows and compare observations using SQL. It loads the visit history into <strong>BigQuery</strong>, Google’s managed data warehouse. A data warehouse stores tables for analysis. BigQuery stores data by column, so a query can read the fields its calculation needs. <a href="#src-15">[15]</a></p>
+<div class="lecture-walkthrough" data-lecture-scene="bigquery-crawl-history"></div>
+<p>To try both queries, open the <a href="./crawl-history.sql" download>GoogleSQL script with the five visits</a>. Run the whole script in the BigQuery query editor. It creates a temporary table called <code>crawl_history</code>, inserts the five rows, and runs both queries. You can inspect each query’s result in the editor. <a href="#src-16">[16]</a></p>
 
-<h2 id="cap" data-slide="18" data-scene="a-network-partition-forces-a-choice">15 · Explain the choice during a network failure</h2>
+<h2 id="bigquery-count-visits" data-slide="18" data-scene="bigquery-count-visits">15 · Count visits for each page</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=18&amp;b=1">Open slide 18 ↗</a></p>
-<p>So far, the server answering a read could see the relevant writes. Consider a separate model where two servers hold the same row. Each copy is a <strong>replica</strong>. What can a reader learn when the two copies lose contact?</p>
-<p>Both replicas start with <code>v1</code>, the morning headline. A <strong>network partition</strong> cuts communication between the servers. Replica 1 accepts the afternoon headline, <code>v2</code>, and confirms the write. A reader then asks replica 2 for the current headline. Replica 2 still has <code>v1</code>. Can it tell from its local data whether the afternoon write happened?</p>
-<p>If replica 2 returns <code>v1</code>, the reader misses a write that already completed. That answer breaks <strong>linearizability</strong>, the guarantee that operations behave like one current copy and respect completed operations.</p>
-<p>Replica 2 could wait for the missing update. If the partition lasts indefinitely, the read may never finish. The <strong>CAP theorem</strong> relates consistency, availability, and partition tolerance. Its availability guarantee requires every request to a nonfailed node to eventually receive a non-error response. Rejecting the read also gives up that guarantee.</p>
-<div class="lecture-walkthrough" data-lecture-scene="a-network-partition-forces-a-choice"></div>
-<p>During a partition, a system cannot guarantee both linearizability and availability for all requests. Some systems continue on one side while another side rejects requests. <a href="#src-5">[5]</a></p>
-<pre class="equation"><code>During a network partition, both guarantees cannot hold for all requests:
+<p>Which destination page appears in the most visits? Look down the <code>page_key</code> column. Each time <code>r2</code> appears, add one to its count. What should happen to the count at visit 4, when the crawler sees “Moon phases” again?</p>
+<pre><code class="language-sql">SELECT page_key, COUNT(*) AS visits
+FROM crawl_history
+GROUP BY page_key
+ORDER BY visits DESC, page_key;</code></pre>
+<div class="reading-table-scroll keep-in-present" tabindex="0" role="region" aria-label="Result of grouping five visits by destination page">
+<table>
+  <caption><strong>Result of grouping five visits by destination page</strong></caption>
+  <thead><tr><th scope="col">page_key</th><th scope="col">visits</th></tr></thead>
+  <tbody><tr><td>r2</td><td>4</td></tr><tr><td>r1</td><td>1</td></tr></tbody>
+</table>
+</div>
+<p><code>GROUP BY page_key</code> collects the visits for each destination page. <code>COUNT(*)</code> counts every row in each group, including visit 4. <code>ORDER BY visits DESC</code> puts the largest count first. <a href="#src-17">[17]</a></p>
+<div class="lecture-walkthrough" data-lecture-scene="bigquery-count-visits"></div>
+<p>The Moon article appears in four visits. How many times did the crawler actually see the school’s link text change?</p>
 
-  Consistency (linearizability): operations behave as if there were one current copy.
-  Availability: every request to a nonfailed node eventually gets a non-error response.
-
-Preserving the first can require delaying or rejecting some requests.
-Preserving the second can allow replicas to disagree until communication recovers.
-
-Bigtable, HBase, Spanner: examples that prioritize strong consistency.
-Dynamo, Cassandra, Riak: designs that support availability-oriented choices.
-Exact guarantees depend on the operation and configuration.</code><sup class="src"><a href="#src-5" title="CAP Twelve Years Later: How the 'Rules' Have Changed (Eric Brewer, IEEE Computer 2012)">5</a></sup><sup class="src"><a href="#src-6" title="Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)">6</a></sup></pre>
-<p>The product names above summarize design directions, not every modern configuration. In original Bigtable, atomicity concerns operations within a row. Choose a guarantee for the operation before applying a system label.</p>
-<p><strong>Reconciliation</strong> brings copies into agreement after communication returns, using the system’s conflict rules. <strong>Eventual consistency</strong> allows temporary disagreement but promises convergence if updates stop and communication and reconciliation continue.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Replica 2 finds <code>v1</code> in its block cache and returns it after replica 1 confirms <code>v2</code>. Which guarantee fails?</p><details><summary>Check your explanation</summary><p>Linearizability fails because the read misses the completed write. A cache hit saves a local storage read. Only communication can bring replica 2 the missing update.</p></details></div>
-
-<h2 id="recap" data-slide="19" data-scene="trace-an-acknowledged-write">16 · Return to the deleted key</h2>
+<h2 id="bigquery-link-changes" data-slide="19" data-scene="bigquery-link-changes">16 · Find changes in the school’s link text</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=19&amp;b=1">Open slide 19 ↗</a></p>
-<p>Return to the crawler’s row, <code>com.cnn.www</code>. In the example with a split at <code>org</code>, the client sends the request to Server 1. The server logged each update before acknowledging it, kept recent entries sorted in memory, and flushed them to files.</p>
-<p>For this row, the read at 5 returns the morning page. The read at 8 returns the afternoon page. A current read after <code>DELETE@9</code> reports the saved page absent. The key identifies the same row each time. Which version the reader can see determines the answer.</p>
-<div class="lecture-walkthrough" data-lecture-scene="trace-an-acknowledged-write"></div>
-<div class="exercise learning-check"><span class="ex-label">One more crawl</span><p>The crawler visits CNN again and stores a fresh copy at sequence 10. A reader still holds snapshot 9. What do that reader and a current reader each see?</p><details><summary>Check your explanation</summary><p>At snapshot 9, <code>DELETE@9</code> still determines the answer, so the page is absent. A current read includes <code>fresh@10</code> and returns the fresh copy. A later merge must preserve both results while that snapshot remains active.</p></details></div>
-<ul class="recap-list">
-  <li>Bigtable assigns ordered row ranges to tablet servers. Key design determines where writes go and which ranges a scan needs.</li>
-  <li>LSM storage reduces some write costs through batching. Reads and compaction must still resolve all relevant versions correctly.</li>
-  <li>Filters, indexes, and caches avoid different kinds of read work. They do not replace the version rule.</li>
-  <li>During network failure, another durable copy may still lack the latest completed update. Replication needs explicit read and write guarantees.</li>
-</ul>
+<p>Visit 3 saw “Moon phases.” The previous visit, number 2, saw “CNN” on another site. Comparing those two rows would count a change between unrelated links. Which visit last saw the school’s link to the Moon article?</p>
+<p>Keep only rows for <code>r2</code> and <code>school</code>. That leaves visits 1, 3, 4, and 5. Within those rows, <code>LAG(link_text)</code> retrieves the words from the previous visit in <code>visit_no</code> order. <a href="#src-18">[18]</a></p>
+<pre><code class="language-sql">WITH history AS (
+  SELECT visit_no, link_text,
+    LAG(link_text) OVER (
+      ORDER BY visit_no) AS prior_text
+  FROM crawl_history
+  WHERE page_key = &#x27;r2&#x27;
+    AND source_site = &#x27;school&#x27;
+)
+SELECT visit_no, prior_text, link_text
+FROM history
+WHERE prior_text &lt;&gt; link_text
+ORDER BY visit_no;</code></pre>
+<p>The query calls this intermediate result <code>history</code>. Its first row has no previous observation, so <code>prior_text</code> is <code>NULL</code>. The outer query keeps rows where the two texts differ. Visit 1 supplies the starting words. Visit 4 repeats the words from visit 3. Only visits 3 and 5 pass the comparison.</p>
+<div class="reading-table-scroll keep-in-present" tabindex="0" role="region" aria-label="Two observed changes to the school’s link">
+<table>
+  <caption><strong>Two observed changes to the school’s link</strong></caption>
+  <thead><tr><th scope="col">visit_no</th><th scope="col">prior_text</th><th scope="col">link_text</th></tr></thead>
+  <tbody><tr><td>3</td><td>Moon facts</td><td>Moon phases</td></tr><tr><td>5</td><td>Moon phases</td><td>Explore the Moon</td></tr></tbody>
+</table>
+</div>
+<div class="lecture-walkthrough" data-lecture-scene="bigquery-link-changes"></div>
+<div class="exercise learning-check"><span class="ex-label">One more crawl</span><p>On visit 6, the crawler sees “Explore the Moon” again on the school’s link. What would each query return now?</p><details><summary>Check your explanation</summary><p>The count for <code>r2</code> rises to 5. The change query still returns visits 3 and 5. Visits 5 and 6 have the same text.</p></details></div>
+<p id="recap">To serve a page lookup, Bigtable directs the client to its row. The LSM tree batches updates into sorted files, and a Bloom filter can rule out files during a lookup. To analyze the crawl, the team gives BigQuery one row per visit. Counting those rows and comparing successive observations answer different questions about the same links.</p>
 
 <h2 id="descendants">Related storage systems</h2>
+<details><summary>Optional reading on related storage systems</summary>
 <p>This comparison extends the main lecture. An <strong>embedded engine</strong> is a library used inside an application process. A <strong>managed service</strong> runs the database infrastructure for its users.</p>
 <p>Bigtable emphasizes ordered data and its placement across servers. The original Dynamo paper emphasizes replication and availability. Later systems combine these ideas in different ways. <a href="#src-6">[6]</a></p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
@@ -592,12 +606,12 @@ Exact guarantees depend on the operation and configuration.</code><sup class="sr
   <p>Both stores use LSM techniques, but their implementations and supporting services differ. Workload distribution and resource management also affect response time. <a href="#src-12">[12]</a></p>
 </div>
 
+</details>
+
 <h2 id="prepare">Prepare for the next class</h2>
 <p class="keep-in-present"><strong>Thursday November 19:</strong> follow <a href="../../labs/lab-11/sparkray.html">Lab 11’s complete Ray examples</a>, then choose your own task to parallelize. Submit <code>my_ray_task.py</code> and <code>completion.txt</code> by Tuesday December 1 at class start. The lab is graded for completion. The earlier MapReduce and Spark exercises remain optional practice.</p>
 <p class="keep-in-present"><strong>Tuesday December 1:</strong> study graph databases and review course connections. Quiz 11 on Bigtable, LSM, and NoSQL starts the class. Lab 11 is due at class start. The retrieval milestone was due November 12. The project question swap is due November 19. The final project workshop is December 3.</p>
 <p class="keep-in-present">This course has no class on November 24 or November 26.</p>
-
-<p class="keep-in-present"><strong>B+ trees and LSM trees trade read work for write work.</strong> B+ trees update pages in place, while LSM trees buffer writes and merge sorted files. Caching, batching, and compaction determine the actual I/O cost.</p>
 
 <p class="keep-in-present"><strong>Before Tuesday December 1:</strong></p>
 <ul class="keep-in-present">
@@ -609,8 +623,11 @@ Exact guarantees depend on the operation and configuration.</code><sup class="sr
 
 <h2 id="faq">FAQ</h2>
 
-<h3 class="keep-in-present">Is Postgres/MySQL "obsolete" for big workloads then?</h3>
+<h3 id="lsm-vs-btree" class="keep-in-present">Is Postgres/MySQL "obsolete" for big workloads then?</h3>
 <p class="keep-in-present">No. B+ tree engines support large workloads and distributed systems. LSM engines can help with sustained writes, but add compaction and read costs. Compare required queries, transaction guarantees, and measured workloads. SQL and NoSQL labels alone do not determine the appropriate engine.</p>
+
+<h3 id="cap">Can a replica always serve the latest write?</h3>
+<p>Suppose one replica confirms a new value while another replica cannot reach it. The second replica might still hold the old value. If the system promises that reads see completed writes, it may have to delay or reject that read during the network failure. <a href="#src-5">[5]</a></p>
 
 <h3 class="keep-in-present">Where do deletes go if SSTables are immutable?</h3>
 <p class="keep-in-present">A delete writes a <strong>tombstone</strong>: a record that marks the key as deleted and hides older values. Compaction must retain it while removing it could expose an older value elsewhere. It must also preserve required snapshot results. Accumulated tombstones can increase read costs, especially with frequent deletes.<sup class="src"><a href="#src-13" title="Apache Cassandra data modeling documentation (queue anti-pattern) and cassandra.yaml">13</a></sup></p>
@@ -640,6 +657,10 @@ document that supports the claim it is attached to.</p>
   <li id="src-12"><a href="https://discord.com/blog/how-discord-stores-trillions-of-messages">How Discord Stores Trillions of Messages (Discord Engineering blog)</a> <span class="src-note">The blog post is dated March 6, 2023, but it says the messages database was switched over to ScyllaDB in May 2022; the C++ / no-garbage-collector and Rust data services details are confirmed.</span></li>
   <li id="src-13"><a href="https://cassandra.apache.org/doc/latest/cassandra/developing/data-modeling/data-modeling_logical.html">Apache Cassandra data modeling documentation (queue anti-pattern) and cassandra.yaml</a></li>
   <li id="src-14"><a href="https://chromium.googlesource.com/chromium/src/+/main/content/browser/indexed_db/docs/README.md">Chromium IndexedDB backing store documentation</a></li>
+  <li id="src-15"><a href="https://docs.cloud.google.com/bigquery/docs/introduction">Google Cloud · Introduction to BigQuery</a></li>
+  <li id="src-16"><a href="https://docs.cloud.google.com/bigquery/docs/multi-statement-queries">Google Cloud · Work with multi-statement queries and temporary tables</a></li>
+  <li id="src-17"><a href="https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#count">GoogleSQL · COUNT</a></li>
+  <li id="src-18"><a href="https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lag">GoogleSQL · LAG</a></li>
 </ol>
 
 
@@ -647,16 +668,17 @@ document that supports the claim it is attached to.</p>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 <script src="../../slides/_shared/visuals.js"></script>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
-<script src="../../slides/decks/lectures-11-15.js?v=bigtable-moon-cells-20261119"></script>
-<script src="../../slides/decks/teaching-notes.js?v=bigtable-moon-cells-20261119"></script>
-<script src="../../slides/decks/clarity-captions.js?v=bigtable-moon-cells-20261119"></script>
-<script src="../../slides/decks/clarity-layout.js?v=bigtable-moon-cells-20261119"></script>
-<script src="../../slides/decks/clarity-diagrams.js?v=bigtable-moon-cells-20261119"></script>
-<script src="../../slides/decks/bigtable-code.js?v=bigtable-moon-cells-20261119"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=bigquery-crawl-20261119"></script>
+<script src="../../slides/decks/teaching-notes.js?v=bigquery-crawl-20261119"></script>
+<script src="../../slides/decks/clarity-captions.js?v=bigquery-crawl-20261119"></script>
+<script src="../../slides/decks/clarity-layout.js?v=bigquery-crawl-20261119"></script>
+<script src="../../slides/decks/clarity-diagrams.js?v=bigquery-crawl-20261119"></script>
+<script src="../../slides/decks/bigtable-code.js?v=bigquery-crawl-20261119"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
 <script src="../lecture-13/slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>

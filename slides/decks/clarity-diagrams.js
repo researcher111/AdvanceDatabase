@@ -328,22 +328,6 @@
     foot(d,s===3?'Crash after success: replay the durable log to rebuild the lost memory buffer.':'Memory can disappear after a crash. The durable log supplies recovery information.');
   });
 
-  function repeatModel(d,s,question,labels){
-    label(d,'return-question',640,236,question,P.ink,30);
-    [175,485,795,1105].forEach((x,i)=>{
-      if(i>s)return;
-      d.circle('repeat-step-'+i,x,401,51,i===3?P.orangeLight:P.greenLight,i===3?P.orange:P.green,3);
-      label(d,'repeat-number-'+i,x,413,String(i+1),i===3?P.orange:P.green,34);
-      labels[i].forEach((line,j)=>label(d,'repeat-label-'+i+'-'+j,x,500+j*33,line,P.ink,26));
-      if(i<s)d.arrow('repeat-next-'+i,x+67,401,x+243,401,P.orange,3);
-    });
-  }
-  use(14,'trace-an-acknowledged-write',(d,s)=>{
-    repeatModel(d,s,'A new visit to com.cnn.www after DELETE @ 9',[
-      ['Route the update','to Server 1'],['Log and buffer','fresh @ 10'],['Flush the batch','to a sorted file'],['Snapshot 9 · absent','Current read · fresh']
-    ]);
-  });
-
   // Slide-only passages continue Maya’s example without changing the lab corpus.
   const sourceExample={
     question:'Why does my model fail on new data?',
@@ -442,24 +426,6 @@
     if(s>=3)d.box('cached-block',905,542,270,65,'Memory copy cached',P.greenLight,P.green,25);
     foot(d,'Toy numeric key order · filter skips files; index chooses blocks; cache reuses bytes.');
   });
-  const capScene=use(14,'a-network-partition-forces-a-choice',(d,s)=>{
-    const xs=[290,990];
-    xs.forEach((x,i)=>{
-      card(d,'replica-'+i,x-170,314,340,148,'Replica '+(i+1),(i===0&&s>0)||s===4?'v2':'v1',i===0&&s>0);
-      label(d,'copy-'+i,x,507,'A copy of the same data',P.muted,24);
-    });
-    d.line('network',475,387,805,387,s>0&&s<4?P.red:P.green,4,s>0&&s<4?'12 12':'');
-    if(s>0&&s<4){d.path('cut','M610,353 L670,421 M670,353 L610,421','none',P.red,5);label(d,'partition-label',640,573,'Network partition: communication interrupted',P.red,27);}
-    if(s>=2&&s<4){
-      d.arrow('read-request',990,263,990,298,P.orange,3);
-      label(d,'read-result',990,233,s===2?'Later read: wait or refuse':'Later read returns stale v1',s===2?P.red:P.orange,25);
-    }
-    if(s===4){d.arrow('reconcile',475,547,805,547,P.green,4);label(d,'reconcile-label',640,595,'Reconcile: bring the copies into agreement',P.green,26);}
-    foot(d,s===3?'This response misses a completed write. It is not linearizable.':s===2?'A wait or error does not complete the requested read with a value.':s===4?'Generic two-copy example · the system must define its reconciliation rules.':'A network partition is a broken connection, not a row range such as a tablet.');
-  });
-
-  if(capScene)capScene.states=['Replicas agree','Communication cut; v2 completes','Wait','Serve stale','Reconcile'];
-
   const graphNodes={ada:[180,385],ben:[390,260],cyd:[390,505],dee:[620,260],eli:[620,505],fay:[825,385]};
   const graphEdges=[['ada','ben'],['ada','cyd'],['ben','dee'],['ben','ada'],['cyd','dee'],['cyd','eli'],['dee','eli'],['eli','fay'],['fay','ada']];
   function graphPicture(d,{frontier=[],visited=[],edges=[],showEdge=()=>true}={}){

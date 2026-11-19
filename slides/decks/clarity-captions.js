@@ -1200,10 +1200,10 @@ window.CourseClarityCaptions = {
       "Key 99 reaches the last range. Another burst takes its count from 6 to 18. Splitting leaves the next writes concentrated."
     ],
     "the-log-protects-memory": [
-      "Follow one arriving update, k2 = v3. What must survive if the server confirms the write and then loses its memory?",
-      "The server appends the update to its write-ahead log. Recovery can use this record to repeat the change.",
-      "The server waits for the log record to reach durable storage before it reports success.",
-      "The server updates its memory buffer and confirms the write. If memory is lost, recovery replays the durable record."
+      "The crawler sends k2 = v3. An LSM tree collects writes in memory, flushes sorted files, and later merges them.",
+      "The server first appends k2 = v3 to its write-ahead log. What would recovery need if memory were lost now?",
+      "The server waits until the log record reaches durable storage. Recovery can now replay this update.",
+      "The server puts k2 = v3 in the ordered buffer and confirms the write. This update can wait for a batch flush."
     ],
     "the-memtable-stays-ordered": [
       "The log can recover a write. Where can a reader find it now? Recent writes enter a memory buffer called a memtable.",
@@ -1236,36 +1236,36 @@ window.CourseClarityCaptions = {
       "All three files participate and the earlier reader finishes. The merge can now remove the marker and both older values."
     ],
     "a-one-sided-membership-test": [
-      "Some files may still await a merge. Can the server rule out a file before reading it? Give that file a Bloom filter.",
-      "Insert keys k1 through k6. Each key’s three hash values select bits to set in this file’s filter.",
-      "Test k7 with the same hashes. One required bit is zero, so this file cannot hold k7. Skip it.",
-      "Test k17. All three bits are set. Predict what the server still has to do.",
-      "A lookup finds no k17 in the file. This false positive costs a file check and the read still reports absence."
+      "Can a lookup skip a sorted file? Give this file a Bloom filter. Each key selects three positions in its 32 bits.",
+      "Inserting k1 sets bits 6, 20, and 17. Insert k2 through k6 the same way. Several keys can set the same bit.",
+      "For k7, positions 12, 30, and 9 hold 0, 0, and 1. Either zero proves k7 is absent. Skip this file.",
+      "For k17, positions 17, 21, and 16 all hold 1. Must this file contain k17?",
+      "Other keys set all three bits. Checking the file finds no k17. This false positive cost one extra lookup."
     ],
     "skip-files-then-find-a-block": [
       "For a different file, the filter allows a lookup for k9. Which part of the file should the server read?",
       "The index lists the first key in each block. Block 1 begins at k8. The next block begins at k16.",
       "Read block 1 and inspect its entries. The server finds k9 and returns v9.",
-      "A second lookup can reuse block 1 from the cache in memory. It avoids another storage read."
+      "A second lookup can reuse the cached block. How would you count visits across every page in the crawl?"
     ],
-    "the-read-write-space-budget": [
-      "Consider the morning CNN update in a B+ tree. The server changes its leaf page in memory. Nearby updates can share a later write.",
-      "Now use an LSM tree. It collects scattered updates in sorted batches, then writes each batch to a file in one pass.",
-      "The read path showed the cost of multiple files. Merging reads the inputs, writes new output, and needs temporary space.",
-      "Which design fits this crawler? Measure updates and page lookups together while the engine performs its background merges."
+    "bigquery-crawl-history": [
+      "BigQuery is a data warehouse for analytical queries. Record the first school link as one observation in a history table.",
+      "Each observation gets a visit number. Visit 2 records CNN. Visit 3 records the school’s next link to the Moon article.",
+      "Visit 4 still says “Moon phases.” It gets its own row because the crawler observed the link again.",
+      "BigQuery stores table data by column. Which column does a query need to count observations for each page?"
     ],
-    "a-network-partition-forces-a-choice": [
-      "One server can now return the newest visible record. What if a reader contacts another copy of the data?",
-      "A broken connection separates the copies. Replica 1 accepts v2 and confirms it. Replica 2 still sees only v1.",
-      "A later read asks replica 2 for the current value. It can wait for communication or decline the request.",
-      "Replica 2 could answer immediately with v1. That answer misses a write that already completed.",
-      "After communication resumes, the copies reconcile. The system’s rules determine how their values converge."
+    "bigquery-count-visits": [
+      "Read the five page keys from crawl_history. Each input row represents one observation.",
+      "GROUP BY page_key puts visits 1, 3, 4, and 5 in the same group. Which group contains visit 2?",
+      "COUNT(*) counts every row in each group. Four observations refer to the Moon article, and one refers to CNN.",
+      "ORDER BY visits DESC puts r2 first. The query returns one count per observed page.",
+      "Visits 3 and 4 have identical link text. Both count as visits. How many times did the words actually change?"
     ],
-    "trace-an-acknowledged-write": [
-      "Return to com.cnn.www. The crawler visits again after the deletion. Where should the client send fresh at sequence 10?",
-      "Server 1 makes the log record durable, buffers fresh, and confirms the write. What if it crashes before the flush?",
-      "Recovery can replay the log. The next flush saves fresh in a file. Predict what a read at 10 and a saved read at 9 return.",
-      "At 10 the latest record is fresh. At 9 the latest visible record is the deletion marker, so that read still reports absence."
+    "bigquery-link-changes": [
+      "Keep the school’s Moon observations and order them by visit_no. The gap at 2 is the CNN observation.",
+      "LAG(link_text) copies the preceding observation’s text beside the current text. The first observation has no predecessor.",
+      "Compare the two text columns. Visit 4 repeats “Moon phases.” Which rows show a change?",
+      "The query returns visits 3 and 5. Four observations of the school’s link contain two observed changes."
     ]
   },
   "15": {

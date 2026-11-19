@@ -395,7 +395,6 @@ function tabletDraw(d,s){const count=s===0?[3,3,3,3]:s===1?[0,0,0,12]:s===2?[0,0
 function lsmRuns(d,s,mode='read') {const runs=[['k2:v1','k7:v1','k9:v1'],['k2:v2','k4:v1','k8:v1'],['k2:v3','k5:v1']];for(let r=0;r<3;r++){const x=150+r*365;d.text('name'+r,x+140,280,['SST 1','SST 2','RAM'][r],31);runs[r].forEach((kv,i)=>{const checked=mode==='read'&&s>=3-r;d.box('r'+r+i,x,325+i*77,280,62,kv,kv.startsWith('k2')&&checked?P.orangeLight:P.white,checked?P.orange:P.line,28);});}if(mode==='read') {d.text('query',650,615,'get(k2)',36,P.orange);const xs=[1020,1020,655,290];token(d,'lookup',xs[Math.min(s,3)],580,undefined,P.orange,17);} }
 function bloomHash(key){let a=0,b=0,c=0;[...key].forEach((ch,i)=>{const n=ch.charCodeAt(0);a=(a*31+n)%32;b=(b*17+n*7)%32;c=(c*13+n*(i+3))%32;});return[a,b,c];}
 function bloomDraw(d,s){const inserted=s?['k1','k2','k3','k4','k5','k6']:[],bits=new Set(inserted.flatMap(bloomHash)),q=s<2?'k1':s===2?'k7':'k17',hs=bloomHash(q);for(let i=0;i<32;i++){const x=170+(i%16)*59,y=335+Math.floor(i/16)*83;d.box('bit'+i,x,y,46,53,bits.has(i)?'1':'0',bits.has(i)?P.greenLight:P.white,hs.includes(i)&&s>1?P.orange:P.line,27);}d.text('query',640,295,s<2?'k1…k6':q,43,s>1?P.orange:P.ink);if(s>1){d.text('answer',640,570,s===2?'0 → ∅':'1 · 1 · 1 → ?',45,s===2?P.green:P.orange);}if(s===4){d.arrow('read',775,565,980,565,P.orange);d.text('absent',1070,578,'∅',47,P.red);}}
-function capNetwork(d,s){const places=[[290,420],[985,420]];places.forEach(([x,y],i)=>{d.circle('rep'+i,x,y,95,i===0?P.greenLight:P.blueLight,i===0?P.green:P.blue,3);d.text('value'+i,x,y+13,(i===0&&s>0)||s===4?'v2':'v1',42);d.text('replica'+i,x,575,'replica '+(i+1),29);});d.line('connection',390,420,885,420,s>0&&s<4?P.red:P.green,5,s>0&&s<4?'12 12':'');if(s>0&&s<4)d.path('cut','M620,370 L670,470 M670,370 L620,470','none',P.red,6);if(s>1){d.arrow('read',985,250,985,305,P.orange);d.text('response',985,215,s===2?'wait':'v1',43,s===2?P.red:P.orange);}if(s===4){d.arrow('reconcile',390,475,880,475,P.orange);}}
 const bigtablePaper = 'https://www.usenix.org/legacy/event/osdi06/tech/chang/chang.pdf';
 const bigtableQuote = [
   '“Bigtable is a distributed storage system for managing',
@@ -412,8 +411,8 @@ const bigtableGoals = [
   ],
   [
     ['predict what current reads and older snapshots should return as', 'an LSM tree merges files containing updates and deletions.'],
-    ['compare the read, write, and maintenance costs of LSM trees and', 'B+ trees for a given workload.'],
-    ['explain why guaranteeing the latest value can force a distributed', 'database to delay reads when replicas lose contact.']
+    ['use a Bloom filter to decide when a lookup can skip a sorted file', 'and when it must check the key.'],
+    ['write BigQuery queries that count crawl visits and identify', 'when a school changes the words in its link.']
   ]
 ];
 function bigtableDefinition(d) {
@@ -528,29 +527,115 @@ function webPagesAndStoredCells(d) {
   });
 }
 
-function compareCrawlerWrites(d, step) {
-  d.text('workload-key',640,208,'Two visits to com.cnn.www',29,P.ink);
-  d.text('btree-path',310,278,'B+ tree',30,P.blue);
-  d.box('buffered-leaf',100,304,420,70,'Update the CNN leaf in memory',P.blueLight,P.blue,25);
-  d.arrow('write-leaf',310,387,310,422,P.blue,3);
-  d.box('stored-leaf',100,434,420,70,'Write the changed leaf to disk',P.white,P.blue,25);
-  if (step >= 1) {
-    d.text('lsm-path',930,278,'LSM tree',30,P.green);
-    d.box('morning-run',652,304,258,70,'A · morning copy',P.greenLight,P.green,24);
-    d.box('afternoon-run',938,304,258,70,'B · afternoon copy',P.greenLight,P.green,24);
-  }
-  if (step >= 2) {
-    d.arrow('merge-a',781,387,868,422,P.orange,3);
-    d.arrow('merge-b',1067,387,980,422,P.orange,3);
-    d.box('merged-file',709,434,430,70,'Read A and B. Write a new file.',P.orangeLight,P.orange,25);
-  }
-  if (step === 3) {
-    d.text('measure',640,579,'Measure on the same workload and durability settings',28,P.ink);
-    d.text('metrics',640,627,'Lookup time  ·  updates per second  ·  storage space',25,P.muted);
+const crawlFields = ['visit_no', 'page_key', 'source_site', 'link_text'];
+const crawlHistory = [
+  [1, 'r2', 'school', 'Moon facts'],
+  [2, 'r1', 'cnnsi.com', 'CNN'],
+  [3, 'r2', 'school', 'Moon phases'],
+  [4, 'r2', 'school', 'Moon phases'],
+  [5, 'r2', 'school', 'Explore the Moon']
+];
+const crawlSqlFile = 'lectures/lecture-14/crawl-history.sql';
+
+function bigQueryHistory(d, step) {
+  const rowCount = [1, 3, 4, 5][step];
+  d.text('table-name', 110, 223, 'crawl_history', 29, P.ink, 'start', 650);
+  d.table('visits', 110, 262, [175, 190, 255, 435],
+    [crawlFields, ...crawlHistory.slice(0, rowCount)], {
+      rowHeight: 52, fontSize: 27,
+      highlightRows: step === 2 ? [3, 4] : [],
+      highlightCols: step === 3 ? [1] : []
+    });
+  d.text('history-note', 110, 620, [
+    'visit_no orders observations in this example.',
+    'Each row records the page, the source of the link, and the words the crawler saw.',
+    'Two observations can contain the same words.',
+    'To count visits by page, read page_key across the five rows.'
+  ][step], 23, P.muted, 'start');
+}
+
+function drawGoogleSql(d, lines, highlights) {
+  d.text('sql-heading', 69, 211, 'GoogleSQL', 27, P.ink, 'start', 650);
+  d.rect('query-panel', 54, 242, 557, lines.length * 30 + 30, P.white, P.line, 6);
+  lines.forEach((line, i) => {
+    const y = 270 + i * 30;
+    if (highlights.includes(i)) d.rect('query-emphasis-' + i, 61, y - 13, 541, 27, P.greenLight, 'none', 3);
+    d.add('query-line-' + i, 'text', {
+      x: 72, y, fill: P.ink, 'font-size': 22, 'text-anchor': 'start',
+      'dominant-baseline': 'middle', 'xml:space': 'preserve',
+      style: 'font-family:ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre'
+    }, line);
+  });
+}
+
+function bigQueryVisitCounts(d, step) {
+  const query = [
+    'SELECT page_key, COUNT(*) AS visits',
+    'FROM crawl_history',
+    'GROUP BY page_key',
+    'ORDER BY visits DESC, page_key;'
+  ];
+  drawGoogleSql(d, query, [[1], [2], [0], [3], [0]][step]);
+  const groups = ['r1', 'r2'].map(key => ({
+    key, visits: crawlHistory.filter(row => row[1] === key).map(row => row[0])
+  }));
+  d.text('result-heading', 700, 211, [
+    'Input rows', 'Groups', 'Counts before sorting', 'Query result', 'Query result'
+  ][step], 27, P.ink, 'start', 650);
+  if (step === 0) {
+    d.table('visit-keys', 699, 242, [200, 242], [
+      ['visit_no', 'page_key'], ...crawlHistory.map(row => row.slice(0, 2))
+    ], {rowHeight: 55, fontSize: 26, highlightCols: [1]});
+  } else if (step === 1) {
+    d.table('grouped-visits', 699, 242, [187, 325], [
+      ['page_key', 'visit numbers'], ...groups.map(group => [group.key, group.visits.join(', ')])
+    ], {rowHeight: 65, fontSize: 26});
+  } else {
+    if (step >= 3) groups.sort((a, b) => b.visits.length - a.visits.length || a.key.localeCompare(b.key));
+    d.table('count-results', 699, 242, [200, 242], [
+      ['page_key', 'visits'], ...groups.map(group => [group.key, group.visits.length])
+    ], {rowHeight: 65, fontSize: 29, highlightRows: step >= 3 ? [1] : []});
+    if (step === 4) {
+      d.text('repeat-one', 700, 503, 'Visit 3: Moon phases', 26, P.ink, 'start');
+      d.text('repeat-two', 700, 549, 'Visit 4: Moon phases', 26, P.ink, 'start');
+    }
   }
 }
-register(14,'Bigtable and LSM trees','2026-11-17','lectures/lecture-14/bigtable.html',[
-scene('Bigtable, LSM Trees & NoSQL', ['The original Bigtable paper'], bigtableDefinition,
+
+function bigQueryLinkChanges(d, step) {
+  const query = [
+    'WITH history AS (',
+    '  SELECT visit_no, link_text,',
+    '    LAG(link_text) OVER (',
+    '      ORDER BY visit_no) AS prior_text',
+    '  FROM crawl_history',
+    "  WHERE page_key = 'r2'",
+    "    AND source_site = 'school'",
+    ')',
+    'SELECT visit_no, prior_text, link_text',
+    'FROM history',
+    'WHERE prior_text <> link_text',
+    'ORDER BY visit_no;'
+  ];
+  drawGoogleSql(d, query, [[5,6], [2,3], [10], [8,11]][step]);
+  const schoolVisits = crawlHistory.filter(row => row[1] === 'r2' && row[2] === 'school');
+  const history = schoolVisits.map((row, i) => [row[0], i ? schoolVisits[i - 1][3] : null, row[3]]);
+  d.text('result-heading', 640, 211, [
+    'School links to r2', 'Adjacent observations', 'Compare the words', 'Query result'
+  ][step], 27, P.ink, 'start', 650);
+  if (step === 0) {
+    d.table('school-visits', 640, 242, [155, 290], [
+      ['visit_no', 'link_text'], ...schoolVisits.map(row => [row[0], row[3]])
+    ], {rowHeight: 61, fontSize: 26});
+  } else {
+    const shown = step === 3 ? history.filter(([,prior,current]) => prior !== null && prior !== current) : history;
+    d.table('changes', 640, 242, [105, 229, 242], [
+      ['visit_no', 'prior_text', 'link_text'], ...shown.map(([visit,prior,current]) => [visit,prior ?? 'NULL',current])
+    ], {rowHeight: 59, fontSize: 23, highlightRows: step === 2 ? [3] : []});
+  }
+}
+register(14,'Bigtable, LSM Trees, Bloom Filters & BigQuery','2026-11-17','lectures/lecture-14/bigtable.html',[
+scene('Bigtable, LSM Trees, Bloom Filters & BigQuery', ['The original Bigtable paper'], bigtableDefinition,
   bigtableQuote.join(' '),
   {id:'bigtable-definition', clarityNative:true, sources:[bigtablePaper],
    teaching:{
@@ -559,11 +644,11 @@ scene('Bigtable, LSM Trees & NoSQL', ['The original Bigtable paper'], bigtableDe
      question:'One server can store both copies of CNN’s home page. What changes as the crawler visits more sites?',
      answer:'The growing crawl can exceed one server’s storage capacity or its ability to keep up with writes.'
    }}),
-scene('Learning goals', ['Row keys, queries, and writes', 'Reads, costs, and consistency'], bigtableLearningGoals,
-  'Follow one crawler update from its row key to durable storage. Then use the saved versions to reason about reads, compare storage costs, and predict what readers can see when servers lose contact.',
+scene('Learning goals', ['Row keys, queries, and writes', 'Reads, Bloom filters, and BigQuery'], bigtableLearningGoals,
+  'Follow one crawler update into a sorted file. Decide which files a lookup can skip. Then use the history of crawler visits to answer questions about many observations.',
   {id:'bigtable-learning-goals', clarityNative:true, sources:['lectures/lecture-14/bigtable.html#plan'],
    teaching:{
-     idea:'Use the crawler’s two visits to connect how Bigtable distributes a table with how an LSM tree stores changes.',
+     idea:'Trace what happens to a web page on each visit, then use BigQuery to find patterns across visits.',
      builds:bigtableGoals.map(group => group.map(lines => '• ' + lines.join(' ')).join('\n\n')),
      question:'The crawler returns in the afternoon and finds a new headline. What can it use to find the same row?',
      answer:'The web address stays the same across visits. The crawler can use that address to build the same row key.'
@@ -587,19 +672,65 @@ scene('Three web pages and the five cells the crawler has stored so far', ['Coun
 scene('Sparse cells and versions',['Sparse cells','New qualifier','Another version'],(d,s)=>{const cells=[[0,0],[0,2],[1,1],[2,0],[2,3]];for(let r=0;r<3;r++)for(let c=0;c<4;c++){d.rect('cell'+r+c,300+c*175,290+r*86,145,63,P.white,P.line,4);if(cells.some(([a,b])=>a===r&&b===c)||(s>0&&r===1&&c===3))d.rect('data'+r+c,310+c*175,300+r*86,125,43,P.greenLight,P.green,3);}['r1','r2','r3'].forEach((v,i)=>d.text('row'+i,215,334+i*86,v,29));if(s>1){[0,1,2].forEach(i=>d.box('version'+i,840+i*20,320+i*36,190,58,'t'+(3-i),i?P.white:P.orangeLight,P.orange,27));}},'Ask whether a missing qualifier needs a reserved fixed-width slot. Expected: sparse storage can omit absent cells, unlike microdb’s fixed slot layout, though metadata itself still costs space. Add a qualifier to one row without drawing it for every other row. Then stack versions of a cell and ask which timestamp a read requests. Distinguish retaining versions from full MVCC transaction semantics and explain retention/garbage-collection policy.'),
 scene('Tablets separate placement from storage',['Sorted ranges','Assigned servers','Shared durable files','Reassignment'],(d,s)=>{for(let i=0;i<4;i++){d.box('tablet'+i,150+i*270,270,210,85,['a–g','h–m','n–s','t…'][i],P.greenLight,P.green,31);d.box('server'+i,150+i*270,425,210,80,'server '+i,s===3&&i===1?P.redLight:P.white,P.line,27);if(s>0)d.arrow('assigned'+i,255+i*270,370,255+i*270,410,P.green);if(s>1)d.line('storage'+i,255+i*270,520,640,580,P.blue,2);}if(s>1)d.box('gfs',350,575,580,60,'replicated files',P.blueLight,P.blue,30);if(s===3)d.arrow('move',525,365,795,410,P.orange,5);},'Define a tablet as a contiguous row-key range and trace assignment to a tablet server. Ask why losing a server need not mean losing its durable data. Expected: the original architecture stores logs and SSTables in replicated GFS, with caches and in-progress state on tablet servers. Replay and reassignment still take work. Explain that partitioning divides the table while replication protects durable pieces. They solve distinct problems.',{kind:'definition',term:'Tablet',definition:'A contiguous range of row keys managed as a unit of placement and service.'}),
 scene('Splitting cannot fix a moving hotspot',['Distributed writes','Timestamp tail','Split','Next burst'],tabletDraw,'Predict where a burst of increasing timestamp-prefixed keys lands. Reveal all writes at the tail, split that tablet, then send another burst. Expected: the newest range remains hot. A split changes size but not the direction of incoming writes.\n\nDiscuss hash prefixes or a different key order and the range-scan locality each sacrifices. The counts are a deterministic toy load model, not observed Bigtable throughput. Reversed domains group related pages but do not inherently distribute all traffic.',{demo:'viz-tablet'}),
-scene('The log protects memory',['Incoming write','Log append','Durable log','Memory update'],(d,s)=>{card(d,'request',125,300,'k2 = v3',P.orangeLight,235,100);card(d,'log',510,300,'WAL',s>1?P.greenLight:P.white,255,100);card(d,'ram',920,300,'RAM',s===3?P.orangeLight:P.white,235,100);d.arrow('logpath',380,350,490,350,P.orange);d.arrow('rampath',785,350,900,350,P.orange);const xs=[240,635,635,1035];token(d,'write',xs[s],465,undefined,s>1?P.green:P.orange,20);if(s>1)d.text('durable',635,555,'durable ✓',34,P.green);if(s===3)d.text('ack',1035,555,'ack',34,P.green);},'Ask what would be lost if the engine acknowledged a RAM-only write and crashed before a flush. Expected: the memtable contents. Trace a durable log record before acknowledging the update, then rebuilding memory by replay after a failure. This LSM write path uses redo-style records and is not the course lab’s physical undo/FORCE protocol copied unchanged. The engine’s settings determine when a write is durable and when several writes can share a flush.',{title:"Recover the acknowledged update"}),
+scene('The log protects memory',['Incoming write','Log append','Durable log','Memory update'],(d,s)=>{card(d,'request',125,300,'k2 = v3',P.orangeLight,235,100);card(d,'log',510,300,'WAL',s>1?P.greenLight:P.white,255,100);card(d,'ram',920,300,'RAM',s===3?P.orangeLight:P.white,235,100);d.arrow('logpath',380,350,490,350,P.orange);d.arrow('rampath',785,350,900,350,P.orange);const xs=[240,635,635,1035];token(d,'write',xs[s],465,undefined,s>1?P.green:P.orange,20);if(s>1)d.text('durable',635,555,'durable ✓',34,P.green);if(s===3)d.text('ack',1035,555,'ack',34,P.green);},'Ask what would be lost if the engine acknowledged a RAM-only write and crashed before a flush. Expected: the memtable contents. Trace a durable log record before acknowledging the update, then rebuilding memory by replay after a failure. This LSM write path uses redo-style records and is not the course lab’s physical undo/FORCE protocol copied unchanged. The engine’s settings determine when a write is durable and when several writes can share a flush.',{title:"How an LSM tree stores a crawler update"}),
 scene('The memtable stays ordered',['Arrival order','Sorted insertion','Overwrite newest value'],(d,s)=>{const initial=['k8','k2','k5','k1','k7'],sorted=['k1','k2','k5','k7','k8'];initial.forEach((k,i)=>{const j=s?sorted.indexOf(k):i;d.box('k'+k,200+j*180,340,140,105,k==='k2'&&s===2?'k2:v2':k,s===2&&k==='k2'?P.orangeLight:P.greenLight,P.green,29);});d.text('memory',640,540,'RAM',39,P.muted);if(s===2)d.arrow('new',480,255,450,320,P.orange);},'Introduce the sorted in-memory structure and reveal keys arriving out of order. Ask why sorting here helps the next disk write. Expected: a flush can stream keys in order. Update k2 and distinguish a new logical version from another physical duplicate within a simple latest-value memtable. Production structures retain versions when snapshots require them. The schematic is not JavaScript object iteration order. A real memtable uses an ordered structure.',{title:"Keep the write buffer sorted",kind:'definition',term:'Memtable',definition:'An in-memory ordered structure holding recent writes before they are flushed.'}),
 scene('Freeze a sorted file',['Memory full','Freeze','Sequential flush','New active memory'],(d,s)=>{d.rect('mem',180,285,350,275,P.greenLight,P.green,12);d.text('ml',355,280,'RAM',31);d.rect('disk',760,285,350,275,P.white,P.blue,12);d.text('dl',935,280,'SSTable',31,P.blue);[1,2,5,7].forEach((v,i)=>{d.box('key'+v,s>1?800:220,320+i*53,270,43,'k'+v,s===1?P.blueLight:P.white,s>1?P.blue:P.green,24);});if(s>0)d.arrow('flush',560,425,725,425,P.blue,4);if(s>2)d.box('fresh',230,390,250,90,'k9',P.orangeLight,P.orange,29);},'Explain immutability: the file is written sequentially, then read without in-place modifications to its entries. Ask where a later update to k2 goes. Expected: the active memtable, eventually a newer file. A real engine can keep a frozen memtable readable while another becomes active and a background flush runs. The original page’s six-entry widget demonstrates this cycle. Capacity there means six distinct keys, not necessarily six write calls.',{kind:'definition',term:'SSTable',definition:'An immutable file of sorted key-value entries with an index for finding blocks.',demo:'viz-lsm'}),
 scene('Read the newest visible value',['Versions in files','Check memory','Older files if needed','Missing-key worst case'],(d,s)=>{lsmRuns(d,0,'records');if(s>0){const target=s===3?'k99':'k2';d.text('query2',640,620,'get('+target+')',38,P.orange);if(s===1)d.rect('hitram',860,318,295,79,'none',P.orange,8,4);if(s===2){d.rect('hitolder',500,318,295,79,'none',P.orange,8,4);d.text('scenario',1020,580,'RAM ∅',31,P.muted);}if(s===3)for(let i=0;i<3;i++)d.rect('checks'+i,145+i*365,310,295,255,'none',P.orange,10,4);}},'Use three versions of k2 to ask what a latest-value read returns. Expected: k2:v3 in memory. Do not fall through to older k2 versions after a hit. Then pose a separate case with no matching memory entry so the newer disk run is needed. Finally query absent k99: without filters every relevant run may need checking. These are separate read cases, not one search that incorrectly keeps going after finding a value.',{demo:'viz-lsm'}),
 scene('Merge sorted runs',['Two immutable files','Merge cursor','Newest duplicate wins','One output'],(d,s)=>{const a=['k1:v1','k2:v1','k7:v1'],b=['k2:v2','k4:v1','k8:v1'];[a,b].forEach((row,r)=>row.forEach((v,i)=>d.box('input'+r+i,145+r*625,280+i*70,320,53,v,v==='k2:v1'&&s>1?P.redLight:P.white,P.line,27)));if(s>0){d.arrow('mergea',470,410,550,510,P.green);d.arrow('mergeb',770,410,680,510,P.green);}if(s>1)d.text('latest',640,555,'k2:v2',36,P.orange);if(s>2)d.box('out',230,585,820,60,'k1 · k2 · k4 · k7 · k8',P.greenLight,P.green,31);},'Ask students to perform a two-way merge, naming the next key at each step. At the duplicate k2, choose the latest visible version under the engine’s retention rules. Explain that sorted inputs permit sequential reading, but the output rewrites data and consumes bandwidth. Real leveled or tiered compaction policies organize many runs and have different costs. The course widget simply merges all disk runs. A memtable is still checked after that compaction.',{kind:'definition',term:'Compaction',definition:'Merging sorted files to control read work, reclaim obsolete versions, and reorganize storage.',demo:'viz-lsm'}),
 scene('Deletion must hide older values',['Old value','Tombstone','Read stops','Safe reclamation'],(d,s)=>{d.box('old',160,365,290,110,'k2:v1',s===3?P.bg:P.greenLight,s===3?P.bg:P.green,34);if(s>0)d.box('delete',780,365,290,110,'k2:∅',s===3?P.bg:P.orangeLight,s===3?P.bg:P.orange,34);if(s>1){d.arrow('get',925,265,925,345,P.orange);d.text('ans',925,560,'∅',54,P.orange);}if(s===3)d.line('sweep',160,515,1070,515,P.green,4);},'Ask why removing the newest k2 record alone could resurrect the older k2:v1 file. Expected: reads would find the old value. Add a tombstone to stop the lookup. Keep it until no older value can reappear and no snapshot still needs those versions.\n\nIn replicated systems, replica repair and retention constraints can matter too. Never state that every compaction can discard every tombstone. Contrast this with microdb’s immediate slot-empty flag.'),
-scene('A one-sided membership test',['Empty bits','Insert six keys','Definite absence','Possible presence','False positive'],bloomDraw,'Define the Bloom filter, then set bits for k1 through k6 with three deterministic hashes. Ask what a zero among a query’s bits proves. Expected: the key is absent, provided inserted keys set their bits correctly and no shared bits were cleared. Reveal k7 as absent and k17 as all bits set despite never being inserted.\n\nThat false positive costs an extra file check. It must not lose data. Ordinary Bloom filters cannot clear a key’s shared bits safely when deleting.',{kind:'definition',term:'Bloom filter',definition:'A compact membership filter returning definitely absent or possibly present.',demo:'viz-bloom'}),
-scene('Skip files then find a block',['Filter','Sparse index','One block','Cached block'],(d,s)=>{const xs=[235,640,1045];d.box('bloom',125,300,220,160,'010110',P.greenLight,P.green,33);d.table('sparse',470,285,[160,150],[['key','block'],['k1','0'],['k8','1'],['k16','2']],{rowHeight:58,fontSize:26,highlightRows:s>0?[2]:[]});for(let i=0;i<4;i++)d.rect('block'+i,930,275+i*70,225,54,i===1&&s>1?P.orangeLight:P.white,i===1&&s>1?P.orange:P.line,5);if(s>0)d.arrow('toindex',355,385,450,385,P.green);if(s>1)d.arrow('todisk',795,385,910,385,P.orange);if(s>2){d.box('cache',920,585,235,60,'cache ✓',P.greenLight,P.green,28);d.arrow('cacheline',1040,545,1040,577,P.green);}},'Ask what each tool eliminates: a Bloom filter can skip an absent file. A sparse index narrows a possible file to a block. A block cache avoids repeated disk reads. Expected: each avoids a different kind of work, and a read can use all three.\n\nA possible Bloom match is not proof of presence. The index must bound the key’s block correctly, then the engine checks actual entries and version visibility. Compaction reduces the number/ranges of files considered.'),
-scene('Compare the cost of the same two visits',['Write a leaf','Flush the two batches','Merge the files','Measure the workload'],compareCrawlerWrites,
-  'Follow the morning and afternoon changes to the same row through both designs. In the B+ tree, the buffer pool can combine changes to the same leaf before a storage write. In the LSM tree, the two visits reach different batches. Both engines can support point reads and scans. Measure the complete workload and maintenance under the required durability settings.',
-  {id:'the-read-write-space-budget',clarityNative:true}),
-scene('A network partition forces a choice',['Replicas agree','Write during a partition','Wait','Serve stale','Reconcile'],capNetwork,'Cut communication between the replicas, then complete v2 on replica 1. Ask what replica 2 can know about the latest completed write. Expected: it cannot infer v2 from silence. Compare waiting/refusing with serving v1.\n\nIn CAP, consistency means linearizability and availability means every request to a non-failed node eventually gets a response. A system cannot guarantee both during a partition. Quorum systems may continue on one side while another side rejects. Product labels alone do not describe every operation or configuration.',{kind:'activity',minutes:4}),
-scene('Trace an acknowledged write',['Route the new visit','Make the update durable','Flush the fresh value','Compare the two reads'],(d,s)=>{const xs=[215,485,755,1025];['WAL','RAM','SST','read'].forEach((v,i)=>{card(d,'box'+i,xs[i]-95,355,v,i===s?P.orangeLight:P.white,190,110);if(i<3)d.arrow('arrow'+i,xs[i]+100,410,xs[i+1]-110,410,P.green);});token(d,'value',xs[s],305,'k2',P.orange,29);if(s>1)d.text('merge',755,560,'merge ↻',31,P.orange);},'Return to the opening server assignment. The crawler revisits the page after deletion and writes fresh at sequence 10. Trace routing, acknowledgment, and flush. Compare a current lookup with a read at the saved boundary 9. Briefly place HBase, Cassandra and RocksDB as examples combining these ideas differently. Avoid treating every managed system as a literal copy of a paper. There is no Thanksgiving lab. Next lecture connects stored relationships to graph traversal.',{title:"What does the next visit change?",kind:'recap',minutes:3})
+scene('A one-sided membership test',['Empty bits','Insert six keys','Definite absence','Possible presence','False positive'],bloomDraw,'Define the Bloom filter, then set bits for k1 through k6 with three deterministic hashes. Ask what a zero among a query’s bits proves. Expected: the key is absent, provided inserted keys set their bits correctly and no shared bits were cleared. Reveal k7 as absent and k17 as all bits set despite never being inserted.\n\nThat false positive costs an extra file check. It must not lose data. Ordinary Bloom filters cannot clear a key’s shared bits safely when deleting.',{title:'How a Bloom filter can skip a sorted file',kind:'definition',term:'Bloom filter',definition:'A compact membership filter returning definitely absent or possibly present.',demo:'viz-bloom'}),
+scene('Skip files then find a block',['Filter','Sparse index','One block','Cached block'],(d,s)=>{const xs=[235,640,1045];d.box('bloom',125,300,220,160,'010110',P.greenLight,P.green,33);d.table('sparse',470,285,[160,150],[['key','block'],['k1','0'],['k8','1'],['k16','2']],{rowHeight:58,fontSize:26,highlightRows:s>0?[2]:[]});for(let i=0;i<4;i++)d.rect('block'+i,930,275+i*70,225,54,i===1&&s>1?P.orangeLight:P.white,i===1&&s>1?P.orange:P.line,5);if(s>0)d.arrow('toindex',355,385,450,385,P.green);if(s>1)d.arrow('todisk',795,385,910,385,P.orange);if(s>2){d.box('cache',920,585,235,60,'cache ✓',P.greenLight,P.green,28);d.arrow('cacheline',1040,545,1040,577,P.green);}},'Ask what each tool eliminates: a Bloom filter can skip an absent file. A sparse index narrows a possible file to a block. A block cache avoids repeated disk reads. Expected: each avoids a different kind of work, and a read can use all three.\n\nA possible Bloom match is not proof of presence. The index must bound the key’s block correctly, then the engine checks actual entries and version visibility. Compaction reduces the number/ranges of files considered.',{title:'Find one key in a sorted file'}),
+scene('A crawl history in BigQuery',
+  ['Record one observation', 'Add two visits', 'Keep the repeated observation', 'Choose the column to scan'],
+  bigQueryHistory, 'The crawler records a history of its observations for analysis. Use GoogleSQL to ask questions across those rows.',
+  {id:'bigquery-crawl-history', clarityNative:true,
+   sources:['lectures/lecture-14/bigtable.html#bigquery-crawl-history',crawlSqlFile,'https://docs.cloud.google.com/bigquery/docs/introduction','https://docs.cloud.google.com/bigquery/docs/multi-statement-queries'],
+   teaching:{
+     idea:'A BigQuery history table can hold one row per observation, including repeated observations about the same page.',
+     builds:[
+       'We have followed one lookup through the LSM tree and its Bloom filter. Now the crawler team wants to analyze many observations. BigQuery is Google’s analytical data warehouse. The team records a separate history for this purpose. The first row says the school linked to r2 using the words “Moon facts.”',
+       'Visit 2 observes a link to CNN from cnnsi.com. Visit 3 observes the school’s link to the Moon article again. Each new observation adds a row. The example assigns consecutive visit numbers across both pages. Earlier Bigtable cell timestamps identified versions within a cell.',
+       'Visits 3 and 4 both say “Moon phases.” Ask how many rows the crawler should keep if it wants to count visits. Keeping both rows lets the team measure how often it saw the link, even when the words stayed the same.',
+       'Visit 5 adds the latest words. BigQuery stores table data in columns, so an analytical query can read just the columns it needs. Ask which column identifies the page on every row. The full example script creates this temporary table and runs two GoogleSQL queries.'
+     ],
+     question:'Which column would you read to count how often each page appeared in the crawl?',
+     answer:'Read page_key for each observation. The link text and source site can be omitted from the count query.',
+     context:'This five-row teaching example uses one unique visit_no per observation. The script populates the analytical table explicitly. Bigtable serves the earlier page lookups.'
+   }}),
+scene('How often did each page appear in the crawl?',
+  ['Read the page keys', 'Group the observations', 'Count each group', 'Sort the results', 'Check a repeat visit'],
+  bigQueryVisitCounts, 'Count observations per page with GROUP BY and COUNT(*). The repeated Moon link at visit 4 still contributes one row.',
+  {id:'bigquery-count-visits', clarityNative:true, minutes:4,
+   sources:['lectures/lecture-14/bigtable.html#bigquery-count-visits',crawlSqlFile,'https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#count'],
+   teaching:{
+     idea:'Grouping observations by page and counting rows gives the number of visits for each observed page.',
+     builds:[
+       'Read the page_key column downward. The selected values are r2, r1, r2, r2, and r2. The visit numbers on the diagram help us follow the input. The count query itself needs only the page keys.',
+       'GROUP BY gives each observed page a group. The r2 group contains visits 1, 3, 4, and 5. Visit 2 alone belongs to r1. Ask students to predict the count beside each page.',
+       'COUNT(*) counts the rows in each group. The Moon article has four visits, and CNN has one. These intermediate counts have no guaranteed order.',
+       'ORDER BY visits DESC puts the larger count first. The second sort key orders equal counts by page key. The displayed query returns two rows, one per observed page.',
+       'Compare visits 3 and 4. The school pointed to the same article with the same words each time. Each visit still counts. Ask what other information a query would need to count changes in the wording.'
+     ],
+     question:'Why does the Moon article have four visits when only three different link texts appear?',
+     answer:'COUNT(*) counts observations. Two separate observations contain “Moon phases,” and each contributes one visit.'
+   }}),
+scene('When did the school change its link text?',
+  ['Select the school’s Moon link', 'Find the previous words', 'Test for a change', 'Read the two changes'],
+  bigQueryLinkChanges, 'Compare each observation of the school’s Moon link with the previous observation in visit order.',
+  {id:'bigquery-link-changes', clarityNative:true, kind:'recap', minutes:3,
+   sources:['lectures/lecture-14/bigtable.html#bigquery-link-changes',crawlSqlFile,'https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lag'],
+   teaching:{
+     idea:'LAG finds the preceding words for the same link, so a comparison reveals the visits when the crawler observed a change.',
+     builds:[
+       'Follow the WHERE clause inside history. Keep the Moon article, r2, and the school source. That selects one link. Its visit numbers are 1, 3, 4, and 5. Visit 2 belongs to CNN. Ask which earlier observation should be compared with visit 3.',
+       'LAG(link_text) puts the preceding text beside each current text. ORDER BY visit_no defines the sequence. The first row has NULL for prior_text because the crawler has no earlier observation of this link in the sample.',
+       'The outer WHERE keeps a row only if the comparison is true. At visit 1 the comparison with NULL is unknown. At visit 4 the two values are equal. Ask which two rows remain.',
+       'Read the changes aloud. At visit 3 the crawler saw “Moon phases” in place of “Moon facts.” At visit 5 it saw “Explore the Moon” in place of “Moon phases.” The observations show when the crawler saw a change. The site could have edited the words between visits.'
+     ],
+     question:'If visit 6 sees “Explore the Moon” again, what changes in the two query results?',
+     answer:'The count for r2 rises to five. The change query still returns visits 3 and 5 because visit 6 repeats the words observed at visit 5.',
+     context:'The sample uses non-null link text and unique visit numbers. To compare many links in one query, partition the window by page_key and source_site, then order by visit_no within each pair.'
+   }})
 ]);
 const GN={ada:[185,330],ben:[420,290],cyd:[400,530],dee:[715,320],eli:[720,550],fay:[1090,440]};
 const GE=[['ada','ben'],['ada','cyd'],['ben','dee'],['cyd','dee'],['dee','eli'],['eli','fay'],['fay','ada'],['cyd','eli'],['ben','ada']];

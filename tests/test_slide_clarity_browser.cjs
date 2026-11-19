@@ -155,6 +155,25 @@ fs.mkdirSync(output,{recursive:true});
       const key=row[2];
       assert.deepEqual(['name','address','key','columns'].map(field=>slideText[key+'-'+field]),row,'the slide matches the reading for '+key);
      }
+     for(const [sceneId,tableKey] of [
+      ['bigquery-crawl-history','visits'],
+      ['bigquery-count-visits','count-results'],
+      ['bigquery-link-changes','changes']
+     ]){
+      const index=scenes.findIndex(scene=>scene.id===sceneId);
+      await go(index,scenes[index].steps-1);
+      const expected=await reading.locator(`#${sceneId} ~ .reading-table-scroll table`).first().locator('tr')
+       .evaluateAll(rows=>rows.map(row=>Array.from(row.cells,cell=>cell.textContent)));
+      const projected=await page.locator(`#canvas text[data-key^="${tableKey}-"]`)
+       .evaluateAll(cells=>Object.fromEntries(cells.map(cell=>[cell.dataset.key,cell.textContent])));
+      assert.deepEqual(expected.map((row,r)=>row.map((_,c)=>projected[`${tableKey}-${r}-${c}-text`])),expected,
+       'the projected data and results match the reading for '+sceneId);
+      if(tableKey!=='visits'){
+       const sql=await reading.locator(`#${sceneId} ~ pre code.language-sql`).first().textContent();
+       const lines=await page.locator('#canvas text[data-key^="query-line-"]').allTextContents();
+       assert.equal(lines.join('\n'),sql,'the slide shows the runnable query for '+sceneId);
+      }
+     }
      const links=await reading.locator('[data-scene] + .slide-reference a').evaluateAll(anchors=>anchors.map(anchor=>{
       const heading=anchor.parentElement.previousElementSibling;
       return {sceneId:heading.dataset.scene,slide:Number(heading.dataset.slide),label:anchor.textContent,href:anchor.href};

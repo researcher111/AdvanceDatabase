@@ -114,16 +114,36 @@
     'reply_success()'
   ]);
   install('the-log-protects-memory',[wal],(d,s)=>{
-    code(d,{...wal,lines:wal.lines.slice(0,[1,3,4,7][s])},s===0?[0]:s===1?[2]:s===2?[3]:[5,6]);
-    box(d,'log',215,'Recovery log',s===0?['No update yet']:s===1?['Appended k2 = v3','Durability not confirmed']:['Durable k2 = v3'],s>=2?P.green:P.orange);
-    arrow(d,'memory-path',365,405,s===3?P.orange:P.line);
-    box(d,'memory',420,s===3?'Memory buffer (memtable)':'Memory buffer',s===3?['k2 = v3','Then reply success']:['Not updated yet'],P.blue);
-    if(s>=2)foot(d,'The log must survive the failures covered by the server’s durability guarantee.');
+    function stages(id, y, cards, arrowColors) {
+      cards.forEach(([title, detail, color], i) => {
+        const x = 65 + i * 412;
+        d.rect(id+'-card-'+i, x, y, 326, 112, P.white, color, 9, 3);
+        d.text(id+'-title-'+i, x+163, y+36, title, 29, P.ink, 'middle', 650);
+        d.text(id+'-detail-'+i, x+163, y+78, detail, 23, P.ink);
+        if (i < 2) d.arrow(id+'-next-'+i, x+336, y+56, x+397, y+56, arrowColors[i], 3);
+      });
+    }
+    d.text('request-label',65,211,'One crawler update reaches its tablet server',27,P.ink,'start',650);
+    stages('write', 240, [
+      ['Crawler update', 'k2 = v3', P.blue],
+      ['Write-ahead log', ['Awaiting the update', 'Appended k2 = v3', 'Durable k2 = v3', 'Durable k2 = v3'][s], s>=2?P.green:P.orange],
+      ['Memory buffer', s===3?'Insert k2 = v3':'Awaiting a durable record', s===3?P.green:P.line]
+    ], [s>=1?P.blue:P.line, s===3?P.green:P.line]);
+    d.text('lsm-label',65,426,'How a log-structured merge-tree (LSM tree) stores batches',27,P.ink,'start',650);
+    stages('batch', 455, [
+      ['Memtable', 'Order recent writes', P.blue],
+      ['Sorted files', 'Flush each full batch', P.green],
+      ['Merged file', 'Combine sorted files', P.green]
+    ], [P.green, P.green]);
+    foot(d,['What would happen if the server lost the update in memory?',
+      'The log has the record. The server still needs to confirm its durability.',
+      'If the server loses memory now, recovery can replay the durable log.',
+      'The server can confirm this write before it flushes the batch.'][s]);
   },[
-    'Zoom in from a range of updates to one request. Think of k2 = v3 as a short example of the crawler sending fresh page data. If the server says saved and then loses memory, what evidence could a replacement use? The pseudocode names the storage operations.',
-    'append_log records the update. An append by itself does not establish that the required storage copies are durable. Predict whether the engine can safely acknowledge this write yet.',
-    'sync_log waits for the durability required by the storage contract. The original architecture uses replicated files. A local Python list append or an ordinary buffered file write is not this guarantee. Failure handling is omitted from the pseudocode.',
-    'Put the update into the ordered memtable, then reply success. A crash can erase memory. Recovery can replay the durable log to rebuild this update. This redo-style example differs from microdb’s physical undo protocol. Several writes can share synchronization work.'
+    'Follow one crawler update after routing. Use k2 for its key and v3 for the new value. Trace the bottom row. The server orders recent writes in a memory buffer called a memtable. It writes a full batch to a sorted file. Later it merges sorted files. This is the log-structured merge-tree, or LSM tree. How can the server confirm a single write before the batch fills?',
+    'Follow the first arrow. The server appends the update to the end of its recovery log. The original paper calls this the commit log. Ask whether the record would survive if the server lost memory before the append reached durable storage.',
+    'The server waits for the log record to reach durable storage. In the original architecture the Google File System replicates the log. After a crash, recovery can read that record and repeat the update.',
+    'Put k2 = v3 in the ordered memtable and send the success reply. A crash before the batch flush can erase memory. Recovery can replay the durable log. Follow the memtable into the next slide to see how it keeps a batch in key order.'
   ]);
 
   const memory=sample('Teaching Python · model sorted keys and current values','python',[
@@ -314,23 +334,42 @@
   ]);
   function hash(key){let a=0,b=0,c=0;[...key].forEach((ch,i)=>{const n=ch.charCodeAt(0);a=(a*31+n)%32;b=(b*17+n*7)%32;c=(c*13+n*(i+3))%32;});return[a,b,c];}
   install('a-one-sided-membership-test',[hashes,bloom],(d,s)=>{
-    const query=s<2?'k1':s===2?'k7':'k17',positions=hash(query);
-    const lines=bloom.lines.slice(0,s===1?8:s===2?10:11).map(line=>s===2?line.replace('"k17"','"k7"'):line);
-    code(d,s===0?hashes:{...bloom,lines},s===0?[9]:s===1?[2,3,4]:s===4?[10]:[6,7,9]);
-    const bits=new Set(s?['k1','k2','k3','k4','k5','k6'].flatMap(hash):[]);
-    d.text('bits-label',1035,225,'32 bits · indices 0–31',25,P.ink);
+    const query=s<2?'k1':s===2?'k7':'k17';
+    const positions=hash(query);
+    const keys=['k1','k2','k3','k4','k5','k6'];
+    const bits=new Set(s ? keys.flatMap(hash) : []);
+    d.text('array-title',60,223,'Each square stores one bit',30,P.ink,'start',650);
+    d.text('array-guide',60,261,'The number above each square is its position.',23,P.muted,'start');
     for(let i=0;i<32;i++){
-      const x=850+(i%8)*47,y=270+Math.floor(i/8)*55;
-      d.box('bit-'+i,x,y,38,38,bits.has(i)?'1':'0',bits.has(i)?P.greenLight:P.white,s>=2&&positions.includes(i)?P.orange:P.line,23);
+      const x=60+(i%16)*46, y=325+Math.floor(i/16)*102;
+      const selected=positions.includes(i);
+      d.text('position-'+i,x+21,y-19,String(i),20,selected?P.ink:P.muted,'middle',selected?650:400);
+      d.rect('bit-cell-'+i,x,y,42,46,selected?P.orangeLight:bits.has(i)?P.greenLight:P.white,selected?P.orange:P.line,4,selected?3:1);
+      d.text('bit-'+i,x+21,y+24,bits.has(i)?'1':'0',27,P.ink,'middle',selected?700:400);
     }
-    if(s>=2){box(d,'query',505,query+' → ['+positions.join(', ')+']',[s===2?'Zero found → definitely absent':s===3?'All ones → possibly present':'File check: k17 is absent'],s===2?P.green:P.orange);}
-    foot(d,s===0?'ord converts a character to a number · % 32 keeps each position between 0 and 31':s===4?'A false positive costs a file lookup · Never clear shared bits to delete a key':'Insertion and query use the same hashes · all(...) is true only when every required bit is 1');
+    d.text('stored-keys',60,535,'Keys in the sorted file',23,P.muted,'start');
+    d.text('stored-values',60,577,keys.join('     '),29,P.ink,'start',650);
+    box(d,'hashes',213,'Three hashes of '+query,[
+      'Positions   '+positions.join('  ·  '),
+      'Bit values   '+positions.map(i=>bits.has(i)?1:0).join('  ·  ')
+    ],P.orange);
+    const decisions=[
+      ['Build the filter','Start with 32 zero bits.','Locate the positions for k1.'],
+      ['Insert k1 through k6','Set each selected bit to 1.','Keys can share a position.'],
+      ['Definitely absent','k7 needs a 1 at position 12.','Skip this file.'],
+      ['Possibly present','All three bits are 1.','Check the file for k17.'],
+      ['False positive','The file has no k17.','Return absence for this file.']
+    ];
+    const [title,...details]=decisions[s];
+    box(d,'decision',382,title,details,s===2?P.green:P.blue);
+    foot(d,s===4?'k1 set bit 17, k2 set bit 21, and k5 set bit 16. Together they made k17 look possible.':
+      s<2?'The filter records bit positions. The sorted file holds the keys.':'A lookup uses the same three hash functions as insertion.');
   },[
-    'The partial merge left one file untouched. What could let a reader skip it entirely? Build a small membership summary for a separate six-key file. The diagram uses three deterministic teaching hashes. ord converts a character to its numeric code. enumerate supplies its position. The remainder operator keeps each output between 0 and 31. These short inputs use ASCII characters. Start with all 32 bits zero. Production filters use suitable hash functions for their workloads.',
-    'Reuse hashes from the previous build. range(1, 7) produces 1 through 6. Set the selected bits for each stored key. The filter remembers bits, not the keys themselves. Different keys can share a bit.',
-    'Query k7. Its required positions are 12, 30, and 9. A zero makes all return false. Since every stored key set its required bits, this zero proves absence. Skip the file.',
-    'Query k17 at positions 17, 21, and 16. All three bits are one, so might_contain returns true. Predict whether the key must be present. The filter alone cannot prove it.',
-    'The stored set represents checking this toy file’s actual keys. k17 is absent even though the filter returned true. This is a false positive. A real engine reads and searches the file. Never remove a key by clearing its shared Bloom bits.'
+    'The partial merge left an older file to check. Could the reader skip a file that lacks the requested key? Build a Bloom filter for a separate file containing k1 through k6. Start with 32 zero bits. For each key, three hash functions give three positions. Locate positions 6, 20, and 17 for k1.',
+    'Insert k1 by setting those three bits to one. Insert k2 through k6 in the same way. Point to the highlighted bits for k1. Setting them again leaves them at one. This sharing lets a small array summarize many keys.',
+    'Use the same three hashes for k7. Read the bits in the order 12, 30, 9. They hold zero, zero, one. If this file contained k7, inserting it would have set all three bits. A single zero therefore proves absence. Skip this file.',
+    'Check k17 at positions 17, 21, and 16. All three bits are one. Before revealing the file result, ask whether a different key could have set each of those bits.',
+    'Inspect the actual keys. The file ends at k6. It has no k17. Point to the three shared positions. The filter allowed a lookup for an absent key. This is a false positive. Checking the file gives the correct answer. Clearing a shared bit to remove one key could hide another key.'
   ]);
 
   const index=sample('Teaching Python · choose a block, then reuse cached entries','python',[
@@ -355,11 +394,11 @@
     box(d,'filter',205,'Bloom filter for k9',['Possibly present → inspect file'],P.blue);
     if(s>=1){arrow(d,'to-index',315,345);box(d,'index',360,'Index chooses block 1',['k8 ≤ k9 < k16'],P.orange);}
     if(s>=2){arrow(d,'to-block',470,500);box(d,'block',515,s===2?'Block 1: k8 · k9 · k12':'Block 1 already cached',['k9 found → v9'],P.green);}
-    foot(d,'Numeric suffixes model the key order · disk is a toy mapping · Real blocks require storage I/O');
+    foot(d,s===3?'How many times did the crawler visit each page across its whole crawl history?':'Use the numbers in these short labels to compare their keys.');
   },[
     'The previous filter admitted a key that the file did not contain. Try a different file, this time for k9. Its positive filter result means the engine still needs to look for the key. The disk dictionary stands in for stored blocks. It is not actual disk I/O. Only the block needed by this example is represented.',
     'bisect_right finds the position after indexed keys no greater than 9. Subtract one to select the preceding block start, 8. The result is block 1. Keys below the first boundary need an absent-range check in general. The displayed query is within this index’s covered range.',
     'read_block checks the cache before accessing the toy disk mapping. It saves the loaded block in cache. The dictionary get then checks the actual key. A candidate block does not imply that every possible key inside its interval is present.',
-    'The repeated read_block call uses the cached block. In a real engine, that avoids another storage read. The filter skips files, the index chooses a block, and the cache reuses its bytes. This model omits eviction and version resolution inside a block.'
+    'The repeated read_block call can reuse block 1 from memory. We have answered a question about one key. Now ask how many times the crawler visited each page. One cached block cannot tell us the counts. We need a record of each visit and a way to group those records by page.'
   ]);
 })();
