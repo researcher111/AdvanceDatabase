@@ -52,7 +52,8 @@
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
 <p class="lede">A table can grow too large for one server to store, or receive more reads and writes than one server can handle. Bigtable spreads the rows and the work across many servers. Applications still read and update one table.</p>
-<p>For example, a web crawler downloads pages and saves one page per row. The page’s address serves as its <strong>row key</strong>. Bigtable sorts rows by key and assigns each range of keys to a server. When the crawler revisits a page, it sends the update to the server for that page’s range. <a href="#src-1">[1]</a></p>
+<p>A web crawler downloads CNN’s home page and needs a <strong>row key</strong> to identify that page in its table. The crawler splits the hostname <code>www.cnn.com</code> at the dots and reads the parts from right to left. Joining <code>com</code>, <code>cnn</code>, and <code>www</code> with dots gives the row key <code>com.cnn.www</code>.</p>
+<p>The crawler’s Bigtable client uses a directory that lists each row-key range and its assigned server. In this example, Server 1 handles keys before <code>org</code> in sorted order, and Server 2 handles keys from <code>org</code> onward. Since <code>c</code> comes before <code>o</code>, <code>com.cnn.www</code> falls in the first range. The client sends the update for that row directly to Server 1. <a href="#src-1">[1]</a></p>
 <div class="cite">
   Companion reading: Chang et&nbsp;al., <a href="https://research.google/pubs/pub27898/"><em>Bigtable: A Distributed Storage System for Structured Data</em></a> (OSDI 2006) ·
   O'Neil et&nbsp;al., <a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf"><em>The Log-Structured Merge-Tree</em></a> (1996, an earlier description of the storage design<sup class="src"><a href="#src-2" title="The Log-Structured Merge-Tree (LSM-Tree)">2</a></sup>) ·
@@ -127,7 +128,7 @@ value = cells[address]</code></pre>
 row_key    "com.cnn.www"      · reversed domains group related rows in key order
 column     "anchor:cnnsi.com" · declared family, dynamic qualifier
 timestamp  a cell version    · reads select versions under the retention policy</code></pre>
-<p>Rows follow row-key order. A <strong>prefix</strong> is the beginning of a key. Reversing domain components puts related addresses under a shared prefix, such as <code>com.cnn</code>. A <strong>range scan</strong> reads keys between chosen bounds in that order.</p>
+<p>A <strong>prefix</strong> is the beginning of a key. For example, <code>news.cnn.com</code> becomes <code>com.cnn.news</code>. Both <code>com.cnn.news</code> and <code>com.cnn.www</code> start with <code>com.cnn.</code>, so their rows fall in the same part of the sorted table. A <strong>range scan</strong> reads rows between chosen bounds in key order. One scan can therefore read all rows with the <code>com.cnn.</code> prefix.</p>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Two values share a row and column but have different timestamps. Did we create another row?</p><details><summary>Check your explanation</summary><p>No. We stored two versions of one cell. A read can request a particular timestamp or the newest retained version.</p></details></div>
 
 <h2 id="sparse" data-slide="3" data-scene="sparse-cells-and-versions">3 · Store present cells and selected versions</h2>
@@ -167,8 +168,8 @@ cells[("r2", "anchor:school", 3)] = b"new"</code></pre>
 <h2 id="tablets" data-slide="4" data-scene="tablets-separate-placement-from-storage">4 · Assign each row range to a tablet server</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=4&amp;b=1">Open slide 4 ↗</a></p>
 <p>A <strong>tablet</strong> is a contiguous range of row keys managed as one unit. A <strong>tablet server</strong> is a process that serves reads and writes for assigned tablets. One server can serve several tablets.</p>
-<p>The system finds the tablet whose boundaries contain the requested row key. It then sends the request to that tablet’s assigned server.</p>
-<p>The short labels <code>a–g</code> and <code>h–m</code> describe the first two alphabetic ranges. Code uses exact boundaries: the second range starts at <code>h</code> and stops before <code>n</code>. Thus, <code>kim</code> belongs to <code>[h, n)</code>. A scan from <code>dee</code> through <code>kim</code> crosses both ranges. The original design maintains location information so clients can find the correct server.</p>
+<p>The crawler’s Bigtable client keeps a local cache of tablet locations. It first checks for an entry whose range contains <code>com.cnn.www</code>. If the entry is missing or stale, the client looks up the current assignment in Bigtable’s location metadata. The client then sends the request directly to the assigned tablet server. <a href="#src-1">[1]</a></p>
+<p>The next example uses shorter keys. The labels <code>a–g</code> and <code>h–m</code> describe the first two alphabetic ranges. The second range starts at <code>h</code> and stops before <code>n</code>, so <code>kim</code> belongs to <code>[h, n)</code>. A scan from <code>dee</code> through <code>kim</code> crosses both ranges.</p>
 <p>A <strong>master</strong> coordinates tablet assignments. It can assign tablets to another server after failure or when balancing work. The original paper describes tablets of roughly <strong>100–200 MB</strong>. <a href="#src-1">[1]</a></p>
 <p><strong>Partitioning</strong> divides data into portions. <strong>Replication</strong> keeps multiple copies of data. A tablet is one portion of the table, not a copy of the whole table.</p>
 <p><strong>Teaching Python:</strong> <code>bisect_right</code> counts the sorted boundaries no greater than the requested row key. For <code>kim</code>, it returns tablet number <code>1</code>. The <code>servers</code> list maps that number to its serving process:</p>
