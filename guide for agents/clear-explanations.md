@@ -4,7 +4,11 @@ Use this file when creating or revising teaching material. This includes reading
 
 **Use CLEAR and ASD-STE100 style by default for all future teaching material in this repository.** CLEAR organizes the explanation. The ASD-STE100 style rules below guide its wording. Use a different style only when the user requests it.
 
-Begin with what the audience knows. Connect the new idea to something familiar. Show the mechanism, state its essential meaning, and revisit that meaning at the end.
+**Build every lecture from the simplest case students already understand, one idea at a time.** This is the course’s primary rule for ordering the material. Use the same progression in the reading, audience slides, and presenter notes.
+
+Start with a task students can attempt using what they already know. Show what their method accomplishes. Change one condition so they can see why they need the next idea. Introduce the mechanism and its name when students have a reason to use it.
+
+In Lecture 14, a crawler saves CNN’s home page under the key `com.cnn.www`. One server can find the row by its key. When the table outgrows that server, the crawler still knows the key. Where should it send an update? The directory lists Server 1 for keys before `org`, so the crawler sends the update there.
 
 ## Source and saved transcript
 
@@ -61,9 +65,9 @@ Review each rewritten sentence in context. Do not rely on replacing punctuation 
 
 This workflow is our adaptation of CLEAR. Use the [storytelling guide](lecture-storytelling.md) when a concrete scene will help motivate the topic.
 
-1. **Write the audience and outcome.** State what the audience already knows and what they should be able to explain, choose, or do afterward. Prepare one short opening question that checks the assumed knowledge.
+1. **Order the ideas by what students need to know.** Start with what students should be able to explain, choose, or do by the end. Work backward to the simplest case they can already attempt. For each later section, identify the earlier result students will use and the new question they can now answer. Open with a short question that checks the assumed knowledge.
 2. **Choose the familiar connection.** Name the familiar object or process, map its parts to the new mechanism, and state where the analogy stops working. An analogy introduces the mechanism; it does not establish a technical claim.
-3. **Draw a small example.** Use the fewest inputs that reveal the important behavior. Keep IDs, labels, units, and positions consistent across builds. Let the audience predict before revealing a result.
+3. **Build on the example.** Use the fewest inputs that reveal the important behavior. Carry the result into the next step and change one input, constraint, or goal. Keep IDs, labels, units, and positions consistent across builds. When a different example is necessary, show which idea from the first case lets students tackle the second. Let the audience predict before revealing a result.
 4. **State the essential idea.** Write one plain sentence connecting the mechanism to its consequence. Then add the formula, technical term, and necessary conditions. Keep details available in notes or supporting material.
 5. **Return and transfer.** Revisit the same diagram and essential sentence. Ask the audience to explain a different input or defend a decision using the model. This transfer question is our teaching adaptation, not an additional step claimed by the video.
 
@@ -73,7 +77,9 @@ Apply the ASD-STE100 wording rules before the final review. Check sentences in c
 
 ## Use the transcript in slides
 
-Apply the communication method to the subject being taught. For a vector-search lecture, the audience needs vectors, lists, neighbor IDs, and search results. The communication framework belongs in the reusable guide and teaching cues; each audience slide should show the relevant mechanism or decision.
+Keep the previous result visible when students need it to interpret a new slide. In the reading, explain how that result raises the next question. In the presenter notes, ask students to use the result to predict the next change. For example, show the exact neighbor IDs before asking students which neighbors a faster search missed.
+
+Use course terms for the objects, actions, and decisions on audience slides. Keep guidance about the communication framework in authoring and presenter notes.
 
 | CLEAR step | Audience slide | Presenter cue |
 | --- | --- | --- |
@@ -147,6 +153,8 @@ Source ideas
 - Relevant limit or condition:
 
 Application to my topic
+- Smallest case the audience can already attempt:
+- Earlier result and new question for each later section:
 - Calibrate: opening question and expected answer
 - Link: familiar comparison, explicit mapping, and limit
 - Envision: smallest useful diagram or worked example
@@ -182,13 +190,14 @@ Read a story sentence aloud and ask whether a student can say what happened, why
 
 ## Final review
 
-- Does the opening question check the assumed audience knowledge?
+- Can students attempt the opening question using what they already know?
+- At each transition, can students point to the earlier result and explain why the next idea helps?
 - Can each part of the analogy be mapped to a real part of the mechanism?
 - Does the diagram show why the result occurs?
 - Do students see the example before the general formula?
 - Is the essential claim precise enough to remain true when simplified?
 - Does each action name its object, and does each consequence say what actually changes?
-- Does the ending revisit the same model and test whether students can use it?
+- Does the ending revisit the opening task and test the model on an unfamiliar input?
 - Are source ideas, invented scenes, toy inputs, estimates, and measured results distinguishable?
 - Do instructions and descriptions meet the 20-word and 25-word limits, with the literal-content exceptions above?
 - Are actors, technical terms, pronoun references, and conditions clear? Does each paragraph stay on one topic?

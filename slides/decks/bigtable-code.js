@@ -26,7 +26,8 @@
     const scene=deck.scenes.find(s=>s.id===id);
     scene.draw=draw;scene.kind='visual';scene.clarityNative=true;scene.codeExamples=examples;
     if(cues)scene.teaching.builds=cues;
-    scene.teaching.context=(scene.teaching.context||'')+' Code panels labeled Teaching Python are limited models. Engine pseudocode names storage guarantees, not library calls.';
+    scene.teaching.context=(scene.teaching.context||'')+' Teaching Python models the example. Engine pseudocode describes storage guarantees.';
+    return scene;
   }
 
   const address=sample('Teaching Python · model a cell address','python',[
@@ -38,14 +39,14 @@
     'value = cells[address]'
   ]);
   install('a-multidimensional-map',[address],(d,s)=>{
-    code(d,address,s===0?[1]:s===1?[2]:[3,5,6,7]);
+    code(d,{...address,lines:address.lines.slice(0,s===0?2:s===1?3:8)},s===0?[1]:s===1?[2]:[3,5,6,7]);
     box(d,'row',210,'Row key',['com.cnn.www'],P.blue);
     if(s>=1)box(d,'column',355,'Column',['anchor = declared family','example = qualifier'],P.green);
     if(s===2)box(d,'value',525,'Version 1 → bytes',['b"example link text"'],P.orange);
-    foot(d,'Address model only · b"…" is a byte string · Bigtable sorts rows and stores versions durably');
+    if(s===2)foot(d,'The row, column, and timestamp together select the saved link text.');
   },[
-    'Read the row assignment. A row key names one row. The tuple will combine three coordinates into one dictionary key. This Python dictionary models an address only. It does not implement Bigtable storage or row ordering.',
-    'Read the column string. The colon separates the family anchor from the qualifier example. A real Bigtable family must already be declared. The dictionary does not enforce that requirement.',
+    'The client sent the morning update for com.cnn.www to Server 1. The page row can hold its contents and several incoming links. Ask which field the crawler should use to store the text of one link. This dictionary models the address of a cell.',
+    'Point to anchor:example. The declared family anchor holds link text. Its qualifier example names this link source. If the crawler later sees different text for the same link, which part of the address will it need next?',
     'Use illustrative timestamp 1 to identify a version. The prefix b makes a Python byte string. Assign those bytes at the complete address, then retrieve them with the same address. A real Bigtable timestamp is an integer. This coordinate does not establish a transaction snapshot across rows.'
   ]);
 
@@ -65,7 +66,7 @@
     code(d,{...sparse,lines:sparse.lines.slice(0,s===0?7:s===1?9:11)},s===0?[1,2,3,4,5]:s===1?[8]:[9,10]);
     box(d,'sparse',210,'Stored cell coordinates',['r1: example, contents','r2: news','r3: example, contents'],P.blue);
     if(s>=1)box(d,'school',430,'r2 · anchor:school',s===1?['t1: old']:['t3: new','t2: prior','t1: old'],P.orange);
-    foot(d,s===2?'The dictionary retains all three versions · A real retention policy decides which versions remain':'Missing cells have no entry · Adding a qualifier to r2 does not create it in other rows');
+    if(s===2)foot(d,'A retention policy determines how many of these three versions remain available.');
   });
 
   const routing=sample('Teaching Python · route a row through ordered bounds','python',[
@@ -85,15 +86,16 @@
     'server = servers[tablet]'
   ]);
   install('tablets-separate-placement-from-storage',[routing,reassignment],(d,s)=>{
-    code(d,s===3?reassignment:routing,s===0?[2,3,4]:s===3?[5,6]:[5,7]);
+    const example = s===3 ? reassignment : {...routing,lines:routing.lines.slice(0,s===0?5:8)};
+    code(d,example,s===0?[2,3,4]:s===3?[5,6]:[5,7]);
     box(d,'range',205,'Tablet 1: [h, n)',['h ≤ kim < n'],P.blue);
     if(s>=1){arrow(d,'assignment',315,345);box(d,'server',360,'Serving process',[s===3?'S1 failed → S2 takes over':'S1 handles tablet 1'],P.orange);}
-    if(s>=2){arrow(d,'storage',470,500,P.blue);box(d,'durable',515,'Replicated durable files',['Logs and SSTables remain'],P.green);}
-    foot(d,'bisect_right counts boundaries ≤ row · Reassignment also requires recovery and coordination');
+    if(s>=2){arrow(d,'storage',470,500,P.blue);box(d,'durable',515,'Replicated durable files',['Data files and recovery log'],P.green);}
+    foot(d,s===3?'S2 must recover the tablet before it serves this range.':'bisect_right counts the boundaries at or before the row key.');
   },[
-    'Translate the short a–g and h–m labels into half-open ranges. Tablet 1 begins at h and stops before n. bisect_right returns the number of boundaries no greater than the row key. For kim, it returns 1. This is a small routing model, not the actual metadata lookup protocol.',
-    'The servers list maps each tablet number to its serving process. Index 1 names S1. The row remains in the same tablet when the serving assignment changes.',
-    'The original architecture stores durable logs and SSTables in replicated GFS. Tablet servers keep memory buffers and caches. Partitioning divides row ranges. Replication protects stored copies. The Python list models only the assignment.',
+    'The first slide routed com.cnn.www. Now shorten the keys to trace a reassignment. Tablet 1 begins at h and stops before n. bisect_right returns the number of boundaries no greater than the row key. For kim, it returns 1. This is a small routing model, not the actual metadata lookup protocol.',
+    'The servers list maps the tablet number to its serving process. Index 1 names S1. A Bigtable client checks its cached tablet locations. If an entry is missing or stale, it looks up the current assignment in the location metadata. The row stays in the same tablet when the serving process changes.',
+    'The original architecture stores its recovery log and data files in the Google File System. GFS replicates those files. Tablet servers keep working copies in memory. Partitioning divides row ranges. Replication protects stored copies. The Python list models only the assignment.',
     'After S1 fails, assign tablet 1 to S2 in the toy directory. S2 can serve more than one tablet. A real reassignment must coordinate ownership and recover the tablet before serving it. Updating this Python list alone does not implement recovery.'
   ]);
 
@@ -101,6 +103,7 @@
   const hotspotDraw=hotspotScene.draw;
   hotspotScene.draw=(d,s)=>{
     hotspotDraw(d,s);
+    if(s===0||s===2)return;
     d.add('route-code','text',{x:640,y:181,fill:P.ink,'font-size':23,style:'font-family:ui-monospace, SFMono-Regular, Menlo, monospace','text-anchor':'middle','dominant-baseline':'middle'},s<2?'bisect_right([25, 50, 75], 99)  # tablet 3':'bisect_right([25, 50, 75, 88], 99)  # tablet 4');
   };
 
@@ -112,13 +115,13 @@
     'reply_success()'
   ]);
   install('the-log-protects-memory',[wal],(d,s)=>{
-    code(d,wal,s===0?[0]:s===1?[2]:s===2?[3]:[5,6]);
+    code(d,{...wal,lines:wal.lines.slice(0,[1,3,4,7][s])},s===0?[0]:s===1?[2]:s===2?[3]:[5,6]);
     box(d,'log',215,'Recovery log',s===0?['No update yet']:s===1?['Appended k2 = v3','Durability not confirmed']:['Durable k2 = v3'],s>=2?P.green:P.orange);
     arrow(d,'memory-path',365,405,s===3?P.orange:P.line);
-    box(d,'memory',420,'Memtable',s===3?['k2 = v3','Then reply success']:['Not updated yet'],P.blue);
-    foot(d,'WAL = write-ahead log · A Python list append would not make an update durable');
+    box(d,'memory',420,s===3?'Memory buffer (memtable)':'Memory buffer',s===3?['k2 = v3','Then reply success']:['Not updated yet'],P.blue);
+    if(s>=2)foot(d,'The log must survive the failures covered by the server’s durability guarantee.');
   },[
-    'Read the request record. Each pseudocode helper names a required operation, not a Python library function. The write-ahead log records enough information to repeat the update after a crash.',
+    'Zoom in from a range of updates to one request. Think of k2 = v3 as a short example of the crawler sending fresh page data. If the server says saved and then loses memory, what evidence could a replacement use? The pseudocode names the storage operations.',
     'append_log records the update. An append by itself does not establish that the required storage copies are durable. Predict whether the engine can safely acknowledge this write yet.',
     'sync_log waits for the durability required by the storage contract. The original architecture uses replicated files. A local Python list append or an ordinary buffered file write is not this guarantee. Failure handling is omitted from the pseudocode.',
     'Put the update into the ordered memtable, then reply success. A crash can erase memory. Recovery can replay the durable log to rebuild this update. This redo-style example differs from microdb’s physical undo protocol. Several writes can share synchronization work.'
@@ -138,9 +141,9 @@
     if(s>=1){arrow(d,'sort',325,375);box(d,'sorted',390,'Ordered keys',['k1, k2, k5, k7, k8',s===2?'k2 now maps to v2':'Each value is v1'],P.green);}
     foot(d,'Integer suffixes model the short labels · This current-value model omits retained versions');
   },[
-    'The keys list records order. The values dictionary holds one current value for each key. Read the incoming integer suffixes 8, 2, 5, 1, 7 as the diagram labels k8, k2, k5, k1, k7.',
+    'The log now protects the change. Show how one server organizes many recent changes in memory using a fresh five-key example. The keys list records their order. The values dictionary holds one current value for each key. Read the incoming integer suffixes 8, 2, 5, 1, 7 as the diagram labels k8, k2, k5, k1, k7.',
     'insort inserts each key at its sorted position. It keeps the list ordered after every insertion. The dictionary alone would not provide sorted key order. This small list model explains ordering, not a production memtable’s performance.',
-    'Update values[2] to v2. The key is already in the keys list, so do not insert it again. The rows expression visits keys in sorted order. This model keeps one current value and omits versions needed by retained snapshots.'
+    'Update values[2] to v2. Its key already has a sorted position. If these five entries filled the available memory, in what order could they be written? The rows expression visits keys in sorted order. This model keeps one current value and omits versions needed by retained snapshots.'
   ]);
 
   const flush=sample('Engine pseudocode · rotate, write, then install safely','text',[
@@ -153,20 +156,30 @@
     'retire_when_no_readers(frozen)'
   ]);
   install('freeze-a-sorted-file',[flush],(d,s)=>{
-    code(d,flush,s===0?[]:s===1?[0,1]:s===2?[4,5,6,7]:[1]);
-    box(d,'batch',205,s===0?'Active batch':'Frozen batch',['k1, k2, k5, k7',s===0?'Accepting writes':'Readable, no new writes'],P.blue);
+    code(d,{...flush,lines:flush.lines.slice(0,s===0?1:s===1?2:8)},s===0?[]:s===1?[0,1]:s===2?[4,5,6,7]:[1]);
+    box(d,'batch',205,s===0?'Active batch':'Frozen batch',['k1, k2, k5, k7, k8',s===0?'Accepting writes':'Readable, no new writes'],P.blue);
     if(s>=2){arrow(d,'flush',345,385);box(d,'sst',400,'SSTable',['Same sorted entries','Durable before publication'],P.green);}
     if(s===1)box(d,'fresh',435,'New active memtable',['Accepts new writes'],P.orange);
     if(s===3)box(d,'fresh',545,'New active memtable',['New k9 enters here'],P.orange);
-    foot(d,'New writes follow the WAL protocol · Readers retain the frozen batch until safe retirement');
+    if(s===2)foot(d,'Readers can use the frozen batch until the new file becomes available.');
+    if(s===3)foot(d,'The log, ordered buffer, and sorted files are parts of a log-structured merge tree (LSM tree).');
   },[
-    'Identify the active batch and its sorted entries. A flush writes these entries into an immutable file. The diagram has four short labels. The separate interactive widget flushes at six distinct keys.',
+    'Use the same five keys that the server just sorted. This memtable is full. Ask where a new arrival can go while the server writes the sorted batch to a file. The separate interactive widget flushes at six distinct keys.',
     'Freeze the old batch and create a different active memtable. Reads can still use the frozen data. New writes go to the new active structure and follow the durable-log protocol.',
     'The background worker writes the sorted file. make_durable waits for the required storage guarantee. publish installs the file in the reader-visible file set. Retire the old buffer only when no reader still needs it. These helpers omit the real synchronization and recovery machinery.',
     'The new active memtable can receive k9 while the frozen batch is being flushed. The separated builds explain overlapping roles. They do not require all writes to stop until the file is complete. The code does not discard the recovery log.'
   ]);
 
-  const visible=sample('Teaching Python · records for one key, then a read rule','python',[
+  const morningRead=sample('Teaching Python · one stored record','python',[
+    'records = [(5, "old")]','',
+    'sequence, value = records[0]'
+  ]);
+  const afternoonRead=sample('Teaching Python · choose the later record','python',[
+    'records = [(5, "old"), (8, "new")]','',
+    'sequence, value = max(records,',
+    '    key=lambda record: record[0])'
+  ]);
+  const visible=sample('Teaching Python · read at a sequence boundary','python',[
     'DELETE = object()  # A distinct marker.',
     'records = [(5, "old"), (8, "new"), (9, DELETE)]','',
     'def read_at(records, snapshot):',
@@ -185,25 +198,43 @@
     'else:',
     '    keep_tombstone(key)'
   ]);
-  install('read-the-newest-visible-value',[visible,safety],(d,s)=>{
-    code(d,s<3?visible:safety,s<2?[4,5,8]:s===2?[9]:s===3?[4,5]:[0,1,3]);
-    if(s<3){
-      box(d,'versions',205,'Available records for k',['A: old @ 5','B: new @ 8','Memory: DELETE @ 9'],P.blue);
-      arrow(d,'read',365,415);
-      box(d,'result',430,'read_at(records, '+[5,8,9][s]+')',[['old','new','None → absent'][s]],s===2?P.orange:P.green);
+  const readViews = [
+    {snapshot:5, result:'old', records:['A · old @ 5']},
+    {snapshot:8, result:'new', records:['A · old @ 5','B · new @ 8']},
+    {snapshot:9, result:'None → absent', records:['A · old @ 5','B · new @ 8','Memory · DELETE @ 9']}
+  ];
+  const readExamples=[morningRead,afternoonRead,visible];
+  const lookup = install('read-the-newest-visible-value',readExamples,(d,s)=>{
+    const stored = readViews[Math.min(s,2)];
+    const read = s===3 ? readViews[1] : stored;
+    code(d,readExamples[Math.min(s,2)],[[2],[2,3],[8,9],[4,5],[4,5,8]][s]);
+    box(d,'versions',205,'Records for the page',stored.records,P.blue);
+    arrow(d,'read',365,395);
+    if(s===4){
+      box(d,'earlier',405,'Saved snapshot at 8',['new'],P.green);
+      box(d,'current',515,'Current read at 9',['None → absent'],P.orange);
     }else{
-      box(d,'files',205,s===3?'Partial merge: B + C':'Merge includes A + B + C',s===3?['SSTable C (flushed)','A still holds old @ 5']:['All older versions covered','No required older read view'],P.blue);
-      arrow(d,'decision',345,395);
-      box(d,'output',410,s===3?'Keep the marker':'Safe output for k',s===3?['Merged output keeps','DELETE @ 9']:['No record'],s===3?P.orange:P.green);
+      const label=s<2?'Current read at '+read.snapshot:'read_at(records, '+read.snapshot+')';
+      box(d,'result',410,label,[s===3?'Which record wins?':read.result],s===2?P.orange:P.green);
     }
-    foot(d,s===4?'All older versions are included, and no active snapshot needs them.':s===3?'Merged output keeps DELETE @ 9 · A still holds old @ 5.':'Toy update sequences differ from Bigtable cell timestamps · None means absent in this model');
+    foot(d,s<3?'Sequence numbers give the order of writes for this one key.':'A read includes only the records at or before its own boundary.');
   },[
-    'Each tuple contains an update sequence and a value for one key. DELETE is a distinct sentinel object, meaning a special marker. None represents absence in this model. At snapshot 5, exclude sequences 8 and 9. The highest eligible sequence is 5, so return old.',
-    'At snapshot 8, the filtering expression includes records 5 and 8. The lambda selects tuple position zero, its sequence number. max chooses record 8. Return new even though the older file remains.',
-    'At snapshot 9, the marker is the highest visible record. The is comparison recognizes that exact marker object. Return None for absence. Do not continue to an older value after the marker wins.',
-    'Flush the deletion to C, then merge B and C. A remains outside the merge with old@5. The first safety condition is false. Keep DELETE@9 so future reads cannot resurrect the older value. The predicates name proofs that a real engine must establish.',
-    'Include all older versions and assume no retained view needs them. Now both safety conditions hold in this toy case. Removing the covered records leaves the current key absent. A retained snapshot at 8 would prevent this removal.'
+    'Let k stand for com.cnn.www. This file holds the morning contents, old, at update sequence 5. Start with one stored record. Ask which value a reader sees.',
+    'Add the afternoon contents in file B. At boundary 8 both writes qualify. Select the greatest qualifying sequence number. What happens if a third record deletes the stored copy?',
+    'At 9 the deletion marker qualifies and has the greatest sequence. The helper returns None for absence. Ask whether a reader that started earlier must also see this deletion.',
+    'Keep all three records on screen. Snapshot 8 still admits 5 and 8 and excludes 9. The is comparison recognizes the unique DELETE marker only if the winning record contains it.',
+    'Compare the two results before changing any files. The earlier reader needs new and the current reader must see absence. Ask how the engine could combine files while preserving both answers.'
   ]);
+  lookup.clarityTraceId=lookup.traceId;
+  delete lookup.traceId;
+  lookup.title='Choose the version a read can see';
+  lookup.states=['Read at 5','Read at 8','Delete at 9','Revisit snapshot 8','Compare both reads'];
+  lookup.teaching.idea='Each read chooses the newest record within its own boundary.';
+  lookup.teaching.question='After DELETE at 9, what should the saved read at 8 return?';
+  lookup.teaching.answer='It returns new from file B. It excludes the deletion at 9.';
+  lookup.teaching.context='The sequence numbers order writes for one key in a simplified storage engine. Bigtable cell timestamps label application versions.';
+  lookup.teaching.reference='Reading section 9 uses the same read_at function. None represents an absent key in this Python example.';
+  lookup.sources=[deck.source+'#versions'];
 
   const mergeInputs=sample('Teaching Python · ordered inputs with numeric key suffixes','python',[
     '# Each entry is (key, version, value).',
@@ -227,26 +258,41 @@
     box(d,'a',205,'Run A',['k1:v1 · k2:v1 · k7:v1'],P.blue);
     box(d,'b',350,'Run B',['k2:v2 · k4:v1 · k8:v1'],P.orange);
     if(s>=1){arrow(d,'merge',455,490);box(d,'merge-output',505,s===1?'Next key: k1':s===2?'Resolve duplicate k2':'Sorted output',s===1?['merge advances input cursors']:s===2?['v2 has the higher version']:['k1 · k2 · k4 · k7 · k8'],P.green);}
-    foot(d,'merge reads sorted inputs in order · groupby gathers equal keys · This is not a general compactor');
+    if(s===0)foot(d,'Each input already lists its keys in ascending order.');
+    if(s===1)foot(d,'merge reads the inputs in order. groupby gathers equal keys.');
+    if(s>=2)foot(d,'This example merges ordinary values for current reads.');
   },[
-    'Read the two sorted lists. Each triple stores numeric key suffix, version, and value. They match the existing k1, k2, k4, k7, k8 example. These version numbers serve only this current-value example.',
+    'The last read had to resolve records stored in separate places. To try a sorted merge, use two small runs of ordinary values. Each triple stores numeric key suffix, version, and value. Predict which key goes into the output first. These version numbers serve only this current-value example.',
     'heapq.merge compares the next key from each input and advances that input cursor. It produces entries in key order without sorting all inputs again. groupby gathers consecutive entries with the same key. Both helpers use tuple position zero for the key.',
     'max selects the highest version at tuple position one inside each key group. It chooses k2:v2 over k2:v1. This simplified function assumes no deletions and no retained snapshots. It must not be used as a general compaction algorithm.',
     'The output contains keys 1, 2, 4, 7, 8 in order. Reading inputs and writing this output still costs storage bandwidth. A real engine also applies the version, deletion, and retention rules before installing its output.'
   ]);
 
-  const deleteRead=sample('Teaching Python · reuse read_at and DELETE from slide 9','python',[
-    'old_file = [(1, "v1")]  # Records for k2.',
-    'newer = [(2, DELETE)]',
-    'result = read_at(old_file + newer, 2)'
+  const deletedPage=sample('Teaching Python · records for page k','python',[
+    'a = [(5, "old")]',
+    'b = [(8, "new")]',
+    'c = [(9, DELETE)]','',
+    'current = read_at(a + b + c, 9)'
   ]);
-  install('deletion-must-hide-older-values',[deleteRead,safety],(d,s)=>{
-    code(d,s===3?safety:{...deleteRead,lines:deleteRead.lines.slice(0,s===0?1:s===1?2:3)},s===0?[0]:s===1?[1]:s===2?[2]:[0,1,3,5]);
-    box(d,'old',210,'Older immutable file',['k2 = v1'],P.blue);
-    if(s>=1)box(d,'delete',360,'Newer record',['DELETE k2'],P.orange);
-    if(s>=2)box(d,'absent',510,s===3?'Removal requires proof':'Newest marker wins',[s===3?'No older value can reappear':'None → absent'],P.green);
-    foot(d,s===3?'Also preserve required read views · Replica repair and retention can add further conditions':'The marker hides the old value · It does not edit the old file');
+  const cleanupCases=[
+    {inputs:'Flushed records for k',files:['File A · old @ 5','File B · new @ 8','File C · DELETE @ 9'],outcome:'Current read at 9',result:['None → absent']},
+    {inputs:'Merge B and C',files:['A stays outside the merge','A still holds old @ 5'],outcome:'Keep the deletion',result:['Merged output keeps DELETE @ 9']},
+    {inputs:'Merge A, B, and C',files:['All older records covered','Snapshot 8 still active'],outcome:'Preserve both reads',result:['Keep new @ 8 for snapshot 8','Keep DELETE @ 9 for current']},
+    {inputs:'Merge A, B, and C',files:['All older records covered','No reader needs the old versions'],outcome:'Safe output for k',result:['No record']}
+  ];
+  const cleanup=install('deletion-must-hide-older-values',[deletedPage,safety],(d,s)=>{
+    const frame=cleanupCases[s];
+    code(d,s===0?deletedPage:safety,[[0,1,2,4],[0,4,5],[1,4,5],[0,1,3]][s]);
+    box(d,'inputs',205,frame.inputs,frame.files,P.blue);
+    arrow(d,'decision',365,405);
+    box(d,'outcome',420,frame.outcome,frame.result,s===1?P.orange:P.green);
+    if(s===1)foot(d,'Dropping the marker would make the morning page visible again.');
+    if(s===2)foot(d,'Covering the files is only the first check. The snapshot still needs the afternoon copy.');
   });
+  cleanup.title='Decide when a deletion marker can go';
+  cleanup.states=['Flush the deletion to C','Merge only B and C','Keep snapshot 8','Release snapshot 8'];
+  cleanup.teaching.reference='Reading section 11 follows the same CNN records through a partial merge and a complete merge. Both file coverage and the required read boundaries determine which records can go.';
+  cleanup.sources=[deck.source+'#worked-example'];
 
   const hashes=sample('Teaching Python · the diagram’s three fixed hash functions','python',[
     'def hashes(key):','    a = b = c = 0',
@@ -281,7 +327,7 @@
     if(s>=2){box(d,'query',505,query+' → ['+positions.join(', ')+']',[s===2?'Zero found → definitely absent':s===3?'All ones → possibly present':'File check: k17 is absent'],s===2?P.green:P.orange);}
     foot(d,s===0?'ord converts a character to a number · % 32 keeps each position between 0 and 31':s===4?'A false positive costs a file lookup · Never clear shared bits to delete a key':'Insertion and query use the same hashes · all(...) is true only when every required bit is 1');
   },[
-    'The diagram uses three deterministic teaching hashes. ord converts a character to its numeric code. enumerate supplies its position. The remainder operator keeps each output between 0 and 31. These short inputs use ASCII characters. Start with all 32 bits zero. Production filters use suitable hash functions for their workloads.',
+    'The partial merge left one file untouched. What could let a reader skip it entirely? Build a small membership summary for a separate six-key file. The diagram uses three deterministic teaching hashes. ord converts a character to its numeric code. enumerate supplies its position. The remainder operator keeps each output between 0 and 31. These short inputs use ASCII characters. Start with all 32 bits zero. Production filters use suitable hash functions for their workloads.',
     'Reuse hashes from the previous build. range(1, 7) produces 1 through 6. Set the selected bits for each stored key. The filter remembers bits, not the keys themselves. Different keys can share a bit.',
     'Query k7. Its required positions are 12, 30, and 9. A zero makes all return false. Since every stored key set its required bits, this zero proves absence. Skip the file.',
     'Query k17 at positions 17, 21, and 16. All three bits are one, so might_contain returns true. Predict whether the key must be present. The filter alone cannot prove it.',
@@ -312,7 +358,7 @@
     if(s>=2){arrow(d,'to-block',470,500);box(d,'block',515,s===2?'Block 1: k8 · k9 · k12':'Block 1 already cached',['k9 found → v9'],P.green);}
     foot(d,'Numeric suffixes model the key order · disk is a toy mapping · Real blocks require storage I/O');
   },[
-    'The Bloom filter has already allowed this file to be checked. A possible match is not proof of presence. The disk dictionary stands in for stored blocks. It is not actual disk I/O. Only the block needed by this example is represented.',
+    'The previous filter admitted a key that the file did not contain. Try a different file, this time for k9. Its positive filter result means the engine still needs to look for the key. The disk dictionary stands in for stored blocks. It is not actual disk I/O. Only the block needed by this example is represented.',
     'bisect_right finds the position after indexed keys no greater than 9. Subtract one to select the preceding block start, 8. The result is block 1. Keys below the first boundary need an absent-range check in general. The displayed query is within this index’s covered range.',
     'read_block checks the cache before accessing the toy disk mapping. It saves the loaded block in cache. The dictionary get then checks the actual key. A candidate block does not imply that every possible key inside its interval is present.',
     'The repeated read_block call uses the cached block. In a real engine, that avoids another storage read. The filter skips files, the index chooses a block, and the cache reuses its bytes. This model omits eviction and version resolution inside a block.'

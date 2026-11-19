@@ -323,7 +323,7 @@
       if(n)d.rect('load-'+i,x+24,545-n*11,w-48,n*11,hot?P.orangeLight:P.greenLight,hot?P.orange:P.green,5,2);
       label(d,'count-'+i,x+w/2,600,n+' writes',hot?P.orange:P.ink,27);
     });
-    foot(d,s>=2?'Key 99 belongs to [88,100). These counts are a toy load model, not measured throughput.':'Four disjoint tablet ranges · each key belongs to the interval that contains it');
+    foot(d,s===2?'Use the new boundary to predict where the next write goes.':s===3?'Key 99 belongs to [88,100). The counts illustrate one possible workload.':'Each key belongs to the interval that contains it.');
   });
   use(14,'the-log-protects-memory',(d,s)=>{
     label(d,'wal-expansion',640,223,'WAL = write-ahead log · recovery can repeat the stored update',P.ink,27);
@@ -348,10 +348,9 @@
     });
   }
   use(14,'trace-an-acknowledged-write',(d,s)=>{
-    repeatModel(d,s,'Return to k: old@5, new@8, DELETE@9',[
-      ['Log durably'],['Buffer in order'],['Flush sorted files'],['Read the newest','visible record']
+    repeatModel(d,s,'A new visit to com.cnn.www after DELETE @ 9',[
+      ['Route the update','to Server 1'],['Log and buffer','fresh @ 10'],['Flush the batch','to a sorted file'],['Snapshot 9 · absent','Current read · fresh']
     ]);
-    if(s===3)foot(d,'A current read returns absent. Old bytes may remain until safe compaction');
   });
 
   // Slide-only passages continue Maya’s example without changing the lab corpus.
@@ -436,28 +435,6 @@
   });
   if(mapreduceScene)mapreduceScene.title='MapReduce: map, shuffle, reduce';
 
-  const lsmRead=use(14,'read-the-newest-visible-value',(d,s)=>{
-    const labels=['SSTable A','SSTable B',s>=3?'SSTable C (flushed)':'Memtable'],vals=['old @ 5','new @ 8','DELETE @ 9'];
-    label(d,'versions',640,215,s<3?'Same key k · toy sequence numbers order these updates':'Compaction = merging sorted files',P.ink,28);
-    labels.forEach((l,i)=>{if(i<=Math.min(s,2)){const removed=s===4;card(d,'version-'+i,90+i*400,267,300,122,l,removed?'safe to remove':vals[i],!removed&&i===Math.min(s,2));if(removed)d.line('remove-'+i,116+i*400,298,362+i*400,361,P.muted,3);}});
-    if(s<3){const x=240+Math.min(s,2)*400;d.arrow('read',x,408,640,497,P.orange,4);d.box('read-result',380,515,520,72,s===0?'Read at 5 → old':s===1?'Read at 8 → new':'Read at 9 → absent',s===2?P.redLight:P.greenLight,s===2?P.red:P.green,29);}
-    if(s===3){d.rect('merge-region',467,247,760,167,'none',P.orange,10,3);d.arrow('merge',850,431,850,485,P.orange,4);d.box('merge-output',585,500,535,78,'Merged output keeps DELETE @ 9',P.orangeLight,P.orange,26);label(d,'remaining',235,494,'A still holds old @ 5',P.red,25);}
-    if(s===4){d.box('safe-output',340,479,600,100,'Safe output for k: no record',P.greenLight,P.green,30);}
-    foot(d,s===4?'All older versions are included, and no active snapshot needs them.':s===3?'Dropping the tombstone now would let old @ 5 reappear.':s===2?'A tombstone is a deletion marker. The newest visible marker makes k absent.':'Visible means included by the read’s boundary. Higher sequence means a later update here.');
-  });
-  if(lsmRead){
-    lsmRead.teaching.idea='A read uses the newest record allowed by its boundary. A deletion marker can win while older bytes remain.';
-    lsmRead.teaching.question='Why must the merge keep DELETE@9 while file A still has old@5?';
-    lsmRead.teaching.answer='Removing the deletion marker would let a later read find old@5. Keep it until older values cannot reappear and required read views remain valid.';
-    lsmRead.teaching.builds=[
-      'Define the toy sequence as an update-order number. A read boundary determines which updates the read includes. Visible means included by that boundary. At boundary 5, read old@5. This toy number is separate from a Bigtable cell timestamp.',
-      'Advance the read boundary to 8. File B has new@8, so it determines the result. Ask why the old bytes can remain in file A without determining this read.',
-      'Define tombstone as a deletion marker. At boundary 9, DELETE@9 is visible and newer than the other records. The current result is absent. The marker does not erase the old bytes.',
-      'Define compaction as merging sorted files into new files. The deletion has been flushed to C. Merge B and C while A remains outside the merge. Predict the result if the marker were dropped. A later read could return old@5.',
-      'Define snapshot as a retained earlier read view. Now include all older versions and assume no active snapshot needs them. The records can be removed safely. The following slides explain merging and deletion in more detail.'
-    ];
-    lsmRead.teaching.context='This is the existing deterministic shared trace: old@5, new@8, DELETE@9, a partial merge, then safe removal. It illustrates a general LSM version rule. It does not claim these sequence numbers are the original Bigtable timestamp API.';
-  }
   use(14,'skip-files-then-find-a-block',(d,s)=>{
     label(d,'lookup-key',640,218,'Lookup: k9',P.ink,31);
     card(d,'filter',70,290,280,117,'Bloom filter','possibly present',s===0);
@@ -792,7 +769,6 @@
   const tracePredictions=[
     [12,'keep-the-source-identity','Predict which source the integer position selects before following the result.'],
     [13,'reduce-sees-the-complete-group','Predict how many occurrences must survive and which values share a key group.'],
-    [14,'read-the-newest-visible-value','Name the read boundary, then predict which included update is newest.'],
     [15,'paths-are-not-unique-vertices','State whether the question asks for walks or distinct people before counting.']
   ];
   for(const [id,sceneId,prediction] of tracePredictions){

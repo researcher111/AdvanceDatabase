@@ -327,9 +327,26 @@ assert(!draw(13,'count-one-logical-task-contribution',2).some(item=>item.key==='
 assert.equal(text(draw(13,'count-one-logical-task-contribution',3),'retry-total-label'),'pizza = 2 + 1 = '+counts.pizza);
 for(const step of [1,2])for(const c of [0,1])assert.equal(text(draw(13,'distinguish-retries-from-new-orders',step),'case-'+c+'-line-1'),'pizza = '+counts.pizza+', salad = '+counts.salad);
 assert.equal(text(draw(13,'distinguish-retries-from-new-orders',2),'case-2-line-1'),'pizza = '+(counts.pizza+2)+', salad = '+counts.salad);
-assert.match(strings(draw(14,'read-the-newest-visible-value',3)),/Merged output keeps DELETE @ 9/);
-assert.match(strings(draw(14,'read-the-newest-visible-value',3)),/SSTable C \(flushed\)/);
-assert.match(strings(draw(14,'read-the-newest-visible-value',4)),/no active snapshot needs them/);
+// The flush carries forward all the keys students just sorted.
+const sortedBatch = text(draw(14, 'the-memtable-stays-ordered', 2), 'sorted-line-0');
+assert.equal(sortedBatch, 'k1, k2, k5, k7, k8');
+assert.equal(text(draw(14, 'freeze-a-sorted-file', 0), 'batch-line-0'), sortedBatch);
+// Start with ordinary values, then add the deletion and compare two read boundaries.
+for (const step of [0, 1]) {
+  assert.doesNotMatch(strings(draw(14, 'read-the-newest-visible-value', step)), /DELETE/);
+}
+const readComparison = draw(14, 'read-the-newest-visible-value', 4);
+assert.equal(text(readComparison, 'earlier-line-0'), 'new');
+assert.equal(text(readComparison, 'current-line-0'), 'None → absent');
+// Cleanup first leaves A outside the merge, then covers A while a reader still needs B.
+const [flushed, partial, withReader, afterReader] = [0, 1, 2, 3].map(
+  step => draw(14, 'deletion-must-hide-older-values', step));
+assert.match(strings(flushed), /File C · DELETE @ 9/);
+assert.match(strings(partial), /A still holds old @ 5/);
+assert.match(strings(partial), /Merged output keeps DELETE @ 9/);
+assert.deepEqual([0, 1].map(i => text(withReader, 'outcome-line-' + i)),
+  ['Keep new @ 8 for snapshot 8', 'Keep DELETE @ 9 for current']);
+assert.equal(text(afterReader, 'outcome-line-0'), 'No record');
 // Independent traversal counts expose the difference between walks and BFS.
 let paths=['ada'],walks=0,frontier=['ada'],visited=new Set(frontier),edgeVisits=0;
 for(let depth=1;depth<=3;depth++){

@@ -1163,99 +1163,99 @@ window.CourseClarityCaptions = {
   },
   "14": {
     "organize-writes-differently": [
-      "A web crawler saves one row per page. As the table grows, one server can run out of space or fall behind on updates.",
-      "Bigtable sorts the rows by key and assigns ranges of neighboring keys to different servers.",
-      "To read com.cnn.www, the client sends its request to Server 1. That server handles keys before org."
+      "The morning crawl fetches CNN’s home page. The crawler reverses the hostname parts to build a row key it can use again.",
+      "When one server cannot handle the whole crawl, Bigtable assigns each range of row keys to a server.",
+      "The client finds the range for com.cnn.www, before org, and sends the update to Server 1. Which field should it change?"
     ],
     "a-multidimensional-map": [
-      "A row key names one row. Bigtable stores rows in key order.",
-      "A column name combines a declared family and a qualifier that names a column within that family.",
-      "A timestamp selects a cell version. The value is bytes that the application interprets."
+      "The request has reached the right server. The row key selects everything stored for the CNN page.",
+      "To save the text of one incoming link, select the column anchor:example. The row and column together identify one cell.",
+      "The same link can change. Timestamp 1 selects one saved version of its text."
     ],
     "sparse-cells-and-versions": [
-      "A cell is one row–column intersection. Sparse storage omits cells with no stored value.",
-      "Add anchor:school only to r2. Other rows do not need a reserved value for that column.",
-      "A retention policy specifies which versions to keep. Here the same cell has versions t3, t2, and t1."
+      "Each row represents a page. These three pages have different links, so the table stores only the cells that have values.",
+      "A new link appears on a later crawl. Add anchor:school to r2. Which other row needs to change?",
+      "The link text changes on later visits. Here one cell holds three versions. A retention policy decides which to keep."
     ],
     "tablets-separate-placement-from-storage": [
-      "A tablet is a contiguous range of row keys. Together, these ranges divide the table.",
-      "A tablet server handles reads and writes for its assigned ranges.",
-      "The Google File System (GFS) keeps replicated copies of the durable log and data files.",
-      "The master assigns the failed server’s tablet to another server. Recovery loads its files and replays its logged updates."
+      "Keep the page’s fields and versions together. Bigtable assigns a range of whole rows, called a tablet, to one server.",
+      "In this smaller example, kim falls between h and n. The client finds tablet 1 and sends the request to S1.",
+      "If S1 fails, its memory is lost. The Google File System keeps copies of the tablet’s files and recovery log.",
+      "The master assigns the same tablet to S2. S2 opens the files and replays the log before serving requests."
     ],
     "splitting-cannot-fix-a-moving-hotspot": [
-      "A hotspot is a range receiving much more work than others. These toy writes initially reach four ranges equally.",
-      "Increasing timestamp keys send all twelve new writes to the newest range.",
-      "Split that range into two disjoint intervals. Predict where the next key, 99, belongs.",
-      "Key 99 still reaches the newest interval. Splitting a range does not change the incoming key pattern."
+      "Routing finds the right tablet. Does it also spread the work? Here twelve writes reach four ranges equally.",
+      "Now give each new row an increasing timestamp as its key. All twelve writes reach the last range, creating a hotspot.",
+      "Split that range at 88. Six existing writes fall on each side. Where will the next key, 99, go?",
+      "Key 99 reaches the last range. Another burst takes its count from 6 to 18. Splitting leaves the next writes concentrated."
     ],
     "the-log-protects-memory": [
-      "A write-ahead log (WAL) records an update so recovery can repeat it after a crash.",
-      "Append the recovery record to the log before relying on the memory copy.",
-      "Make the required log record durable: it must survive the failures covered by the storage contract.",
-      "Update the ordered memory buffer, then acknowledge success. The durable log can rebuild this buffer after a crash."
+      "Follow one arriving update, k2 = v3. What must survive if the server confirms the write and then loses its memory?",
+      "The server appends the update to its write-ahead log. Recovery can use this record to repeat the change.",
+      "The server waits for the log record to reach durable storage before it reports success.",
+      "The server updates its memory buffer and confirms the write. If memory is lost, recovery replays the durable record."
     ],
     "the-memtable-stays-ordered": [
-      "A memtable is an ordered memory buffer for recent writes. These keys arrive out of order.",
-      "The memtable keeps the keys in order. When the engine writes the batch to a file, it can copy the keys in that order.",
-      "A later k2 record changes its current value. The simplified view shows only that value. Some readers need retained versions."
+      "The log can recover a write. Where can a reader find it now? Recent writes enter a memory buffer called a memtable.",
+      "Five keys arrive out of order. The memtable keeps them sorted so the server can later write a file in one pass.",
+      "Another write changes k2 to v2. The key keeps its position in this current-value model."
     ],
     "freeze-a-sorted-file": [
-      "A flush copies buffered entries into a sorted string table (SSTable), an immutable file whose existing entries stay unchanged.",
-      "Freeze this batch: stop changing its entries, but keep it readable.",
-      "Write a sorted string table (SSTable): an immutable file of sorted entries. Immutable means its existing entries are not edited.",
-      "Accept incoming writes in a new active memtable while the frozen batch finishes its flush."
+      "The memtable fills. How can the server save this sorted batch while the crawler keeps sending updates?",
+      "The server freezes the batch and opens a new memtable. Readers can still use the frozen entries.",
+      "A flush writes the frozen entries in order to a sorted string table (SSTable). Entries in this file stay fixed.",
+      "Key k9 goes into the new memtable. What if a later update has the same key as an entry in the older file?"
     ],
     "read-the-newest-visible-value": [
-      "The toy sequence number orders updates. At sequence 5, the newest visible record says k = old.",
-      "A read at sequence 8 includes the newer record in B, so it returns new.",
-      "A tombstone is a deletion marker. DELETE at sequence 9 makes the current result absent.",
-      "Compaction merges sorted files. Merge B and C, but keep DELETE@9 because A still contains old@5.",
-      "A snapshot preserves an earlier read view. Remove these records only when no required view needs them and older values cannot reappear."
+      "Let k name the CNN page. File A holds its morning copy, old, at sequence 5. A read at 5 returns old.",
+      "The afternoon flush puts new in file B at sequence 8. A read at 8 returns new even though A still holds old.",
+      "At sequence 9 the crawler deletes its stored copy. A current read sees the deletion marker and returns absent.",
+      "A reader kept its earlier view, called a snapshot, at 8. Which of the three records can that reader see?",
+      "The saved read returns new. The current read at 9 returns absent. Both answers come from the same stored records."
     ],
     "merge-sorted-runs": [
-      "A sorted run is a batch of entries in key order. These two file runs contain different versions of k2.",
-      "A merge cursor marks the next unread entry. Repeatedly take the smaller next key.",
-      "This current-value example keeps k2:v2. An engine must also retain versions needed by its read and retention rules.",
-      "Write one sorted output. Sequential merging still reads input bytes and writes output bytes."
+      "Reads may have to check several sorted files. Can the server merge two files while preserving the answers?",
+      "Compare the next entries in A and B. Copy the smaller key, then advance that file’s position.",
+      "The two files meet at k2. With only current reads and no deletions in this example, keep the higher version, v2.",
+      "One sorted output replaces the two inputs. What should a merge keep if the newest record deletes a key?"
     ],
     "deletion-must-hide-older-values": [
-      "The old file still holds k2 = v1. What should a lookup return after a delete?",
-      "Write a newer tombstone, a deletion marker, instead of editing the old file.",
-      "The current read honors the newest visible marker and returns absent.",
-      "Remove the marker only when older values cannot reappear and required snapshots remain valid."
+      "Return to the CNN page. The deletion marker has reached file C. File A still holds the morning copy.",
+      "Merge B and C. File A stays outside the merge. Keep the marker or the morning copy could reappear.",
+      "Now include A, B, and C. A reader still holds snapshot 8. Preserve its afternoon copy and the current deletion.",
+      "All three files participate and the earlier reader finishes. The merge can now remove the marker and both older values."
     ],
     "a-one-sided-membership-test": [
-      "A Bloom filter summarizes possible membership using bits, each either 0 or 1.",
-      "A hash function maps each key to bit positions. Insertion sets those bits to 1.",
-      "Any required zero bit proves absence, so the file can be skipped.",
-      "If every required bit is 1, the key might be present. Search the file to find out.",
-      "A false positive means the filter says “possibly present” for an absent key. The extra file check still returns absent."
+      "Some files may still await a merge. Can the server rule out a file before reading it? Give that file a Bloom filter.",
+      "Insert keys k1 through k6. Each key’s three hash values select bits to set in this file’s filter.",
+      "Test k7 with the same hashes. One required bit is zero, so this file cannot hold k7. Skip it.",
+      "Test k17. All three bits are set. Predict what the server still has to do.",
+      "A lookup finds no k17 in the file. This false positive costs a file check and the read still reports absence."
     ],
     "skip-files-then-find-a-block": [
-      "A Bloom filter can skip an absent file. A possible match still needs an actual lookup.",
-      "A block groups stored entries. A sparse index stores selected keys and block locations. For k9, choose the block beginning at k8.",
-      "A block is a stored group of entries. Search block 1, whose keys start at k8 and end before k16.",
-      "A block cache keeps recently read blocks in memory. Reusing block 1 avoids another storage read."
+      "For a different file, the filter allows a lookup for k9. Which part of the file should the server read?",
+      "The index lists the first key in each block. Block 1 begins at k8. The next block begins at k16.",
+      "Read block 1 and inspect its entries. The server finds k9 and returns v9.",
+      "A second lookup can reuse block 1 from the cache in memory. It avoids another storage read."
     ],
     "the-read-write-space-budget": [
-      "A B+ tree updates searchable pages. Nearby updates can share page writes.",
-      "An LSM tree is a log-structured merge tree: it buffers writes and stores sorted runs that it later merges.",
-      "Compaction adds reads, writes, and temporary storage. If it falls behind, runs accumulate and incoming writes may slow down.",
-      "Choose a starting design from the required reads, writes, storage space, and durability. Measure the complete workload."
+      "Consider the morning CNN update in a B+ tree. The server changes its leaf page in memory. Nearby updates can share a later write.",
+      "Now use an LSM tree. It collects scattered updates in sorted batches, then writes each batch to a file in one pass.",
+      "The read path showed the cost of multiple files. Merging reads the inputs, writes new output, and needs temporary space.",
+      "Which design fits this crawler? Measure updates and page lookups together while the engine performs its background merges."
     ],
     "a-network-partition-forces-a-choice": [
-      "A replica is another copy of data. Both copies begin with v1.",
-      "A network partition interrupts communication. Replica 1 completes a v2 write that replica 2 cannot learn about.",
-      "Linearizability requires this later read to respect the completed write. Replica 2 cannot safely return v1.",
-      "Availability requires each request to a non-failed node to eventually return a non-error response. Returning stale v1 sacrifices linearizability here.",
-      "Reconciliation makes copies agree after communication resumes. Its conflict rules depend on the system."
+      "One server can now return the newest visible record. What if a reader contacts another copy of the data?",
+      "A broken connection separates the copies. Replica 1 accepts v2 and confirms it. Replica 2 still sees only v1.",
+      "A later read asks replica 2 for the current value. It can wait for communication or decline the request.",
+      "Replica 2 could answer immediately with v1. That answer misses a write that already completed.",
+      "After communication resumes, the copies reconcile. The system’s rules determine how their values converge."
     ],
     "trace-an-acknowledged-write": [
-      "Return to key k. Make its recovery log record durable before acknowledging the write.",
-      "Place its update in the ordered memtable. A deletion also needs a record.",
-      "Flush sorted files, then compact them without exposing obsolete values.",
-      "A current read returns absent after DELETE@9. Explain why keeping old@5 in a file does not change that result."
+      "Return to com.cnn.www. The crawler visits again after the deletion. Where should the client send fresh at sequence 10?",
+      "Server 1 makes the log record durable, buffers fresh, and confirms the write. What if it crashes before the flush?",
+      "Recovery can replay the log. The next flush saves fresh in a file. Predict what a read at 10 and a saved read at 9 return.",
+      "At 10 the latest record is fresh. At 9 the latest visible record is the deletion marker, so that read still reports absence."
     ]
   },
   "15": {

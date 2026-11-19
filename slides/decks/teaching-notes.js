@@ -2117,9 +2117,9 @@
       "question": "Which server would handle an update for org.example.www?",
       "answer": "Server 2. Its range starts at org and includes org.example.www.",
       "builds": [
-        "A web crawler collects pages and revisits them to save changes. Each row key identifies a page by its web address. The example writes host names in reverse order, so www.cnn.com becomes com.cnn.www. Ask what happens if one server receives updates faster than it can save them.",
-        "Each server serves a consecutive range of row keys. Point to org, the boundary in this example. Ask which server should receive a request for com.cnn.www.",
-        "Follow the request to Server 1. The client locates the range containing com.cnn.www and sends the read to its server. The same routing rule directs a crawler’s update to the right server."
+        "Start with the morning update for CNN’s home page. Read www.cnn.com from right to left by hostname component. The resulting key is com.cnn.www. Which key will a return visit use?",
+        "Keep the CNN key on screen. Suppose the growing crawl exceeds one server’s storage or request capacity. Bigtable can assign ranges of sorted keys to different servers while the crawler still uses one table. Ask which range includes the CNN row.",
+        "The client looks up the assigned range. The first character c sorts before o in org, so the morning update goes directly to Server 1. Ask how to specify which field the server should store."
       ],
       "context": "Bigtable calls each row range a tablet. A tablet server can serve several tablets. Later slides explain how each server batches writes and how a client finds a tablet after its assignment changes."
     },
@@ -2139,9 +2139,9 @@
       "question": "Does adding anchor:school to r2 require a value in that column for every row?",
       "answer": "No. Only r2 needs that stored cell. Other rows can omit it.",
       "builds": [
-        "Read the row and column labels before looking at the colored cells. Each filled cell has a stored value. An empty diagram position means no stored cell, not a fixed-width empty slot on disk.",
-        "Add anchor:school only to r2. Ask which other rows must change. None need to acquire this value. Metadata still costs space.",
-        "Show three versions of that one cell. Define retention policy as rules deciding which versions remain stored. The original paper supports keeping the last n versions or versions younger than an age limit."
+        "The previous update selected one column of one page. Now use r1, r2, and r3 as short names for three example pages. Count the five stored cells. Which page has link text in anchor:news?",
+        "The crawler finds a link from a school site to r2. Point to the single assignment for anchor:school. Ask whether either of the other two rows must acquire a value in that column. Metadata still consumes storage.",
+        "On two further visits, the crawler saves changed text in the same cell. Point to timestamps 1, 2, and 3. A retention policy specifies which versions to keep. Ask whether distributing the table should send three versions of one row to three different ranges."
       ]
     },
     "tablets-separate-placement-from-storage": {
@@ -2215,14 +2215,14 @@
       "context": "The course widget merges all disk runs. Production compaction policies select files differently. The memtable remains a separate input to later reads."
     },
     "deletion-must-hide-older-values": {
-      "idea": "A tombstone makes deletion visible while older stored values still exist.",
-      "question": "What goes wrong if the newer deletion marker disappears but the old value remains?",
-      "answer": "A later read can find the old value and return it again.",
+      "idea": "A merge can discard the marker only when older values cannot reappear and every required read keeps its answer.",
+      "question": "A merge includes every file, but a reader still holds snapshot 8. What must it be able to read?",
+      "answer": "It must still read new from sequence 8. A current read must still report absence, so keep the deletion marker as well.",
       "builds": [
-        "Locate k2:v1 in the older file. Ask what a reader would return for k2 before a deletion marker arrives.",
-        "Define tombstone again as a deletion marker. Write it as the newer record. The old file remains immutable.",
-        "A current read must honor the visible marker and return absent. Absence is the logical result even though the physical old bytes remain.",
-        "Remove old records and their marker only when older values cannot reappear and required snapshots remain valid. A snapshot is a retained read view. Ask why merging only some files can make removal unsafe."
+        "Slide 10 merged files containing ordinary values. Now add a delete. Reuse slide 9’s key k and its three records. File A holds old at 5, B holds new at 8, and C holds the flushed deletion at 9. Ask for the current answer before merging.",
+        "Merge only B and C. Cover B and C on the diagram. Which record remains outside the merge? If the output discarded the marker, A could return old. The merged output must keep DELETE at 9.",
+        "Consider a complete merge of A, B, and C while a reader still holds snapshot 8. The first safety check passes. The second fails. Ask for the two answers the merge must preserve. Keep new for the saved view and the deletion for current reads.",
+        "Let that reader finish. In this example no remaining view requires an old version, and the merge covers all older values. Both checks now pass. Removing the covered records leaves the key absent. Until files are merged, how can a reader avoid opening every file?"
       ],
       "context": "Compaction is not automatic permission to discard every tombstone. Other systems can also require replica-repair or retention conditions. Keep this generic LSM safety rule separate from any one product’s deletion API."
     },
@@ -2254,10 +2254,10 @@
       "question": "Why can a fast log append fail to sustain a high incoming write rate?",
       "answer": "Compaction must keep up. Otherwise runs accumulate, increase later work, and can force incoming writes to slow down.",
       "builds": [
-        "Recall searchable B+ tree pages. Nearby updates can share page writes. Ask which pages a scattered update pattern changes.",
-        "Expand LSM as log-structured merge tree. Its sorted memory and files make batches sequential, while compaction reorganizes them. The term names a storage organization, not a SQL interface or transaction guarantee.",
-        "Count input reads, output writes, and temporary space during compaction. Define bandwidth as bytes processed per unit of time. Fast logging does not eliminate this later work.",
-        "Give steady event ingestion, frequent point lookups, and range-heavy mixed requests. Ask students to name the required operations and propose a measurement. Choose an initial design from these requirements, then test it."
+        "Return to the same morning and afternoon web crawls. Suppose a B+ tree holds the CNN record on a leaf. Find the changed leaf in the buffer pool. If both updates reach the same leaf before it is written, they can share that write.",
+        "Give the same changes to the LSM engine. The morning flush creates A. The afternoon update enters the memtable and later reaches B. Ask what the reader may have to check to find the latest page.",
+        "The merge reads its inputs and writes a new output while the original files still occupy space. Ask which work a benchmark misses if it stops after timing a log append.",
+        "Ask students to choose measurements for frequent crawler updates and lookups. Use the same workload and durability requirements for both designs. Next, give a reader a second copy of the data. Can a faster read path help if that copy missed a write?"
       ]
     },
     "a-network-partition-forces-a-choice": {
@@ -2274,14 +2274,14 @@
       "context": "This is a generic two-replica thought experiment, not Bigtable’s exact read protocol. Some systems keep serving one side while rejecting the other. A product label alone does not determine every operation’s behavior."
     },
     "trace-an-acknowledged-write": {
-      "idea": "Logging, ordered buffering, sorted files, and version rules together explain the current read.",
-      "question": "Why must the merge retain DELETE@9 while another file still contains old@5?",
-      "answer": "Dropping the marker could expose the old value again. The merge must cover older values and respect required read views.",
+      "idea": "A new crawl uses the same row key, write path, and read rule even after a prior deletion.",
+      "question": "After fresh arrives at 10, what do a current read and the saved snapshot at 9 return for the CNN page?",
+      "answer": "A current read returns fresh. The saved snapshot excludes sequence 10 and still sees the deletion at 9.",
       "builds": [
-        "Return to the fictional key k. Ask students to name the stored information that can recover an acknowledged update after memory loss. The durable log contains its recovery record.",
-        "Place the record in the ordered memtable. Ask what changes when the record is a deletion. It still needs an ordered record describing the deletion.",
-        "Flush a sorted file and account for later compaction. Repeat why an SSTable stays unchanged while its logical value can become obsolete.",
-        "Return absent after DELETE@9. Ask students to explain this result without saying that every old byte was erased. Transfer the mechanism to another key: what must remain if an old file has not joined the merge?"
+        "Return to www.cnn.com on the next crawl. Ask students to reconstruct the row key and name its server under the opening assignment. The key com.cnn.www is before org, so its update goes to Server 1.",
+        "Give this new page copy the value fresh and sequence 10. Ask what must happen before the server confirms the update. Make the log durable, then buffer the record. A crash before the flush requires replay.",
+        "Follow the flush. The new file keeps the fresh value, and older files may still contain the deletion marker. Before advancing, ask for the current read and the read at snapshot 9.",
+        "At boundary 10, fresh is the newest record. At boundary 9, the delete is the newest eligible record. Ask what a later merge must preserve for those two readers. A different, isolated replica may still lack sequence 10."
       ]
     }
   },

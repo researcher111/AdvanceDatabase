@@ -18,7 +18,7 @@
   <p><a href="../../slides/lecture-14.html">Visual slide deck ↗</a></p>
   <ul>
     <li><a href="#plan">Learning goals</a></li>
-    <li><a href="#problem">1 · Distribute the rows and batch the writes</a></li>
+    <li><a href="#problem">1 · Find the server for one page</a></li>
     <li><a href="#model">2 · Locate a value with row, column, and time</a></li>
     <li><a href="#sparse">3 · Store present cells and selected versions</a></li>
     <li><a href="#tablets">4 · Assign each row range to a tablet server</a></li>
@@ -51,9 +51,8 @@
   <div class="subtitle">What problem does Bigtable solve?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
-<p class="lede">A table can grow too large for one server to store, or receive more reads and writes than one server can handle. Bigtable spreads the rows and the work across many servers. Applications still read and update one table.</p>
-<p>A web crawler downloads CNN’s home page and needs a <strong>row key</strong> to identify that page in its table. The crawler splits the hostname <code>www.cnn.com</code> at the dots and reads the parts from right to left. Joining <code>com</code>, <code>cnn</code>, and <code>www</code> with dots gives the row key <code>com.cnn.www</code>.</p>
-<p>The crawler’s Bigtable client uses a directory that lists each row-key range and its assigned server. In this example, Server 1 handles keys before <code>org</code> in sorted order, and Server 2 handles keys from <code>org</code> onward. Since <code>c</code> comes before <code>o</code>, <code>com.cnn.www</code> falls in the first range. The client sends the update for that row directly to Server 1. <a href="#src-1">[1]</a></p>
+<p class="lede">A web crawler saves CNN’s home page in the morning. By afternoon the headline has changed. How can the crawler save the new copy and still find the morning one?</p>
+<p>One server can do this for one page. A crawl of many sites can exceed one server’s storage capacity or its ability to keep up with updates. Bigtable divides the work among servers while the crawler continues to read and update one table. <a href="#src-1">[1]</a></p>
 <div class="cite">
   Companion reading: Chang et&nbsp;al., <a href="https://research.google/pubs/pub27898/"><em>Bigtable: A Distributed Storage System for Structured Data</em></a> (OSDI 2006) ·
   O'Neil et&nbsp;al., <a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf"><em>The Log-Structured Merge-Tree</em></a> (1996, an earlier description of the storage design<sup class="src"><a href="#src-2" title="The Log-Structured Merge-Tree (LSM-Tree)">2</a></sup>) ·
@@ -72,49 +71,27 @@
 </ul>
 <div class="callout note"><span class="label">Class plan</span>
   <p>Start with <strong>Quiz 10</strong>, a 10-minute quiz on MapReduce, Spark, and Ray. Then study Bigtable and storage for workloads with many writes.</p>
-  <p>The numbered sections follow the slide sequence. Each diagram has its own controls and explanation. The reading includes the information needed to follow each example.</p>
 </div>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>A program changes a value only in memory, then the computer crashes. What information would let another process restore that change?</p><details><summary>Check your explanation</summary><p>It needs a surviving record of the change. Saving recovery information before reporting success lets the engine rebuild changes lost from memory.</p></details></div>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>When the crawler revisits CNN’s home page, what can it use to find the same row even though the headline changed?</p><details><summary>Check your explanation</summary><p>The web address still identifies the page. The crawler can use that address to construct the same key on both visits.</p></details></div>
 <p class="glossary-hint">Dotted terms have extra definitions. Hover over a term or tap it to show its definition below the sentence.</p>
 <div class="glossary-panel" id="glossary-panel" hidden>
   <button id="glossary-close" class="glossary-close" aria-label="Close">×</button>
   <div id="glossary-content" class="glossary-content"></div>
 </div>
 
-<h2 id="problem" data-slide="1" data-scene="organize-writes-differently">1 · Distribute the rows and batch the writes</h2>
+<h2 id="problem" data-slide="1" data-scene="organize-writes-differently">1 · Find the server for one page</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=1&amp;b=1">Open slide 1 ↗</a></p>
+<p>Start with the morning visit. The crawler needs a name for the row where it will store CNN’s home page. That name is the <strong>row key</strong>. The crawler splits <code>www.cnn.com</code> at the dots and reads the parts from right to left. Joining <code>com</code>, <code>cnn</code>, and <code>www</code> gives <code>com.cnn.www</code>.</p>
+<p>Now add pages from other sites. As the table grows, Bigtable can divide the sorted row keys into ranges and assign those ranges to different servers. In the diagram, Server 1 handles keys before <code>org</code>. Server 2 handles keys from <code>org</code> onward. Which server should receive the CNN update?</p>
 <div class="lecture-walkthrough" data-lecture-scene="organize-writes-differently"></div>
-<p>The crawler sends Server 1 the morning copy of CNN’s home page under the key <code>com.cnn.www</code>. Suppose the server uses a B+ tree. It finds the leaf page for that key and changes the copy in its <strong>buffer pool</strong>, where it keeps database pages in memory. The leaf is now a <strong>dirty page</strong> because the CNN entry in memory is newer than the one on disk.</p>
-<p>If another update changes the same leaf before the server writes it back, one write saves both changes. Now suppose the crawler’s next hundred updates land on a hundred different leaves. The server may have to write a hundred separate pages scattered across storage. Could it write those updates together?</p>
-<p>Bigtable groups the updates in a <strong>log-structured merge-tree</strong>, or <strong>LSM tree</strong>. When the CNN update arrives, Server 1 appends it to a <strong>log</strong> so it can replay the change after a crash. It also puts the CNN entry in its <strong>memtable</strong>, where it keeps recent updates sorted by key. When the memtable fills, the server <strong>flushes</strong> the batch to a new file. The entries are already in key order, so the server can write the entire <strong>sorted run</strong> in one sequential pass.</p>
-<p>That afternoon, the crawler finds a new headline on CNN’s home page. The morning file is <strong>immutable</strong>, so its entries stay as written. The afternoon copy goes into the next batch and then into a second file. A reader looking for the latest headline may now need to check both files. Later, the server can merge both runs into a new sorted file through <strong>compaction</strong>. If a reader still needs the morning version, the merge must preserve it.</p>
-<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
-<table>
-  <thead><tr><th>After this step</th><th>CNN entry in the active memtable</th><th>CNN entries in sorted files</th></tr></thead>
-  <tbody>
-    <tr><td>Morning flush</td><td>None</td><td>File A holds the morning copy.</td></tr>
-    <tr><td>Afternoon update</td><td>Afternoon copy</td><td>File A holds the morning copy.</td></tr>
-    <tr><td>Afternoon flush</td><td>None</td><td>File A holds the morning copy. File B holds the afternoon copy.</td></tr>
-  </tbody>
-</table>
-</div>
-<p><strong>The essential tradeoff:</strong> batching can reduce scattered writes, but reads may need several files and merging adds storage work.</p>
-<pre class="equation"><code>Writes: sequential output can reduce scattered storage operations.
-Reads:  sorted files and indexes help locate a key or scan a range.
-
-B+ tree: update the key’s leaf page; the buffer pool batches dirty-page writes.
-LSM tree: buffer updates, flush sorted files, and merge them with compaction.
-
-The LSM design reduces some write costs while adding read and compaction work.</code></pre>
+<p>The client looks up the assignment for <code>com.cnn.www</code>. Since <code>c</code> comes before <code>o</code>, the key falls in the first range. The client sends the update directly to Server 1. What should the server store inside that row?</p>
 
 <h2 id="model" data-slide="2" data-scene="a-multidimensional-map">2 · Locate a value with row, column, and time</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=2&amp;b=1">Open slide 2 ↗</a></p>
-<p><strong>Bigtable</strong> distributes an ordered map of records across servers. This lecture explains the original 2006 design and its storage mechanisms. Modern products can add interfaces and guarantees beyond that paper.</p>
-<p>A <strong>row key</strong> names a row. A <strong>column</strong> names a field within that row. The intersection of one row and column is a <strong>cell</strong>.</p>
-<p>A <strong>column family</strong> is a declared group of related columns. A <strong>qualifier</strong> names a column within that family. In <code>anchor:cnnsi.com</code>, <code>anchor</code> is the family and <code>cnnsi.com</code> is the qualifier.</p>
-<p>A <strong>timestamp</strong> identifies one version of a cell. A <strong>version</strong> is a value saved for that cell at a particular timestamp. The application can interpret these timestamps as page-fetch times, for example.</p>
-<p>Bigtable stores each value as bytes. The application decides whether those bytes represent text, an image, or another format.</p>
-<p><strong>Teaching Python:</strong> a tuple groups the three coordinates into one dictionary key. The prefix <code>b</code> creates a byte string. This model stores and retrieves one addressed value:</p>
+<p>Suppose the crawler saves both the contents of CNN’s home page and the words another site uses to link to CNN. Both belong to the same row. A <strong>column</strong> identifies which field the crawler wants. One row and one column together identify a <strong>cell</strong>.</p>
+<p>In the original Bigtable paper, the column <code>anchor:cnnsi.com</code> holds link text from <code>cnnsi.com</code>. The application declares <code>anchor</code> as a <strong>column family</strong> for incoming links. The crawler uses the source site’s name as the <strong>qualifier</strong> to distinguish that source within the family. <a href="#src-1">[1]</a></p>
+<p>What if the source changes its link text? The crawler can write the new words to the same cell with a later <strong>timestamp</strong>. A reader can now select a particular <strong>version</strong> using the row, column, and timestamp together.</p>
+<p>The Python example uses <code>anchor:example</code> for one source and <code>1</code> for one visit. The tuple below is the address. The byte string <code>b"example link text"</code> is the value stored there.</p>
 <pre><code class="language-python">cells = {}
 row = "com.cnn.www"
 column = "anchor:example"
@@ -123,24 +100,19 @@ timestamp = 1  # One illustrative version
 address = (row, column, timestamp)
 cells[address] = b"example link text"
 value = cells[address]</code></pre>
-<p>The illustrative timestamp <code>1</code> names one version. Real Bigtable timestamps are integers that an application can interpret as times. This dictionary models addressing. It does not implement sorted rows, declared families, persistence, or transactions.</p>
+<p>Reading the same tuple returns <code>b"example link text"</code>. Bigtable stores values as bytes, so the crawler can use the same addressing scheme for the contents of a page or an image.</p>
 <div class="lecture-walkthrough" data-lecture-scene="a-multidimensional-map"></div>
-<p>The paper describes a “sparse, distributed, persistent, multidimensional sorted map.” Its address combines the row, column, and timestamp. A <strong>retention policy</strong> specifies which versions to keep. The next section explains sparse storage and retention. <a href="#src-1">[1]</a></p>
 <pre class="equation"><code>(row_key, column_family:qualifier, timestamp) → bytes
 
 row_key    "com.cnn.www"      · reversed domains group related rows in key order
 column     "anchor:cnnsi.com" · declared family, dynamic qualifier
 timestamp  a cell version    · reads select versions under the retention policy</code></pre>
-<p>A <strong>prefix</strong> is the beginning of a key. For example, <code>news.cnn.com</code> becomes <code>com.cnn.news</code>. Both <code>com.cnn.news</code> and <code>com.cnn.www</code> start with <code>com.cnn.</code>, so their rows fall in the same part of the sorted table. A <strong>range scan</strong> reads rows between chosen bounds in key order. One scan can therefore read all rows with the <code>com.cnn.</code> prefix.</p>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Two values share a row and column but have different timestamps. Did we create another row?</p><details><summary>Check your explanation</summary><p>No. We stored two versions of one cell. A read can request a particular timestamp or the newest retained version.</p></details></div>
 
 <h2 id="sparse" data-slide="3" data-scene="sparse-cells-and-versions">3 · Store present cells and selected versions</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=3&amp;b=1">Open slide 3 ↗</a></p>
-<p><strong>Sparse</strong> means the system stores present cells without reserving a fixed value slot for every absent cell. Different rows can have different qualifiers within the same declared family.</p>
-<p>The example starts with three rows and three columns. A later step adds a fourth column in row <code>r2</code>. Missing cells have no dictionary entry.</p>
-<p>A new qualifier can appear in one row without adding a value to every other row. Column names and other bookkeeping still consume storage.</p>
-<p>A <strong>retention policy</strong> states which cell versions to keep. For example, a family can retain the latest versions or versions younger than a chosen age. Each retained version consumes storage.</p>
-<p><strong>Teaching Python:</strong> start a separate dictionary containing five present cells. Then add <code>anchor:school</code> to <code>r2</code> and retain three versions of that cell:</p>
+<p>Now a school links to one of the pages in the crawl. Only that page needs a value in <code>anchor:school</code>. Should every other row reserve space for the school’s link text?</p>
+<p>Use three short page keys, <code>r1</code>, <code>r2</code>, and <code>r3</code>, to see what grows. The example starts with five cells across three rows and three columns. The school links to <code>r2</code>. Look for the fourth column in that row as you step through the example.</p>
 <pre><code class="language-python">cells = {
     ("r1", "anchor:example", 1): b"link",
     ("r1", "contents:", 1): b"page",
@@ -152,7 +124,8 @@ timestamp  a cell version    · reads select versions under the retention policy
 cells[("r2", "anchor:school", 1)] = b"old"
 cells[("r2", "anchor:school", 2)] = b"prior"
 cells[("r2", "anchor:school", 3)] = b"new"</code></pre>
-<p>The last three assignments use different timestamp coordinates, so they create separate entries. They do not replace each other or create cells in other rows. This dictionary keeps every version. A real retention policy can remove versions when its rules permit.</p>
+<p>Only <code>r2</code> gains the new column. This is <strong>sparse</strong> storage. Bigtable stores the cells that have values and their names, without reserving a value slot for each missing cell.</p>
+<p>The last three writes share a row and a column. Their timestamps differ, so they create three versions of that cell. Keeping all three costs space. A <strong>retention policy</strong> lets the application specify how many recent versions a family keeps or how old they may be.</p>
 <div class="lecture-walkthrough" data-lecture-scene="sparse-cells-and-versions"></div>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
@@ -162,19 +135,18 @@ cells[("r2", "anchor:school", 3)] = b"new"</code></pre>
     <tr><td>Sparse cells</td><td>Absent cells need no fixed value slots. This differs from microdb’s fixed record layout.</td></tr>
     <tr><td>Timestamped cell versions</td><td>Versions can be selected and retained. Cell timestamps alone do not create a consistent transaction view across rows.</td></tr>
     <tr><td>Atomic operations within one row</td><td><strong>Atomic</strong> means the operation takes effect as a whole. The original design does not supply general transactions across rows.</td></tr>
-    <tr><td>A nonrelational interface</td><td>The original interface does not provide SQL joins. Applications must arrange that work separately. <a href="#src-1">[1]</a></td></tr>
+    <tr><td>A nonrelational interface</td><td>The original interface leaves joins to the application. <strong>NoSQL</strong> is a broad name for systems with nonrelational interfaces or data models. Each system has its own storage design and transaction guarantees. <a href="#src-1">[1]</a></td></tr>
   </tbody>
 </table>
 </div>
-<p><strong>NoSQL</strong> is a broad label for systems with data models or interfaces outside the traditional relational model. The label does not specify a storage engine or transaction guarantee.</p>
+<p>The 2006 paper calls Bigtable a “sparse, distributed, persistent, multidimensional sorted map.” Consider the word <em>distributed</em>. If the CNN row moves to a different server, how will the crawler find it? <a href="#src-1">[1]</a></p>
 
 <h2 id="tablets" data-slide="4" data-scene="tablets-separate-placement-from-storage">4 · Assign each row range to a tablet server</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=4&amp;b=1">Open slide 4 ↗</a></p>
-<p>A <strong>tablet</strong> is a contiguous range of row keys managed as one unit. A <strong>tablet server</strong> is a process that serves reads and writes for assigned tablets. One server can serve several tablets.</p>
+<p>Return to the CNN row. Reversing the hostname also gives <code>news.cnn.com</code> the key <code>com.cnn.news</code>. Both CNN keys begin with <code>com.cnn.</code>. This shared beginning is a <strong>prefix</strong>. A <strong>range scan</strong> can read all the rows with that prefix by walking consecutive keys in order.</p>
+<p>Bigtable manages each consecutive range of keys as a unit called a <strong>tablet</strong>. A <strong>tablet server</strong> handles reads and writes for its assigned tablets. One server can serve several tablets. Adding servers or replacing a failed one can change the assignment while the row keys stay the same.</p>
 <p>The crawler’s Bigtable client keeps a local cache of tablet locations. It first checks for an entry whose range contains <code>com.cnn.www</code>. If the entry is missing or stale, the client looks up the current assignment in Bigtable’s location metadata. The client then sends the request directly to the assigned tablet server. <a href="#src-1">[1]</a></p>
 <p>The next example uses shorter keys. The labels <code>a–g</code> and <code>h–m</code> describe the first two alphabetic ranges. The second range starts at <code>h</code> and stops before <code>n</code>, so <code>kim</code> belongs to <code>[h, n)</code>. A scan from <code>dee</code> through <code>kim</code> crosses both ranges.</p>
-<p>A <strong>master</strong> coordinates tablet assignments. It can assign tablets to another server after failure or when balancing work. The original paper describes tablets of roughly <strong>100–200 MB</strong>. <a href="#src-1">[1]</a></p>
-<p><strong>Partitioning</strong> divides data into portions. <strong>Replication</strong> keeps multiple copies of data. A tablet is one portion of the table, not a copy of the whole table.</p>
 <p><strong>Teaching Python:</strong> <code>bisect_right</code> counts the sorted boundaries no greater than the requested row key. For <code>kim</code>, it returns tablet number <code>1</code>. The <code>servers</code> list maps that number to its serving process:</p>
 <pre><code class="language-python">from bisect import bisect_right
 
@@ -187,18 +159,15 @@ server = servers[tablet]</code></pre>
 <p>The result is <code>server == "S1"</code>. After S1 fails, the toy directory can name S2 as the replacement:</p>
 <pre><code class="language-python">servers[1] = "S2"
 server = servers[tablet]  # "S2"</code></pre>
-<p>Changing the list models only the assignment. The real system must coordinate ownership and recover the tablet before the replacement serves requests.</p>
+<p>The same key now leads to S2. In the 2006 design, a coordinator called the <strong>master</strong> assigns the tablet to its replacement. The original paper describes tablets of roughly <strong>100–200 MB</strong>. Before S2 can serve the range, it must open the stored data and recover recent changes. <a href="#src-1">[1]</a></p>
 <div class="lecture-walkthrough" data-lecture-scene="tablets-separate-placement-from-storage"></div>
-<p>The original design stores files and recovery logs in the <strong>Google File System</strong>, or <strong>GFS</strong>. GFS replicates stored data across machines. Losing a tablet server therefore need not destroy its durable files. <a href="#src-3">[3]</a></p>
-<p>The replacement server opens those files and <strong>replays</strong> the log: it applies saved changes to rebuild lost memory state. Section 6 explains the required write ordering. Reassignment and recovery still take time.</p>
+<p>Dividing the rows into tablets is <strong>partitioning</strong>. Preserving the data when a server fails requires another mechanism. The original Bigtable stores its files in the <strong>Google File System</strong> (GFS), which keeps copies across machines. Keeping those copies is <strong>replication</strong>. The replacement can open the surviving files and use saved changes to rebuild what the failed server held in memory. Recovery takes time. <a href="#src-3">[3]</a></p>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Why does assigning a tablet to a new server differ from making another durable copy?</p><details><summary>Check your explanation</summary><p>Assignment changes who serves the row range. Replication creates another stored copy. Both can help recovery, but they solve different problems.</p></details></div>
 
 <h2 id="hotspot" data-slide="5" data-scene="splitting-cannot-fix-a-moving-hotspot">5 · Explain why a split can leave a hotspot</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=5&amp;b=1">Open slide 5 ↗</a></p>
-<p>A <strong>hotspot</strong> is a range that receives much more traffic than other ranges. Row-key design determines which tablet receives each new write.</p>
-<p>Keys that begin with increasing timestamps keep moving toward the end of the ordered key space.</p>
-<p>The diagram uses numeric intervals. In <code>[75, 100)</code>, the left boundary is included and the right boundary is excluded. Key <code>99</code> belongs to that interval.</p>
-<p>A <strong>tablet split</strong> divides one range into two adjacent ranges. Splitting the last range reduces its size. However, the next increasing keys still reach the new last range.</p>
+<p>Separate servers can share the work only if requests reach different ranges. Try changing the first part of the row key. Suppose each new row begins with the time of its visit. Later writes go to the end of the sorted table. That last range becomes a <strong>hotspot</strong> when it receives much more traffic than the others.</p>
+<p>Can splitting the busiest tablet spread the next writes? Use numbers for the ordered keys so you can see the boundary move. The final range, <code>[75, 100)</code>, contains 75 through 99. A <strong>tablet split</strong> divides it at 88. Predict which of the two new ranges receives key <code>99</code>.</p>
 <p><strong>Teaching Python:</strong> reuse <code>bisect_right</code> from the preceding section with numeric boundaries. Key <code>99</code> reaches the final tablet before and after the split:</p>
 <pre><code class="language-python">before = bisect_right([25, 50, 75], 99)      # Tablet 3
 after = bisect_right([25, 50, 75, 88], 99)  # Tablet 4</code></pre>
@@ -222,10 +191,9 @@ after = bisect_right([25, 50, 75, 88], 99)  # Tablet 4</code></pre>
 
 <h2 id="lsm" data-slide="6" data-scene="the-log-protects-memory">6 · Protect a write with a durable log</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=6&amp;b=1">Open slide 6 ↗</a></p>
-<p>A <strong>write-ahead log</strong>, or <strong>WAL</strong>, records changes before later storage actions depend on them. For the durable write shown here, the engine makes the log record durable before reporting success.</p>
-<p><strong>Append</strong> means add a record at the end of the log. <strong>Sync</strong> means request the persistence required by the durability protocol. An <strong>acknowledgment</strong>, abbreviated <code>ack</code>, tells the caller the write succeeded.</p>
-<p>Follow <code>k2 = v3</code>. The engine appends its recovery record, makes that record durable, and updates the sorted memtable. It then acknowledges success.</p>
-<p><strong>Engine pseudocode:</strong> each helper below names a required storage operation. These names are not functions supplied by a Python library:</p>
+<p>Follow just one write that reached Server 1. The crawler sends the morning CNN update. Suppose the server changes a copy in memory, replies “saved,” and then crashes. What surviving record could the replacement use to keep that promise?</p>
+<p>Before replying, the server appends a record of the change to a <strong>write-ahead log</strong> (WAL). Appending puts the record at the end of the log. The server waits until the record is <strong>durable</strong>, meaning it can survive the failure covered by the storage protocol. Recovery can then replay the change even if the in-memory copy disappears.</p>
+<p>The slide uses <code>k2 = v3</code> as a short example write. Follow it through the engine pseudocode below. The call to <code>sync_log()</code> waits for durability. Only after that wait and the memory update does the engine send its <strong>acknowledgment</strong>, the success reply.</p>
 <pre><code class="language-text">record = ("k2", "v3")
 
 append_log(record)
@@ -233,17 +201,18 @@ sync_log()  # Wait for required durability.
 
 memtable.put("k2", "v3")
 reply_success()</code></pre>
-<p><code>append_log</code> records recovery information. <code>sync_log</code> waits for the required durability before memory changes and the success reply. This trace omits error handling. A list append or buffered file write alone does not supply that durability guarantee.</p>
+<p>Here <code>memtable.put</code> updates the working copy in memory. The function names describe storage operations the engine must implement. A Python list append or a buffered file write alone cannot make the log durable.</p>
 <div class="lecture-walkthrough" data-lecture-scene="the-log-protects-memory"></div>
-<p>If the server crashes before the memory batch reaches a sorted file, recovery replays the log. The new process can restore <code>k2 = v3</code>.</p>
-<p>This is a <strong>redo</strong> use of a log: recovery reapplies a recorded update. It differs from microdb’s physical undo protocol, which restores earlier values. The lab’s ordering rules cannot be copied unchanged into this design.</p>
-<p>Engines can share one persistence operation across several writes. They can also offer weaker durability settings. Our trace assumes the acknowledged write has durable recovery information.</p>
+<p>If the server crashes after the reply, the replacement can restore <code>k2 = v3</code> by applying the logged update again. This is <strong>redo</strong>. In microdb’s earlier undo exercise, recovery used a saved value to restore the state before a change.</p>
+<p>One sync can make several writes durable together. Engines also offer weaker durability settings. The example assumes the caller requested durable writes.</p>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>The caller received success, but the update never reached a sorted file. What must recovery still be able to read?</p><details><summary>Check your explanation</summary><p>The durable log record. Losing the memtable is recoverable if that record and the required older stored data survive.</p></details></div>
 
 <h2 id="memtable" data-slide="7" data-scene="the-memtable-stays-ordered">7 · Keep recent writes in a sorted memtable</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=7&amp;b=1">Open slide 7 ↗</a></p>
-<p>The <span class="gloss" data-gloss="memtable">memtable</span> holds recent entries in random-access memory (RAM), sorted by key. Arrival order can differ from key order.</p>
-<p>The example receives <code>k8, k2, k5, k1, k7</code>. Its ordered structure keeps <code>k1, k2, k5, k7, k8</code>. That order lets a flush write the entries sequentially.</p>
+<p>The log protects the morning CNN update. Server 1 still has to store that update alongside changes to other sites. Recall how a B+ tree would handle <code>com.cnn.www</code>. The engine finds the leaf for that key in its <strong>buffer pool</strong>, where it keeps working copies of database pages. After the update, the leaf is a <strong>dirty page</strong> until the engine writes it back.</p>
+<p>If a second update changes that leaf before the write, one write saves both changes. Now suppose a hundred updates land on a hundred different leaves. The server may have to write a hundred pages scattered across storage. Could it collect those updates and write them together?</p>
+<p>Bigtable uses a <strong>log-structured merge-tree</strong> (LSM tree) to batch the updates. As each logged write arrives, the server places it in a <span class="gloss" data-gloss="memtable">memtable</span>. This structure keeps entries sorted by key in random-access memory (RAM).</p>
+<p>Try a fresh batch with five short keys. They arrive as <code>k8, k2, k5, k1, k7</code>. In what order could the server copy them out?</p>
 <p><strong>Teaching Python:</strong> the integers below represent the suffixes of <code>k8</code>, <code>k2</code>, and the other short labels. The <code>keys</code> list records their order. The <code>values</code> dictionary holds each key’s current value:</p>
 <pre><code class="language-python">from bisect import insort
 keys = []
@@ -258,14 +227,13 @@ rows = [(key, values[key]) for key in keys]</code></pre>
 <p><code>insort</code> inserts each arriving key at its sorted position. The five initial keys are distinct. Updating <code>values[2]</code> changes the value without inserting that key again.</p>
 <p>The final expression pairs each ordered key with its current value. This list model explains ordering, not production memtable performance. Real Bigtable row keys use byte-string order.</p>
 <div class="lecture-walkthrough" data-lecture-scene="the-memtable-stays-ordered"></div>
-<p>A later <code>k2</code> write changes its newest value. This simple drawing keeps one current value per key in memory. Production engines can retain older versions for reads that require earlier views.</p>
-<p>A real memtable uses an ordered data structure. In the Python example, <code>insort</code> maintains key order separately because a dictionary keeps insertion order.</p>
+<p>The server can now copy <code>k1, k2, k5, k7, k8</code> in one pass. The example keeps just the current value for each key. A production engine can also retain older versions for readers that need them. Once this batch fills, where can the next write go?</p>
 
 <h2 id="flush" data-slide="8" data-scene="freeze-a-sorted-file">8 · Flush a frozen memtable to an SSTable</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=8&amp;b=1">Open slide 8 ↗</a></p>
-<p>An <strong>SSTable</strong>, short for <strong>Sorted String Table</strong>, is an immutable file of sorted key-value entries. It also has an index that helps locate data within the file.</p>
-<p>At its size threshold, the engine <strong>freezes</strong> the current memtable: it stops changing that batch. A flush writes the frozen entries to an SSTable. New writes enter another active memtable.</p>
-<p><strong>Engine pseudocode:</strong> <code>active</code> names the current ordered memtable. The old batch becomes frozen while a new object accepts writes:</p>
+<p>The morning batch reaches its size limit just as more updates arrive. To write a stable copy, Server 1 <strong>freezes</strong> that memtable. Readers can still use its entries. New writes go into a fresh memtable.</p>
+<p>The server <strong>flushes</strong> the frozen batch by writing its entries sequentially to a new file. The entries already form a <strong>sorted run</strong> because the memtable kept them in key order. The resulting <strong>Sorted String Table</strong> (SSTable) includes an index to locate data inside it. The file is <strong>immutable</strong>, so its entries stay as written.</p>
+<p>In this engine pseudocode, follow the two batches. Which one can accept an afternoon update while the server is still writing the morning file?</p>
 <pre><code class="language-text">frozen = active
 active = new_memtable()
 
@@ -277,16 +245,25 @@ retire_when_no_readers(frozen)</code></pre>
 <p><code>write_sstable</code> writes ordered entries. <code>make_durable</code> establishes the required storage guarantee. <code>publish</code> installs the file where readers can find it. These helpers stand for storage and coordination work, not Python library calls.</p>
 <p>Retire the frozen batch only after readers no longer need it. New writes follow the WAL protocol and can proceed while the background flush runs. This fragment does not discard the recovery log.</p>
 <div class="lecture-walkthrough" data-lecture-scene="freeze-a-sorted-file"></div>
-<p>The frozen batch can remain readable while the file is written. A later update goes into active memory and eventually another file. It does not edit the older SSTable.</p>
-<p>Suppose a file holds yesterday’s copy of a web page and the memtable holds today’s update. Which copy should a current read return?</p>
+<p>That afternoon, the crawler finds a new headline on CNN’s home page. The row key is still <code>com.cnn.www</code>. Follow the two copies of the page through the next flush.</p>
+<div class="reading-table-scroll" tabindex="0" role="region" aria-label="Morning and afternoon copies of the CNN page">
+<table>
+  <thead><tr><th>After this step</th><th>CNN entry in the active memtable</th><th>CNN entries in sorted files</th></tr></thead>
+  <tbody>
+    <tr><td>Morning flush</td><td>None</td><td>File A holds the morning copy.</td></tr>
+    <tr><td>Afternoon update</td><td>Afternoon copy</td><td>File A holds the morning copy.</td></tr>
+    <tr><td>Afternoon flush</td><td>None</td><td>File A holds the morning copy. File B holds the afternoon copy.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Both files contain the requested key. If one reader asks for the latest headline and another asks for the morning copy, which entry should each reader see?</p>
 
 <h2 id="versions" data-slide="9" data-scene="read-the-newest-visible-value">9 · Choose the newest visible record</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
-<p>In this trace, <code>k</code> identifies one web page. The values <code>old</code> and <code>new</code> represent the page contents from two visits.</p>
-<p>The trace gives each change an increasing <strong>sequence number</strong> to show its order. For example, <code>old@5</code> means the crawler stored the earlier copy at sequence 5.</p>
-<p>A <strong>snapshot</strong> is a retained view used by a read. In this toy model, snapshot 8 admits records numbered 8 or earlier. A record is <strong>visible</strong> when the chosen view permits the read to use it.</p>
-<p>A <strong>tombstone</strong> is a deletion marker stored as a newer record. <code>DELETE@9</code> means the key is absent from sequence 9 onward, until another update.</p>
-<p><strong>Keep two kinds of time separate.</strong> These update numbers explain a generic LSM version rule. Bigtable’s application cell timestamps do not automatically provide a transactionally consistent snapshot across rows.</p>
+<p>File A holds the morning copy of CNN’s home page. File B holds the afternoon copy. Both entries have the same row key, which we shorten to <code>k</code>. Which copy should a reader get?</p>
+<p>Give the two writes <strong>sequence numbers</strong> to record their order. File A holds <code>old@5</code>, the morning copy. File B holds <code>new@8</code>, the afternoon copy. After both writes, a current read chooses sequence 8 and returns <code>new</code>.</p>
+<p>Suppose a reader kept a <strong>snapshot</strong> at sequence 5. That reader can see changes through 5, so it still gets <code>old</code>. A record is <strong>visible</strong> to a read when its sequence falls within the read’s boundary.</p>
+<p>At sequence 9, the crawler deletes its saved copy of the page. The server writes <code>DELETE@9</code>, a deletion marker called a <strong>tombstone</strong>. Predict what a current read returns now. Would a reader holding snapshot 8 get the same answer?</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
   <thead><tr><th>Read view</th><th>Visible records for <code>k</code></th><th>Newest visible record</th><th>Result</th></tr></thead>
@@ -297,7 +274,7 @@ retire_when_no_readers(frozen)</code></pre>
   </tbody>
 </table>
 </div>
-<p>The animation advances the read boundary across the three records. It then previews a <strong>partial compaction</strong>: a merge that includes only some files. The final merge includes all older records and assumes no retained snapshot needs them.</p>
+<p>At 9, the newest visible record is the tombstone, so the read reports the key absent. At 8, the tombstone is still outside the reader’s view. These sequence numbers model update order inside an LSM engine. Bigtable’s application cell timestamps label cell versions and do not themselves establish a consistent snapshot across rows.</p>
 <p><strong>Teaching Python:</strong> each tuple contains a sequence number and a value for one key. <code>DELETE</code> is a distinct marker object. The result <code>None</code> means absent in this model:</p>
 <pre><code class="language-python">DELETE = object()  # A distinct marker.
 records = [(5, "old"), (8, "new"), (9, DELETE)]
@@ -315,15 +292,14 @@ def read_at(records, snapshot):
 read_at(records, 8)  # "new"
 read_at(records, 9)  # None: absent</code></pre>
 <div class="lecture-walkthrough" data-lecture-scene="read-the-newest-visible-value"></div>
-<p><strong>A read must resolve versions across relevant structures.</strong> The original Bigtable paper describes a merged view of the memtable and SSTables. File location alone does not determine which version wins. <a href="#src-1">[1]</a></p>
-<p>Our simpler latest-value widget searches memory and files from newest to oldest. That shortcut depends on its version ordering. General engines use their file organization, timestamps, and visibility rules.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Snapshot 8 remains active after DELETE@9 arrives. Can the engine erase new@8 immediately?</p><details><summary>Check your explanation</summary><p>No. Snapshot 8 must still return new. The engine must preserve the information needed for that earlier view.</p></details></div>
+<p>The same rule works while the deletion is still in memory. The server considers relevant entries in the memtable and sorted files together. The original Bigtable paper describes this merged read view. <a href="#src-1">[1]</a></p>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Two readers ask for <code>k</code> after the deletion. One holds snapshot 8. The other asks for the current value. Which record determines each answer?</p><details><summary>Check your explanation</summary><p>The first reader sees <code>new@8</code> and gets the afternoon copy. The current reader sees <code>DELETE@9</code> and gets no page.</p></details></div>
 
 <h2 id="compaction" data-slide="10" data-scene="merge-sorted-runs">10 · Merge sorted files without changing answers</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=10&amp;b=1">Open slide 10 ↗</a></p>
-<p><span class="gloss" data-gloss="compaction">Compaction</span> merges sorted files and writes new sorted output. It can reduce the number of files a read checks and reclaim obsolete versions.</p>
-<p>A <strong>merge cursor</strong> marks the next unread entry in each input. Compare those entries, output the next key, and advance the corresponding cursor.</p>
-<p>At duplicate <code>k2</code>, this current-value example keeps <code>k2:v2</code> instead of <code>k2:v1</code>. Its output keys are <code>k1, k2, k4, k7, k8</code>.</p>
+<p>The crawler keeps visiting sites. Every flush adds a file, so a lookup for one page may need to check several files. The server can reduce that work by merging selected files into new sorted output. This operation is <span class="gloss" data-gloss="compaction">compaction</span>.</p>
+<p>Start with two sorted files in a separate example. File A contains <code>k1, k2, k7</code>. File B contains <code>k2, k4, k8</code>. Readers here need only current values, and these files contain no deletions. Those assumptions let us work out the merge one key at a time.</p>
+<p>A <strong>merge cursor</strong> marks the next unread entry in each file. A starts at <code>k1</code> and B starts at <code>k2</code>, so the server copies <code>k1</code> and advances A. Now both cursors point to <code>k2</code>. Which version belongs in the output?</p>
 <p><strong>Teaching Python:</strong> each input triple contains an integer key suffix, a version number, and a value. These separate inputs match the diagram:</p>
 <pre><code class="language-python"># Each entry is (key, version, value).
 a = [(1, 1, "v1"), (2, 1, "v1"),
@@ -341,11 +317,11 @@ def compact_current(a, b):
             for key, group in groups]
 
 output = compact_current(a, b)</code></pre>
-<p>The first two <code>lambda</code> expressions select the key at position <code>0</code>. The last selects the version at position <code>1</code>. Thus, <code>max</code> keeps version 2 for key 2.</p>
+<p>The first two <code>lambda</code> expressions select the key at position <code>0</code>. For the two <code>k2</code> entries, the last <code>lambda</code> compares the versions at position <code>1</code>. The merge keeps B’s <code>k2:v2</code>. Both cursors move past that key.</p>
 <p>The output contains keys <code>1, 2, 4, 7, 8</code> in order. This function assumes no deletions and no retained snapshots. It is not a general compaction algorithm.</p>
 <div class="lecture-walkthrough" data-lecture-scene="merge-sorted-runs"></div>
-<p>Actual compaction must also retain versions needed by active snapshots. It must retain tombstones while older values could reappear. Sequential merging still reads and rewrites stored bytes.</p>
-<p>Here is the complete write path. Each line now names a mechanism already introduced.</p>
+<p>A lookup can now find <code>k2:v2</code> in one output file. To produce that file, the server read both inputs and wrote their surviving entries again. With retained snapshots, more than one version of a key may have to survive.</p>
+<p>Follow one write from the recovery log to the file that a later merge reads.</p>
 <pre class="equation"><code>write(k, v):   1. append a log record       recovery information
                2. update the memtable      sorted state in memory
 
@@ -375,43 +351,41 @@ background:    compact selected SSTables   merge entries; remove obsolete versio
   <div id="lsm-stage"></div>
   <p class="viz-caption">Write about 20 keys without compaction. Run a lookup. The lookup can check the memtable and several SSTables. Compact the files. Repeat the lookup to compare the number of files searched. Actual engines schedule partial compactions and use indexes and filters to avoid unnecessary reads.</p>
 </div>
-<p>The widget merges all displayed files and keeps the newest value per key. It omits persistent logging, deletes, and retained snapshots. The <a href="#worked-example">delete trace below</a> supplies the missing safety case.</p>
+<p>The widget searches memory and files in newest-first order, which works with its simplified version ordering. Its merge covers all displayed files. Real compactions often cover only some files. For the crawler’s deleted page, <a href="#worked-example">trace a merge that leaves the morning file untouched</a>. What must the server keep so a read still reports the page absent?</p>
 
 <h2 id="deletes" data-slide="11" data-scene="deletion-must-hide-older-values">11 · Keep a deletion marker until removal is safe</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=11&amp;b=1">Open slide 11 ↗</a></p>
-<p>Deleting an in-memory entry does not remove an older value from an immutable file. A later lookup could otherwise find that older value and incorrectly return it.</p>
-<p>The engine writes a newer tombstone. A current read that selects the tombstone returns absent. It must not continue looking for an older value to return.</p>
-<p><strong>Teaching Python:</strong> reuse <code>read_at</code> and the same <code>DELETE</code> marker from section 9. This separate example assigns sequences 1 and 2 to records for <code>k2</code>:</p>
-<pre><code class="language-python">old_file = [(1, "v1")]  # Records for k2.
-newer = [(2, DELETE)]
-result = read_at(old_file + newer, 2)</code></pre>
-<p><code>result</code> is <code>None</code>, meaning absent. The old tuple still exists, but the newer marker determines the read.</p>
-<p><strong>Engine pseudocode:</strong> removal requires proof about older records and required read views. These predicates name the checks a real engine must establish:</p>
+<p>Return to CNN’s page. File A holds <code>old@5</code>, and file B holds <code>new@8</code>. A flush moves <code>DELETE@9</code> from memory into file C. A current read still finds the marker and reports the page absent.</p>
+<h3 id="worked-example">Trace a delete through older sorted files</h3>
+<p>The server merges just B and C. Suppose it discards both the afternoon copy and the deletion marker. Which entry can a new reader still find?</p>
+<div class="lecture-walkthrough" data-lecture-scene="deletion-must-hide-older-values"></div>
+<p>File A still holds the morning copy. Without the marker, a current read would return that copy after the crawler had deleted the page. Keeping <code>DELETE@9</code> in the output hides the older entry. The shared trace starts with the marker in memory and follows it through the partial merge.</p>
+<div data-teaching-trace="lsm">
+  <p><strong>Worked result:</strong> At snapshot 9, DELETE@9 is the newest visible record. The read returns absent despite older values at 8 and 5. A partial compaction must retain the tombstone while an older value could reappear.</p>
+  <p>Enable JavaScript to step through the code and intermediate state.</p>
+</div>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Now the merge includes A, B, and C. A reader still holds snapshot 8. Can the merge remove every entry for <code>k</code>?</p><details><summary>Check your explanation</summary><p>No. That reader still needs <code>new@8</code>. The merge must preserve the afternoon copy for that reader and the absent result for a current read.</p></details></div>
+<p>Once the merge covers every older copy and no required read view needs those versions, this model can remove all three records. Replicated systems can impose additional repair and retention rules.</p>
+<p>The server must establish both conditions before it removes the marker and the versions it hides. The following engine pseudocode gives those checks names.</p>
 <pre><code class="language-text">if all_older_versions_are_covered(key) and (
     no_required_read_needs_older_versions(key)
 ):
     remove_tombstone_and_covered_versions(key)
 else:
     keep_tombstone(key)</code></pre>
-<p>If an older value remains outside the merge, the first condition fails. If a retained snapshot needs an older version, the second condition fails. Either failure prevents this removal.</p>
-<div class="lecture-walkthrough" data-lecture-scene="deletion-must-hide-older-values"></div>
-<h3 id="worked-example">Trace a delete through older sorted files</h3>
-<p>SSTable A holds <code>old@5</code>. B holds <code>new@8</code>. C holds the flushed <code>DELETE@9</code>. A partial compaction merges B and C while A remains outside that merge.</p>
-<p>If the output drops the tombstone, a later read can find A’s old value. Therefore, the merged output must keep <code>DELETE@9</code>.</p>
-<p>The walkthrough starts earlier, with <code>DELETE@9</code> still in memory. It then flushes that record to C before the partial merge.</p>
-<div data-teaching-trace="lsm">
-  <p><strong>Worked result:</strong> At snapshot 9, DELETE@9 is the newest visible record. The read returns absent despite older values at 8 and 5. A partial compaction must retain the tombstone while an older value could reappear.</p>
-  <p>Enable JavaScript to step through the code and intermediate state.</p>
-</div>
-<p>Safe removal requires checking every older value that could reappear and every retained read view. In replicated systems, repair and retention rules can add further constraints.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>A complete merge includes A, B, and C, but snapshot 8 is still active. Is removing every record for k safe?</p><details><summary>Check your explanation</summary><p>No. Including every file prevents an outside value from reappearing, but snapshot 8 still needs new@8. Both conditions matter.</p></details></div>
+<details><summary>Check the deletion rule with two records</summary>
+<p>Reuse <code>read_at</code> and the <code>DELETE</code> marker from section 9. This separate Python example gives <code>k2</code> a value at sequence 1 and deletes it at sequence 2.</p>
+<pre><code class="language-python">old_file = [(1, "v1")]  # Records for k2.
+newer = [(2, DELETE)]
+result = read_at(old_file + newer, 2)</code></pre>
+<p>The old tuple still exists. The newer marker determines the answer, so <code>result</code> is <code>None</code>.</p>
+</details>
 
 <h2 id="bloom" data-slide="12" data-scene="a-one-sided-membership-test">12 · Use a Bloom filter to rule out files</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=12&amp;b=1">Open slide 12 ↗</a></p>
-<p>A missing key can force a read to check several files. A <strong>Bloom filter</strong> is a compact membership test that can rule out a file before reading its entries.</p>
-<p>A <strong>bit</strong> stores either 0 or 1. Our filter has <strong>32 bits</strong> and <strong>3 hash functions</strong>. Each function chooses a bit position from the key.</p>
-<p>Insertion sets the key’s chosen bits to 1. A query checks those same positions. Any zero proves absence, because insertion would have set that bit.</p>
-<p>All ones mean <strong>possibly present</strong>. Other keys can set those same bits. A <strong>false positive</strong> occurs when an absent key passes this test.</p>
+<p>The server now knows which records must survive a merge. A lookup still has to find them among the remaining files. Some files contain only other sites. How can the server skip those files before reading their entries?</p>
+<p>When writing a file, the server can build a small summary of its keys called a <strong>Bloom filter</strong>. Try a separate toy file with six keys, <code>k1</code> through <code>k6</code>. Its filter has <strong>32 bits</strong>, initially all zero. Each of <strong>3 hash functions</strong> maps an inserted key to a bit position. Inserting the key sets those positions to 1.</p>
+<p>To look up <code>k7</code>, the server checks the same three positions that inserting <code>k7</code> would set. One bit is zero, so the file cannot contain <code>k7</code>. For <code>k17</code>, all three bits are 1. Could another key have set each of those bits?</p>
 <p><strong>Teaching Python:</strong> these fixed functions reproduce the diagram’s bit positions. <code>ord</code> converts an ASCII character to its numeric code. <code>enumerate</code> supplies the character’s position. The remainder operation <code>% 32</code> keeps each result between 0 and 31:</p>
 <pre><code class="language-python">def hashes(key):
     a = b = c = 0
@@ -436,9 +410,9 @@ def might_contain(key):
 possible = might_contain("k17")
 present = "k17" in stored</code></pre>
 <p><code>all</code> returns true only when every required bit is set. For <code>k7</code>, positions <code>12, 30, 9</code> include a zero, so <code>might_contain("k7")</code> returns false.</p>
-<p>For <code>k17</code>, positions <code>17, 21, 16</code> are all set. Therefore, <code>possible</code> is true but <code>present</code> is false. The set membership check represents inspecting actual file entries after the filter allows a lookup.</p>
+<p>For <code>k17</code>, positions <code>17, 21, 16</code> are all set by the six stored keys. The filter reports <strong>possibly present</strong>, yet a check of the actual entries finds no <code>k17</code>. This is a <strong>false positive</strong>. In the code, <code>possible</code> is true and <code>present</code> is false.</p>
 <div class="lecture-walkthrough" data-lecture-scene="a-one-sided-membership-test"></div>
-<p>The diagram inserts <code>k1</code> through <code>k6</code>. Query <code>k7</code> has a required zero and can skip the file. Query <code>k17</code> finds all required bits set, but the key is absent.</p>
+<p>Use the controls below to insert <code>k1</code> through <code>k6</code>. Compare the highlighted positions for <code>k7</code> and <code>k17</code>.</p>
 <div class="viz" id="viz-bloom">
   <div class="viz-title">Bloom filter · 32 bits, 3 hashes · look for a false positive</div>
   <p class="viz-description">An insertion sets 3 bits for each key. Hover over a bit to see which keys set it. A query checks the same 3 bits. Any zero means <em>definitely absent</em>, so the engine can skip the SSTable. Three ones mean only <em>maybe here</em>.</p>
@@ -459,9 +433,9 @@ present = "k17" in stored</code></pre>
 
 <h2 id="reads" data-slide="13" data-scene="skip-files-then-find-a-block">13 · Find a block and reuse its cached copy</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=13&amp;b=1">Open slide 13 ↗</a></p>
-<p>A <strong>block</strong> is a chunk of file data read as a unit. A <strong>sparse index</strong> records selected boundary keys and the blocks where their ranges begin.</p>
-<p>For the diagram’s query <code>k9</code>, the index entries are <code>k1 → 0</code>, <code>k8 → 1</code>, and <code>k16 → 2</code>. Under the example’s numeric key order, <code>k9</code> falls between <code>k8</code> and <code>k16</code>. The engine searches block 1.</p>
-<p>A <strong>block cache</strong> keeps recently read blocks in memory. If a needed block is cached, the engine can inspect that copy without another storage read.</p>
+<p>A Bloom filter can leave the server with a file to search. Take a different file that contains <code>k9</code>. The server reads file data in units called <strong>blocks</strong>. Which block should it open for <code>k9</code>?</p>
+<p>A <strong>sparse index</strong> lists the first key in each block. Here the entries are <code>k1 → 0</code>, <code>k8 → 1</code>, and <code>k16 → 2</code>. The example compares numeric suffixes. Since 9 falls between 8 and 16, only block 1 can contain <code>k9</code>.</p>
+<p>The first request loads block 1 and finds <code>k9</code>. The server keeps the block in memory in a <strong>block cache</strong>. A second request for the same block can reuse its contents.</p>
 <p><strong>Teaching Python:</strong> integers represent the diagram’s numeric key suffixes. <code>bisect_right</code> finds the position after index boundaries no greater than the query. Subtracting one selects the preceding block start:</p>
 <pre><code class="language-python">from bisect import bisect_right
 first_keys = [1, 8, 16]
@@ -486,7 +460,7 @@ again = read_block(block_id)</code></pre>
 <table>
   <thead><tr><th>Mechanism</th><th>Question answered</th><th>Work avoided</th></tr></thead>
   <tbody>
-    <tr><td>Bloom filter</td><td>Can this file contain the key?</td><td>Checking a file that is definitely absent</td></tr>
+    <tr><td>Bloom filter</td><td>Can this file contain the key?</td><td>Reading entries from a file that cannot contain the key</td></tr>
     <tr><td>Sparse index</td><td>Which block could contain it?</td><td>Scanning unrelated blocks</td></tr>
     <tr><td>Block cache</td><td>Is that block already in memory?</td><td>Reading the same block from storage again</td></tr>
     <tr><td>Compaction</td><td>Can files be merged safely?</td><td>Some future file and version checks</td></tr>
@@ -498,8 +472,9 @@ again = read_block(block_id)</code></pre>
 
 <h2 id="lsm-vs-btree" data-slide="14" data-scene="the-read-write-space-budget">14 · Compare the full storage workload</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=14&amp;b=1">Open slide 14 ↗</a></p>
-<p><strong>Read amplification</strong> is extra work needed to answer a logical read, such as searching several files for one key. <strong>Write amplification</strong> is stored data written or rewritten relative to the application’s writes. <strong>Space amplification</strong> is extra storage beyond the live data, including retained obsolete versions.</p>
-<p>Compaction can reduce read and space costs by doing more write work. If incoming writes outpace compaction, extra files and pending maintenance can accumulate.</p>
+<p>Give two engines the same job. Both must save the crawler’s updates, serve lookups for individual pages, and scan rows for one domain. Both must meet the same durability requirement. What storage work does each engine perform for those requests?</p>
+<p>In a B+ tree, updates to the same leaf can share a write from the buffer pool. Updates to many different leaves can leave the server with many scattered dirty pages. An LSM engine collects updates in key order and writes each batch sequentially. A later read may have to check several files to find the current page.</p>
+<p>That extra work per lookup is <strong>read amplification</strong>. Compaction reduces the number of candidate files, but it reads and rewrites entries that the crawler already saved. <strong>Write amplification</strong> compares the bytes the engine writes with the bytes the application writes. Retaining obsolete versions also uses space beyond the live data, contributing to <strong>space amplification</strong>. If merges fall behind, the number of files can keep growing.</p>
 <div class="lecture-walkthrough" data-lecture-scene="the-read-write-space-budget"></div>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
@@ -513,16 +488,15 @@ again = read_block(block_id)</code></pre>
 </table>
 </div>
 <p>Both designs maintain sorted data and can support transactions. B+ tree engines appear in systems such as microdb, PostgreSQL, and MySQL. Bigtable, Cassandra, and RocksDB use related LSM techniques.</p>
-<p><strong>Choose using the full workload.</strong> Compare read response time, writes completed per second, memory, storage space, and maintenance under the required durability settings. Neither design is faster for every workload.</p>
+<p>Run the same mix of updates, lookups, and domain scans on both engines. Measure read response time, sustained writes per second, memory use, storage space, and maintenance work. Include the merges that the LSM engine needs to keep up with the crawler.</p>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>A test times only log appends and ends before any compaction. Does it establish sustained LSM write performance?</p><details><summary>Check your explanation</summary><p>No. Sustained performance also requires flush and compaction to keep up. Include their costs and the required read workload.</p></details></div>
 
 <h2 id="cap" data-slide="15" data-scene="a-network-partition-forces-a-choice">15 · Explain the choice during a network failure</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=15&amp;b=1">Open slide 15 ↗</a></p>
-<p>A <strong>replica</strong> is another copy of data. A <strong>network partition</strong> is a communication failure that prevents some machines from exchanging messages. This differs from a data partition, which divides records into portions.</p>
-<p>Imagine Maya and Noor each keep a copy of the same record. Both copies show <code>v1</code>. Maya records <code>v2</code> and confirms the write, but Noor’s copy cannot receive it.</p>
-<p>A caller then asks Noor for the current value. Noor cannot infer <code>v2</code> from silence. This copy analogy explains missing information, not a particular replication protocol.</p>
-<p><strong>Linearizability</strong> requires operations to behave like one current copy while respecting completed operations. In this example, a read begun after the completed <code>v2</code> write cannot correctly return the earlier <code>v1</code>.</p>
-<p><strong>CAP</strong> names consistency, availability, and network partitions. <strong>CAP availability</strong> requires every request to a nonfailed node to eventually receive a non-error response. Waiting indefinitely or rejecting that read sacrifices this guarantee.</p>
+<p>So far, the server answering a read could see the relevant writes. Consider a separate model where two servers hold the same row. Each copy is a <strong>replica</strong>. What can a reader learn when the two copies lose contact?</p>
+<p>Both replicas start with <code>v1</code>, the morning headline. A <strong>network partition</strong> cuts communication between the servers. Replica 1 accepts the afternoon headline, <code>v2</code>, and confirms the write. A reader then asks replica 2 for the current headline. Replica 2 still has <code>v1</code>. Can it tell from its local data whether the afternoon write happened?</p>
+<p>If replica 2 returns <code>v1</code>, the reader misses a write that already completed. That answer breaks <strong>linearizability</strong>, the guarantee that operations behave like one current copy and respect completed operations.</p>
+<p>Replica 2 could wait for the missing update. If the partition lasts indefinitely, the read may never finish. The <strong>CAP theorem</strong> relates consistency, availability, and partition tolerance. Its availability guarantee requires every request to a nonfailed node to eventually receive a non-error response. Rejecting the read also gives up that guarantee.</p>
 <div class="lecture-walkthrough" data-lecture-scene="a-network-partition-forces-a-choice"></div>
 <p>During a partition, a system cannot guarantee both linearizability and availability for all requests. Some systems continue on one side while another side rejects requests. <a href="#src-5">[5]</a></p>
 <pre class="equation"><code>During a network partition, both guarantees cannot hold for all requests:
@@ -538,15 +512,14 @@ Dynamo, Cassandra, Riak: designs that support availability-oriented choices.
 Exact guarantees depend on the operation and configuration.</code><sup class="src"><a href="#src-5" title="CAP Twelve Years Later: How the 'Rules' Have Changed (Eric Brewer, IEEE Computer 2012)">5</a></sup><sup class="src"><a href="#src-6" title="Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)">6</a></sup></pre>
 <p>The product names above summarize design directions, not every modern configuration. In original Bigtable, atomicity concerns operations within a row. Choose a guarantee for the operation before applying a system label.</p>
 <p><strong>Reconciliation</strong> brings copies into agreement after communication returns, using the system’s conflict rules. <strong>Eventual consistency</strong> allows temporary disagreement but promises convergence if updates stop and communication and reconciliation continue.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Noor returns v1 immediately after the completed v2 write. Which guarantee fails in this trace?</p><details><summary>Check your explanation</summary><p>Linearizability fails because the read misses an earlier completed write. Returning an answer promptly does not establish that the answer reflects the current value.</p></details></div>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Replica 2 finds <code>v1</code> in its block cache and returns it after replica 1 confirms <code>v2</code>. Which guarantee fails?</p><details><summary>Check your explanation</summary><p>Linearizability fails because the read misses the completed write. A cache hit saves a local storage read. Only communication can bring replica 2 the missing update.</p></details></div>
 
 <h2 id="recap" data-slide="16" data-scene="trace-an-acknowledged-write">16 · Return to the deleted key</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=16&amp;b=1">Open slide 16 ↗</a></p>
-<p>After the crawler deletes its stored copy of the page, a current read for <code>k</code> reports that the page is absent. The newest visible record is the deletion marker, even if an older file still contains the page.</p>
+<p>Return to the crawler’s row, <code>com.cnn.www</code>. In the example with a split at <code>org</code>, the client sends the request to Server 1. The server logged each update before acknowledging it, kept recent entries sorted in memory, and flushed them to files.</p>
+<p>For this row, the read at 5 returns the morning page. The read at 8 returns the afternoon page. A current read after <code>DELETE@9</code> reports the saved page absent. The key identifies the same row each time. Which version the reader can see determines the answer.</p>
 <div class="lecture-walkthrough" data-lecture-scene="trace-an-acknowledged-write"></div>
-<p>The log protects acknowledged updates. The memtable orders recent entries. A flush creates sorted files, and compaction merges them while preserving required reads.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>File A still holds <code>old@5</code>. Suppose a merge discards both B’s <code>new@8</code> and C’s <code>DELETE@9</code>. What would a current lookup return?</p><details><summary>Check your explanation</summary><p>It would return <code>old</code> from file A. The merge must keep the deletion marker while an older copy of the page could reappear. It must also preserve versions that required snapshots need.</p></details></div>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Now all files are included and no retained snapshot needs k. What two checks make removing its tombstone safe in this toy trace?</p><details><summary>Check your explanation</summary><p>No older value remains outside the merge to reappear, and no retained read view needs the removed records. Deletion alone was not enough.</p></details></div>
+<div class="exercise learning-check"><span class="ex-label">One more crawl</span><p>The crawler visits CNN again and stores a fresh copy at sequence 10. A reader still holds snapshot 9. What do that reader and a current reader each see?</p><details><summary>Check your explanation</summary><p>At snapshot 9, <code>DELETE@9</code> still determines the answer, so the page is absent. A current read includes <code>fresh@10</code> and returns the fresh copy. A later merge must preserve both results while that snapshot remains active.</p></details></div>
 <ul class="recap-list">
   <li>Bigtable assigns ordered row ranges to tablet servers. Key design determines where writes go and which ranges a scan needs.</li>
   <li>LSM storage reduces some write costs through batching. Reads and compaction must still resolve all relevant versions correctly.</li>
@@ -637,12 +610,12 @@ document that supports the claim it is attached to.</p>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
-<script src="../../slides/decks/lectures-11-15.js?v=bigtable-web-crawl-20261119"></script>
-<script src="../../slides/decks/teaching-notes.js?v=bigtable-web-crawl-20261119"></script>
-<script src="../../slides/decks/clarity-captions.js?v=bigtable-web-crawl-20261119"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=bigtable-progression-20261119"></script>
+<script src="../../slides/decks/teaching-notes.js?v=bigtable-progression-20261119"></script>
+<script src="../../slides/decks/clarity-captions.js?v=bigtable-progression-20261119"></script>
 <script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
-<script src="../../slides/decks/clarity-diagrams.js?v=bigtable-web-crawl-20261119"></script>
-<script src="../../slides/decks/bigtable-code.js?v=visible-code-20261112"></script>
+<script src="../../slides/decks/clarity-diagrams.js?v=bigtable-progression-20261119"></script>
+<script src="../../slides/decks/bigtable-code.js?v=bigtable-progression-20261119"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
 <script src="../lecture-13/slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>
