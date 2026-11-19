@@ -9,8 +9,8 @@ const mins = [3,4,4,4,3,4,4,4,4,3,4,4,4,4,3,4];
 const lecturePacing = {
   // Lecture 12 assigns time from removed slides to evaluation, filtering, and diagnosis discussion.
   12: [3,4,4,4,3,6,4,4,3,4,4,6,4,7],
-  // The definition and goals share the first eleven minutes with the first three worked scenes.
-  14: [1,2,2,3,3,...mins.slice(3)]
+  // The five-cell table and the following Python walkthrough share three minutes.
+  14: [1,2,2,3,1,2,...mins.slice(3)]
 };
 function scene(title, states, draw, notes, extra={}) {
   return Object.assign({id:title.toLowerCase().replace(/[^a-z0-9]+/g,'-'),title,kind:'visual',steps:states.length,states,draw,notes},extra);
@@ -501,6 +501,33 @@ function cnnWebtableRow(d, step) {
   }
 }
 
+function webPagesAndStoredCells(d) {
+  const pages = [
+    ['r1', 'CNN’s home page', 'www.cnn.com/', 'anchor:example, contents:'],
+    ['r2', 'Moon article', 'science.example/moon', 'anchor:news'],
+    ['r3', 'Mars article', 'science.example/mars', 'anchor:example, contents:']
+  ];
+  const left = 80, right = 1200, top = 215, firstRow = 285, rowHeight = 110;
+  const keyLeft = 545, columnsLeft = 725;
+  const keyCenter = (keyLeft + columnsLeft) / 2;
+  const bottom = firstRow + pages.length * rowHeight;
+  d.rect('page-table', left, top, right - left, bottom - top, P.white, P.line, 0);
+  d.rect('page-table-head', left, top, right - left, firstRow - top, P.greenLight, P.line, 0);
+  d.line('key-divider', keyLeft, top, keyLeft, bottom, P.line, 2);
+  d.line('columns-divider', columnsLeft, top, columnsLeft, bottom, P.line, 2);
+  d.text('page-heading', left + 25, 250, 'Web page', 29, P.ink, 'start', 650);
+  d.text('key-heading', keyCenter, 250, 'Row key', 29, P.ink, 'middle', 650);
+  d.text('columns-heading', columnsLeft + 25, 250, 'Stored columns', 29, P.ink, 'start', 650);
+  pages.forEach(([key, name, address, columns], i) => {
+    const y = firstRow + i * rowHeight;
+    d.line(key + '-divider', left, y, right, y, P.line, 2);
+    d.text(key + '-name', left + 25, y + 37, name, 31, P.ink, 'start', 650);
+    d.text(key + '-address', left + 25, y + 78, address, 27, P.muted, 'start');
+    d.text(key + '-key', keyCenter, y + rowHeight / 2, key, 32, P.blue, 'middle', 650);
+    d.text(key + '-columns', columnsLeft + 25, y + rowHeight / 2, columns, 30, P.ink, 'start');
+  });
+}
+
 function compareCrawlerWrites(d, step) {
   d.text('workload-key',640,208,'Two visits to com.cnn.www',29,P.ink);
   d.text('btree-path',310,278,'B+ tree',30,P.blue);
@@ -548,6 +575,15 @@ scene('A multidimensional map', ['Group facts about CNN', 'Select the link-text 
   'Figure 1 in the original paper shows the CNN row with several columns and timestamps. The slide follows the HTML and one incoming link. The reading’s separate Python example uses anchor:example, timestamp 1, and b"example link text" to model the same address. Cell timestamps identify versions within a cell.',
   {title:'Where does CNN’s incoming link text go?', clarityNative:true,
    sources:['lectures/lecture-14/bigtable.html#model','https://www.usenix.org/legacy/event/osdi06/tech/chang/chang.pdf#page=2']}),
+scene('Three web pages and the five cells the crawler has stored so far', ['Count the stored cells'], webPagesAndStoredCells,
+  'The example uses short keys for three web pages. Each column listed beside a key identifies one stored cell in that row.',
+  {id:'web-pages-and-stored-cells', clarityNative:true, sources:['lectures/lecture-14/bigtable.html#sparse'],
+   teaching:{
+     idea:'Each web page has its own row, and different rows can hold values in different columns.',
+     builds:['Trace CNN’s home page across the first row. Use r1 as a short name for the CNN row in this example. Count the stored columns for each page. CNN has two, the Moon article has one, and the Mars article has two. Together they account for all five cells.'],
+     question:'A school adds a link to the Moon article. Which row should gain a cell for the words in that link?',
+     answer:'Row r2 identifies the Moon article. The crawler adds anchor:school to r2, bringing the total to six stored cells.'
+   }}),
 scene('Sparse cells and versions',['Sparse cells','New qualifier','Another version'],(d,s)=>{const cells=[[0,0],[0,2],[1,1],[2,0],[2,3]];for(let r=0;r<3;r++)for(let c=0;c<4;c++){d.rect('cell'+r+c,300+c*175,290+r*86,145,63,P.white,P.line,4);if(cells.some(([a,b])=>a===r&&b===c)||(s>0&&r===1&&c===3))d.rect('data'+r+c,310+c*175,300+r*86,125,43,P.greenLight,P.green,3);}['r1','r2','r3'].forEach((v,i)=>d.text('row'+i,215,334+i*86,v,29));if(s>1){[0,1,2].forEach(i=>d.box('version'+i,840+i*20,320+i*36,190,58,'t'+(3-i),i?P.white:P.orangeLight,P.orange,27));}},'Ask whether a missing qualifier needs a reserved fixed-width slot. Expected: sparse storage can omit absent cells, unlike microdb’s fixed slot layout, though metadata itself still costs space. Add a qualifier to one row without drawing it for every other row. Then stack versions of a cell and ask which timestamp a read requests. Distinguish retaining versions from full MVCC transaction semantics and explain retention/garbage-collection policy.'),
 scene('Tablets separate placement from storage',['Sorted ranges','Assigned servers','Shared durable files','Reassignment'],(d,s)=>{for(let i=0;i<4;i++){d.box('tablet'+i,150+i*270,270,210,85,['a–g','h–m','n–s','t…'][i],P.greenLight,P.green,31);d.box('server'+i,150+i*270,425,210,80,'server '+i,s===3&&i===1?P.redLight:P.white,P.line,27);if(s>0)d.arrow('assigned'+i,255+i*270,370,255+i*270,410,P.green);if(s>1)d.line('storage'+i,255+i*270,520,640,580,P.blue,2);}if(s>1)d.box('gfs',350,575,580,60,'replicated files',P.blueLight,P.blue,30);if(s===3)d.arrow('move',525,365,795,410,P.orange,5);},'Define a tablet as a contiguous row-key range and trace assignment to a tablet server. Ask why losing a server need not mean losing its durable data. Expected: the original architecture stores logs and SSTables in replicated GFS, with caches and in-progress state on tablet servers. Replay and reassignment still take work. Explain that partitioning divides the table while replication protects durable pieces. They solve distinct problems.',{kind:'definition',term:'Tablet',definition:'A contiguous range of row keys managed as a unit of placement and service.'}),
 scene('Splitting cannot fix a moving hotspot',['Distributed writes','Timestamp tail','Split','Next burst'],tabletDraw,'Predict where a burst of increasing timestamp-prefixed keys lands. Reveal all writes at the tail, split that tablet, then send another burst. Expected: the newest range remains hot. A split changes size but not the direction of incoming writes.\n\nDiscuss hash prefixes or a different key order and the range-scan locality each sacrifices. The counts are a deterministic toy load model, not observed Bigtable throughput. Reversed domains group related pages but do not inherently distribute all traffic.',{demo:'viz-tablet'}),

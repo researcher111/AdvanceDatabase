@@ -48,7 +48,7 @@ for(const deck of Object.values(decks)){
   slides++;
  }
 }
-assert.equal(slides,234);assert.equal(builds,869);
+assert.equal(slides,235);assert.equal(builds,870);
 const resources=decks[10].scenes.at(-1);
 assert.equal(resources.id,'more-models-with-duckdb');
 const resourceLinks=V.sceneDrawing(resources,0).filter(item=>item.tag==='a');
@@ -330,6 +330,18 @@ assert.equal(text(draw(13,'distinguish-retries-from-new-orders',2),'case-2-line-
 assert.deepEqual(Array.from(decks[14].scenes.slice(0,3),scene=>[scene.id,scene.steps]),[
   ['bigtable-definition',1],['bigtable-learning-goals',2],['organize-writes-differently',3]
 ],'Lecture 14 moves from the paper to the goals and then to the CNN row');
+assert.deepEqual(Array.from(decks[14].scenes.slice(4,6),scene=>[scene.id,scene.steps]),[
+  ['web-pages-and-stored-cells',1],['sparse-cells-and-versions',3]
+],'the five stored cells precede the school link example');
+const moonLinkWords=['Moon facts','Moon phases','Explore the Moon'];
+for(const [step,versionCount] of [0,1,3].entries()){
+ const items=draw(14,'sparse-cells-and-versions',step);
+ const versions=moonLinkWords.slice(0,versionCount);
+ assert.deepEqual(Array.from(items.filter(i=>i.key.startsWith('school-line-')),i=>i.text.trim().replace(/\s+/g,' ')),
+  versions.map((words,i)=>`t${i+1} “${words}”`),'the diagram shows one link text for each visit so far');
+ assert.deepEqual(Array.from(items.filter(i=>i.key.startsWith('code-line-')&&i.text.includes('"anchor:school"')),i=>i.text),
+  versions.map((words,i)=>`cells[("r2", "anchor:school", ${i+1})] = b"${words}"`),'the Python writes the same versions in the same cell');
+}
 // The flush carries forward all the keys students just sorted.
 const sortedBatch = text(draw(14, 'the-memtable-stays-ordered', 2), 'sorted-line-0');
 assert.equal(sortedBatch, 'k1, k2, k5, k7, k8');

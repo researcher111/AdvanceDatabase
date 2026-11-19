@@ -6,13 +6,13 @@
   const deck=window.COURSE_DECKS[14];if(!deck)return;
   const P=window.DeckViz.palette;
   const sample=(title,language,lines)=>({title,language,lines});
-  function code(d,example,active=[]){
+  function code(d,example,active=[],fontSize=24){
     d.rect('code-panel',45,190,760,420,P.white,P.line,10,2);
     d.text('code-label',65,219,example.title,22,P.muted,'start',650);
     example.lines.forEach((line,i)=>{
       const y=258+i*30;
       if(active.includes(i))d.rect('code-highlight-'+i,57,y-14,736,28,P.orangeLight,'none',4);
-      d.add('code-line-'+i,'text',{x:68,y,fill:P.ink,'font-size':24,style:'font-family:ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre','xml:space':'preserve','text-anchor':'start','dominant-baseline':'middle'},line);
+      d.add('code-line-'+i,'text',{x:68,y,fill:P.ink,'font-size':fontSize,style:'font-family:ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre','xml:space':'preserve','text-anchor':'start','dominant-baseline':'middle'},line);
     });
   }
   function box(d,key,y,title,lines=[],color=P.green){
@@ -30,6 +30,7 @@
     return scene;
   }
 
+  const schoolLinkTexts = ['Moon facts', 'Moon phases', 'Explore the Moon'];
   const sparse=sample('Teaching Python · store only present cell versions','python',[
     'cells = {',
     '    ("r1", "anchor:example", 1): b"link",',
@@ -38,12 +39,10 @@
     '    ("r3", "anchor:example", 1): b"link",',
     '    ("r3", "contents:", 1): b"page",',
     '}','',
-    'cells[("r2", "anchor:school", 1)] = b"old"',
-    'cells[("r2", "anchor:school", 2)] = b"prior"',
-    'cells[("r2", "anchor:school", 3)] = b"new"'
+    ...schoolLinkTexts.map((text, i) => `cells[("r2", "anchor:school", ${i + 1})] = b"${text}"`)
   ]);
   install('sparse-cells-and-versions',[sparse],(d,s)=>{
-    code(d,{...sparse,lines:sparse.lines.slice(0,s===0?7:s===1?9:11)},s===0?[1,2,3,4,5]:s===1?[8]:[9,10]);
+    code(d,{...sparse,lines:sparse.lines.slice(0,s===0?7:s===1?9:11)},s===0?[1,2,3,4,5]:s===1?[8]:[9,10],21);
     d.text('page-key-heading',850,206,'Row key',21,P.muted,'start');
     d.text('web-page-heading',952,206,'Web page',21,P.muted,'start');
     const pages=[
@@ -60,7 +59,8 @@
       d.text(key+'-address',950,y+52,address,22,P.muted,'start');
     });
     if(s>=1){
-      box(d,'school',495,'School website',['Link text on each visit',s===1?'t1: old':'t1: old  ·  t2: prior  ·  t3: new'],P.orange);
+      const versions = schoolLinkTexts.slice(0, s===1 ? 1 : 3);
+      box(d,'school',479,'Link text on the school’s page',versions.map((text, i) => `t${i + 1}  “${text}”`),P.orange);
       d.line('school-link-start',840,530,821,530,P.orange,3);
       d.line('school-link-up',821,530,821,344,P.orange,3);
       d.arrow('school-link-target',821,344,838,344,P.orange,3);

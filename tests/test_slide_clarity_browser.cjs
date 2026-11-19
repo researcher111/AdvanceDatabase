@@ -115,9 +115,9 @@ fs.mkdirSync(output,{recursive:true});
     const readingFile=id===15?'lecture-15/graphs.html':id===14?'lecture-14/bigtable.html':id===13?'lecture-13/distributed.html':'lecture-13/spark-ray.html';
     await reading.goto(pathToFileURL(path.join(root,'lectures',readingFile)).href);
     const widgets=reading.locator('.lecture-walkthrough');
-    const walkthroughScenes=id===14?scenes.slice(2):scenes;
+    const walkthroughScenes=id===14?scenes.slice(2).filter(s=>s.id!=='web-pages-and-stored-cells'):scenes;
     if(id===14){
-     assert.equal(walkthroughScenes.length,16,'Bigtable retains all sixteen walkthroughs after its two opening slides');
+     assert.equal(walkthroughScenes.length,16,'Bigtable retains all sixteen embedded walkthroughs');
      const quote=reading.locator('main figure q[cite]').first();
      await go(0,0);
      const quoteLines=await page.locator('#canvas text[data-key^="quote-line-"]').allTextContents();
@@ -141,11 +141,25 @@ fs.mkdirSync(output,{recursive:true});
       });
       assert.deepEqual(projectedGoals,goals.slice(step*3,step*3+3),'the projected bullets follow the reading in order');
      }
-     const links=await reading.locator('h2[data-scene] + .slide-reference a').evaluateAll(anchors=>anchors.map(anchor=>{
+     await go(4,0);
+     const table=reading.locator('table.page-key-map');
+     const slideText=await page.locator('#canvas text[data-key]').evaluateAll(nodes=>
+      Object.fromEntries(nodes.map(node=>[node.dataset.key,node.textContent])));
+     assert.equal(slideText['clarity-title'],await table.locator('caption').textContent());
+     assert.deepEqual(['page-heading','key-heading','columns-heading'].map(key=>slideText[key]),await table.locator('thead th').allTextContents());
+     const rows=await table.locator('tbody tr').evaluateAll(nodes=>nodes.map(row=>[
+      row.cells[0].firstChild.textContent,row.cells[0].querySelector('code').textContent,row.cells[1].textContent,row.cells[2].textContent
+     ]));
+     assert.equal(rows.length,3);
+     for(const row of rows){
+      const key=row[2];
+      assert.deepEqual(['name','address','key','columns'].map(field=>slideText[key+'-'+field]),row,'the slide matches the reading for '+key);
+     }
+     const links=await reading.locator('[data-scene] + .slide-reference a').evaluateAll(anchors=>anchors.map(anchor=>{
       const heading=anchor.parentElement.previousElementSibling;
       return {sceneId:heading.dataset.scene,slide:Number(heading.dataset.slide),label:anchor.textContent,href:anchor.href};
      }));
-     for(const scene of walkthroughScenes){
+     for(const scene of scenes.slice(2)){
       const number=scenes.indexOf(scene)+1;
       const link=links.find(link=>link.sceneId===scene.id);
       assert(link,'reading references '+scene.id);

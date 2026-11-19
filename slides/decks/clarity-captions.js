@@ -1179,10 +1179,13 @@ window.CourseClarityCaptions = {
       "In CNN’s row, choose anchor:cnnsi.com. The family groups incoming links. The qualifier names the site that wrote these words.",
       "The row and column identify the cell. At timestamp t9, its stored value is the three letters CNN."
     ],
+    "web-pages-and-stored-cells": [
+      "How many cells does the crawler store for each page before the school adds its link?"
+    ],
     "sparse-cells-and-versions": [
       "Each row describes one web page at one address. The Moon and Mars articles have different rows on the same website.",
-      "The school website links to the Moon article. The crawler stores the link text in the Moon article’s row, r2, under anchor:school.",
-      "The school changes its link text twice. All three versions belong to the same cell in the Moon article’s row."
+      "Clicking “Moon facts” on the school’s page opens the Moon article. The crawler saves those words in row r2, column anchor:school.",
+      "The words change to “Moon phases” on the second visit and “Explore the Moon” on the third. The link still opens the same article."
     ],
     "tablets-separate-placement-from-storage": [
       "Keep the page’s fields and versions together. Bigtable assigns a range of whole rows, called a tablet, to one server.",

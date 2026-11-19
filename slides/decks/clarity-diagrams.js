@@ -294,11 +294,11 @@
     }
     ['r1','r2','r3'].forEach((row,r)=>label(d,'row-'+r,155,323+r*91,row,P.ink,29));
     if(s===0)label(d,'missing',1050,386,'No stored cell',P.muted,25);
-    if(s>=1)label(d,'new-column',1040,586,'New qualifier in r2',P.orange,24);
+    if(s===1)label(d,'new-column',1040,586,'New qualifier in r2',P.orange,24);
     if(s===2){
       d.path('versions-path','M 1144 405 L 1210 405 L 1210 540 L 615 540','none',P.orange,3);
       d.arrow('versions-arrow',615,540,615,552,P.orange,3);
-      ['t3: new','t2: prior','t1: old'].forEach((v,i)=>d.box('version-'+i,350+i*180,552,165,59,v,i===0?P.orangeLight:P.white,P.orange,24));
+      ['t1: Moon facts','t2: Moon phases','t3: Explore the Moon'].forEach((v,i)=>d.box('version-'+i,175+i*320,552,300,59,v,i===2?P.orangeLight:P.white,P.orange,24));
     }
     foot(d,s===2?'Three versions of one cell · a retention policy decides which versions remain':'Empty positions show missing cells; they do not reserve fixed-width slots in storage.');
   });

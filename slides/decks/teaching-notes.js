@@ -2140,8 +2140,8 @@
       "answer": "The link points to the Moon article, so its text belongs in r2. The Mars article has its own address and row, r3.",
       "builds": [
         "Point to CNN’s home page. In this example, r1 is its short row label. Follow r2 and r3 to the two article addresses. Ask which article has text from a news site. The dictionary stores anchor:news in r2, along with four other cells across the three rows.",
-        "Follow the arrow from the school website to the Moon article. The destination address selects row r2. The source of the link gives the qualifier school. Point to the assignment for anchor:school. It adds one cell to r2. The other rows can omit that cell.",
-        "Follow the same arrow on the next two visits. The source and destination stay the same while the words in the link change. Trace the stored value from old to prior to new. A retention policy specifies which versions to keep."
+        "Follow the arrow from the school website to the Moon article. A student clicks “Moon facts” to open the article. Its address selects row r2. The school supplies the link, so the crawler stores those words in anchor:school at timestamp 1.",
+        "On the second visit the link reads “Moon phases.” On the third it reads “Explore the Moon.” Ask which words a student would have clicked at timestamp 2. All three versions belong to the same cell because the school still links to the same article. A retention policy specifies which versions to keep."
       ]
     },
     "tablets-separate-placement-from-storage": {

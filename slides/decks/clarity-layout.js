@@ -205,6 +205,7 @@ window.CourseClarityLayout = {
   "14/bigtable-learning-goals": [82,205,1002,560],
   "14/organize-writes-differently": [132,273,1158,610],
   "14/a-multidimensional-map": [77,251,1213,623],
+  "14/web-pages-and-stored-cells": [77,212,1203,618],
   "14/sparse-cells-and-versions": [42,187,1233,657],
   "14/tablets-separate-placement-from-storage": [147,267,1173,638],
   "14/splitting-cannot-fix-a-moving-hotspot": [117,251,1110,644],
