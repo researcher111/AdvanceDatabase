@@ -1168,9 +1168,9 @@ window.CourseClarityCaptions = {
       "The client finds the range for com.cnn.www, before org, and sends the update to Server 1. Which field should it change?"
     ],
     "a-multidimensional-map": [
-      "The request has reached the right server. The row key selects everything stored for the CNN page.",
-      "To save the text of one incoming link, select the column anchor:example. The row and column together identify one cell.",
-      "The same link can change. Timestamp 1 selects one saved version of its text."
+      "CNN supplies its HTML. A link on cnnsi.com points to CNN. Which row can a reader look up to find both facts?",
+      "In CNN’s row, choose anchor:cnnsi.com. The family groups incoming links. The qualifier names the site that wrote these words.",
+      "The row and column identify the cell. At timestamp t9, its stored value is the three letters CNN."
     ],
     "sparse-cells-and-versions": [
       "Each row represents a page. These three pages have different links, so the table stores only the cells that have values.",

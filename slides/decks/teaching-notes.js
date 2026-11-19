@@ -2124,15 +2124,15 @@
       "context": "Bigtable calls each row range a tablet. A tablet server can serve several tablets. Later slides explain how each server batches writes and how a client finds a tablet after its assignment changes."
     },
     "a-multidimensional-map": {
-      "idea": "Bigtable locates a value by row, column, and timestamp.",
-      "question": "What does each coordinate in (com.cnn.www, anchor:example, time) select?",
-      "answer": "The row key selects a row. The family and qualifier select a column. The timestamp selects its version.",
+      "idea": "Webtable groups facts by the page they describe. The row and column identify a cell, and a timestamp selects a version.",
+      "question": "Suppose a different site links to the same CNN page. Which parts of the address would stay the same?",
+      "answer": "The row key stays com.cnn.www because the link still points to CNN. The family stays anchor. The new source site supplies a different qualifier.",
       "builds": [
-        "Recall a labeled spreadsheet row, then name the row key. Bigtable orders row keys like dictionary entries. Reversing hostname components makes related domains share an ordered prefix. The key is a logical name, not a physical file address.",
-        "Define a column family as a declared group of columns. Define the qualifier as a name within that family. In anchor:example, anchor is the family and example is the qualifier. The qualifier can be introduced when a value arrives.",
-        "Define a cell as one row–column intersection. A timestamp labels one version of that cell. Bytes are the stored value; the application decides their meaning. Ask which coordinate changes when only the value receives a new version."
+        "Follow the HTML from CNN’s home page. Now follow the link from cnnsi.com to its destination. Both observations describe www.cnn.com. The crawler files them under com.cnn.www so a reader can look up that page once.",
+        "Point to the two columns. The application declares its column families in advance. In anchor:cnnsi.com, anchor names the family for incoming links and cnnsi.com identifies the referring site. Ask students to point to the cell that contains the link text.",
+        "Keep the row and column fixed. Figure 1 labels the version of the link text t9. Reading that version returns the bytes for the three letters CNN. Ask which part of the address changes if the site later edits its link text."
       ],
-      "context": "This is the 2006 Bigtable model. Its timestamps are 64-bit integers. Clients can supply them; server-assigned timestamps use microseconds. Single-row operations are atomic. Cell versions alone do not provide a transaction snapshot across rows. The later toy sequence numbers describe update order, not Bigtable timestamp assignment."
+      "context": "The 2006 paper illustrates one Webtable schema. The contents: column has an empty qualifier. Figure 1 uses t9 to label a timestamp. Bigtable stores timestamps as 64-bit integers. Clients can supply them, and server-assigned timestamps use microseconds. A timestamp selects a cell version. A consistent snapshot across rows requires additional guarantees."
     },
     "sparse-cells-and-versions": {
       "idea": "Sparse storage omits missing cells and can retain several versions of a present cell.",

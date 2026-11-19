@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <link rel="stylesheet" href="../../labs/_shared/lab-base.css?v=21">
 <link rel="stylesheet" href="../../labs/_shared/clear-teaching.css?v=1">
-<link rel="stylesheet" href="styles.css?v=bigtable-clear-20261110">
+<link rel="stylesheet" href="styles.css?v=bigtable-webtable-row-20261119">
 <link rel="stylesheet" href="../../labs/_shared/teaching-trace.css?v=1">
 <link rel="stylesheet" href="../lecture-13/slide-walkthroughs.css?v=1">
 </head>
@@ -61,7 +61,7 @@
 
 
 <h2 id="plan">Learning goals</h2>
-<ul class="recap-list">
+<ul>
   <li>A row key gives a page a stable name. Bigtable assigns ranges of keys to servers, so the page keeps its name when another server takes over.</li>
   <li>A row can hold several fields, and each field can change over time. The row and column identify the cell. A timestamp selects a retained version.</li>
   <li>A confirmed write can survive the loss of memory before it reaches a sorted file. The server can replay the change from its durable log.</li>
@@ -88,10 +88,34 @@
 
 <h2 id="model" data-slide="2" data-scene="a-multidimensional-map">2 · Locate a value with row, column, and time</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=2&amp;b=1">Open slide 2 ↗</a></p>
-<p>Suppose the crawler saves both the contents of CNN’s home page and the words another site uses to link to CNN. Both belong to the same row. A <strong>column</strong> identifies which field the crawler wants. One row and one column together identify a <strong>cell</strong>.</p>
-<p>In the original Bigtable paper, the column <code>anchor:cnnsi.com</code> holds link text from <code>cnnsi.com</code>. The application declares <code>anchor</code> as a <strong>column family</strong> for incoming links. The crawler uses the source site’s name as the <strong>qualifier</strong> to distinguish that source within the family. <a href="#src-1">[1]</a></p>
-<p>What if the source changes its link text? The crawler can write the new words to the same cell with a later <strong>timestamp</strong>. A reader can now select a particular <strong>version</strong> using the row, column, and timestamp together.</p>
-<p>The Python example uses <code>anchor:example</code> for one source and <code>1</code> for one visit. The tuple below is the address. The byte string <code>b"example link text"</code> is the value stored there.</p>
+<p>In the Bigtable paper’s Webtable example, the designers chose one row per web page. A reader looking up CNN wants its HTML and the words other sites use to link to it. When the crawler finds a link to CNN on another site, which page’s row should receive the link text?</p>
+<figure class="webtable-map keep-in-present" id="cnn-row">
+  <figcaption>Two web pages supply facts about CNN’s home page</figcaption>
+  <div class="webtable-sources">
+    <div><strong>On <code>www.cnn.com</code></strong>The crawler fetches the home page’s HTML.</div>
+    <div><strong>On <code>cnnsi.com</code></strong>The link reads <q>CNN</q> and points to <code>www.cnn.com</code>.</div>
+  </div>
+  <div class="webtable-arrows" aria-hidden="true"><span>↓</span><span>↓</span></div>
+  <div class="webtable-record">
+    <div class="webtable-key">Row key <code>com.cnn.www</code></div>
+    <dl class="webtable-cells">
+      <div><dt><span class="webtable-label">Column</span><code>contents:</code></dt><dd><span class="webtable-label">Cell value</span>CNN’s HTML</dd></div>
+      <div class="webtable-selected"><dt><span class="webtable-label">Column</span><code>anchor:<wbr>cnnsi.com</code></dt><dd><span class="webtable-label">Selected cell value</span>“CNN”</dd></div>
+    </dl>
+  </div>
+  <div class="webtable-column-parts">
+    <strong>How to read <code>anchor:<wbr>cnnsi.com</code></strong>
+    <dl>
+      <div><dt>Column family</dt><dd><code>anchor</code> groups incoming links.</dd></div>
+      <div><dt>Qualifier</dt><dd><code>cnnsi.com</code> identifies the site that supplied this link.</dd></div>
+    </dl>
+  </div>
+</figure>
+<p>The link lives on <code>cnnsi.com</code>, but it points to CNN. The crawler uses that destination to choose CNN’s row and the source site to name the <strong>column</strong>. A reader can now look up <code>com.cnn.www</code> once to get both the HTML and the incoming link text. <a href="https://www.usenix.org/legacy/event/osdi06/tech/chang/chang.pdf#page=2">Bigtable paper, Figure 1</a>.</p>
+<p>To find the link text, start in row <code>com.cnn.www</code> and choose column <code>anchor:cnnsi.com</code>. That intersection is one <strong>cell</strong>. The application declares the <strong>column families</strong> <code>contents</code> and <code>anchor</code> in advance. The <strong>qualifier</strong> identifies a column within its family. It is empty in <code>contents:</code>.</p>
+<p>What if the source changes its link text? The crawler can write the new words to the same cell with a later <strong>timestamp</strong>. In the paper, timestamp <code>t9</code> selects the <strong>version</strong> containing the three letters <code>CNN</code>.</p>
+<div class="lecture-walkthrough" data-lecture-scene="a-multidimensional-map"></div>
+<p>Try the same addressing rule in Python with a different link. This example uses <code>anchor:example</code> for the source and <code>1</code> for the timestamp. The tuple is the address. The byte string <code>b"example link text"</code> is the value stored there.</p>
 <pre><code class="language-python">cells = {}
 row = "com.cnn.www"
 column = "anchor:example"
@@ -101,7 +125,6 @@ address = (row, column, timestamp)
 cells[address] = b"example link text"
 value = cells[address]</code></pre>
 <p>Reading the same tuple returns <code>b"example link text"</code>. Bigtable stores values as bytes, so the crawler can use the same addressing scheme for the contents of a page or an image.</p>
-<div class="lecture-walkthrough" data-lecture-scene="a-multidimensional-map"></div>
 <pre class="equation"><code>(row_key, column_family:qualifier, timestamp) → bytes
 
 row_key    "com.cnn.www"      · reversed domains group related rows in key order
@@ -610,12 +633,12 @@ document that supports the claim it is attached to.</p>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
-<script src="../../slides/decks/lectures-11-15.js?v=bigtable-progression-20261119"></script>
-<script src="../../slides/decks/teaching-notes.js?v=bigtable-progression-20261119"></script>
-<script src="../../slides/decks/clarity-captions.js?v=bigtable-progression-20261119"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=bigtable-cnn-row-20261119"></script>
+<script src="../../slides/decks/teaching-notes.js?v=bigtable-cnn-row-20261119"></script>
+<script src="../../slides/decks/clarity-captions.js?v=bigtable-cnn-row-20261119"></script>
 <script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
-<script src="../../slides/decks/clarity-diagrams.js?v=bigtable-progression-20261119"></script>
-<script src="../../slides/decks/bigtable-code.js?v=bigtable-progression-20261119"></script>
+<script src="../../slides/decks/clarity-diagrams.js?v=bigtable-cnn-row-20261119"></script>
+<script src="../../slides/decks/bigtable-code.js?v=bigtable-cnn-row-20261119"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
 <script src="../lecture-13/slide-walkthroughs.js?v=2"></script>
 <script src="../../labs/_shared/lab-base.js?v=mapreduce-20261109"></script>

@@ -416,6 +416,52 @@ function webTable(d, step) {
     d.arrow('route', 350, 251, 350, 290, P.blue, 4);
   }
 }
+function cnnWebtableRow(d, step) {
+  const selectCell = step >= 1;
+  const left = 65, contentsStart = 345, anchorStart = 695, right = 1215;
+  const headerTop = 335, rowTop = 462, bottom = 547;
+  const rowCenter = (left + contentsStart) / 2;
+  const contentsCenter = (contentsStart + anchorStart) / 2;
+  const anchorCenter = (anchorStart + right) / 2;
+
+  d.text('source-heading', rowCenter, 247, 'Crawler reads', 27, P.muted);
+  d.rect('page-source', contentsStart + 8, 196, anchorStart - contentsStart - 16, 98, P.white, P.line, 8);
+  d.text('page-source-site', contentsCenter, 226, 'www.cnn.com', 27, P.ink, 'middle', 650);
+  d.text('page-source-value', contentsCenter, 266, 'CNN’s home page HTML', 24, P.ink);
+  d.rect('link-source', anchorStart + 8, 196, right - anchorStart - 16, 98, P.white, P.line, 8);
+  d.text('link-source-site', anchorCenter, 226, 'cnnsi.com', 27, P.ink, 'middle', 650);
+  d.text('link-source-target', anchorCenter, 266, '“CNN” links to www.cnn.com', 24, P.ink);
+  d.arrow('store-page', contentsCenter, 298, contentsCenter, headerTop - 6, P.blue, 3);
+  d.arrow('store-link', anchorCenter, 298, anchorCenter, headerTop - 6, P.blue, 3);
+
+  d.rect('row-table', left, headerTop, right - left, bottom - headerTop, P.white, P.line, 0);
+  d.rect('row-key-cell', left, rowTop, contentsStart - left, bottom - rowTop, P.blueLight, P.blue, 0, 2);
+  if (selectCell) {
+    d.rect('selected-column', anchorStart, headerTop, right - anchorStart, rowTop - headerTop, P.greenLight, P.green, 0, 2);
+    d.rect('selected-cell', anchorStart, rowTop, right - anchorStart, bottom - rowTop, P.orangeLight, P.orange, 0, 3);
+  }
+  d.line('contents-divider', contentsStart, headerTop, contentsStart, bottom, P.line, 2);
+  d.line('anchor-divider', anchorStart, headerTop, anchorStart, bottom, P.line, 2);
+  d.line('header-divider', left, rowTop, right, rowTop, P.line, 2);
+  d.text('row-key-label', rowCenter, 400, 'Row key', 26, P.blue);
+  d.text('row-key', rowCenter, 506, 'com.cnn.www', 31, P.blue, 'middle', 650);
+  d.text('contents-label', contentsCenter, 364, 'Column', 23, P.muted);
+  d.text('contents-column', contentsCenter, 400, 'contents:', 29, P.ink, 'middle', 650);
+  d.text('contents-value', contentsCenter, 506, 'CNN’s HTML', 28, P.ink);
+  d.text('anchor-label', anchorCenter, 364, 'Column', 23, P.muted);
+  d.text('anchor-column', anchorCenter, 400, 'anchor:cnnsi.com', 29, P.ink, 'middle', 650);
+  if (selectCell) {
+    d.text('family', 825, 437, 'Column family: anchor', 22, P.green);
+    d.text('qualifier', 1080, 437, 'Qualifier: cnnsi.com', 22, P.green);
+    d.text('cell-label', anchorCenter, 486, 'Selected cell', 22, P.orange);
+  }
+  d.text('link-text', anchorCenter, selectCell ? 521 : 506, '“CNN”', 30, P.ink, 'middle', 650);
+  if (step === 2) {
+    d.arrow('select-version', anchorCenter, bottom + 5, anchorCenter, 578, P.orange, 3);
+    d.box('version', anchorStart, 584, right - anchorStart, 62, 'Timestamp t9 → stored bytes b"CNN"', P.white, P.orange, 25);
+  }
+}
+
 function compareCrawlerWrites(d, step) {
   d.text('workload-key',640,208,'Two visits to com.cnn.www',29,P.ink);
   d.text('btree-path',310,278,'B+ tree',30,P.blue);
@@ -441,7 +487,10 @@ register(14,'Bigtable and LSM trees','2026-11-17','lectures/lecture-14/bigtable.
 scene('Find the row for one web page', ['Name one page', 'Split the growing table', 'Route the morning update'], webTable,
   'The Webtable example comes from the original Bigtable paper. The crawler names a row for its morning update, finds the assigned server, and sends the update there. The two keys and the boundary shown here illustrate one possible assignment.',
   {id:'organize-writes-differently', clarityNative:true}),
-scene('A multidimensional map',['Row','Column','Version'],(d,s)=>{d.text('key',640,285,'(row, family:qualifier, time)',43);['com.cnn.www','anchor:example','2026-11-10'].forEach((v,i)=>{d.box('coord'+i,80+i*390,350,350,105,v,i===s?P.orangeLight:P.white,i===s?P.orange:P.line,27);});d.arrow('maps',640,480,640,535,P.green);d.box('bytes',450,555,380,65,'bytes',P.greenLight,P.green,30);},'Unpack the three coordinates rather than showing a feature list. Ask why reversing domain names helps a scan find related names together. Expected: related domains share an ordered prefix. Families are declared groups.\n\nQualifiers can be created as data arrives. Cell timestamps select versions but do not automatically provide a transactionally consistent snapshot across rows. The diagram describes the original Bigtable model. It is not a claim about every modern product feature.',{title:'Choose a value within the CNN row',kind:'definition',term:'Bigtable',definition:'A distributed sorted map from row, column, and timestamp coordinates to values.'}),
+scene('A multidimensional map', ['Group facts about CNN', 'Select the link-text cell', 'Read a stored version'], cnnWebtableRow,
+  'Figure 1 in the original paper shows the CNN row with several columns and timestamps. The slide follows the HTML and one incoming link. The reading’s separate Python example uses anchor:example, timestamp 1, and b"example link text" to model the same address. Cell timestamps identify versions within a cell.',
+  {title:'Where does CNN’s incoming link text go?', clarityNative:true,
+   sources:['lectures/lecture-14/bigtable.html#model','https://www.usenix.org/legacy/event/osdi06/tech/chang/chang.pdf#page=2']}),
 scene('Sparse cells and versions',['Sparse cells','New qualifier','Another version'],(d,s)=>{const cells=[[0,0],[0,2],[1,1],[2,0],[2,3]];for(let r=0;r<3;r++)for(let c=0;c<4;c++){d.rect('cell'+r+c,300+c*175,290+r*86,145,63,P.white,P.line,4);if(cells.some(([a,b])=>a===r&&b===c)||(s>0&&r===1&&c===3))d.rect('data'+r+c,310+c*175,300+r*86,125,43,P.greenLight,P.green,3);}['r1','r2','r3'].forEach((v,i)=>d.text('row'+i,215,334+i*86,v,29));if(s>1){[0,1,2].forEach(i=>d.box('version'+i,840+i*20,320+i*36,190,58,'t'+(3-i),i?P.white:P.orangeLight,P.orange,27));}},'Ask whether a missing qualifier needs a reserved fixed-width slot. Expected: sparse storage can omit absent cells, unlike microdb’s fixed slot layout, though metadata itself still costs space. Add a qualifier to one row without drawing it for every other row. Then stack versions of a cell and ask which timestamp a read requests. Distinguish retaining versions from full MVCC transaction semantics and explain retention/garbage-collection policy.'),
 scene('Tablets separate placement from storage',['Sorted ranges','Assigned servers','Shared durable files','Reassignment'],(d,s)=>{for(let i=0;i<4;i++){d.box('tablet'+i,150+i*270,270,210,85,['a–g','h–m','n–s','t…'][i],P.greenLight,P.green,31);d.box('server'+i,150+i*270,425,210,80,'server '+i,s===3&&i===1?P.redLight:P.white,P.line,27);if(s>0)d.arrow('assigned'+i,255+i*270,370,255+i*270,410,P.green);if(s>1)d.line('storage'+i,255+i*270,520,640,580,P.blue,2);}if(s>1)d.box('gfs',350,575,580,60,'replicated files',P.blueLight,P.blue,30);if(s===3)d.arrow('move',525,365,795,410,P.orange,5);},'Define a tablet as a contiguous row-key range and trace assignment to a tablet server. Ask why losing a server need not mean losing its durable data. Expected: the original architecture stores logs and SSTables in replicated GFS, with caches and in-progress state on tablet servers. Replay and reassignment still take work. Explain that partitioning divides the table while replication protects durable pieces. They solve distinct problems.',{kind:'definition',term:'Tablet',definition:'A contiguous range of row keys managed as a unit of placement and service.'}),
 scene('Splitting cannot fix a moving hotspot',['Distributed writes','Timestamp tail','Split','Next burst'],tabletDraw,'Predict where a burst of increasing timestamp-prefixed keys lands. Reveal all writes at the tail, split that tablet, then send another burst. Expected: the newest range remains hot. A split changes size but not the direction of incoming writes.\n\nDiscuss hash prefixes or a different key order and the range-scan locality each sacrifices. The counts are a deterministic toy load model, not observed Bigtable throughput. Reversed domains group related pages but do not inherently distribute all traffic.',{demo:'viz-tablet'}),

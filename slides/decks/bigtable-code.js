@@ -30,26 +30,6 @@
     return scene;
   }
 
-  const address=sample('Teaching Python · model a cell address','python',[
-    'cells = {}','row = "com.cnn.www"',
-    'column = "anchor:example"',
-    'timestamp = 1  # One illustrative version','',
-    'address = (row, column, timestamp)',
-    'cells[address] = b"example link text"',
-    'value = cells[address]'
-  ]);
-  install('a-multidimensional-map',[address],(d,s)=>{
-    code(d,{...address,lines:address.lines.slice(0,s===0?2:s===1?3:8)},s===0?[1]:s===1?[2]:[3,5,6,7]);
-    box(d,'row',210,'Row key',['com.cnn.www'],P.blue);
-    if(s>=1)box(d,'column',355,'Column',['anchor = declared family','example = qualifier'],P.green);
-    if(s===2)box(d,'value',525,'Version 1 → bytes',['b"example link text"'],P.orange);
-    if(s===2)foot(d,'The row, column, and timestamp together select the saved link text.');
-  },[
-    'The client sent the morning update for com.cnn.www to Server 1. The page row can hold its contents and several incoming links. Ask which field the crawler should use to store the text of one link. This dictionary models the address of a cell.',
-    'Point to anchor:example. The declared family anchor holds link text. Its qualifier example names this link source. If the crawler later sees different text for the same link, which part of the address will it need next?',
-    'Use illustrative timestamp 1 to identify a version. The prefix b makes a Python byte string. Assign those bytes at the complete address, then retrieve them with the same address. A real Bigtable timestamp is an integer. This coordinate does not establish a transaction snapshot across rows.'
-  ]);
-
   const sparse=sample('Teaching Python · store only present cell versions','python',[
     'cells = {',
     '    ("r1", "anchor:example", 1): b"link",',

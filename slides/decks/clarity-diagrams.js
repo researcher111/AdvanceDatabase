@@ -281,15 +281,6 @@
     ragOpening.teaching.reference='Trace the same passage from Lecture 11 into the prompt, with source ID ml-notes. Then compare the proposed claim with the passage. The later source-mapping slide continues this fictional example. The reading and lab use a separate database-recovery fixture. Retrieval metrics measure source presence and rank. Claim support needs a separate check.';
   }
 
-  use(14,'a-multidimensional-map',(d,s)=>{
-    label(d,'address',640,218,['Choose a row','Then choose a column in that row','(row, family:qualifier, timestamp) → value'][s],P.ink,31);
-    const titles=['Row key','Column name','Version timestamp'],values=['com.cnn.www','anchor:example','2026-11-10'];
-    titles.forEach((title,i)=>{if(i<=s)card(d,'coordinate-'+i,65+i*420,280,310,112,title,values[i],i===s);});
-    label(d,'row-order',220,442,'Rows stay in key order.',P.muted,23);
-    if(s>=1){label(d,'family',640,438,'anchor = declared family',P.green,23);label(d,'qualifier',640,471,'example = qualifier',P.green,23);}
-    if(s>=2){label(d,'time-label',1060,438,'One version of this cell',P.orange,23);d.arrow('value-arrow',640,493,640,530,P.green,3);d.box('cell-value',360,543,560,65,'Value bytes: “example link text”',P.greenLight,P.green,27);}
-    foot(d,s===0?'Related reversed hostnames share a prefix: com.cnn.www and com.cnn.sports.':s===1?'A cell is one row–column intersection. A family must exist before its qualifiers are used.':'Each timestamp selects one stored version. The application interprets its value bytes.');
-  });
   use(14,'sparse-cells-and-versions',(d,s)=>{
     const xs=[350,580,810,1040],columns=['anchor:example','anchor:news','contents:','anchor:school'];
     const cells=[[0,0],[0,2],[1,1],[2,0],[2,2]];
