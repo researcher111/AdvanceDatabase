@@ -2113,15 +2113,15 @@
   },
   "14": {
     "organize-writes-differently": {
-      "idea": "The newest visible record for the booking tells a reader which room to use or whether the booking is absent.",
-      "question": "If you checked this thread on Wednesday, which room would you report?",
-      "answer": "Room 204. Tuesday’s message was the latest update for the match on Wednesday. Thursday’s cancellation came later.",
+      "idea": "Bigtable spreads a large table across servers and uses the row key to locate each page.",
+      "question": "Which server would handle an update for org.example.www?",
+      "answer": "Server 2. Its range starts at org and includes org.example.www.",
       "builds": [
-        "Introduce a fictional chess club. Ask which room a player would write on the calendar after Monday’s email. The Friday match identifies one booking. Its room is the value. Before advancing, ask what the player should do if the club sends a room change.",
-        "Point to Tuesday’s email. It names the same match and gives Room 204. Both emails remain in the inbox. Before advancing, ask which room the player should report if the club cancels the match.",
-        "Point to Thursday’s cancellation. The club no longer has a room booked for this match. A database records the cancellation as a deletion marker. Even if both older room values remain in files, a current read finds the marker and reports the booking absent."
+        "A web crawler collects pages and revisits them to save changes. Each row key identifies a page by its web address. The example writes host names in reverse order, so www.cnn.com becomes com.cnn.www. Ask what happens if one server receives updates faster than it can save them.",
+        "Each server serves a consecutive range of row keys. Point to org, the boundary in this example. Ask which server should receive a request for com.cnn.www.",
+        "Follow the request to Server 1. The client locates the range containing com.cnn.www and sends the read to its server. The same routing rule directs a crawler’s update to the right server."
       ],
-      "context": "An email thread illustrates how an update can change an answer while earlier messages remain readable. The database uses sequence numbers to order these example records. Bigtable uses a log-structured merge tree (LSM tree) to buffer writes and later merge sorted batches. This design can reduce scattered writes and adds work during reads and merges."
+      "context": "Bigtable calls each row range a tablet. A tablet server can serve several tablets. Later slides explain how each server batches writes and how a client finds a tablet after its assignment changes."
     },
     "a-multidimensional-map": {
       "idea": "Bigtable locates a value by row, column, and timestamp.",
@@ -2219,7 +2219,7 @@
       "question": "What goes wrong if the newer deletion marker disappears but the old value remains?",
       "answer": "A later read can find the old value and return it again.",
       "builds": [
-        "Recall the email that canceled the chess match. Locate k2:v1 in the older file. Ask what a reader would return for k2 before a deletion marker arrives.",
+        "Locate k2:v1 in the older file. Ask what a reader would return for k2 before a deletion marker arrives.",
         "Define tombstone again as a deletion marker. Write it as the newer record. The old file remains immutable.",
         "A current read must honor the visible marker and return absent. Absence is the logical result even though the physical old bytes remain.",
         "Remove old records and their marker only when older values cannot reappear and required snapshots remain valid. A snapshot is a retained read view. Ask why merging only some files can make removal unsafe."

@@ -1163,9 +1163,9 @@ window.CourseClarityCaptions = {
   },
   "14": {
     "organize-writes-differently": [
-      "Monday’s email books Room 101 for the Friday chess match.",
-      "Tuesday’s email moves the same match to Room 204. Monday’s email stays in the inbox.",
-      "Thursday’s email cancels the match. Both earlier emails still name rooms. Which message decides the booking now?"
+      "A web crawler saves one row per page. As the table grows, one server can run out of space or fall behind on updates.",
+      "Bigtable sorts the rows by key and assigns ranges of neighboring keys to different servers.",
+      "To read com.cnn.www, the client sends its request to Server 1. That server handles keys before org."
     ],
     "a-multidimensional-map": [
       "A row key names one row. Bigtable stores rows in key order.",
@@ -1220,7 +1220,7 @@ window.CourseClarityCaptions = {
       "Write one sorted output. Sequential merging still reads input bytes and writes output bytes."
     ],
     "deletion-must-hide-older-values": [
-      "Return to the opening puzzle: the old file still holds k2 = v1.",
+      "The old file still holds k2 = v1. What should a lookup return after a delete?",
       "Write a newer tombstone, a deletion marker, instead of editing the old file.",
       "The current read honors the newest visible marker and returns absent.",
       "Remove the marker only when older values cannot reappear and required snapshots remain valid."

@@ -18,7 +18,7 @@
   <p><a href="../../slides/lecture-14.html">Visual slide deck ↗</a></p>
   <ul>
     <li><a href="#plan">Starting point and class plan</a></li>
-    <li><a href="#problem">1 · Organize writes into sorted batches</a></li>
+    <li><a href="#problem">1 · Distribute the rows and batch the writes</a></li>
     <li><a href="#model">2 · Locate a value with row, column, and time</a></li>
     <li><a href="#sparse">3 · Store present cells and selected versions</a></li>
     <li><a href="#tablets">4 · Assign each row range to a tablet server</a></li>
@@ -48,24 +48,11 @@
 <header class="hero">
   <div class="eyebrow">DS 6XXX · Lecture 14 · Tuesday November 17, 2026</div>
   <h1>Bigtable, LSM Trees &amp; NoSQL</h1>
-  <div class="subtitle">How can a database cancel a booking when an older file still lists the room?</div>
+  <div class="subtitle">What problem does Bigtable solve?</div>
   <div class="byline">Daniel G. Graham · UVA School of Data Science</div>
 </header>
-<div class="story-scene">
-  <p class="story-label">A fictional room booking</p>
-  <p class="lede">You open the chess club’s emails to find the room for Friday’s match. Three messages from the organizer are still in your inbox.</p>
-  <ul>
-    <li><strong>Monday</strong> — <q>We booked Room 101 for Friday’s match.</q></li>
-    <li><strong>Tuesday</strong> — <q>We moved the match to Room 204.</q></li>
-    <li><strong>Thursday</strong> — <q>We canceled Friday’s match.</q></li>
-  </ul>
-  <details>
-    <summary>Which room, if any, should the booking system show on Friday?</summary>
-    <p>Neither room. Thursday’s cancellation applies to the same match as the two earlier emails. You can still read both room numbers in your inbox.</p>
-  </details>
-  <p>In the booking database, the <strong>key</strong> identifies Friday’s chess match. The <strong>value</strong> is the room number. Each change adds a record for the same key.</p>
-  <p>To cancel the booking, the database writes a <strong>deletion marker</strong>. A current lookup uses the newest record for that key. Since the marker is newest, the lookup reports no booking even though older files still list the rooms.</p>
-</div>
+<p class="lede">A table can grow too large for one server to store, or receive more reads and writes than one server can handle. Bigtable spreads the rows and the work across many servers. Applications still read and update one table.</p>
+<p>For example, a web crawler downloads pages and saves one page per row. The page’s address serves as its <strong>row key</strong>. Bigtable sorts rows by key and assigns each range of keys to a server. When the crawler revisits a page, it sends the update to the server for that page’s range. <a href="#src-1">[1]</a></p>
 <div class="cite">
   Companion reading: Chang et&nbsp;al., <a href="https://research.google/pubs/pub27898/"><em>Bigtable: A Distributed Storage System for Structured Data</em></a> (OSDI 2006) ·
   O'Neil et&nbsp;al., <a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf"><em>The Log-Structured Merge-Tree</em></a> (1996, an earlier description of the storage design<sup class="src"><a href="#src-2" title="The Log-Structured Merge-Tree (LSM-Tree)">2</a></sup>) ·
@@ -89,25 +76,24 @@
   <div id="glossary-content" class="glossary-content"></div>
 </div>
 
-<h2 id="problem" data-slide="1" data-scene="organize-writes-differently">1 · Organize writes into sorted batches</h2>
+<h2 id="problem" data-slide="1" data-scene="organize-writes-differently">1 · Distribute the rows and batch the writes</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=1&amp;b=1">Open slide 1 ↗</a></p>
-<p>A web crawler collects pages from many sites. Updating all those records can change many different B+ tree leaf pages.</p>
+<div class="lecture-walkthrough" data-lecture-scene="organize-writes-differently"></div>
+<p>Once an update reaches the server for its row, the server must write it to storage. In a B+ tree, updates for different web addresses can change many different leaf pages.</p>
 <p>A <strong>dirty page</strong> is a memory copy changed since its last storage write. The <strong>buffer pool</strong> holds working copies of storage pages in memory. It can combine updates before writing dirty pages. However, scattered keys can still require writes to many separate storage locations.</p>
 <p>A <strong>log-structured merge-tree</strong>, or <strong>LSM tree</strong>, organizes updates into batches. It records changes in a log and keeps recent entries sorted in memory. It then writes each completed batch as a sorted file.</p>
 <p>A <strong>log</strong> is an ordered record of changes used for recovery. <strong>Sequential output</strong> writes a stream of data instead of repeatedly updating scattered locations. A <strong>sorted run</strong> is a sequence of entries ordered by key.</p>
 <p>A <strong>flush</strong> writes a memory batch to storage. <strong>Compaction</strong> merges existing sorted files into new sorted files. Later sections explain how each operation preserves reads.</p>
 <div class="reading-table-scroll" tabindex="0" role="region" aria-label="Comparison table; scroll horizontally if needed">
 <table>
-  <thead><tr><th>Booking example</th><th>What the database does</th></tr></thead>
+  <thead><tr><th>When the crawler writes</th><th>What the storage engine does</th></tr></thead>
   <tbody>
-    <tr><td>The club books Room 101.</td><td>The <strong>memtable</strong> holds this booking with other recent writes in memory, sorted by key.</td></tr>
-    <tr><td>The database saves the batch. The club later moves the match to Room 204.</td><td>A flush writes an <strong>immutable</strong> file. Its entries stay fixed. The room change goes into the active memtable.</td></tr>
-    <tr><td>A later flush saves the Room 204 booking in a second file.</td><td>Compaction merges sorted files. It can discard an older booking record when doing so preserves every required read result.</td></tr>
+    <tr><td>The crawler saves pages from several sites.</td><td>The <strong>memtable</strong> holds recent writes in memory, sorted by key.</td></tr>
+    <tr><td>After a flush, the crawler visits one page again.</td><td>The flushed file is <strong>immutable</strong>. Its entries stay fixed. The updated page goes into the active memtable.</td></tr>
+    <tr><td>A later flush writes the updated page to a second file.</td><td>Compaction merges sorted files. It can discard an older version when doing so preserves every required read result.</td></tr>
   </tbody>
 </table>
 </div>
-<p>The emails show how to interpret later changes. The database also needs rules for recovering changes after a crash and deciding when it can discard older records.</p>
-<div class="lecture-walkthrough" data-lecture-scene="organize-writes-differently"></div>
 <p><strong>The essential tradeoff:</strong> batching can reduce scattered writes, but reads may need several files and merging adds storage work.</p>
 <pre class="equation"><code>Writes: sequential output can reduce scattered storage operations.
 Reads:  sorted files and indexes help locate a key or scan a range.
@@ -288,12 +274,12 @@ retire_when_no_readers(frozen)</code></pre>
 <p>Retire the frozen batch only after readers no longer need it. New writes follow the WAL protocol and can proceed while the background flush runs. This fragment does not discard the recovery log.</p>
 <div class="lecture-walkthrough" data-lecture-scene="freeze-a-sorted-file"></div>
 <p>The frozen batch can remain readable while the file is written. A later update goes into active memory and eventually another file. It does not edit the older SSTable.</p>
-<p>Suppose a file lists Room 101 for Friday’s match and the active memtable lists Room 204. Which record should a current lookup use?</p>
+<p>Suppose a file holds yesterday’s copy of a web page and the memtable holds today’s update. Which copy should a current read return?</p>
 
 <h2 id="versions" data-slide="9" data-scene="read-the-newest-visible-value">9 · Choose the newest visible record</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=9&amp;b=1">Open slide 9 ↗</a></p>
-<p>In this trace, <code>k</code> identifies Friday’s chess match. The value <code>old</code> stands for Room 101, and <code>new</code> stands for Room 204.</p>
-<p>The trace gives each change an increasing <strong>sequence number</strong> to show its order. For example, <code>old@5</code> records the booking for Room 101 at sequence 5.</p>
+<p>In this trace, <code>k</code> identifies one web page. The values <code>old</code> and <code>new</code> represent the page contents from two visits.</p>
+<p>The trace gives each change an increasing <strong>sequence number</strong> to show its order. For example, <code>old@5</code> means the crawler stored the earlier copy at sequence 5.</p>
 <p>A <strong>snapshot</strong> is a retained view used by a read. In this toy model, snapshot 8 admits records numbered 8 or earlier. A record is <strong>visible</strong> when the chosen view permits the read to use it.</p>
 <p>A <strong>tombstone</strong> is a deletion marker stored as a newer record. <code>DELETE@9</code> means the key is absent from sequence 9 onward, until another update.</p>
 <p><strong>Keep two kinds of time separate.</strong> These update numbers explain a generic LSM version rule. Bigtable’s application cell timestamps do not automatically provide a transactionally consistent snapshot across rows.</p>
@@ -529,7 +515,7 @@ again = read_block(block_id)</code></pre>
 <h2 id="cap" data-slide="15" data-scene="a-network-partition-forces-a-choice">15 · Explain the choice during a network failure</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=15&amp;b=1">Open slide 15 ↗</a></p>
 <p>A <strong>replica</strong> is another copy of data. A <strong>network partition</strong> is a communication failure that prevents some machines from exchanging messages. This differs from a data partition, which divides records into portions.</p>
-<p>Imagine Maya and Noor each keep a copy of the club’s record. Both copies show <code>v1</code>. Maya records <code>v2</code> and confirms the write, but Noor’s copy cannot receive it.</p>
+<p>Imagine Maya and Noor each keep a copy of the same record. Both copies show <code>v1</code>. Maya records <code>v2</code> and confirms the write, but Noor’s copy cannot receive it.</p>
 <p>A caller then asks Noor for the current value. Noor cannot infer <code>v2</code> from silence. This copy analogy explains missing information, not a particular replication protocol.</p>
 <p><strong>Linearizability</strong> requires operations to behave like one current copy while respecting completed operations. In this example, a read begun after the completed <code>v2</code> write cannot correctly return the earlier <code>v1</code>.</p>
 <p><strong>CAP</strong> names consistency, availability, and network partitions. <strong>CAP availability</strong> requires every request to a nonfailed node to eventually receive a non-error response. Waiting indefinitely or rejecting that read sacrifices this guarantee.</p>
@@ -552,10 +538,10 @@ Exact guarantees depend on the operation and configuration.</code><sup class="sr
 
 <h2 id="recap" data-slide="16" data-scene="trace-an-acknowledged-write">16 · Return to the deleted key</h2>
 <p class="slide-reference"><a href="../../slides/lecture-14.html#s=16&amp;b=1">Open slide 16 ↗</a></p>
-<p>Friday’s chess match has no room booking. A current lookup sees Thursday’s cancellation as the newest record for the match. The older files can still list Room 101 and Room 204.</p>
+<p>After the crawler deletes its stored copy of the page, a current read for <code>k</code> reports that the page is absent. The newest visible record is the deletion marker, even if an older file still contains the page.</p>
 <div class="lecture-walkthrough" data-lecture-scene="trace-an-acknowledged-write"></div>
 <p>The log protects acknowledged updates. The memtable orders recent entries. A flush creates sorted files, and compaction merges them while preserving required reads.</p>
-<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>File A still holds <code>old@5</code>. Suppose a merge discards both B’s <code>new@8</code> and C’s <code>DELETE@9</code>. Which room would a current lookup return?</p><details><summary>Check your explanation</summary><p>Room 101. File A would hold the only remaining record for the match. The merge must keep the deletion marker to prevent that booking from reappearing. It must also preserve versions that required snapshots need.</p></details></div>
+<div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>File A still holds <code>old@5</code>. Suppose a merge discards both B’s <code>new@8</code> and C’s <code>DELETE@9</code>. What would a current lookup return?</p><details><summary>Check your explanation</summary><p>It would return <code>old</code> from file A. The merge must keep the deletion marker while an older copy of the page could reappear. It must also preserve versions that required snapshots need.</p></details></div>
 <div class="exercise learning-check"><span class="ex-label">Predict, then explain</span><p>Now all files are included and no retained snapshot needs k. What two checks make removing its tombstone safe in this toy trace?</p><details><summary>Check your explanation</summary><p>No older value remains outside the merge to reappear, and no retained read view needs the removed records. Deletion alone was not enough.</p></details></div>
 <ul class="recap-list">
   <li>Bigtable assigns ordered row ranges to tablet servers. Key design determines where writes go and which ranges a scan needs.</li>
@@ -622,7 +608,7 @@ Exact guarantees depend on the operation and configuration.</code><sup class="sr
 <p class="sources-intro">Numbered markers in the text point here. Each entry is the primary
 document that supports the claim it is attached to.</p>
 <ol class="sources">
-  <li id="src-1"><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf">Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)</a> <span class="src-note">The OSDI 2006 paper names web indexing, Google Earth (which serves the maps.google.com interface), Google Finance, Analytics, Orkut, Personalized Search and Writely among more than sixty users; Gmail is not mentioned in the paper.</span></li>
+  <li id="src-1"><a href="https://storage.googleapis.com/gweb-research2023-media/pubtools/4443.pdf">Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)</a> <span class="src-note">The OSDI 2006 paper names web indexing, Google Earth (which serves the maps.google.com interface), Google Finance, Analytics, Orkut, Personalized Search and Writely among more than sixty users; Gmail is not mentioned in the paper.</span></li>
   <li id="src-2"><a href="https://www.cs.umb.edu/~poneil/lsmtree.pdf">The Log-Structured Merge-Tree (LSM-Tree)</a></li>
   <li id="src-3"><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/gfs-sosp2003.pdf">The Google File System (SOSP 2003)</a></li>
   <li id="src-4"><a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter">RocksDB Bloom Filter (RocksDB wiki)</a></li>
@@ -647,11 +633,11 @@ document that supports the claim it is attached to.</p>
 <script src="../../labs/_shared/rag-measurements.js?v=1"></script>
 <script src="../../labs/_shared/teaching-traces.js?v=ste-20261015"></script>
 <script src="../../slides/_shared/trace-scenes.js?v=3"></script>
-<script src="../../slides/decks/lectures-11-15.js?v=schedule-swap-20261112"></script>
-<script src="../../slides/decks/teaching-notes.js?v=chess-booking-20261119"></script>
-<script src="../../slides/decks/clarity-captions.js?v=chess-booking-20261119"></script>
+<script src="../../slides/decks/lectures-11-15.js?v=bigtable-web-crawl-20261119"></script>
+<script src="../../slides/decks/teaching-notes.js?v=bigtable-web-crawl-20261119"></script>
+<script src="../../slides/decks/clarity-captions.js?v=bigtable-web-crawl-20261119"></script>
 <script src="../../slides/decks/clarity-layout.js?v=mapreduce-20261109"></script>
-<script src="../../slides/decks/clarity-diagrams.js?v=chess-booking-20261119"></script>
+<script src="../../slides/decks/clarity-diagrams.js?v=bigtable-web-crawl-20261119"></script>
 <script src="../../slides/decks/bigtable-code.js?v=visible-code-20261112"></script>
 <script src="../../slides/decks/course-clarity.js?v=ste-20261015"></script>
 <script src="../lecture-13/slide-walkthroughs.js?v=2"></script>

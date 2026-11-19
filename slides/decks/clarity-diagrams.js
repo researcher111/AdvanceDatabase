@@ -281,29 +281,6 @@
     ragOpening.teaching.reference='Trace the same passage from Lecture 11 into the prompt, with source ID ml-notes. Then compare the proposed claim with the passage. The later source-mapping slide continues this fictional example. The reading and lab use a separate database-recovery fixture. Retrieval metrics measure source presence and rank. Claim support needs a separate check.';
   }
 
-  const lsmOpening=use(14,'organize-writes-differently',(d,s)=>{
-    label(d,'opening-question',640,230,'Email thread · Friday chess match',P.ink,29);
-    const days=['Monday','Tuesday','Thursday'];
-    const messages=['Room 101','Room 204','Match canceled'];
-    for(let i=0;i<=s;i++){
-      const x=240+i*400;
-      label(d,'file-name-'+i,x,318,days[i],P.muted,26);
-      d.rect('version-'+i,x-155,347,310,112,i===s?P.orangeLight:P.white,i===s?P.orange:P.line,9,2);
-      label(d,'value-'+i,x,412,messages[i],i===s?P.orange:P.ink,34);
-      if(i<s)d.arrow('newer-'+i,x+170,403,x+230,403,P.green,3);
-    }
-    label(d,'current-result',640,535,['Current booking · Room 101','Current booking · Room 204','No current booking'][s],s===2?P.orange:P.green,34);
-    foot(d,[
-      'The key identifies the match. The value gives its room.',
-      'The key still identifies the same match. The room value changes.',
-      'A deletion marker tells a current read that the booking is absent.'
-    ][s]);
-  });
-  if(lsmOpening){
-    lsmOpening.states=['Monday books a room','Tuesday changes the room','Thursday cancels the match'];
-    lsmOpening.teaching.reference='In the later database trace, key k identifies the booking. Room 101 corresponds to old@5, Room 204 to new@8, and the cancellation to DELETE@9. The numbers give the order of the changes.';
-  }
-
   use(14,'a-multidimensional-map',(d,s)=>{
     label(d,'address',640,218,['Choose a row','Then choose a column in that row','(row, family:qualifier, timestamp) → value'][s],P.ink,31);
     const titles=['Row key','Column name','Version timestamp'],values=['com.cnn.www','anchor:example','2026-11-10'];
